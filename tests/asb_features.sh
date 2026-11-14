@@ -6215,16 +6215,41 @@ printf '%s\n' "$out" | grep -q 'state=measuring|.*sources=0|resets=0' || fail "s
 wk wakeup0 radio 13 26 3450; wk wakeup1 other 2 3 100; wk wakeup2 unchanged 1 1 1
 mkdir -p "$T/class/wakeup4"; wk wakeup4 new_source 2 4 80
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^wakeup_source|radio|events=6|active=3|time_ms=450|reset=0$' || fail "radio delta wrong: $out"
-printf '%s\n' "$out" | grep -q '^wakeup_source|other|events=3|active=2|time_ms=100|reset=1$' || fail "counter reset not bounded: $out"
-printf '%s\n' "$out" | grep -q '^wakeup_source|new_source|events=4|active=2|time_ms=80|reset=0$' || fail 'new source missing'
+printf '%s\n' "$out" | grep -q '^wakeup_source|radio|events=6|active=3|time_ms=450|reset=0|shared=1|new=0$' || fail "radio delta wrong: $out"
+printf '%s\n' "$out" | grep -q '^wakeup_source|other|events=3|active=2|time_ms=100|reset=1|shared=1|new=0$' || fail "counter reset not bounded: $out"
+printf '%s\n' "$out" | grep -q '^wakeup_source|new_source|events=4|active=2|time_ms=80|reset=0|shared=1|new=1$' || fail 'new source missing'
 printf '%s\n' "$out" | grep -q '^wakeup_source|unchanged|' && fail 'unchanged lifetime counter listed as idle activity'
 printf '%s\n' "$out" | grep -q '^wakeup_source|bad' && fail 'unsafe source name emitted'
 printf '%s\n' "$out" | grep -q 'sources=3|resets=1' || fail 'summary counts wrong'
 [ ! -s "$T/policy" ] || fail 'status automatically blocked a source'
 out="$(run observe_clear)"; printf '%s\n' "$out" | grep -q 'state=idle|elapsed_ms=0|started=0|sources=0|resets=0' || fail 'clear did not reset observation'
+# dev55: names are not unique in /sys/class/wakeup (every epoll instance with an EPOLLWAKEUP
+# item registers its own "eventpoll"). dev54 keyed the window by name, so one eventpoll that
+# woke once read as +96 right after the start. Snapshots are keyed by the wakeupN entry,
+# deltas are summed per name and the number of same-named sources travels with the line;
+# an entry id reused for another name is a new source, not a reset.
+rm -rf "$T/class"; mkdir -p "$T/class/wakeup0" "$T/class/wakeup1" "$T/class/wakeup2" "$T/class/wakeup5"
+wk wakeup0 eventpoll 100 100 500; wk wakeup1 eventpoll 5 5 20; wk wakeup2 alarmtimer 7 7 7; wk wakeup5 recycled 3 3 3
+out="$(run observe_start)"
+printf '%s\n' "$out" | grep -q 'state=measuring|.*sources=0|resets=0' || fail "duplicate names invented activity at the start: $out"
+wk wakeup0 eventpoll 101 101 510; printf 'other_name\n' > "$T/class/wakeup5/name"
+out="$(run status)"
+printf '%s\n' "$out" | grep -q '^wakeup_source|eventpoll|events=1|active=1|time_ms=10|reset=0|shared=2|new=0$' || fail "same-named sources not kept apart: $out"
+printf '%s\n' "$out" | grep -q '^wakeup_source|other_name|events=3|active=3|time_ms=3|reset=0|shared=1|new=1$' || fail "a reused entry id read as the old source: $out"
+printf '%s\n' "$out" | grep -q '^wakeup_source|recycled|' && fail 'a vanished source was listed'
+printf '%s\n' "$out" | grep -q '^wakeup_source|alarmtimer|' && fail 'an unchanged source was listed'
+wk wakeup1 eventpoll 2 2 4
+out="$(run status)"
+printf '%s\n' "$out" | grep -q '^wakeup_source|eventpoll|events=3|active=3|time_ms=14|reset=1|shared=2|new=0$' || fail "a reset in one of two same-named sources: $out"
+printf 'start_mono_ms=1\nstart_epoch=1\n' > "$T/state/meta"; printf 'eventpoll\t1\t1\t1\n' > "$T/state/baseline.tsv"
+out="$(run status)"
+printf '%s\n' "$out" | grep -q '^wakeup_observe|status|state=idle|' && [ ! -e "$T/state/baseline.tsv" ] || fail "a dev54 by-name window was compared as by-id: $out"
+mkdir -p "$T/bin"; printf '#!/bin/sh\necho "$*" >> "%s"\nexec %s "$@"\n' "$T/cat.log" "$(command -v cat)" > "$T/bin/cat"; chmod 0755 "$T/bin/cat"
+PATH="$T/bin:$PATH" run observe_start >/dev/null
+! grep -q "$T/class" "$T/cat.log" 2>/dev/null || fail "the snapshot spawned one cat per counter ($(grep -c "$T/class" "$T/cat.log"))"
+grep -q 'xargs grep -H' "$W" || fail 'the snapshot no longer reads all counters in one pass'
 ! grep -Eq '^[[:space:]]*sleep[[:space:]]|while[[:space:]]+true' "$W" || fail 'persistent observation worker appeared'
-echo 'PASS wakeup observation: ABI 2, per-rule counters, explicit deltas, new/reset sources, no auto-block or worker'
+echo 'PASS wakeup observation: ABI 2, per-rule counters, per-entry deltas for same-named sources, reused ids, legacy windows reset, one-pass snapshot, no auto-block or worker'
 )
 
 t_phantom_stock_restore_runtime() (
@@ -11209,8 +11234,9 @@ out="$(run apply kernel_mglru_min_ttl)"
 printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|2000' || fail "bounded apply/readback: $out"
 [ "$(cat "$T/ttl")" = 1000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'value or original baseline is wrong'
 printf 'kernel_mglru_min_ttl=5000\n' > "$T/mod/config/governor.conf"
-run apply kernel_mglru_min_ttl >/dev/null
-[ "$(cat "$T/ttl")" = 5000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'repeat apply replaced the original baseline'
+out="$(run apply kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|2000|2000|2000' || fail "legacy 5000 is not read as 2000: $out"
+[ "$(cat "$T/ttl")" = 2000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'repeat apply replaced the original baseline'
 printf '9\n' > "$T/ttl"
 printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
@@ -11235,6 +11261,56 @@ rc=$?
 set -e
 [ "$rc" -ne 0 ] || fail 'config writer accepted an arbitrary TTL'
 echo 'PASS kernel MGLRU TTL: fixed node, bounded values, stable baseline, exact restore, honest absence and no legacy direct writer'
+)
+
+
+t_kernel_controls_kernel_bound_baseline_dev55() (
+# dev55: a captured kernel baseline belongs to the kernel build it was read from (uname -r and -v
+# in a .kid sidecar). After a kernel flash the old value is not written into the new kernel:
+# the next apply re-captures this kernel's own value, and Stock with only a foreign baseline is
+# reported as stock_unowned without a write. A pre-dev55 baseline without a sidecar is adopted.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel-bound baseline: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state"
+run() { MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_MGLRU_MIN_TTL_NODE="$T/ttl" ASB_KC_KERNEL_ID="$KID" sh "$K" "$@"; }
+P="$T/state/kernel_mglru_min_ttl.prev"
+KID='6.12.23-a|#1 SMP PREEMPT Mon Nov 10'
+printf '2000\n' > "$T/ttl"; printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
+out="$(run apply kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|2000' || fail "first capture: $out"
+[ "$(cat "$P")" = 2000 ] && [ "$(cat "$P.kid")" = "$KID" ] || fail 'baseline or kernel id not recorded'
+KID='6.12.23-b|#1 SMP PREEMPT Fri Nov 14'
+printf '0\n' > "$T/ttl"
+out="$(run status kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|writable|1000|0|none' || fail "status shows a foreign baseline: $out"
+out="$(run apply kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|0' || fail "new kernel not re-captured: $out"
+[ "$(cat "$P")" = 0 ] && [ "$(cat "$P.kid")" = "$KID" ] || fail 'baseline not bound to the new kernel'
+printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
+out="$(run apply kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|restored|stock|0|none' || fail "same-kernel restore: $out"
+[ ! -e "$P" ] && [ ! -e "$P.kid" ] || fail 'restore left state behind'
+printf 'kernel_mglru_min_ttl=2000\n' > "$T/mod/config/governor.conf"
+run apply kernel_mglru_min_ttl >/dev/null
+KID='6.12.23-c|#2 SMP PREEMPT Sat Nov 15'
+printf '7\n' > "$T/ttl"
+printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
+out="$(run apply kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|stock_unowned|stock|unknown|none' || fail "foreign baseline restored: $out"
+[ "$(cat "$T/ttl")" = 7 ] || fail 'a baseline from another kernel was written into this one'
+[ ! -e "$P" ] && [ ! -e "$P.kid" ] || fail 'foreign baseline kept'
+printf '2000\n' > "$P"
+KID='6.12.23-d|#1'
+printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
+out="$(run apply kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|2000' || fail "legacy baseline not adopted: $out"
+[ "$(cat "$P.kid")" = "$KID" ] || fail 'legacy baseline not bound'
+printf '2000\n' > "$T/ttl"; rm -f "$P" "$P.kid"; out="$(MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_MGLRU_MIN_TTL_NODE="$T/ttl" sh "$K" apply kernel_mglru_min_ttl)"
+[ -s "$P.kid" ] && grep -Fq "$(uname -r)" "$P.kid" || fail "default kernel id is not uname-based: $(cat "$P.kid" 2>/dev/null)"
+echo 'PASS kernel-bound baseline: kernel id sidecar, re-capture after a kernel change, no foreign restore, legacy baseline adopted, status hides a foreign value'
 )
 
 t_diag_kernel_controls_readable_runtime() (

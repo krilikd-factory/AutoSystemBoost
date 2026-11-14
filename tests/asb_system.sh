@@ -5095,8 +5095,8 @@ fail() { echo "FAIL fix203: $*"; exit 1; }
 # px of hysteresis). The runtime behaviour (escalation, the allowance, the hysteresis) is
 # exercised in node by t_webui_fill_pages_runtime; here the structural pins.
 grep -qF 'const need = Math.max(56, Math.round(' "$H" || fail "a small overflow must keep the look and scroll, not compact"
-grep -qF "root.style.setProperty('--pbtn-h', '0px');" "$H" || fail "the tier is not decided from the page's natural height"
-grep -qF "root.style.setProperty('--cfg-tile-h', '0px');" "$H" || fail "the Settings tiles' fitted height is not neutralized for the measurement"
+grep -qF "if (homeOn && fittable) prof.style.setProperty('--pbtn-h', '0px');" "$H" || fail "the tier is not decided from the page's natural height"
+grep -qF "if (hubOn && fittable) hubHost.style.setProperty('--cfg-tile-h', '0px');" "$H" || fail "the Settings tiles' fitted height is not neutralized for the measurement"
 grep -qF "st.bottom = 'auto'; st.height = 'auto';" "$H" || fail "a fixed overlay is still measured through its clamped scrollHeight"
 grep -qF 'over2 > need - 8' "$H" || fail "a tier comes off without hysteresis"
 grep -qF 'getComputedStyle(el).paddingBottom' "$H" || fail "the bar's reserved padding is still counted as overflow"
@@ -7170,7 +7170,7 @@ absent "$WEB" '.theme-choice.active { color:#04120f; background:linear-gradient'
 absent "$WEB" ':is(.cfg-reset-choice.armed,.theme-choice.active) { color:#04120f !important; }'
 # These cover readable dialog/title copy, Smart monitor telemetry and small configuration text.
 need "$WEB" '--text-secondary:#365048; --text-tertiary:#526b62;'
-need "$WEB" ':is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }'
+need "$WEB" 'html[data-asb-theme="light"] .debug-action-wait-title { color:var(--text) !important; }'
 need "$WEB" '.smart-banner-value { color:#006c56; }'
 need "$WEB" '.cfg-desc { color:var(--text-secondary); opacity:1; }'
 # Android WebView light controls: every control that had retained translucent light text has an explicit override.
@@ -7188,8 +7188,9 @@ need "$WEB" 'Only outer material surfaces'
 # The light-theme override list is checked by membership, not as one literal line:
 # adding a selector to it is a normal change, and pinning the whole line makes every
 # such addition look like a regression.
-need "$WEB" '.cfg-reset-dialog,.debug-action-wait-sheet,'
-need "$WEB" '.asb-tabbar) {'
+need "$WEB" 'html[data-asb-theme="light"] .cfg-reset-dialog,'
+need "$WEB" 'html[data-asb-theme="light"] .debug-action-wait-sheet,'
+need "$WEB" 'html[data-asb-theme="light"] .asb-tabbar {'
 absent "$WEB" '[class*="cfg-row"]'
 absent "$WEB" '[class*="live-cell"]'
 need "$WEB" '.cfg-search::placeholder { color:#61776f; opacity:1; }'
@@ -9546,6 +9547,55 @@ for token in 'lk_stage sampling' 'lk_stage phase_detection' 'lk_stage power_trac
 done
 grep -Fq 'full_day_progress_fields "$_pid"' "$D" || fail 'process status has no separate capture progress fields'
 echo 'PASS logkit recorder freshness: atomic monotonic stage heartbeat at two process starts per stage, bounded dumpsys with/without timeout, 200-row gap evidence and loop stages'
+)
+
+
+t_mglru_ttl_update_migration_dev55() (
+# dev55: Hold and Aggressive came from the retired mglru_hold writer. An update carries that
+# intent into kernel_mglru_min_ttl (1000 / 2000 ms) once and sets the legacy key to stock;
+# 5000 ms is no longer offered and becomes 2000; an explicit TTL choice is never overridden.
+set -euo pipefail
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+fail() { echo "FAIL mglru ttl migration: $*" >&2; exit 1; }
+sed -n '/^asb_preserve_user_config() {/,/^}/p' "$ROOT/common/install.sh" | sed "s|/data/adb/asb|$TMP/state|g" > "$TMP/fn.sh"
+[ -s "$TMP/fn.sh" ] || fail 'could not extract the production preserve function'
+grep -q '_mg_ttl=' "$TMP/fn.sh" || fail 'migration is not inside the preserve function'
+ui_print() { printf '%s\n' "$*" >> "$TMP/ui.log"; }
+asb_neutralise_fresh_install() { fail 'update treated as a fresh install'; }
+# shellcheck disable=SC1090
+source "$TMP/fn.sh"
+MODID=AutoSystemBoost
+case_run() {
+  rm -rf "$TMP/nv" "$TMP/state" "$TMP/ui.log"
+  NVBASE="$TMP/nv"; MODPATH="$TMP/nv/modules_update/$MODID"
+  mkdir -p "$NVBASE/modules/$MODID/config" "$MODPATH/config" "$TMP/state"
+  cp "$ROOT/config/governor.conf.shipped" "$MODPATH/config/governor.conf"
+  cp "$ROOT/config/governor.conf.shipped" "$MODPATH/config/governor.conf.shipped"
+  cp "$ROOT/module.prop" "$MODPATH/module.prop"
+  cp "$ROOT/config/governor.conf.shipped" "$NVBASE/modules/$MODID/config/governor.conf"
+  printf '3\n' > "$TMP/state/config_schema"
+  _o="$NVBASE/modules/$MODID/config/governor.conf"
+  sed -i "s|^mglru_hold=.*|mglru_hold=$1|; s|^kernel_mglru_min_ttl=.*|kernel_mglru_min_ttl=$2|" "$_o"
+  set +e; asb_preserve_user_config >/dev/null 2>&1; rc=$?; set -e
+  [ "$rc" -eq 0 ] || fail "preserve returned $rc for hold=$1 ttl=$2"
+  got_ttl="$(sed -n 's/^kernel_mglru_min_ttl=//p' "$MODPATH/config/governor.conf")"
+  got_hold="$(sed -n 's/^mglru_hold=//p' "$MODPATH/config/governor.conf")"
+  [ "$got_ttl" = "$3" ] || fail "hold=$1 ttl=$2 -> ttl $got_ttl, want $3"
+  [ "$got_hold" = stock ] || fail "hold=$1 ttl=$2 left mglru_hold=$got_hold"
+  [ "$(grep -c '^kernel_mglru_min_ttl=' "$MODPATH/config/governor.conf")" = 1 ] || fail 'duplicate TTL lines'
+}
+case_run hold stock 1000
+grep -q 'MGLRU generation protection carried over: 1000 ms' "$TMP/ui.log" || fail 'carry-over not reported'
+case_run aggressive stock 2000
+case_run stock 5000 2000
+case_run hold 2000 2000
+case_run aggressive 1000 1000
+case_run stock stock stock
+[ ! -s "$TMP/ui.log" ] || ! grep -q 'MGLRU' "$TMP/ui.log" || fail 'reported a carry-over that did not happen'
+case_run stock 1000 1000
+echo 'PASS mglru ttl migration: Hold -> 1000 ms, Aggressive -> 2000 ms, 5000 -> 2000, explicit TTL kept, legacy key reset, one line, reported once'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

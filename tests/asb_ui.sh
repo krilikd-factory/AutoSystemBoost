@@ -4149,14 +4149,14 @@ PY
 python3 - "$H" <<'PY' || fail 'Liquid Glass coverage'
 import sys
 h = open(sys.argv[1], encoding='utf-8').read()
-for sel in ('html[data-asb-glass="1"] :is(#reportPage,#devicePage,#zygiskPage)',
-            'html[data-asb-glass="1"][data-asb-theme="light"] :is(#reportPage,#devicePage,#zygiskPage)',
-            'html[data-asb-glass="1"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist)',
-            'html[data-asb-glass="1"][data-asb-theme="light"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist)',
+for sel in ('html[data-asb-glass="1"] #reportPage,\nhtml[data-asb-glass="1"] #devicePage,\nhtml[data-asb-glass="1"] #zygiskPage',
+            'html[data-asb-glass="1"][data-asb-theme="light"] #reportPage,\nhtml[data-asb-glass="1"][data-asb-theme="light"] #devicePage,\nhtml[data-asb-glass="1"][data-asb-theme="light"] #zygiskPage',
+            'html[data-asb-glass="1"] .smart-drain-half,\nhtml[data-asb-glass="1"] .live-drain-block,\nhtml[data-asb-glass="1"] .live-drain-cmp,\nhtml[data-asb-glass="1"] .live-info-hist',
+            'html[data-asb-glass="1"][data-asb-theme="light"] .smart-drain-half,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .live-drain-block,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .live-drain-cmp,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .live-info-hist',
             'html[data-asb-glass="1"] .cfg-profile-primary', 'html[data-asb-glass="1"] .toast:not(.stock-restoring)',
-            'html[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait) {\n  -webkit-backdrop-filter:blur(6px)'):
+            'html[data-asb-glass="1"] .cfg-modal,\nhtml[data-asb-glass="1"] .cfg-profile-modal,\nhtml[data-asb-glass="1"] .cfg-reset-modal,\nhtml[data-asb-glass="1"] .diag-wait-modal,\nhtml[data-asb-glass="1"] .debug-action-wait {\n  -webkit-backdrop-filter:blur(6px)'):
     assert sel in h, sel
-assert h.index('html[data-asb-glass="1"] :is(#reportPage,#devicePage,#zygiskPage)') > h.index('#reportPage, #devicePage, #zygiskPage { background: var(--bg) !important; }'), 'the glass backdrop must come after the opaque page rule'
+assert h.index('html[data-asb-glass="1"] #reportPage,\nhtml[data-asb-glass="1"] #devicePage,\nhtml[data-asb-glass="1"] #zygiskPage') > h.index('#reportPage, #devicePage, #zygiskPage { background: var(--bg) !important; }'), 'the glass backdrop must come after the opaque page rule'
 PY
 echo "PASS webui live info insight: scale = the tile's own colour, history, raw facts, 13 locales, Liquid Glass coverage"
 )
@@ -4186,12 +4186,12 @@ for cls in ('good','fair','warm','bad','mild','hot','severe','charge'):
 # fix252: green is the best end of every quality scale; no blue step sits beyond it.
 assert 'metric-cool' not in h and '--m-cool' not in h and '--metric-cool' not in h, 'a blue step returned to a quality scale'
 for prefix in ('html ', 'html[data-asb-glass="1"] ', 'html[data-asb-theme="light"] '):
-    assert prefix + ':is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info)' in h, prefix + 'plain facts'
+    assert all(prefix + v + ':is(.metric-normal,.metric-info)' in h for v in ('.live-cell-value', '.smart-banner-value', '.smart-drain-val', '.live-info-val')), prefix + 'plain facts'
     for cls in ('fsm-deep','fsm-light','fsm-moderate','fsm-heavy','fsm-sustained','fsm-gaming'):
         assert prefix + ':is(.live-cell-value,.smart-banner-value,.live-info-val).metric-' + cls in h, prefix + cls
-i = h.index('html :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info)')
+i = h.index('html .live-cell-value:is(.metric-normal,.metric-info),')
 j = h.index('{ color:var(--text) !important; }', i)
-assert j - i < 400, 'plain facts take the text colour, not the old mint/teal card colour'
+assert j - i < 900, 'plain facts take the text colour, not the old mint/teal card colour'
 assert "asbMetricPaint('liveCapSrc', 'metric-normal'); }" in h and h.count("asbMetricPaint('liveCapSrc', 'metric-normal'); }") == 2, 'ASB or the profile script holding the ceiling is a plain fact'
 assert 'html .smart-drain-half .smart-drain-eta { color:var(--text) !important; }' in h, 'screen time estimates must stay neutral'
 assert "asbMetricPaint('bnDrain', _chg ? 'metric-charge' : 'metric-info');" in h, 'numeric screen-on %/h must not use a severity grade'
@@ -4806,7 +4806,7 @@ prim = re.search(r'\.cfg-profile-primary \{([^}]*)\}', s).group(1)
 assert 'background:linear-gradient(135deg,#2cd6ad,#67e4c8)' not in prim, "the poisonous green slab is back on the sheet button"
 assert 'rgba(44,214,173,.16)' in prim and 'border:1px solid rgba(44,214,173,.34)' in prim, "sheet button lost its tonal dark style"
 assert '.cfg-profile-primary:active' in s, "sheet button has no pressed state"
-assert 'html[data-asb-theme="light"] :is(.cfg-profile-primary,.cfg-profile-apply)' in s, "light tonal primary rule is missing"
+assert 'html[data-asb-theme="light"] .cfg-profile-primary,\nhtml[data-asb-theme="light"] .cfg-profile-apply' in s, "light tonal primary rule is missing"
 assert "'cfg-tile-desc'" in s and "'cfg-tile-bar'" in s, "category tiles lack their description and fill bar"
 assert "sub.className = 'smart-banner-pill' + (we ? ' we' : '');" in s, "weekday/weekend is still glued to the slot name"
 assert "html[data-asb-font=\"device\"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }" in s, "no device-font switch"
@@ -4835,7 +4835,12 @@ assert 'asbFitPages._tier' in s, "the tier is not remembered between passes"
 # clientHeight), and a small overflow just scrolls (fix201) instead of compacting the
 # chrome over a void.
 assert 'const need = Math.max(56, Math.round(' in s, "a small overflow must keep the look and scroll, not compact"
-assert "root.style.setProperty('--pbtn-h', '0px');" in s and "root.style.setProperty('--cfg-tile-h', '0px');" in s, "the tier is not decided from the page's natural height"
+assert "if (homeOn && fittable) prof.style.setProperty('--pbtn-h', '0px');" in s and "if (hubOn && fittable) hubHost.style.setProperty('--cfg-tile-h', '0px');" in s and 'let guard = fittable ? 0 : 6;' in s, "the tier is not decided from the page's natural height"
+fit = s[s.index('function asbFitPagesNow('):s.index('\n}\n', s.index('function asbFitPagesNow('))]
+assert 'root.style.setProperty' not in fit, "a fitted height is written on <html> again: every write restyles the whole document"
+assert "document.documentElement.style.setProperty('--tabbar-space'" not in s and "classList.toggle('asb-bar-hidden', !!hideBar)" in s
+assert ':where(html.asb-bar-hidden) body { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }' in s
+assert ':where(html.asb-bar-hidden) .page {\n  min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom) - 16px);' in s
 assert "st.bottom = 'auto'; st.height = 'auto';" in s, "a fixed overlay is still measured through its clamped scrollHeight"
 assert 'over2 > need - 8' in s, "a tier comes off without hysteresis"
 assert 'getComputedStyle(el).paddingBottom' in s, "the bar's reserved padding is still counted as overflow"
@@ -4877,7 +4882,8 @@ const root = {
 };
 const box = (top, h) => ({ getBoundingClientRect() { return { top: top, height: h, bottom: top + h }; } });
 const pb = new Array(5).fill(0), tiles = new Array(9).fill(0);
-const prof = { getBoundingClientRect() { return { top: profTop }; }, querySelectorAll() { return pb; } };
+const prof = { style: root.style, getBoundingClientRect() { return { top: profTop }; }, querySelectorAll() { return pb; } };
+const cfgList = { style: root.style };
 const hub = { getBoundingClientRect() { return { top: hubTop }; }, querySelectorAll() { return tiles; } };
 /* fix206: home is a self-scrolling fixed overlay now - it mocks like the report page:
  * unclamped (height:auto) it reports its natural content bottom, clamped it reports the
@@ -4914,7 +4920,7 @@ global.document = {
   }
 };
 global.getComputedStyle = () => ({ rowGap: '10px', gap: '10px', marginTop: '10px', paddingBottom: '0px' });
-function _el(id) { return id === 'configPage' ? page : id === 'reportPage' ? reportPage : null; }
+function _el(id) { return id === 'configPage' ? page : id === 'reportPage' ? reportPage : id === 'cfgList' ? cfgList : null; }
 /* fix278: asbFitPages is the coalescing scheduler; the measurement itself is asbFitPagesNow,
  * run here synchronously exactly as the scheduler runs it once a transition has settled. */
 function asbFitPages() { return asbFitPagesNow(); }
@@ -5610,10 +5616,10 @@ if 'var(--pill-wash)' not in sv: bad.append('the current profile is not on the t
 need('.island-btn[aria-expanded="true"] { color: var(--accent); background: var(--pill-wash);', 'the open Logs menu is not marked')
 need('.status-row:is(.has-back,.is-tight) .island-btn > span { display: none; }', 'Logs/Channel never fold to icons')
 need("if (row) row.classList.toggle('has-back', !!_cfgGroup);", 'the category Back does not fold the island')
-lp = re.search(r'html\[data-asb-theme="light"\] :is\(([^)]*)\) \{\n  background:#ffffff !important;', h)
+lp = re.search(r'((?:html\[data-asb-theme="light"\] [.#][\w-]+,\n)+html\[data-asb-theme="light"\] [.#][\w-]+) \{\n  background:#ffffff !important;', h)
 if not lp: bad.append('light paper list not found')
 else:
-    m = [x.strip() for x in re.sub(r'/\*.*?\*/', '', lp.group(1), flags=re.S).split(',')]
+    m = [x.strip().replace('html[data-asb-theme="light"] ', '') for x in lp.group(1).split(',\n')]
     for x in ('.hdr-cap', '.theme-toggle', '.status-row', '.asb-tabbar'):
         if x not in m: bad.append('light paper list lacks ' + x)
     if '.badge' in m: bad.append('light theme still paints each badge as its own white chip')
@@ -7803,9 +7809,9 @@ assert 'html[data-asb-glass="1"]' in h
 assert 'html[data-asb-glass="1"][data-asb-theme="light"]' in h
 assert '--accent:#00f0b4' in h and '--accent:#007c63' in h
 assert '--surface:rgba(8,13,10,.90)' in h and '--border:rgba(108,151,133,.46)' in h
-assert '.log-menu,.cfg-fm-box,.asb-tabbar' in h
-assert ':is(.log-menu,.cfg-fm-box,.cfg-profile-sheet,.cfg-reset-dialog)' in h
-assert '.cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel' in h
+assert 'html[data-asb-glass="1"] .log-menu,\nhtml[data-asb-glass="1"] .cfg-fm-box,\nhtml[data-asb-glass="1"] .asb-tabbar,' in h
+assert 'html[data-asb-glass="1"] .log-menu,\nhtml[data-asb-glass="1"] .cfg-fm-box,\nhtml[data-asb-glass="1"] .cfg-profile-sheet,\nhtml[data-asb-glass="1"] .cfg-reset-dialog {' in h
+assert 'html[data-asb-glass="1"] .cfg-fm-btn:not(asb-spec-pad),\nhtml[data-asb-glass="1"] .cfg-fm-place:not(asb-spec-pad),\nhtml[data-asb-glass="1"] .cfg-fm-cancel:not(asb-spec-pad),' in h
 assert '#00aaff' not in h and '0,170,255' not in h and '101,215,255' not in h
 assert "localStorage.getItem('asb_glass_base')" in h
 assert '@media (prefers-reduced-motion:reduce)' in h
@@ -7826,7 +7832,7 @@ for cls in ('good', 'warm', 'bad', 'neutral'):
     assert '.live-cell-value.metric-' + cls in h
     assert 'html[data-asb-glass="1"] .smart-banner-value.metric-' + cls in h
     assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h
-assert 'html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info)' in h
+assert all('html[data-asb-glass="1"] ' + v + ':is(.metric-normal,.metric-info)' in h for v in ('.live-cell-value', '.smart-banner-value', '.smart-drain-val', '.live-info-val'))
 assert 'html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-moderate' in h
 # Category colour is a translucent material layer, not a flat replacement or a neutral wash.
 assert 'html[data-asb-glass="1"] .cfg-tile[class*="cat-"] {' in h
@@ -9694,7 +9700,7 @@ for key in keys:
     assert key + ': APPLY_LIVE' in h, 'live mode missing: ' + key
 branch = "ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0"
 pos = h.rindex(branch)
-end = h.index("} else if (key === 'mglru_hold'", pos)
+end = h.index("} else if (BLUR_KEYS.indexOf(key) >= 0)", pos)
 body = h[pos:end]
 for token in ('await run(', 'asb_kernel_controls.sh', 'kr.errno === 0', "'applied','restored','stock_unowned'", "uiSound('error')", "kp[1]", "kp[3]", 'await kernelPanelLoad(true)'):
     assert token in body, 'verdict branch lost ' + token
@@ -9761,7 +9767,7 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 72, len(new)
+assert len(new) == 78, len(new)
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -9785,7 +9791,8 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
-for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupSelectSources','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
+eval(h.match(/\nconst KERNEL_WB_CRITICAL = [^\n]*/)[0].replace('const ','global.'));
+for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupSelectSources','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupRisk','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_hrtimer_migration|covered_by_timer_migration|auto|0|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
 if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_hrtimer_migration.state!=='covered_by_timer_migration'||c.kernel_hrtimer_migration.live!=='0'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
@@ -9989,16 +9996,16 @@ assert 'var(--cat,var(--accent))' in on
 # fix307: the Settings Zygisk summary participates in both Glass palettes as one parent
 # material. Its evidence/master children must win over the generic row ON/OFF paints above.
 for prefix in ('html[data-asb-glass="1"] ', 'html[data-asb-glass="1"][data-asb-theme="light"] '):
-    start = s.index(prefix + ':is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,')
+    start = s.index(prefix + '.hdr-cap,\n' + prefix + '.theme-toggle,')
     body = s[start:s.index('}', start)]
     assert '.cfg-zygisk-card' in body and 'backdrop-filter:blur(8px)' in body, prefix
-child_sel = 'html[data-asb-glass="1"] .cfg-zygisk-card > :is(.dev-zygisk-link,.cfg-row)'
+child_sel = 'html[data-asb-glass="1"] .cfg-zygisk-card > .dev-zygisk-link,\nhtml[data-asb-glass="1"] .cfg-zygisk-card > .cfg-row'
 child = rule(child_sel)
 assert 'background:transparent !important' in child and 'box-shadow:none !important' in child
 assert '-webkit-backdrop-filter:none' in child and 'backdrop-filter:none' in child
 assert s.index(child_sel) > s.index('html[data-asb-glass="1"] .cfg-row.is-on')
 assert s.index(child_sel) > s.index('html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row:not(.is-on)')
-light_child = rule('html[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card > :is(.dev-zygisk-link,.cfg-row)')
+light_child = rule('html[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card > .dev-zygisk-link,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card > .cfg-row')
 assert 'background:transparent !important' in light_child and 'box-shadow:none !important' in light_child
 # Text contrast for the actual owner colours on their card-family surfaces.
 def rgb(h):
@@ -10083,10 +10090,10 @@ assert 'opacity:0 !important' in before
 # These overrides follow both shared Glass materials and the light-Glass active rule. Their
 # explicit :not([data-asb-theme="light"]) guard prevents changes to the other three themes.
 pos = s.index(base)
-assert pos > s.index('html[data-asb-glass="1"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src)')
-assert pos > s.index('html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src)')
-assert pos > s.index('html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected,.cfg-row.is-on)')
-active = rule('html[data-asb-glass="1"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected)')
+assert pos > s.index('html[data-asb-glass="1"] .pbtn,\nhtml[data-asb-glass="1"] .lgr-hero,\nhtml[data-asb-glass="1"] .lgr-sec,\nhtml[data-asb-glass="1"] .live-info-now,\nhtml[data-asb-glass="1"] .live-info-src')
+assert pos > s.index('html[data-asb-glass="1"][data-asb-theme="light"] .pbtn,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .lgr-hero,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .lgr-sec,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .live-info-now,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .live-info-src')
+assert pos > s.index('html[data-asb-glass="1"][data-asb-theme="light"] .pbtn.on,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile.active,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-row.selected,\nhtml[data-asb-glass="1"][data-asb-theme="light"] .cfg-row.is-on')
+active = rule('html[data-asb-glass="1"] .pbtn.on,\nhtml[data-asb-glass="1"] .cfg-tile.active,\nhtml[data-asb-glass="1"] .cfg-profile-row.selected')
 assert 'border-color:var(--accent) !important' in active
 # fix259: disabled tweaks use exactly the approved inactive-profile surface, not a lighter
 # competing material. Their light-Glass and enabled treatments remain independent.
@@ -10145,10 +10152,10 @@ for token in (
     assert token in b, token
 # The same canvas reaches drill-in pages; the status scrim has no hard opaque cutoff.
 assert 'background:var(--glass-canvas-image) !important' in b
-assert '#reportPage,#devicePage,#zygiskPage' in b
+assert 'html:root[data-asb-glass="1"] #reportPage,\nhtml:root[data-asb-glass="1"] #devicePage,\nhtml:root[data-asb-glass="1"] #zygiskPage' in b
 assert 'background:var(--glass-scrim)' in b
 # Every important surface family participates, including previously easy-to-miss controls.
-shared = b[b.index('html:root[data-asb-glass="1"] :is(.hdr-cap'):]
+shared = b[b.index('html:root[data-asb-glass="1"] .hdr-cap,\nhtml:root[data-asb-glass="1"] .theme-toggle,'):]
 shared = shared[:shared.index('}')]
 for cls in ('.cfg-tile', '.cfg-row', '.cfg-zygisk-card', '.live-cell', '.smart-banner',
             '.cfg-profile-sheet', '.cfg-reset-dialog', '.log-menu', '.cfg-fm-box',
@@ -10156,25 +10163,25 @@ for cls in ('.cfg-tile', '.cfg-row', '.cfg-zygisk-card', '.live-cell', '.smart-b
     assert cls in shared, cls
 # Only floating chrome/dialogs get the denser material. Neutral edges replace the old
 # accent outline around ordinary menus and dialogs.
-floating = b[b.index('html:root[data-asb-glass="1"] :is(.asb-tabbar'):]
+floating = b[b.index('html:root[data-asb-glass="1"] .asb-tabbar,'):]
 floating = floating[:floating.index('}')]
-assert '.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu' in floating
+assert 'html:root[data-asb-glass="1"] .report-nav,\nhtml:root[data-asb-glass="1"] .zy-page-nav,\nhtml:root[data-asb-glass="1"] .dev-page-nav,\nhtml:root[data-asb-glass="1"] .cfg-page-nav,\nhtml:root[data-asb-glass="1"] .log-menu' in floating
 assert 'var(--glass-surface-strong)' in floating and 'blur(26px)' in floating
 assert 'border-color:var(--glass-edge) !important' in floating
 # fix332: only navigation docks get the darker dark-Glass material; light Glass and
 # header capsules keep their approved paints. The rule must follow the dense base rule.
-nav_selector = 'html:root[data-asb-glass="1"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
+nav_selector = 'html:root[data-asb-glass="1"] .asb-tabbar,\nhtml:root[data-asb-glass="1"] .report-nav,\nhtml:root[data-asb-glass="1"] .zy-page-nav,\nhtml:root[data-asb-glass="1"] .dev-page-nav,\nhtml:root[data-asb-glass="1"] .cfg-page-nav'
 assert b.count(nav_selector + ' {') == 1
 nav = b[b.index(nav_selector + ' {'):]
 nav = nav[:nav.index('}')]
 assert 'background:var(--glass-nav-wash),var(--glass-nav-surface) !important' in nav
 assert '.log-menu' not in nav and '.hdr-cap' not in nav
-assert b.index(nav_selector + ' {') > b.index('html:root[data-asb-glass="1"] :is(.asb-tabbar')
+assert b.index(nav_selector + ' {') > b.index('html:root[data-asb-glass="1"] .asb-tabbar,')
 # The Zygisk note's logical gutter survives the more specific lgr-note reset, including RTL.
 assert '#zygiskPage .dev-evidence { padding-inline-start:12px; }' in b
 assert '#zygiskPage .zy-controls-card > .dev-evidence' not in b
 # Nested report evidence must not double the parent's blur/shadow.
-nested = re.search(r'html:root\[data-asb-glass="1"\] :is\(\.lgr-sec,\.cfg-zygisk-card\) :is\(\.lgr-hero,\.lgr-quality,\.live-info-now,\.live-info-src\) \{([^}]*)\}', b)
+nested = re.search(r'html:root\[data-asb-glass="1"\] :is\(\.lgr-sec,\.cfg-zygisk-card\) \.lgr-hero,\n(?:html:root\[data-asb-glass="1"\] :is\(\.lgr-sec,\.cfg-zygisk-card\) \.(?:lgr-quality|live-info-now),\n){2}html:root\[data-asb-glass="1"\] :is\(\.lgr-sec,\.cfg-zygisk-card\) \.live-info-src \{([^}]*)\}', b)
 assert nested and '-webkit-backdrop-filter:none' in nested.group(1)
 assert 'box-shadow:inset 0 1px 0' in nested.group(1)
 # Selected profiles/categories keep identity through a restrained tint, not a luminous slab.
@@ -10873,7 +10880,7 @@ assert s.count(marker) == 1
 b = s[s.index(marker):s.index('/* WebViews without backdrop filtering', s.index(marker))]
 # Fixed pages do not contribute to body height: the root, not that short body, owns canvas.
 assert 'html:root[data-asb-glass="1"] { background:var(--glass-canvas-image); }' in b
-assert ':is(.page,.live-page,.config-page)' in b and 'background:transparent !important' in b
+assert 'html:root[data-asb-glass="1"] .page,\nhtml:root[data-asb-glass="1"] .live-page,\nhtml:root[data-asb-glass="1"] .config-page' in b and 'background:transparent !important' in b
 # fix324: dark Glass is explicitly black; the coloured full-screen wash was rejected on-device.
 assert '--glass-canvas-image:#000;' in s
 assert 'radial-gradient(ellipse 120% 48% at 0% 0%,rgba(130,157,143,.28)' not in s
@@ -10885,7 +10892,7 @@ for token in ('background:transparent !important', 'border-color:transparent !im
               'box-shadow:none !important', 'backdrop-filter:none'):
     assert token in dock.group(1), token
 # The specific active check follows the generic chip and cannot be painted grey by it.
-generic = s.index('html:root[data-asb-glass="1"] :is(.lgr-chip,.pmeta-chip,.cfg-icon,.pchk)')
+generic = s.index('html:root[data-asb-glass="1"] .lgr-chip,\nhtml:root[data-asb-glass="1"] .pmeta-chip,\nhtml:root[data-asb-glass="1"] .cfg-icon,\nhtml:root[data-asb-glass="1"] .pchk')
 active = s.index('html:root[data-asb-glass="1"] .pbtn.on .pchk {', generic)
 assert active > generic
 check = re.search(r'html:root\[data-asb-glass="1"\] \.pbtn\.on \.pchk \{([^}]*)\}', b)
@@ -11530,7 +11537,7 @@ for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display
               'if (prevScroll > 0) el.scrollTop = prevScroll;',
               'background: var(--cap-wash), var(--tabbar-bg, #000000);',
               'background: var(--pill-wash);', 'box-shadow: var(--pill-edge);',
-              '.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.asb-tabbar)',
+              'html[data-asb-theme="light"] .cfg-page-nav,\nhtml[data-asb-theme="light"] .asb-tabbar {',
               "head.className = 'lgr-jump-head'", "track.className = 'lgr-jump-track'",
               "b.className = dock ? 'lgr-chip lgr-jump-btn asb-tab'", "icon.className = 'asb-tab-ico'",
               'nav._asbJumpCurrent.textContent = b._asbJumpLabel || b.textContent;',
@@ -11909,7 +11916,10 @@ for token in ("var DUR = 20.0",'UFO_PARTICLE_CAP = 150','UFO_TRAIL_CAP = 54','UF
               'nodes.length < UFO_CONTENT_CAP','transition:n.style.transition',
               'willChange:n.style.willChange','content.restore(); cosmos.destroy();',
               "document.body.classList.remove('ufo-flying')",'el.parentNode.removeChild(el)',
-              "document.removeEventListener('visibilitychange', onVis)"):
+              "document.removeEventListener('visibilitychange', onVis)",
+              "matchMedia('(prefers-reduced-motion: reduce)')", 'ufoCosmosScene(calm)',
+              "content = calm ? { update:function () {}, restore:function () {} } : ufoContentScene()",
+              "if (calm) { ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; return; }"):
     assert token in flight, token
 assert 'ufo-emoji' not in flight and '🛸' not in flight and 'emojiK' not in flight
 assert 'setInterval(' not in flight
@@ -12062,13 +12072,14 @@ const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 const classes=new Set(['config-active']),props={};
 const cls={contains:c=>classes.has(c),toggle:(c,on)=>{if(on)classes.add(c);else classes.delete(c)}};
 const bar={style:{display:''}};
-global.document={body:{classList:cls},documentElement:{style:{setProperty:(k,v)=>props[k]=v}},querySelector:s=>s==='.asb-tabbar'?bar:null};
+const rootCls={toggle:(c,on)=>{props[c]=!!on}};
+global.document={body:{classList:cls},documentElement:{classList:rootCls,style:{setProperty:(k,v)=>props[k]=v}},querySelector:s=>s==='.asb-tabbar'?bar:null};
 global._cfgGroup=null;global._deviceOpen=false;global._rpOpen=false;global.asbNavIndicator=()=>{};
 const a=h.indexOf('function asbTabbarVisibility()'),b=h.indexOf('\n}\n',a);eval(h.slice(a,b+3));
 asbTabbarVisibility();
-if(classes.has('config-category-active')||bar.style.display==='none'||props['--tabbar-space']!=='82px')throw Error('hub reserves a hidden dock');
+if(classes.has('config-category-active')||bar.style.display==='none'||props['asb-bar-hidden']!==false||'--tabbar-space' in props)throw Error('hub reserves a hidden dock');
 _cfgGroup='battery';asbTabbarVisibility();
-if(!classes.has('config-category-active')||bar.style.display!=='none'||props['--tabbar-space']!=='16px')throw Error('category lost dock spacing');
+if(!classes.has('config-category-active')||bar.style.display!=='none'||props['asb-bar-hidden']!==true)throw Error('category lost dock spacing');
 _deviceOpen=true;asbTabbarVisibility();
 if(classes.has('config-category-active')||bar.style.display==='none')throw Error('Device overlay left Config spacing active');
 _deviceOpen=false;_cfgGroup=null;asbTabbarVisibility();
@@ -12553,7 +12564,7 @@ for token in (
  '.cfg-row[class*="cat-"] .cfg-range input[type="range"]::-webkit-slider-thumb',
  '.cfg-row[class*="cat-"] .cfg-range input[type="range"]::-moz-range-thumb',
  '.cfg-row[class*="cat-"] .cfg-range-val { color:var(--cat) !important; }',
- '.cfg-row[class*="cat-"] :is(.cfg-status.good,.cfg-status.on)',
+ '.cfg-row[class*="cat-"] .cfg-status.good,\n.cfg-row[class*="cat-"] .cfg-status.on',
  '.cfg-row[class*="cat-"] .cfg-sel-pop button.active',
  '.cfg-row[class*="cat-"] .cfg-apply-live { color:var(--cat); }',
  '.kernel-card.cat-kernel .bfx-primary:not(.kernel-clear):not(:disabled)',
@@ -13198,7 +13209,7 @@ _kernelPanel.controls = { kernel_sched_nr_migrate: { state: 'not_exposed', live:
   kernel_lpm_prediction: { state: 'not_exposed', live: '' }, kernel_sched_stats: { state: 'not_exposed', live: '' } };
 let r = row(); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate'); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate');
 chk(/CONFIG_SCHED_DEBUG/.test(why(r)) && /privately/.test(why(r)) && r.children.filter(c => c.className === 'kernel-why').length === 1, 'nr_migrate why: ' + why(r));
-r = row(); kernelDecorateControlRow(r, 'kernel_sched_autogroup'); chk(/KRILIKD intentionally disables CONFIG_SCHED_AUTOGROUP/.test(why(r)), 'autogroup why');
+r = row(); kernelDecorateControlRow(r, 'kernel_sched_autogroup'); chk(/GKI kernels are normally built without CONFIG_SCHED_AUTOGROUP/.test(why(r)), 'autogroup why');
 r = row(); kernelDecorateControlRow(r, 'kernel_lpm_prediction'); chk(/lpm_levels/.test(why(r)), 'lpm why');
 r = row(); kernelDecorateControlRow(r, 'kernel_sched_stats'); chk(why(r) === '', 'a control without a reason got one');
 _kernelPanel.controls.kernel_sched_nr_migrate = { state: 'writable', live: '8' };
@@ -13246,13 +13257,181 @@ for k, v in ink.items():
 block = h[h.index('/* dev49: on the black and AMOLED surfaces'):h.index('.cfg-zygisk-card .cfg-zygisk-open {')]
 assert 'html[data-asb-theme="light"]' not in block
 assert '::after' not in re.sub(r'\.cfg-row:is\(\.cat-kernel,\.cat-audio\) \.cfg-sel-btn::after', '', block), 'a pseudo-element inside :is() voids the whole rule'
-for token in ('--tech-icon:var(--cat-ink)', '--section-accent:var(--cat-ink)', ':is(.cfg-status.good,.cfg-status.on)', '.cfg-range-val', '.cfg-seg button.on'):
+for token in ('--tech-icon:var(--cat-ink)', '--section-accent:var(--cat-ink)', '.cfg-row:is(.cat-kernel,.cat-audio) .cfg-status.good', '.cfg-row:is(.cat-kernel,.cat-audio) .cfg-status.on', '.cfg-range-val', '.cfg-seg button.on'):
     assert token in block, token
 for other in ('cat-camera', 'cat-battery', 'cat-ux', 'cat-net', 'cat-feel', 'cat-zygisk'):
     assert other not in block, other
 assert ':is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #b0704a; }' in h and ':is(.cfg-icon,.cfg-row).cat-audio   { --cat: #d4475f; }' in h
 PY
 echo "PASS webui category ink: Kernel and Audio text/icons use a lighter same-hue ink on dark and glass (>=7:1), fills and the light theme keep the hue, other categories untouched"
+)
+
+t_webui_wakeup_confirm_dev55_runtime() (
+# dev55: a wakeup-source name is not unique (several epoll sources share "eventpoll") and the
+# kernel rule blocks every source of that name. The observation dialog now shows new / shared /
+# system-source tags, and Block opens an inline confirmation that names how many sources share
+# the name and warns for alarm, power, charging, input and thermal sources; nothing is written
+# before Yes. A manually typed system-source name gets the same warning.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui wakeup confirm: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+keys = {'kernel_wb_confirm_shared': {'{n}'}, 'kernel_wb_confirm_critical': set(), 'kernel_wb_confirm_plain': {'{name}'},
+        'kernel_wb_new_short': set(), 'kernel_wb_shared_short': {'{n}'}, 'kernel_wb_critical_short': set()}
+en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
+for k in keys:
+    fb = re.findall(r"T\('" + k + r"', '([^']*)'\)", h)
+    assert fb and all(f == en[k] for f in fb), (k, fb, en.get(k))
+files = sorted((root / 'webroot/i18n').glob('*.json')); assert len(files) == 13
+for p in files:
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k, ph in keys.items():
+        v = d.get(k); assert isinstance(v, str) and v.strip(), (p.name, k)
+        assert set(re.findall(r'\{[a-z]+\}', v)) == ph, (p.name, k, v)
+        if p.stem != 'en': assert v != en[k], (p.name, k, 'untranslated')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui wakeup confirm: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+function grab(name) { const m = h.match(new RegExp('\\n(?:async )?function ' + name + '\\([^)]*\\) \\{[\\s\\S]*?\\n\\}')); if (!m) throw Error('missing ' + name); return m[0]; }
+const crit = h.match(/\nconst KERNEL_WB_CRITICAL = [^\n]*/); if (!crit) throw Error('missing KERNEL_WB_CRITICAL');
+const T = (k, f) => f; const uiSound = () => {}; const cfgRender = () => {};
+const toasts = []; const toast = (m, t) => toasts.push([m, t]);
+function mk(tag) {
+  return { tag, className:'', _t:'', children:[], attrs:{}, disabled:false, type:'', onclick:null, hidden:false,
+    get textContent() { return this._t; }, set textContent(v) { this._t = String(v); if (this._t === '') this.children = []; },
+    appendChild(c) { this.children.push(c); return c; }, setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; },
+    classList:{ toggle() {} }, querySelector() { return null; }, querySelectorAll() { return []; } };
+}
+const document = { createElement: mk };
+let _wbDraft = null, _wbBusy = false, _wbSourceView = { open:true, query:'', filter:'all', sort:'events' }, _kernelPanel = { wakeup:null }, _wbConfirm = '';
+const blockedCalls = []; function kernelWakeupBlockObserved(n) { blockedCalls.push(n); }
+eval(grab('bfxEl') + crit[0] + grab('kernelWakeupParse') + grab('kernelWakeupValidName') + grab('kernelWakeupDraft') + grab('kernelWakeupDuration')
+  + grab('kernelWakeupRisk') + grab('kernelWakeupConfirmText') + grab('kernelWakeupSelectSources') + grab('kernelWakeupSourcesDrawList') + grab('kernelWakeupAdd'));
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const wb = kernelWakeupParse('wakeup_blocker|status|blocked_events=0|node=writable|policy=ready|saved_count=0|current_count=0\n'
+  + 'wakeup_source|eventpoll|events=40|active=40|time_ms=10|reset=0|shared=2|new=0\n'
+  + 'wakeup_source|radio|events=30|active=3|time_ms=450|reset=0|shared=1|new=1\n'
+  + 'wakeup_source|legacy_line|events=1|active=1|time_ms=1|reset=0\n'
+  + 'wakeup_source|bad|events=1|active=1|time_ms=1|reset=0|shared=x|new=0\n');
+chk(wb.sources.length === 3, 'parse count ' + wb.sources.length);
+const ep = wb.sources.find(s => s.name === 'eventpoll'), ra = wb.sources.find(s => s.name === 'radio'), lg = wb.sources.find(s => s.name === 'legacy_line');
+chk(ep && ep.shared === 2 && !ep.fresh, 'shared parse'); chk(ra && ra.shared === 1 && ra.fresh, 'new parse'); chk(lg && lg.shared === 1 && !lg.fresh, 'legacy line defaults');
+_kernelPanel.wakeup = wb; wb.saved = [];
+const list = mk('div'), m = { querySelector: s => s === '.kernel-sources-scroll' ? list : null, querySelectorAll: () => [] };
+const flat = n => [n].concat(...n.children.map(flat));
+const byClass = c => flat(list).filter(n => (' ' + n.className + ' ').indexOf(' ' + c + ' ') >= 0);
+const blockBtn = name => { const r = list.children.find(r => r.className === 'kernel-source' && r.children[0].children[0].textContent === name); return r && r.children[1]; };
+kernelWakeupSourcesDrawList(m);
+const tags = byClass('kernel-source-tags').map(n => n.textContent);
+chk(tags.some(t => /shared name ×2/.test(t) && /system source/.test(t)), 'eventpoll tags ' + JSON.stringify(tags));
+chk(tags.some(t => t === 'new source'), 'radio new tag ' + JSON.stringify(tags));
+chk(tags.length === 2, 'legacy source tagged ' + JSON.stringify(tags));
+chk(byClass('kernel-source-tags').filter(n => /is-critical/.test(n.className)).length === 1, 'critical class');
+chk(byClass('kernel-source-confirm').length === 0, 'confirm shown before Block');
+blockBtn('eventpoll').onclick();
+chk(blockedCalls.length === 0, 'Block wrote before confirmation');
+let box = byClass('kernel-source-confirm');
+chk(box.length === 1 && box[0].attrs.role === 'alertdialog' && /is-critical/.test(box[0].className), 'critical confirm box');
+const txt = byClass('kernel-source-confirm-text')[0].textContent;
+chk(/^2 sources share this name; the rule blocks all of them\. This looks like a system source/.test(txt) && /Block “eventpoll” for all future events\?$/.test(txt), 'confirm text ' + txt);
+let yes = flat(box[0]).find(n => /bfx-primary/.test(n.className)), no = flat(box[0]).find(n => /bfx-secondary/.test(n.className));
+chk(yes.attrs['data-mode'] === 'stop' && yes.textContent === 'Block' && no.textContent === 'Cancel', 'confirm buttons');
+no.onclick();
+chk(byClass('kernel-source-confirm').length === 0 && _wbConfirm === '' && blockedCalls.length === 0, 'Cancel closes without writing');
+blockBtn('radio').onclick();
+box = byClass('kernel-source-confirm');
+chk(box.length === 1 && !/is-critical/.test(box[0].className), 'plain confirm box');
+chk(byClass('kernel-source-confirm-text')[0].textContent === 'Block “radio” for all future events?', 'plain text');
+yes = flat(box[0]).find(n => /bfx-primary/.test(n.className));
+chk(yes.attrs['data-mode'] === undefined, 'plain Yes marked as stop');
+blockBtn('radio').onclick(); chk(byClass('kernel-source-confirm').length === 0, 'a second Block tap does not close the confirmation');
+blockBtn('radio').onclick(); yes = flat(byClass('kernel-source-confirm')[0]).find(n => /bfx-primary/.test(n.className)); yes.onclick();
+chk(blockedCalls.join() === 'radio' && _wbConfirm === '', 'Yes did not block exactly once ' + blockedCalls);
+for (const n of ['alarmtimer', 'PowerManagerService.Display', 'battery', 'pmic_charger', 'gpio_keys', 'qcom-rtc', 'thermal-engine', 'eventpoll']) chk(kernelWakeupRisk(n, 1).critical, 'not critical: ' + n);
+for (const n of ['NETLINK', 'qcom_rx_wakelock', 'radio', 'IPA_WS', 'wlan']) chk(!kernelWakeupRisk(n, 1).critical, 'critical: ' + n);
+toasts.length = 0; kernelWakeupAdd('PowerManagerService.Display');
+chk(toasts.length === 1 && toasts[0][1] === 'warn' && /system source/.test(toasts[0][0]) && _wbDraft.indexOf('PowerManagerService.Display') >= 0, 'manual critical add ' + JSON.stringify(toasts));
+toasts.length = 0; kernelWakeupAdd('NETLINK'); chk(toasts.length === 0, 'plain manual add warned');
+process.exit(bad ? 1 : 0);
+JS
+node "$T/t.js" "$H" || fail 'dialog runtime'
+echo 'PASS webui wakeup confirm: shared/new/system-source tags, inline confirmation names the shared count and system risk, Cancel writes nothing, Yes blocks once, manual system names warn; 13 locales'
+)
+
+t_webui_render_cost_dev55() (
+# dev55 WebUI speed pass, measured in a 4x-throttled browser bench with the root bridge
+# modelled as a blocking call. The causes it removed, each pinned here:
+#  1. fitted card/tile heights and the tab-bar space were inherited custom properties on
+#     <html>; every write restyled the whole document (4 writes per page switch, 2 of them
+#     behind a forced layout). They live on .profiles / #cfgList and as a class now;
+#  2. pages that never take a compaction tier are not unclamped and measured;
+#  3. the UI scale is applied before the first element is styled, not after a full pass;
+#  4. Monitor resets its scroll before its classes change (no forced layout in the tap);
+#  5. long lists lay out only the rows near the viewport (content-visibility), an open
+#     option list lifts its row out of that containment;
+#  6. selectors whose rightmost compound was a bare :is() list are rewritten into the
+#     equivalent bucketable list (tools/asb_css_bucket.py --check keeps it that way);
+#  7. search keystrokes within 90 ms share one list rebuild.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui render cost: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cp "$H" "$T/index.html"
+python3 "$ROOT/tools/asb_css_bucket.py" "$T/index.html" --check >"$T/check" || fail "selectors left in the every-element bucket: $(head -3 "$T/check")"
+grep -qx 'asb_css_bucket.py' "$ROOT/tools/release_tools.list" && fail 'the host-only CSS tool is listed for the device package'
+python3 - "$H" <<'PY' || fail 'contract'
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+css = '\n'.join(re.findall(r'<style[^>]*>(.*?)</style>', h, flags=re.S))
+js = re.sub(r'<style[^>]*>.*?</style>', '', h, flags=re.S)
+# the padding sentinels only ever appear inside :not(); no element, class or id uses them
+assert 'asb-spec-pad' in css
+assert not re.search(r'(?<!:not\()[.#]?asb-spec-pad', css.replace(':not(.asb-spec-pad)', '').replace(':not(#asb-spec-pad)', '').replace(':not(asb-spec-pad)', ''))
+assert 'asb-spec-pad' not in js
+fit = h[h.index('function asbFitPagesNow('):h.index('\n}\n', h.index('function asbFitPagesNow('))]
+assert 'root.style.setProperty' not in fit
+for tok in ("prof.style.setProperty('--pbtn-h', h + 'px');", "hubHost.style.setProperty('--cfg-tile-h', h + 'px');",
+            "const hubHost = hubOn ? (_el('cfgList') || hubEl.parentNode || hubEl) : null;", 'let guard = fittable ? 0 : 6;'):
+    assert tok in fit, tok
+assert not re.search(r"documentElement\.style\.setProperty\('--(?:tabbar-space|pbtn-h|cfg-tile-h)'", h)
+tv = h[h.index('function asbTabbarVisibility('):h.index('\n}\n', h.index('function asbTabbarVisibility('))]
+assert "document.documentElement.classList.toggle('asb-bar-hidden', !!hideBar);" in tv
+body = h.index('\n<body>\n')
+early = h[body:h.index('</script>', body)]
+assert "setProperty('--asb-ui-scale'" in early and "classList.add('asb-scaled')" in early and 'window._asbUiScale=s' in early
+assert body < h.index('<svg class="asb-ufo-defs"') and early.count('\n') < 8
+lp = h[h.index('function openLivePage('):h.index('\n}\n', h.index('function openLivePage('))]
+assert lp.index('p.scrollTop = 0;') < lp.index("p.classList.add('open');")
+assert '#cfgList > .cfg-row { content-visibility: auto; contain-intrinsic-height: auto 90px; }' in css
+assert '#cfgList > .cfg-row.sel-open { content-visibility: visible; }' in css
+assert '.cfg-row.sel-open { position: relative; z-index: 60; }' in css
+assert ':is(#devicePage, #reportPage, #zygiskPage) .lgr-sec { content-visibility: auto; contain-intrinsic-height: auto 320px; }' in css
+srch = h[h.index('function cfgRenderSearch('):h.index('\n}\n', h.index('function cfgRenderSearch('))]
+assert 'clearTimeout(inp._asbSearchT)' in srch and '}, 90);' in srch and srch.index('_cfgSearch = inp.value.trim();') < srch.index('setTimeout(')
+PY
+# The rewrite really is equivalent on synthetic markup: same matches, same winner.
+python3 - "$ROOT/tools/asb_css_bucket.py" <<'PY' || fail 'tool semantics'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('b', sys.argv[1]); b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
+for src, want in (('html[data-x] :is(.a, .b.c)::after', ['html[data-x] .a.a::after', 'html[data-x] .b.c::after']),
+                  ('html[data-x] :is(input, .seg button)', ['html[data-x] input:not(.asb-spec-pad)', 'html[data-x] .seg button']),
+                  ('.p > :is(.a,.b)', ['.p > .a', '.p > .b']),
+                  ('html[data-x] :is(.a, #b)', ['html[data-x] :is(.a, #b)']),
+                  ('.x :is(.p .q, .r)', ['.x :is(.p .q, .r)']),
+                  ('html :is(.asb-calm .q, .r)', ['html :is(.asb-calm .q, .r)']),
+                  ('.row:is(.a,.b)', ['.row:is(.a,.b)'])):
+    got = b.rewrite_selector(src, [])
+    assert got == want, (src, got)
+    assert all(b.specificity(g) == b.specificity(src) for g in got), (src, got)
+assert b.specificity(':is(.a, #b)') == (1, 0, 0) and b.specificity(':where(.a) .b') == (0, 1, 0)
+PY
+echo 'PASS webui render cost: no root-level custom property writes on page switches, no wasted overlay measurement, early UI scale, scroll reset before class changes, bounded list layout with option lists intact, bucketable selectors (tool check) and coalesced search'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
