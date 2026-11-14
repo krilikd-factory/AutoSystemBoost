@@ -316,7 +316,10 @@ mglru_hold=stock
 # kernel_timer_migration: stock|off|on. Default off preserves the former profile value 0.
 # kernel_sched_nr_migrate: stock|1|2|4|8|16 through /sys/kernel/debug/sched/nr_migrate.
 # Default 4 preserves the former balanced request; Stock performs no unowned write.
+# kernel_mglru_min_ttl: stock|1000|2000|5000 milliseconds; exact baseline restore.
+# The legacy mglru_hold key is snapshot-compatible but no longer writes sysfs.
 mglru_mode=smart
+kernel_mglru_min_ttl=stock
 kernel_timer_migration=off
 kernel_sched_nr_migrate=4
 
