@@ -433,7 +433,7 @@
     },
     "kernel_sched_stats": {
       "name": "Scheduler Debug Accounting",
-      "desc": "Off disables extra scheduler statistics through /proc/sys/kernel/sched_schedstats. This removes the small overhead of that debug accounting, but also removes schedstats diagnostics; scheduling policy and CPU frequencies do not change. Any performance or battery effect is limited to this accounting and is not claimed without measurement. Stock is inert when unowned and restores the original 0/1 after Off; uninstall does the same.",
+      "desc": "For daily use choose Off to remove schedstats accounting overhead. It does not change scheduler policy or CPU frequencies. Restore Stock when diagnosing scheduler/latency problems, otherwise those statistics are unavailable. No battery or performance percentage is claimed. Interface: /proc/sys/kernel/sched_schedstats.",
       "descOpt": {
         "stock": "Leave scheduler debug accounting unchanged.",
         "off": "Disable only an exposed writable sched_schedstats node; restore its recorded value on Stock or uninstall."
@@ -558,19 +558,19 @@
     },
     "mglru_mode": {
       "name": "MGLRU Mode",
-      "desc": "Changes how MGLRU selects and reclaims memory pages: Off requests 0, On 7, and Smart 5 or 7 by load. Under memory pressure a suitable policy can reduce reclaim work and improve responsiveness or app retention; an unsuitable one can increase reclaim, reloads and stutter. Battery impact depends on the workload and is not guaranteed. Stock and uninstall restore the captured mask; clamped readback is a mismatch, not success."
+      "desc": "For memory pressure: Smart (5/7 by load) is the balanced starting point for responsiveness and app retention; On=7 enables more MGLRU policy, Off=0 uses legacy reclaim. Start with Smart for daily battery use and compare with Stock when diagnosing. Heat and drain effects depend on workload and are not guaranteed."
     },
     "kernel_timer_migration": {
       "name": "Timer Migration",
-      "desc": "Controls whether the kernel may migrate timers, including high-resolution timers, between CPUs. On can move timers from idle CPUs to already active ones and avoid some wake-ups; Off keeps timers in place, which can behave differently under load. Depending on CPU idle behavior, either mode may help or hurt latency and power use. Off preserves the previous ASB request; Stock and uninstall restore the captured value after verified readback."
+      "desc": "To test fewer idle wake-ups choose On: timers may move from idle CPUs to already active ones. Off keeps timers in place and can sometimes help loaded latency. This phone currently reads 0; test On for idle drain, but revert to Off/Stock if latency or glitches appear. Neither value is universally faster or cooler."
     },
     "kernel_sched_nr_migrate": {
       "name": "Scheduler Migration Batch",
-      "desc": "Sets the maximum tasks moved in one scheduler balancing pass through /sys/kernel/debug/sched/nr_migrate. Lower values reduce migration work per pass but can leave cores imbalanced for longer; higher values can balance load sooner at the cost of more migrations and cache disruption. Performance and battery effects depend on the workload. Default 4 is the previous Balanced request, not a proven optimum; Stock and uninstall restore the captured integer."
+      "desc": "This caps tasks moved per balancing pass. 1–2 reduces migration work/cache disruption but can leave imbalance longer; 4 is a moderate start; 8–16 balances heavy multitasking sooner with more migrations. Start at 2–4 for battery and compare 4–8 under heavy load. This is not a CPU-frequency control; measure rather than assume. Interface: /sys/kernel/debug/sched/nr_migrate."
     },
     "kernel_sched_autogroup": {
       "name": "Scheduler Autogroup",
-      "desc": "On groups tasks by session for scheduler fairness; Off disables that grouping. Under competing background load this can change interactive responsiveness and the CPU share given to background work. It is neither a performance booster nor a power-saving mode, and battery impact is not guaranteed. Stock and uninstall restore the captured 0/1. If the interface is absent, ASB reports not exposed instead of enabling a kernel option just for this card.",
+      "desc": "The choice is disabled on this GKI/KRILIKD: CONFIG_SCHED_AUTOGROUP is intentionally off because signal_struct affects the vendor-module KMI. There is no value to select for battery savings. Where genuinely supported, On improves CPU fairness between sessions under background contention and Off removes grouping; it is not a direct FPS or battery tweak.",
       "descOpt": {
         "stock": "Leave automatic scheduler grouping unchanged.",
         "off": "Disable automatic task grouping.",
@@ -579,7 +579,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Child Task Runs First",
-      "desc": "After fork(), On asks the scheduler to run the child before its parent; Off selects the opposite order. This can change process-start latency and copy-on-write behavior in some workloads, while others may see no benefit or a regression. It is not a general FPS, performance or battery optimization. Stock and uninstall restore the captured 0/1, and readback must match before ASB reports success.",
+      "desc": "Only changes parent/child order after fork(). Keep Stock for ordinary use and battery. On can improve some process-launch/copy-on-write paths, Off favours the parent; regressions are possible. There is no universal game, Shelf or battery recommendation.",
       "descOpt": {
         "stock": "Leave child-first scheduler policy unchanged.",
         "off": "Do not request the child to run first.",
@@ -588,15 +588,15 @@
     },
     "kernel_hrtimer_migration": {
       "name": "High-resolution Timer Migration",
-      "desc": "Uses a separate /proc/sys/kernel/hrtimer_migration only when a vendor actually exposes that non-upstream interface. Standard Linux 6.12 has no such independent sysctl: ASB then marks this row as covered by Timer migration and performs no second write. On a kernel with a real separate node, Auto requests 0 only on Battery and other profiles restore the captured value. Neither latency nor power benefit is guaranteed."
+      "desc": "There is no independent value on KRILIKD: Linux 6.12 does not expose /proc/sys/kernel/hrtimer_migration. This row only reflects Timer migration and writes nothing. Use the shared control above for power/latency tests; Auto/On/Off here cannot have a separate effect."
     },
     "kernel_lpm_prediction": {
       "name": "Idle Prediction (LPM)",
-      "desc": "Controls the low-power-mode idle-state predictor when exposed by the kernel. Auto requests 1 only on Battery and restores the captured value on other profiles; Off and On override the profile. Power and wake-up latency effects are not guaranteed. Stock and uninstall require verified restoration."
+      "desc": "The current qcom-cpu-lpm governor has no such switch; it belongs to the legacy lpm_levels driver. Leave Auto: ASB writes nothing when not exposed. On a kernel that really exposes it, Auto enables prediction only on Battery; On may save idle power at a wake-latency cost, Off tests the opposite trade-off. This is not Android LPM or radio policy."
     },
     "kernel_usb_autosuspend": {
       "name": "USB Autosuspend",
-      "desc": "Sets the default autosuspend delay for newly detected USB peripherals: On requests 2 seconds, Off requests -1. This does not change charging, ADB, gadget mode, tethering or VPN Hide. Stock restores the captured signed integer when ASB owns it."
+      "desc": "For USB peripherals, On sets a 2-second default autosuspend for newly detected devices and may reduce their power use; Off=-1 disables that default and is for compatibility problems. It does not set charging current, ADB, tethering or existing device policy. Expect no benefit when no USB peripheral is used."
     }
   },
   "cfg_search": "Search",
@@ -3196,6 +3196,25 @@
   "soter_trigger_boot": "after reboot",
   "lsp_db_schema_empty": "The LSPosed database ASB found holds no tables, so there is no module list to read. If LSPosed itself shows modules, it keeps them elsewhere: send the diagnostic export.",
   "kc_why_kernel_sched_nr_migrate": "Needs a kernel built with scheduler debugging (CONFIG_SCHED_DEBUG) and debugfs. ASB mounts debugfs privately only for the moment it reads or writes the value, so nothing more is needed when both are built in.",
-  "kc_why_kernel_sched_autogroup": "GKI kernels are built without autogroup. Turning it on changes a kernel structure that vendor modules are compiled against, so a GKI kernel cannot gain it without breaking those modules.",
-  "kc_why_kernel_lpm_prediction": "This switch belongs to the older Snapdragon lpm_levels idle driver. Newer Snapdragon kernels use another idle governor without it; the diagnostic export lists the parameters this kernel has."
+  "kc_why_kernel_sched_autogroup": "KRILIKD intentionally disables CONFIG_SCHED_AUTOGROUP: it changes signal_struct and the KMI against which vendor modules are built. ASB does not bypass the KMI guard just to expose this switch.",
+  "kc_why_kernel_lpm_prediction": "This device uses qcom-cpu-lpm; the switch belongs to the legacy lpm_levels driver. Leave Auto: there is no independent value to choose. ASB does not invent a writer or confuse this with Android LPM.",
+  "kernel_wb_observe_title": "Observed in the idle window",
+  "kernel_wb_observe_idle": "No measurement has started. Start it before turning the screen off, then update after waking. The window also includes any screen-on activity.",
+  "kernel_wb_observe_running": "Window: {elapsed} · changed sources: {n}",
+  "kernel_wb_observe_error": "Could not read wakeup-source counters",
+  "kernel_wb_start": "Start idle window",
+  "kernel_wb_restart": "Restart window",
+  "kernel_wb_update_sources": "Update sources",
+  "kernel_wb_reset_window": "Clear window",
+  "kernel_wb_no_sources": "No source counter has increased yet. Leave the phone idle and update later; zero is not an error.",
+  "kernel_wb_counter_reset": "Some counters restarted during the window; their values cover only the time since the reset.",
+  "kernel_wb_source_metrics": "+{events} events · +{active} activations · +{time} active",
+  "kernel_wb_reset_short": "counter reset",
+  "kernel_wb_block": "Block",
+  "kernel_wb_blocked": "Blocked",
+  "kernel_wb_abi": "KRILIKD ABI: {v}",
+  "kernel_wb_sec": " s",
+  "kernel_wb_min": " min",
+  "kernel_wb_hour": " h",
+  "dev_kernel_features_wakeup_blocker_abi": "Wakeup blocker ABI"
 }
