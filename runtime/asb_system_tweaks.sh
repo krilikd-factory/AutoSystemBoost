@@ -34,8 +34,8 @@ _changed=""
 _kc_helper="$MODDIR/runtime/asb_kernel_controls.sh"
 if [ -f "$_kc_helper" ]; then
   case "$(_cfg mglru_mode):$(cat "$MODDIR/current_profile" 2>/dev/null)" in
-    smart:smart|:smart) _kc_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend" ;;
-    *) _kc_keys="mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend" ;;
+    smart:smart|:smart) _kc_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_mglru_min_ttl kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend" ;;
+    *) _kc_keys="mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_mglru_min_ttl kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend" ;;
   esac
   for _kc_key in $_kc_keys; do
     MODDIR="$MODDIR" ASB_CONF="$CONF" sh "$_kc_helper" apply "$_kc_key" >/dev/null 2>&1 || true
@@ -43,35 +43,9 @@ if [ -f "$_kc_helper" ]; then
   _changed="${_changed}kernel_controls=processed "
 fi
 
-# --- MGLRU working-set protection ------------------------------------------
-#
-# min_ttl_ms is how long a page generation is protected from reclaim. At 0 - the value on
-# every device checked so far - there is no protection at all, so the foreground app can be
-# evicted under memory pressure and has to be rebuilt when the user returns to it.
-#
-# This is the ONE actionable lever of the two a third-party module ships in this area:
-#   lru_gen_config asks the kernel for a bit it does not honour here (the property says
-#   core_and_nonleaf_young, the kernel reports 0x3 - the non-leaf bit stays off), and
-#   enable_uffd_gc=false disables the Android 14+ collector, which is a downgrade.
-#
-# Guarded on the node existing. A kernel without MGLRU is left alone rather than told the
-# tweak is unavailable, and "stock" restores 0 rather than walking away - the same rule the
-# rest of this file follows.
-_mg_node="/sys/kernel/mm/lru_gen/min_ttl_ms"
-if [ -w "$_mg_node" ]; then
-  case "$(_cfg mglru_hold)" in
-    hold)
-      echo 1000 > "$_mg_node" 2>/dev/null && _changed="${_changed}mglru_hold=1000ms "
-      ;;
-    aggressive)
-      echo 2000 > "$_mg_node" 2>/dev/null && _changed="${_changed}mglru_hold=2000ms "
-      ;;
-    *)
-      echo 0 > "$_mg_node" 2>/dev/null && _changed="${_changed}mglru_hold=stock "
-      ;;
-  esac
-fi
-
+# MGLRU min_ttl_ms is owned exclusively by asb_kernel_controls.sh above.
+# The legacy mglru_hold writer was retired: it had no readback/baseline and incorrectly
+# treated 0 as Stock. kernel_mglru_min_ttl now restores the exact captured value instead.
 # scheduler statistics are owned by asb_kernel_controls.sh above, together with the other
 # bounded kernel controls. That owner captures/restores the baseline and verifies readback.
 

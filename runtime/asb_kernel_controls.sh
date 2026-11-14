@@ -7,6 +7,7 @@ ASB_KC_DBG_MP=""
 
 asb_kc_node() {
   case "$1" in
+    kernel_mglru_min_ttl) printf '%s\n' "${ASB_MGLRU_MIN_TTL_NODE:-/sys/kernel/mm/lru_gen/min_ttl_ms}" ;;
     mglru_mode) printf '%s\n' "${ASB_MGLRU_ENABLED_NODE:-/sys/kernel/mm/lru_gen/enabled}" ;;
     kernel_timer_migration) printf '%s\n' "${ASB_TIMER_MIGRATION_NODE:-/proc/sys/kernel/timer_migration}" ;;
     kernel_sched_nr_migrate) printf '%s\n' "${ASB_SCHED_NR_MIGRATE_NODE:-/sys/kernel/debug/sched/nr_migrate}" ;;
@@ -59,6 +60,8 @@ asb_kc_clean() { printf '%s' "$1" | tr -d ' \t\r\n'; }
 asb_kc_mode() {
   _akm_v="$(grep -E "^[[:space:]]*$1=" "$ASB_KC_CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \t\r\n')"
   case "$1:$_akm_v" in
+    kernel_mglru_min_ttl:stock|kernel_mglru_min_ttl:1000|kernel_mglru_min_ttl:2000|kernel_mglru_min_ttl:5000) ;;
+    kernel_mglru_min_ttl:*) _akm_v=stock ;;
     mglru_mode:stock|mglru_mode:off|mglru_mode:on|mglru_mode:smart) ;;
     mglru_mode:*) _akm_v=smart ;;
     kernel_timer_migration:stock|kernel_timer_migration:off|kernel_timer_migration:on) ;;
@@ -93,7 +96,7 @@ asb_kc_valid_value() {
         *) [ "${#_akv_v}" -le 9 ] ;;
       esac
       ;;
-    kernel_sched_nr_migrate)
+    kernel_sched_nr_migrate|kernel_mglru_min_ttl)
       case "$_akv_v" in ''|*[!0-9]*) return 1 ;; esac
       [ "${#_akv_v}" -le 9 ]
       ;;
@@ -229,6 +232,7 @@ asb_kc_apply() {
     mglru_mode:smart)
       case "$_aka_smart" in 5|7) _aka_want="$_aka_smart" ;; *) _aka_want=7 ;; esac
       ;;
+    kernel_mglru_min_ttl:1000|kernel_mglru_min_ttl:2000|kernel_mglru_min_ttl:5000) _aka_want="$_aka_mode" ;;
     kernel_timer_migration:off|kernel_hrtimer_migration:off|kernel_hrtimer_migration:auto|kernel_lpm_prediction:off) _aka_want=0 ;;
     kernel_timer_migration:on|kernel_hrtimer_migration:on|kernel_lpm_prediction:on|kernel_lpm_prediction:auto) _aka_want=1 ;;
     kernel_usb_autosuspend:off) _aka_want=-1 ;;
@@ -282,7 +286,7 @@ asb_kc_status() {
 
 asb_kc_each() {
   _ake_action="$1" _ake_rc=0
-  for _ake_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
+  for _ake_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
     asb_kc_run "$_ake_action" "$_ake_key" || _ake_rc=1
   done
   return "$_ake_rc"
