@@ -12,6 +12,7 @@ STATUS="$STATE/night_charge.status"
 LOCK="$STATE/night_charge.lock"
 BOOTID_FILE="${ASB_NC_BOOTID:-/proc/sys/kernel/random/boot_id}"
 PSYROOT="${ASB_NC_PSYROOT:-${PSY%/*}}"
+OPLUS="${ASB_NC_OPLUS:-/sys/class/oplus_chg/battery}"
 LEARN="$STATE/night_charge.learn"
 UNPLUG="$STATE/night_charge.unplug"
 PLUG="$STATE/night_charge.plug"
@@ -140,20 +141,25 @@ _nc_discover() {
      && [ "$_max" -ge "$TARGET" ] 2>/dev/null; then
     NC_KIND=limit; NC_NODE="$_lim"; return 0
   fi
-  _sw="$PSY/charging_enabled"
-  _cur="$(_nc_read "$_sw")"
-  if [ -f "$_sw" ] && [ -w "$_sw" ]; then
-    case "$_cur" in 0|1) NC_KIND=switch; NC_NODE="$_sw"; return 0 ;; esac
-  fi
+  for _sk in switch mmi mmi_psy; do
+    _sw="$(_nc_node_for "$_sk")"
+    _cur="$(_nc_read "$_sw")"
+    if [ -f "$_sw" ] && [ -w "$_sw" ]; then
+      case "$_cur" in 0|1) NC_KIND="$_sk"; NC_NODE="$_sw"; return 0 ;; esac
+    fi
+  done
   return 1
 }
 _nc_node_for() {
   case "$1" in
     limit) printf '%s\n' "$PSY/charge_control_limit" ;;
     switch) printf '%s\n' "$PSY/charging_enabled" ;;
+    mmi) printf '%s\n' "$OPLUS/mmi_charging_enable" ;;
+    mmi_psy) printf '%s\n' "$PSY/mmi_charging_enable" ;;
     *) return 1 ;;
   esac
 }
+_nc_is_switch() { case "$1" in switch|mmi|mmi_psy) return 0 ;; esac; return 1; }
 _nc_ledger_load() {
   L_KIND=""; L_ORIG=""; L_APPLIED=""; L_OWNED=""; L_BOOT=""; L_FOUND=0
   [ -f "$LEDGER" ] || return 1
@@ -163,7 +169,7 @@ _nc_ledger_load() {
       owned) L_OWNED="$_v" ;; boot) L_BOOT="$_v" ;;
     esac
   done < "$LEDGER"
-  case "$L_KIND" in limit|switch) ;; *) return 1 ;; esac
+  case "$L_KIND" in limit|switch|mmi|mmi_psy) ;; *) return 1 ;; esac
   _nc_num "$L_ORIG" && _nc_num "$L_APPLIED" || return 1
   case "$L_OWNED" in 0|1) ;; *) return 1 ;; esac
   L_FOUND=1
@@ -304,9 +310,14 @@ _nc_reconcile() {
     # Discharging is an explicit unplug indication. "Not charging" is not: it is
     # also the normal result of our own limit/switch and must not cause a release/
     # apply oscillation on the next maintenance tick.
-    if [ "$NC_BATTERY_STATUS" = Discharging ] || \
-       { [ "$NC_KIND" = switch ] && [ "$NC_CAPACITY" = unknown ]; } || \
-       { [ "$NC_KIND" = switch ] && [ "$NC_CAPACITY" != unknown ] \
+    _unplug=0
+    if [ "$NC_BATTERY_STATUS" = Discharging ]; then
+      _unplug=1
+      _nc_is_switch "$NC_KIND" && _nc_plugged && _unplug=0
+    fi
+    if [ "$_unplug" = 1 ] || \
+       { _nc_is_switch "$NC_KIND" && [ "$NC_CAPACITY" = unknown ]; } || \
+       { _nc_is_switch "$NC_KIND" && [ "$NC_CAPACITY" != unknown ] \
          && [ "$NC_CAPACITY" -lt "$TARGET" ] 2>/dev/null; }; then
       _r="$(_nc_release)"
       case "$_r" in restored|external|none) _nc_status waiting ;; *) _nc_status restore_failed ;; esac
@@ -326,7 +337,7 @@ _nc_reconcile() {
   fi
   if [ "$NC_CAPACITY" = unknown ]; then _nc_status unknown; return 0; fi
   if [ "$NC_CAPACITY" -lt "$TARGET" ] 2>/dev/null; then _nc_status waiting; return 0; fi
-  _nc_apply_new switch "$NC_NODE" 0
+  _nc_apply_new "$NC_KIND" "$NC_NODE" 0
 }
 _nc_status_only() {
   NC_ENABLED=0
@@ -339,7 +350,7 @@ _nc_status_only() {
     _st="$(grep -E '^state=' "$STATUS" 2>/dev/null | head -1 | sed 's/.*=//')"
     _if="$(grep -E '^interface=' "$STATUS" 2>/dev/null | head -1 | sed 's/.*=//')"
     case "$_st" in ''|*[!a-z_]*) _st=unknown ;; esac
-    case "$_if" in limit|switch) NC_KIND="$_if" ;; esac
+    case "$_if" in limit|switch|mmi|mmi_psy) NC_KIND="$_if" ;; esac
   elif [ "$NC_ENABLED" = 1 ] && [ "$NC_KIND" = none ]; then
     _st=not_exposed
   fi

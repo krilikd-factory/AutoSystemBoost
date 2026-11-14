@@ -403,6 +403,8 @@ _status() {
   _si="$(_inv)"
   _sr="$(printf '%s\n' "$_si" | sed -n 's/^reason=//p' | head -n 1)"
   if printf '%s\n' "$_si" | grep -qx 'format=v1'; then echo 'database=ok'; else echo "database=${_sr:-unknown}"; fi
+  printf '%s\n' "$_si" | sed -n 's/^layout=\([a-z]*\)$/layout=\1/p' | head -n 1
+  printf '%s\n' "$_si" | sed -n 's/^schema=//p' | head -n 1 | tr -cd 'A-Za-z0-9_(),;' | cut -c1-600 | sed -n 's/^\(..*\)$/db_schema=\1/p'
   [ -f "$AUTO" ] && echo 'auto=1' || echo 'auto=0'
   echo "pending_reboot=$(_pending)"
   echo "evidence_age=$(_evid_age)"

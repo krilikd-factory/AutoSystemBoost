@@ -67,6 +67,8 @@ _asb_lsposed_info() {
     fi
   fi
   _emit lsposed_hooks database "$_ls_state"
+  _ls_schema="$(printf '%s\n' "$_ls_inv" | sed -n 's/^schema=//p' | head -n 1 | tr -cd 'A-Za-z0-9_(),;')"
+  [ -n "$_ls_schema" ] && _emit lsposed_hooks db_layout "$_ls_schema"
 
   _ls_mods="$(printf '%s\n' "$_ls_inv" | awk -F'|' '$1 == "module" && $3 == 1 && NF == 4 { print $2 }')"
   _ls_modl="$(_asb_lsp_list "$_ls_mods")"

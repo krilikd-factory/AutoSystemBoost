@@ -3,6 +3,7 @@
 ASB_KC_MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 ASB_KC_CONF="${ASB_CONF:-$ASB_KC_MODDIR/config/governor.conf}"
 ASB_KC_STATE="${ASB_KERNEL_STATE_DIR:-/data/adb/asb/kernel_controls}"
+ASB_KC_DBG_MP=""
 
 asb_kc_node() {
   case "$1" in
@@ -17,6 +18,40 @@ asb_kc_node() {
     kernel_usb_autosuspend) printf '%s\n' "${ASB_USB_AUTOSUSPEND_NODE:-/sys/module/usbcore/parameters/autosuspend}" ;;
     *) return 1 ;;
   esac
+}
+
+asb_kc_dbg_up() {
+  [ "$1" = kernel_sched_nr_migrate ] || return 0
+  [ -z "${ASB_SCHED_NR_MIGRATE_NODE:-}" ] || return 0
+  [ -e "${ASB_KC_DEBUGFS_DEFAULT:-/sys/kernel/debug/sched/nr_migrate}" ] && return 0
+  grep -qw debugfs "${ASB_KC_FILESYSTEMS:-/proc/filesystems}" 2>/dev/null || return 0
+  _akd_mp="${ASB_KC_DEBUGFS_MP:-/dev/.asb_kc_debugfs}"
+  mkdir -p "$_akd_mp" 2>/dev/null || return 0
+  if mount -t debugfs debugfs "$_akd_mp" 2>/dev/null; then
+    ASB_KC_DBG_MP="$_akd_mp"
+    ASB_SCHED_NR_MIGRATE_NODE="$_akd_mp/sched/nr_migrate"
+  else
+    rmdir "$_akd_mp" 2>/dev/null
+  fi
+  return 0
+}
+
+asb_kc_dbg_down() {
+  [ -n "$ASB_KC_DBG_MP" ] || return 0
+  umount "$ASB_KC_DBG_MP" 2>/dev/null || umount -l "$ASB_KC_DBG_MP" 2>/dev/null
+  rmdir "$ASB_KC_DBG_MP" 2>/dev/null
+  ASB_KC_DBG_MP=""
+  ASB_SCHED_NR_MIGRATE_NODE=""
+  return 0
+}
+
+asb_kc_run() {
+  _akrn_a="$1"; shift
+  asb_kc_dbg_up "$1"
+  "asb_kc_$_akrn_a" "$@"
+  _akrn_rc=$?
+  asb_kc_dbg_down
+  return "$_akrn_rc"
 }
 
 asb_kc_clean() { printf '%s' "$1" | tr -d ' \t\r\n'; }
@@ -248,7 +283,7 @@ asb_kc_status() {
 asb_kc_each() {
   _ake_action="$1" _ake_rc=0
   for _ake_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
-    "asb_kc_$_ake_action" "$_ake_key" || _ake_rc=1
+    asb_kc_run "$_ake_action" "$_ake_key" || _ake_rc=1
   done
   return "$_ake_rc"
 }
@@ -257,9 +292,9 @@ case "${0##*/}" in
   asb_kernel_controls.sh)
     _akc_cmd="${1:-status}" _akc_one="${2:-}"
     case "$_akc_cmd" in
-      apply) if [ -z "$_akc_one" ]; then asb_kc_each apply; else asb_kc_apply "$_akc_one" "${3:-}" "${4:-}"; fi ;;
-      restore) if [ -z "$_akc_one" ]; then asb_kc_each restore; else asb_kc_restore "$_akc_one"; fi ;;
-      status) if [ -z "$_akc_one" ]; then asb_kc_each status; else asb_kc_status "$_akc_one"; fi ;;
+      apply) if [ -z "$_akc_one" ]; then asb_kc_each apply; else asb_kc_run apply "$_akc_one" "${3:-}" "${4:-}"; fi ;;
+      restore) if [ -z "$_akc_one" ]; then asb_kc_each restore; else asb_kc_run restore "$_akc_one"; fi ;;
+      status) if [ -z "$_akc_one" ]; then asb_kc_each status; else asb_kc_run status "$_akc_one"; fi ;;
       *) printf 'usage: asb_kernel_controls.sh apply|restore|status [registered_key]\n' >&2; exit 2 ;;
     esac
     ;;
