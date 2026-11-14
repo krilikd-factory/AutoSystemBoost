@@ -3188,6 +3188,23 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
     fi
   done
 
+  _mg_ttl="$(grep -E '^[[:space:]]*kernel_mglru_min_ttl=' "$_new_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r')"
+  _mg_hold="$(grep -E '^[[:space:]]*mglru_hold=' "$_new_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r')"
+  _mg_new=""
+  case "$_mg_ttl" in
+    5000) _mg_new=2000 ;;
+    ''|stock) case "$_mg_hold" in hold) _mg_new=1000 ;; aggressive) _mg_new=2000 ;; esac ;;
+  esac
+  if [ -n "$_mg_new" ]; then
+    if grep -qE '^[[:space:]]*kernel_mglru_min_ttl=' "$_new_conf" 2>/dev/null; then
+      sed -i "s|^\([[:space:]]*kernel_mglru_min_ttl=\).*|\1$_mg_new|" "$_new_conf" 2>/dev/null
+    else
+      printf 'kernel_mglru_min_ttl=%s\n' "$_mg_new" >> "$_new_conf"
+    fi
+    ui_print "      + MGLRU generation protection carried over: ${_mg_new} ms"
+  fi
+  case "$_mg_hold" in hold|aggressive) sed -i "s|^\([[:space:]]*mglru_hold=\).*|\1stock|" "$_new_conf" 2>/dev/null ;; esac
+
   ASB_CONFIG_MIGRATED_COUNT=$_migrated
   # Stamp the schema regardless of what was migrated. This is the line whose absence made
   # the first attempt defer the bug by one update instead of fixing it.
