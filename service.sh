@@ -2455,6 +2455,7 @@ apply_kernel() {
       ;;
   esac
   if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+    sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_mglru_min_ttl >/dev/null 2>&1 || true
     sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
     sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
     sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_hrtimer_migration "" "$ASB_PROFILE" >/dev/null 2>&1 || true
@@ -4313,6 +4314,7 @@ fi
   if asb_feature_enabled KERNEL; then
     if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_stats >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_mglru_min_ttl >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_hrtimer_migration "" "$ASB_PROFILE" >/dev/null 2>&1 || true
@@ -4341,6 +4343,7 @@ fi
   if asb_feature_enabled KERNEL; then
     if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_stats >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_mglru_min_ttl >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_hrtimer_migration "" "$ASB_PROFILE" >/dev/null 2>&1 || true
