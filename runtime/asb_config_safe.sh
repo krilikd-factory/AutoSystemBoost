@@ -308,7 +308,7 @@ _validate() {
   case "$_handover_active" in ''|0|1) : ;; *) _die "net_handover_active must be 0 or 1" ;; esac
   case "$_net_mtu" in ''|stock|on) : ;; *) _die "net_mtu_probing must be stock or on" ;; esac
   case "$_mglru_mode" in ''|stock|off|on|smart) : ;; *) _die "mglru_mode must be stock, off, on or smart" ;; esac
-  case "$_mglru_min_ttl" in ''|stock|1000|2000|5000) : ;; *) _die "kernel_mglru_min_ttl must be stock, 1000, 2000 or 5000" ;; esac
+  case "$_mglru_min_ttl" in ''|stock|1000|2000|5000) : ;; *) _die "kernel_mglru_min_ttl must be stock, 1000 or 2000" ;; esac
   case "$_timer_migration" in ''|stock|off|on) : ;; *) _die "kernel_timer_migration must be stock, off or on" ;; esac
   case "$_nr_migrate" in ''|stock|1|2|4|8|16) : ;; *) _die "kernel_sched_nr_migrate must be stock, 1, 2, 4, 8 or 16" ;; esac
   case "$_sched_autogroup" in ''|stock|off|on) : ;; *) _die "kernel_sched_autogroup must be stock, off or on" ;; esac

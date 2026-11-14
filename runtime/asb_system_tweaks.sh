@@ -43,9 +43,6 @@ if [ -f "$_kc_helper" ]; then
   _changed="${_changed}kernel_controls=processed "
 fi
 
-# MGLRU min_ttl_ms is owned exclusively by asb_kernel_controls.sh above.
-# The legacy mglru_hold writer was retired: it had no readback/baseline and incorrectly
-# treated 0 as Stock. kernel_mglru_min_ttl now restores the exact captured value instead.
 # scheduler statistics are owned by asb_kernel_controls.sh above, together with the other
 # bounded kernel controls. That owner captures/restores the baseline and verifies readback.
 

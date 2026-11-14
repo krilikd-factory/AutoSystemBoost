@@ -112,10 +112,6 @@ asb_wb_set() {
   asb_wb_apply
 }
 
-
-# On-demand observation of the standard kernel wakeup-source counters. A start snapshot
-# and a later read define one explicit window; there is no timer, delay or background job.
-# The counters are cumulative, so only a start/end delta is shown as window activity.
 asb_wb_mono_ms() {
   awk '{ printf "%.0f\n", $1 * 1000 }' /proc/uptime 2>/dev/null
 }
@@ -124,24 +120,31 @@ asb_wb_snapshot() {
   _wb_snap_out="$1"
   _wb_snap_tmp="${_wb_snap_out}.new.$$"
   (umask 077; printf '%s' '' > "$_wb_snap_tmp") || return 1
-  _wb_snap_found=0
-  for _wb_snap_dir in "$ASB_WB_CLASS"/wakeup*; do
-    [ -d "$_wb_snap_dir" ] || continue
-    [ -r "$_wb_snap_dir/name" ] || continue
-    _wb_snap_name="$(cat "$_wb_snap_dir/name" 2>/dev/null)"
-    asb_wb_valid_name "$_wb_snap_name" || continue
-    _wb_snap_active="$(cat "$_wb_snap_dir/active_count" 2>/dev/null)"
-    _wb_snap_events="$(cat "$_wb_snap_dir/event_count" 2>/dev/null)"
-    _wb_snap_time="$(cat "$_wb_snap_dir/total_time_ms" 2>/dev/null)"
-    case "$_wb_snap_active" in ''|*[!0-9]*) continue ;; esac
-    case "$_wb_snap_events" in ''|*[!0-9]*) continue ;; esac
-    case "$_wb_snap_time" in ''|*[!0-9]*) continue ;; esac
-    printf '%s\t%s\t%s\t%s\n' "$_wb_snap_name" "$_wb_snap_active" "$_wb_snap_events" "$_wb_snap_time" >> "$_wb_snap_tmp" || {
-      rm -f "$_wb_snap_tmp"; return 1;
+  set -- "$ASB_WB_CLASS"/wakeup*
+  [ -d "$1" ] || { rm -f "$_wb_snap_tmp"; return 1; }
+  for _wb_snap_dir in "$@"; do
+    printf '%s\n' "$_wb_snap_dir/name" "$_wb_snap_dir/active_count" "$_wb_snap_dir/event_count" "$_wb_snap_dir/total_time_ms"
+  done | xargs grep -H '' 2>/dev/null | awk '
+    {
+      i = index($0, ":"); if (i < 2) next
+      p = substr($0, 1, i - 1); v = substr($0, i + 1)
+      n = split(p, a, "/"); if (n < 2) next
+      id = a[n - 1]; f = a[n]
+      if (id !~ /^wakeup[0-9]+$/) next
+      if (f == "name") {
+        if (length(v) < 1 || length(v) > 63 || v !~ /^[!-~]+$/ || v ~ /[\/\\]/) next
+        nm[id] = v
+      } else if (v ~ /^[0-9]+$/) {
+        if (f == "active_count") ac[id] = v
+        else if (f == "event_count") ev[id] = v
+        else if (f == "total_time_ms") tt[id] = v
+      }
     }
-    _wb_snap_found=1
-  done
-  [ "$_wb_snap_found" = 1 ] || { rm -f "$_wb_snap_tmp"; return 1; }
+    END {
+      c = 0
+      for (id in nm) if ((id in ac) && (id in ev) && (id in tt)) { printf "%s\t%s\t%s\t%s\t%s\n", id, nm[id], ac[id], ev[id], tt[id]; c++ }
+      exit c ? 0 : 1
+    }' > "$_wb_snap_tmp" || { rm -f "$_wb_snap_tmp"; return 1; }
   mv -f "$_wb_snap_tmp" "$_wb_snap_out"
 }
 
@@ -152,7 +155,7 @@ asb_wb_observe_start() {
   asb_wb_snapshot "$ASB_WB_OBSERVE/baseline.tsv.new" || return 1
   _wb_obs_now="$(asb_wb_mono_ms)"
   case "$_wb_obs_now" in ''|*[!0-9]*) return 1 ;; esac
-  (umask 077; printf 'start_mono_ms=%s\nstart_epoch=%s\n' "$_wb_obs_now" "$(date +%s)" > "$ASB_WB_OBSERVE/meta.new.$$") || return 1
+  (umask 077; printf 'format=2\nstart_mono_ms=%s\nstart_epoch=%s\n' "$_wb_obs_now" "$(date +%s)" > "$ASB_WB_OBSERVE/meta.new.$$") || return 1
   mv -f "$ASB_WB_OBSERVE/baseline.tsv.new" "$ASB_WB_OBSERVE/baseline.tsv" || return 1
   mv -f "$ASB_WB_OBSERVE/meta.new.$$" "$ASB_WB_OBSERVE/meta" || return 1
   rm -f "$ASB_WB_OBSERVE/delta.tsv" 2>/dev/null || true
@@ -167,6 +170,11 @@ asb_wb_observe_status() {
   _wb_obs_state=idle
   [ -d "$ASB_WB_CLASS" ] || _wb_obs_state=not_exposed
   if [ "$_wb_obs_state" = idle ] && [ ! -r "$ASB_WB_OBSERVE/baseline.tsv" ]; then
+    printf 'wakeup_observe|status|state=idle|elapsed_ms=0|started=0|sources=0|resets=0\n'
+    return 0
+  fi
+  if [ "$_wb_obs_state" = idle ] && ! grep -qx 'format=2' "$ASB_WB_OBSERVE/meta" 2>/dev/null; then
+    asb_wb_observe_clear
     printf 'wakeup_observe|status|state=idle|elapsed_ms=0|started=0|sources=0|resets=0\n'
     return 0
   fi
@@ -189,20 +197,35 @@ asb_wb_observe_status() {
     return 0
   fi
   awk -F '\t' '
-    NR == FNR { a[$1]=$2; e[$1]=$3; t[$1]=$4; next }
+    NR == FNR { bn[$1]=$2; a[$1]=$3; e[$1]=$4; t[$1]=$5; next }
     {
-      da=$2-a[$1]; de=$3-e[$1]; dt=$4-t[$1]; reset=0
-      if ($2<a[$1] || $3<e[$1] || $4<t[$1]) { da=$2; de=$3; dt=$4; reset=1 }
-      if (da>0 || de>0 || dt>0 || reset) printf "%s\t%d\t%d\t%d\t%d\n", $1,da,de,dt,reset
+      shared[$2]++
+      fresh = !($1 in bn) || bn[$1] != $2
+      if (fresh) { da=$3; de=$4; dt=$5; reset=0 }
+      else {
+        da=$3-a[$1]; de=$4-e[$1]; dt=$5-t[$1]; reset=0
+        if (da<0 || de<0 || dt<0) { da=$3; de=$4; dt=$5; reset=1 }
+      }
+      if (da>0 || de>0 || dt>0 || reset) {
+        if (!($2 in sa)) order[++no]=$2
+        sa[$2]+=da; se[$2]+=de; st[$2]+=dt
+        if (reset) sr[$2]=1
+        if (fresh) sn[$2]=1
+      }
+    }
+    END {
+      for (k=1; k<=no; k++) { nme=order[k]
+        printf "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", nme, sa[nme], se[nme], st[nme], (nme in sr) ? 1 : 0, shared[nme], (nme in sn) ? 1 : 0
+      }
     }
   ' "$ASB_WB_OBSERVE/baseline.tsv" "$ASB_WB_OBSERVE/current.tsv.new" > "$_wb_obs_delta" || {
     rm -f "$ASB_WB_OBSERVE/current.tsv.new" "$_wb_obs_delta"; return 1;
   }
   _wb_obs_count=0; _wb_obs_resets=0
-  while IFS='	' read -r _wb_obs_name _wb_obs_active _wb_obs_events _wb_obs_time _wb_obs_reset; do
+  while IFS='	' read -r _wb_obs_name _wb_obs_active _wb_obs_events _wb_obs_time _wb_obs_reset _wb_obs_shared _wb_obs_new; do
     [ -n "$_wb_obs_name" ] || continue
-    printf 'wakeup_source|%s|events=%s|active=%s|time_ms=%s|reset=%s\n' \
-      "$_wb_obs_name" "$_wb_obs_events" "$_wb_obs_active" "$_wb_obs_time" "$_wb_obs_reset"
+    printf 'wakeup_source|%s|events=%s|active=%s|time_ms=%s|reset=%s|shared=%s|new=%s\n' \
+      "$_wb_obs_name" "$_wb_obs_events" "$_wb_obs_active" "$_wb_obs_time" "$_wb_obs_reset" "$_wb_obs_shared" "$_wb_obs_new"
     _wb_obs_count=$((_wb_obs_count + 1)); [ "$_wb_obs_reset" != 1 ] || _wb_obs_resets=$((_wb_obs_resets + 1))
   done < "$_wb_obs_delta"
   rm -f "$ASB_WB_OBSERVE/current.tsv.new" "$_wb_obs_delta"
@@ -270,8 +293,7 @@ ASB_WB_RULES
     while IFS='	' read -r _wb_name _wb_count || [ -n "$_wb_name" ]; do
       asb_wb_valid_name "$_wb_name" || continue
       case "$_wb_count" in ''|*[!0-9]*) continue ;; esac
-      printf 'wakeup_rule|blocked|%s|%s
-' "$_wb_name" "$_wb_count"
+      printf 'wakeup_rule|blocked|%s|%s\n' "$_wb_name" "$_wb_count"
     done < "$ASB_WB_STATS"
   fi
   asb_wb_observe_status
