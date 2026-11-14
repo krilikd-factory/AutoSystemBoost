@@ -4,6 +4,103 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev50 - stable SOTER completion, faster WebUI reads and a cosmic saucer scene
+
+Input: the dev49 source and five owner requests. No native source or release binary changed.
+
+- **SOTER completion after one tap.** dev49 already made two clear/restart passes, but accepted
+  the first `init.svc=running` sample as completion. Each pass now also requires six consecutive
+  running samples at half-second intervals; a transient crash/restart returns `service_down`
+  instead of a false `done`. This is bounded service stabilization, not a third blind `pm clear`
+  and not a claim that a host fixture proves physical key reinitialization. The card is rendered
+  immediately below Battery Fix and before the unrelated package repairs.
+- **Fewer repeated WebUI reads.** Cold concurrent callers share one static `device_info.json`
+  fetch, and a valid seven-day display-only device cache is painted without another fetch.
+  Returning to Stock Monitor reuses a sample inside the existing ten-second telemetry window
+  instead of forcing the same root collector again. No persistent worker was added and stale,
+  failed or unknown metric states remain distinct.
+- **Shorter, live boot preview.** The artificial minimum is 1.4 s (was 3.2 s), with a 6.5 s
+  fail-safe cap (was 9 s). The active stage has a beacon/line animation, the core has a halo and
+  the completed state gets a short ready transition. The four bars still represent only the real
+  Live, Config, Device and Zygisk jobs; a timed-out job never produces a ready/100 % claim.
+- **Twenty-second saucer Easter egg.** Ten quick logo taps keep the original detailed SVG for the
+  entire flight; there is no emoji substitution. A fixed canvas adds a bounded cosmic trail,
+  stars and at most 150 particles (DPR capped at 1.5). At most 18 visible cards sway/spill through
+  an intensity envelope that reaches zero before landing. Their transform, opacity, transition
+  and will-change inline values are restored on completion and on a hidden-page abort; canvas,
+  overlay, animation frame and visibility listener are cleaned up. Repeated launches do not stack.
+
+Host shell fixtures and Node runtime contracts cover the changed logic. The canonical source
+regression passes with 523 PASS lines and no failed tests. They are not physical ColorOS WebView
+validation and do not prove that SOTER keys or payment enrollment are ready.
+
+## V66 dev49 - another user's export, the owner's kernel, SOTER on the first run
+
+Input: the dev48 source (host regression 519/519), a user's asbdiag, full-day log and
+screenshots from an older V66 test build (stock OnePlus kernel 6.12, Magisk), the owner's
+14.11 exports and screenshots, and the kernel workflow's failed run.
+
+- **LSPosed card: "unexpected_schema".** The helper only knew the standard module database
+  layout, so any fork that renames a column or table read as a foreign database, with no
+  further detail. Module and scope queries are now built from `PRAGMA table_info`
+  (`mid`/`id`/`module_id`, `module_pkg_name`/`pkg_name`/..., `scope`/`scopes`, a scope keyed by
+  id or by package) and read as `layout=adapted`; edits and the verbose switch stay limited to
+  the standard layout. A database matching nothing names its tables and columns (identifiers
+  only) in the card, the Device page and asbdiag; an empty file says it has no tables. What the
+  user's database actually contains is still unknown until the next export - the card now asks
+  for it with the evidence attached. Native change: CI rebuild of `asb`.
+- **Night charge limit: "kernel does not expose the interface".** On a stock OnePlus kernel
+  neither standard node exists. The OPlus charger switch `mmi_charging_enable` (1 = charge,
+  0 = stop; under `oplus_chg/battery`, then `power_supply/battery`) is used like
+  `charging_enabled`: the same baseline, read-back, ledger, boot scope and exact hand-back. Not
+  verified on that phone - the write is read back every tick and an external change is reported.
+  A switch-type hold is no longer released on "Discharging" while a charger is still online
+  (a stopped charger may report that); a real unplug still releases it. asbdiag section 5a3
+  lists every candidate node and its value.
+- **Battery Fix: "succeeded 0, failed 560".** The compile output was discarded, so the reason
+  was never recorded. The first refusal's text is kept and shown; after 12 refusals with no
+  success the run stops (`refused`) instead of spending the battery on the rest; `pm compile`
+  is tried when `cmd package compile` rejects its options. What Android answered on that phone
+  is still to be seen in the next export.
+- **Battery Fix: "30 May 13:09, 1 of 3 files removed".** The reset runs in post-fs-data, before
+  the clock is set, so the stored time was the early-boot clock. A time behind the arm time is
+  not stored; the boot step records uptime and boot id, and `settle` (status, and service.sh
+  90 s after boot) derives the real time in the same boot. Until then the card says "at the
+  last reboot". Files Android never created are counted as "not present on this Android", apart
+  from files that could not be removed.
+- **Kernel tweaks.** The owner's kernel is built with debugfs and scheduler debugging, yet
+  "Scheduler migration batch" read "not exposed": Android does not mount debugfs on user builds.
+  The control owner now mounts debugfs on a private root-only directory for the one read or
+  write and unmounts it at once (the value stays in the kernel; nothing stays mounted); the
+  Device page reads it the same way. Autogroup and LPM prediction say why they are missing:
+  autogroup changes a structure vendor modules are built against, so a GKI kernel cannot have
+  it; LPM prediction belongs to the older idle driver, and asbdiag lists the idle-driver
+  parameters this kernel has.
+- **Kernel and Audio text on AMOLED.** Badges, the chosen segment, slider values and section
+  headings of these two categories take a lighter ink of the same hue on the dark and glass
+  themes (about 8:1 instead of 4.3-4.7:1 on black); fills, edges and the light theme are
+  unchanged.
+- **SOTER Repair on the first run.** The owner saw it work only on the second run; the log does
+  not show why. One run now makes both passes (force-stop the server, stop the SOTER services
+  and wait until stopped, clear its data, start them and wait until running), stopping early on
+  a refused clear or a service that does not come back, and starts on the first tap. A switch
+  in the card makes service.sh run the same repair 45 s after every boot; the switch text says
+  that fingerprint payment then has to be switched on again after each reboot.
+- **Sustained entry reason.** The owner's log read "other actual_t=63degC (thresh=54)": the
+  floor test used the global threshold while the line printed the profile's. Both use the
+  profile threshold now. Native change: CI rebuild of `asb`.
+
+Kernel workflow (separate repository): the failed run stopped after ten minutes because the
+selected KernelSU-Next commit calls a function the pinned SUSFS release does
+not have. A resolve-step check now compares the two in seconds and falls back to the
+boot-attested known-good commit, or stops at once with the missing names. No source of either
+component is patched.
+
+Native code changed (`src/asb_lspd.h`, `src/asb_governor.c`): the `asb` binary needs a CI
+rebuild. Host regression: every suite passes (523 PASS lines; dev48 had 518 by the same count).
+Host fixtures and Node renderers are not device validation; the OPlus charge switch, the Battery
+Fix refusal text and the LSPosed fork layout still need the next export from that phone.
+
 ## V66 dev48 - audit follow-up and fixes from the 14.11 asbdiag/device export
 
 Input: the dev47 source (host regression 515/515), an external dev47 audit (F1-F8, P0) and the
