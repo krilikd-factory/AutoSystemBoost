@@ -524,11 +524,11 @@
     },
     "kernel_mglru_min_ttl": {
       "name": "MGLRU 代保护",
-      "desc": "通过已注册的内核控制所有者设置 /sys/kernel/mm/lru_gen/min_ttl_ms，只允许 1000、2000 或 5000 毫秒。较长时间可保护最近使用的页面代，减少过早回收和应用重新载入，但也会延迟内存释放；较短时间可能更快回收内存，却增加缺页和重复工作。Stock 精确恢复 ASB 首次写入前保存的值。节点不存在、只读、写入失败或回读不符都会如实显示，不会伪报成功，也不承诺省电或性能提升。"
+      "desc": "将最近使用的 MGLRU 代保护 1000 或 2000 毫秒（写入 /sys/kernel/mm/lru_gen/min_ttl_ms）。这是内核的防抖动机制：如果该工作集无法留在内存中，内核的 OOM killer 会结束进程而不是回收内存，因此更长的时间以减少回收卡顿换取应用被提前结束的风险。内核文档建议 1000。Stock 恢复 ASB 首次写入前记录的确切值；接口缺失、只读或回读不符时会如实显示。"
     },
     "kernel_timer_migration": {
       "name": "定时器迁移",
-      "desc": "控制内核是否可以在 CPU 之间迁移定时器。“开”可将定时器从空闲 CPU 移到已活动的 CPU，从而避免部分唤醒；“关”保持定时器位置，但负载下的结果可能不同。取决于 CPU idle 行为，任一模式都可能改善或恶化延迟与功耗。“关”保留 ASB 原先的请求；“Stock”和卸载在验证读回后恢复原值。"
+      "desc": "如需测试空闲时更少的唤醒，选择 On：定时器可从空闲 CPU 迁移到已活跃的 CPU。Off 让定时器留在原处，有时可改善负载下的延迟。状态显示内核当前报告的值；可用 On 测试空闲耗电，但如出现延迟或卡顿请恢复 Off/Stock。没有哪个值总是更快或更凉。"
     },
     "kernel_sched_nr_migrate": {
       "name": "调度器迁移批次",
@@ -536,7 +536,7 @@
     },
     "kernel_sched_autogroup": {
       "name": "调度器自动分组",
-      "desc": "“开”按会话对任务分组，以公平分配 CPU；“关”禁用此分组。在后台负载竞争时，这可能改变交互响应和后台任务获得的 CPU 份额。它不是性能加速器或省电模式，也不保证改善续航。“Stock”和卸载恢复保存的 0/1。若接口不存在，ASB 会报告“not exposed”，不会仅为显示此卡片而启用内核选项。",
+      "desc": "按会话对任务分组以公平分配 CPU。GKI 内核通常不包含它（CONFIG_SCHED_AUTOGROUP 会改变厂商模块编译所依据的 signal_struct）；此时状态显示为未提供且不会写入任何内容。在内核提供它时，On 可在后台负载下改善会话之间的公平性，Off 取消分组；它不是直接的帧率或电池调整。",
       "descOpt": {
         "stock": "不更改调度器自动分组。",
         "off": "禁用任务自动分组。",
@@ -554,11 +554,11 @@
     },
     "kernel_hrtimer_migration": {
       "name": "高分辨率定时器迁移",
-      "desc": "仅在供应商确实提供非上游 /proc/sys/kernel/hrtimer_migration 接口时使用它。标准 Linux 6.12 没有独立的 HR 定时器 sysctl：ASB 会将此行标记为由“定时器迁移”统一管理，不会重复写入。若存在真实独立节点，自动模式仅在省电配置中请求 0，其他配置恢复捕获值。延迟和功耗效果不作保证。"
+      "desc": "仅当内核提供该非标准接口时才使用独立的 /proc/sys/kernel/hrtimer_migration。标准 Linux 内核（包括 6.12 GKI）没有这样的独立开关；此时此行只反映定时器迁移且不写入任何内容，因此请使用上方的共享开关进行功耗和延迟测试。"
     },
     "kernel_lpm_prediction": {
       "name": "空闲状态预测（LPM）",
-      "desc": "在内核提供该节点时控制 LPM 空闲状态预测器。自动模式仅在省电配置中请求 1；手动模式优先于配置。"
+      "desc": "lpm_prediction 开关属于较旧的 Snapdragon lpm_levels 空闲驱动。较新的 Snapdragon 内核使用没有此开关的 qcom-cpu-lpm 调速器，此时 ASB 不写入任何内容。在提供该开关的内核上，Auto 仅在 Battery 配置下启用预测；On 可能以唤醒延迟为代价节省空闲功耗，Off 测试相反的取舍。这不是 Android LPM 或射频策略。"
     },
     "kernel_usb_autosuspend": {
       "name": "USB 自动挂起",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "重启后",
   "lsp_db_schema_empty": "ASB 找到的 LSPosed 数据库中没有任何表，因此没有可读取的模块列表。如果 LSPosed 自身显示了模块，说明它们保存在别处：请发送诊断导出。",
   "kc_why_kernel_sched_nr_migrate": "需要启用调度器调试（CONFIG_SCHED_DEBUG）和 debugfs 编译的内核。ASB 仅在读取或写入该值的瞬间私下挂载 debugfs，因此只要两者都已编入，就无需其他操作。",
-  "kc_why_kernel_sched_autogroup": "GKI 内核在构建时不含 autogroup。启用它会改变厂商模块所依据编译的内核结构，因此 GKI 内核无法在不破坏这些模块的情况下获得它。",
-  "kc_why_kernel_lpm_prediction": "此开关属于较旧的 Snapdragon lpm_levels 空闲驱动。较新的 Snapdragon 内核使用不含此开关的另一种空闲调速器；诊断导出会列出此内核拥有的参数。",
+  "kc_why_kernel_sched_autogroup": "此内核没有 autogroup 开关。GKI 内核通常不启用 CONFIG_SCHED_AUTOGROUP，因为它会改变厂商模块编译所依据的 signal_struct；ASB 不会绕过这一点。",
+  "kc_why_kernel_lpm_prediction": "此内核未提供 lpm_prediction 开关。它属于较旧的 lpm_levels 空闲驱动；使用 qcom-cpu-lpm 调速器的内核没有该开关。ASB 不写入任何内容；诊断导出会列出此内核拥有的空闲驱动参数。",
   "kernel_wb_observe_title": "在空闲窗口内检测到",
   "kernel_wb_observe_idle": "尚未开始测量。请在息屏前开始，唤醒后更新。亮屏期间的活动也会计入该窗口。",
   "kernel_wb_observe_running": "窗口：{elapsed} · 有变化的来源：{n}",
@@ -3363,7 +3363,7 @@
   "kernel_wb_reset_short": "计数器已重置",
   "kernel_wb_block": "阻止",
   "kernel_wb_blocked": "已阻止",
-  "kernel_wb_abi": "KRILIKD ABI：{v}",
+  "kernel_wb_abi": "内核阻止器 ABI：{v}",
   "kernel_wb_sec": " 秒",
   "kernel_wb_min": " 分钟",
   "kernel_wb_hour": " 小时",
@@ -3383,5 +3383,11 @@
   "kernel_wb_sort_time": "活动时间",
   "kernel_wb_sort_name": "名称",
   "kernel_wb_dialog_title": "观察到的唤醒来源",
-  "kernel_wb_close": "关闭"
+  "kernel_wb_close": "关闭",
+  "kernel_wb_confirm_shared": "有 {n} 个来源使用此名称；该规则会将它们全部阻止。",
+  "kernel_wb_confirm_critical": "这看起来是系统来源（闹钟、电源管理、充电、输入或温控）。阻止它可能导致闹钟、唤醒或充电无法正常工作。",
+  "kernel_wb_confirm_plain": "要阻止“{name}”今后的所有事件吗？",
+  "kernel_wb_new_short": "新来源",
+  "kernel_wb_shared_short": "同名 ×{n}",
+  "kernel_wb_critical_short": "系统来源"
 }

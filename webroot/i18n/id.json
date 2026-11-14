@@ -494,11 +494,11 @@
     },
     "kernel_mglru_min_ttl": {
       "name": "Perlindungan Generasi MGLRU",
-      "desc": "Mengatur perlindungan generasi MGLRU ke 1000, 2000 atau 5000 ms. Perlindungan lebih lama dapat mengurangi reclaim dini tetapi menunda pemulihan memori; lebih singkat dapat menambah refault. Stock memulihkan nilai tersimpan persis; antarmuka yang tidak tersedia dilaporkan apa adanya."
+      "desc": "Melindungi generasi MGLRU yang paling baru dipakai selama 1000 atau 2000 ms (menulis /sys/kernel/mm/lru_gen/min_ttl_ms). Ini pelindung thrashing kernel: jika working set itu tidak muat di memori, OOM killer kernel mengakhiri sebuah proses alih-alih merebut kembali memori, jadi waktu lebih lama menukar lebih sedikit jeda reclaim dengan risiko aplikasi ditutup lebih awal. Dokumentasi kernel menyarankan 1000. Stock memulihkan nilai persis yang dicatat sebelum penulisan pertama ASB; antarmuka yang tidak ada, hanya-baca, atau tidak cocok dilaporkan."
     },
     "kernel_timer_migration": {
       "name": "Migrasi Timer",
-      "desc": "Mengatur apakah kernel boleh memindahkan timer antar-CPU. On dapat memindahkan timer dari CPU idle ke CPU yang sudah aktif dan menghindari sebagian wake-up; Off mempertahankan posisi timer, dengan hasil yang dapat berbeda saat berbeban. Tergantung perilaku CPU idle, kedua mode dapat memperbaiki atau memperburuk latensi dan konsumsi daya. Off mempertahankan permintaan ASB sebelumnya; Stock dan penghapusan memulihkan nilai tersimpan setelah readback terverifikasi."
+      "desc": "Untuk menguji lebih sedikit bangun saat idle, pilih On: timer boleh pindah dari CPU yang idle ke CPU yang sudah aktif. Off menjaga timer di tempatnya dan terkadang membantu latensi saat beban. Status menunjukkan nilai yang dilaporkan kernel sekarang; uji On untuk konsumsi idle, tetapi kembali ke Off/Stock jika muncul latensi atau patah-patah. Tidak ada nilai yang selalu lebih cepat atau lebih dingin."
     },
     "kernel_sched_nr_migrate": {
       "name": "Batch Migrasi Penjadwal",
@@ -506,7 +506,7 @@
     },
     "kernel_sched_autogroup": {
       "name": "Autogroup penjadwal",
-      "desc": "On mengelompokkan tugas berdasarkan sesi untuk pembagian CPU yang adil, Off menonaktifkan pengelompokan itu. Dengan beban latar yang bersaing, ini dapat mengubah respons interaktif dan jatah CPU pekerjaan latar. Ini bukan pendorong performa atau mode hemat daya; manfaat baterai tidak dijamin. Stock dan penghapusan memulihkan 0/1 tersimpan. Jika antarmuka tidak ada, ASB melaporkan «not exposed», bukan mengaktifkan opsi kernel hanya demi kartu ini.",
+      "desc": "Mengelompokkan tugas per sesi untuk pembagian CPU yang adil. Kernel GKI biasanya dibangun tanpanya (CONFIG_SCHED_AUTOGROUP mengubah signal_struct yang menjadi dasar kompilasi modul vendor); maka status menampilkannya sebagai tidak tersedia dan tidak ada yang ditulis. Bila kernel menyediakannya, On meningkatkan keadilan antar-sesi saat ada beban latar dan Off menghapus pengelompokan; ini bukan penyetelan langsung FPS atau baterai.",
       "descOpt": {
         "stock": "Biarkan pengelompokan otomatis tidak berubah.",
         "off": "Nonaktifkan pengelompokan tugas otomatis.",
@@ -524,11 +524,11 @@
     },
     "kernel_hrtimer_migration": {
       "name": "Migrasi Timer HR",
-      "desc": "Menggunakan /proc/sys/kernel/hrtimer_migration hanya jika vendor benar-benar menyediakan antarmuka non-upstream itu. Linux 6.12 standar tidak memiliki sysctl HR independen: ASB menandai baris ini dicakup oleh Migrasi Timer dan tidak menulis untuk kedua kali. Dengan node terpisah yang nyata, Auto meminta 0 hanya di profil Baterai. Dampaknya tidak dijamin."
+      "desc": "Memakai /proc/sys/kernel/hrtimer_migration terpisah hanya jika kernel menyediakan antarmuka non-standar itu. Kernel Linux standar, termasuk 6.12 GKI, tidak punya sakelar independen seperti itu; maka baris ini hanya mencerminkan migrasi timer dan tidak menulis apa pun, jadi gunakan kontrol bersama di atas untuk uji daya dan latensi."
     },
     "kernel_lpm_prediction": {
       "name": "Prediksi Idle (LPM)",
-      "desc": "Mengontrol prediktor idle LPM jika disediakan kernel. Auto meminta 1 hanya di profil Baterai; mode manual mengesampingkan profil."
+      "desc": "Sakelar lpm_prediction milik driver idle Snapdragon lpm_levels yang lama. Kernel Snapdragon yang lebih baru memakai governor qcom-cpu-lpm yang tidak memilikinya, dan saat itu ASB tidak menulis apa pun. Pada kernel yang menyediakannya, Auto menyalakan prediksi hanya di profil Battery; On dapat menghemat daya idle dengan biaya latensi bangun, Off menguji kompromi sebaliknya. Ini bukan LPM Android atau kebijakan radio."
     },
     "kernel_usb_autosuspend": {
       "name": "Autosuspend USB",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "setelah mulai ulang",
   "lsp_db_schema_empty": "Basis data LSPosed yang ditemukan ASB tidak berisi tabel, jadi tidak ada daftar modul untuk dibaca. Jika LSPosed sendiri menampilkan modul, ia menyimpannya di tempat lain: kirim ekspor diagnostik.",
   "kc_why_kernel_sched_nr_migrate": "Memerlukan kernel yang dibangun dengan debug penjadwal (CONFIG_SCHED_DEBUG) dan debugfs. ASB memasang debugfs secara privat hanya selama membaca atau menulis nilainya, jadi tidak perlu apa-apa lagi bila keduanya disertakan.",
-  "kc_why_kernel_sched_autogroup": "Kernel GKI dibangun tanpa autogroup. Mengaktifkannya mengubah struktur kernel yang menjadi dasar kompilasi modul vendor, jadi kernel GKI tidak bisa memilikinya tanpa merusak modul tersebut.",
-  "kc_why_kernel_lpm_prediction": "Sakelar ini milik driver idle Snapdragon lpm_levels yang lama. Kernel Snapdragon yang lebih baru memakai governor idle lain tanpa sakelar ini; ekspor diagnostik mencantumkan parameter yang dimiliki kernel ini.",
+  "kc_why_kernel_sched_autogroup": "Kernel ini tidak punya sakelar autogroup. Kernel GKI biasanya dibangun tanpa CONFIG_SCHED_AUTOGROUP karena itu mengubah signal_struct yang menjadi dasar kompilasi modul vendor; ASB tidak mengakalinya.",
+  "kc_why_kernel_lpm_prediction": "Kernel ini tidak menyediakan sakelar lpm_prediction. Sakelar itu milik driver idle lpm_levels yang lama; kernel dengan governor qcom-cpu-lpm tidak memilikinya. ASB tidak menulis apa pun; ekspor diagnostik mencantumkan parameter driver idle yang dimiliki kernel ini.",
   "kernel_wb_observe_title": "Terdeteksi dalam jendela idle",
   "kernel_wb_observe_idle": "Pengukuran belum dimulai. Mulai sebelum mematikan layar, lalu perbarui setelah bangun. Aktivitas saat layar menyala juga dihitung.",
   "kernel_wb_observe_running": "Jendela: {elapsed} · sumber berubah: {n}",
@@ -3363,7 +3363,7 @@
   "kernel_wb_reset_short": "penghitung direset",
   "kernel_wb_block": "Blokir",
   "kernel_wb_blocked": "Diblokir",
-  "kernel_wb_abi": "ABI KRILIKD: {v}",
+  "kernel_wb_abi": "ABI pemblokir kernel: {v}",
   "kernel_wb_sec": " dtk",
   "kernel_wb_min": " mnt",
   "kernel_wb_hour": " jam",
@@ -3383,5 +3383,11 @@
   "kernel_wb_sort_time": "Waktu aktif",
   "kernel_wb_sort_name": "Nama",
   "kernel_wb_dialog_title": "Sumber wakeup yang diamati",
-  "kernel_wb_close": "Tutup"
+  "kernel_wb_close": "Tutup",
+  "kernel_wb_confirm_shared": "{n} sumber memakai nama ini; aturan memblokir semuanya.",
+  "kernel_wb_confirm_critical": "Ini tampak seperti sumber sistem (alarm, pengelola daya, pengisian, input, atau termal). Memblokirnya dapat menghentikan alarm, bangun, atau pengisian.",
+  "kernel_wb_confirm_plain": "Blokir “{name}” untuk semua peristiwa berikutnya?",
+  "kernel_wb_new_short": "sumber baru",
+  "kernel_wb_shared_short": "nama bersama ×{n}",
+  "kernel_wb_critical_short": "sumber sistem"
 }

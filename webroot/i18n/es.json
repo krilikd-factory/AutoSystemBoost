@@ -494,11 +494,11 @@
     },
     "kernel_mglru_min_ttl": {
       "name": "Protección de generaciones MGLRU",
-      "desc": "Ajusta la protección de generaciones MGLRU a 1000, 2000 o 5000 ms. Una protección mayor puede evitar recuperación prematura, pero retrasar la liberación; una menor puede aumentar los refallos. Stock restaura el valor exacto guardado y los errores de lectura se muestran honestamente."
+      "desc": "Protege la generación MGLRU usada más recientemente durante 1000 o 2000 ms (escribe /sys/kernel/mm/lru_gen/min_ttl_ms). Es la protección del kernel contra el thrashing: si ese conjunto de trabajo no cabe en memoria, el OOM killer del kernel termina un proceso en lugar de recuperar memoria; un tiempo mayor cambia menos bloqueos de recuperación por el riesgo de cierres tempranos de apps. La documentación del kernel recomienda 1000. Stock restaura el valor exacto capturado antes de la primera escritura de ASB; una interfaz ausente, de solo lectura o discordante se indica."
     },
     "kernel_timer_migration": {
       "name": "Migración de temporizadores",
-      "desc": "Controla si el kernel puede migrar temporizadores entre CPU. Activado puede moverlos desde CPU inactivas a otras ya activas y evitar algunos despertares; Desactivado mantiene su ubicación, con un resultado distinto según la carga. Según el comportamiento de CPU idle, cualquier modo puede mejorar o empeorar latencia y consumo. Desactivado conserva la solicitud anterior de ASB; Stock y la desinstalación restauran el valor capturado tras verificar readback."
+      "desc": "Para probar menos despertares en reposo, elige On: los temporizadores pueden pasar de CPU inactivas a otras ya activas. Off mantiene los temporizadores en su sitio y a veces ayuda a la latencia con carga. El estado muestra el valor que el kernel informa ahora; prueba On para el consumo en reposo, pero vuelve a Off/Stock si aparecen latencias o tirones. Ningún valor es siempre más rápido ni más fresco."
     },
     "kernel_sched_nr_migrate": {
       "name": "Lote de migración del planificador",
@@ -506,7 +506,7 @@
     },
     "kernel_sched_autogroup": {
       "name": "Autogrupo del planificador",
-      "desc": "Activado agrupa tareas por sesión para repartir la CPU con equidad; Desactivado elimina esa agrupación. Con carga de fondo competidora puede cambiar la respuesta interactiva y la cuota de CPU del trabajo secundario. No es un acelerador ni un modo de ahorro; la mejora de batería no está garantizada. Stock y la desinstalación restauran el 0/1 capturado. Si falta la interfaz, ASB informa «not exposed» en lugar de activar una opción del kernel solo para esta tarjeta.",
+      "desc": "Agrupa tareas por sesión para un reparto justo de la CPU. Los kernels GKI suelen compilarse sin ello (CONFIG_SCHED_AUTOGROUP cambia signal_struct, para la que se compilan los módulos del fabricante); entonces el estado lo muestra como no expuesto y no se escribe nada. Donde el kernel lo ofrece, On mejora la equidad entre sesiones con carga en segundo plano y Off quita la agrupación; no es un ajuste directo de FPS ni de batería.",
       "descOpt": {
         "stock": "No cambiar la agrupación automática del planificador.",
         "off": "Deshabilitar la agrupación automática de tareas.",
@@ -524,11 +524,11 @@
     },
     "kernel_hrtimer_migration": {
       "name": "Migración de temporizadores HR",
-      "desc": "Usa /proc/sys/kernel/hrtimer_migration solo si el proveedor expone realmente esa interfaz no upstream. Linux 6.12 estándar no tiene este sysctl independiente: ASB marca la fila como cubierta por Migración de temporizadores y no escribe dos veces. Con un nodo separado real, Auto solicita 0 solo en Batería. Los efectos no están garantizados."
+      "desc": "Usa un /proc/sys/kernel/hrtimer_migration independiente solo cuando el kernel expone esa interfaz no estándar. Los kernels Linux estándar, incluido 6.12 GKI, no tienen ese interruptor independiente; entonces esta fila solo refleja la migración de temporizadores y no escribe nada, así que usa el control común de arriba para pruebas de energía y latencia."
     },
     "kernel_lpm_prediction": {
       "name": "Predicción de inactividad (LPM)",
-      "desc": "Controla el predictor de inactividad LPM si el kernel lo expone. Auto solicita 1 solo en Batería; los modos manuales prevalecen."
+      "desc": "El interruptor lpm_prediction pertenece al antiguo controlador de reposo lpm_levels de Snapdragon. Los kernels Snapdragon más nuevos usan el gobernador qcom-cpu-lpm, que no lo tiene, y entonces ASB no escribe nada. En un kernel que lo expone, Auto activa la predicción solo en el perfil Battery; On puede ahorrar energía en reposo a costa de la latencia al despertar, Off prueba el compromiso opuesto. No es el LPM de Android ni la política de radio."
     },
     "kernel_usb_autosuspend": {
       "name": "Autosuspensión USB",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "tras reiniciar",
   "lsp_db_schema_empty": "La base de datos de LSPosed que encontró ASB no tiene tablas, así que no hay lista de módulos que leer. Si LSPosed muestra módulos, los guarda en otro sitio: envía la exportación de diagnóstico.",
   "kc_why_kernel_sched_nr_migrate": "Necesita un kernel compilado con depuración del planificador (CONFIG_SCHED_DEBUG) y debugfs. ASB monta debugfs de forma privada solo mientras lee o escribe el valor, así que no hace falta nada más si ambos están incluidos.",
-  "kc_why_kernel_sched_autogroup": "Los kernels GKI se compilan sin autogroup. Activarlo cambia una estructura del kernel para la que están compilados los módulos del fabricante, así que un kernel GKI no puede incluirlo sin romper esos módulos.",
-  "kc_why_kernel_lpm_prediction": "Este interruptor pertenece al antiguo controlador de reposo lpm_levels de Snapdragon. Los kernels Snapdragon más nuevos usan otro gobernador de reposo sin él; la exportación de diagnóstico enumera los parámetros de este kernel.",
+  "kc_why_kernel_sched_autogroup": "Este kernel no tiene interruptor de autogroup. Los kernels GKI suelen compilarse sin CONFIG_SCHED_AUTOGROUP porque cambia signal_struct, para la que se compilan los módulos del fabricante; ASB no lo esquiva.",
+  "kc_why_kernel_lpm_prediction": "Este kernel no expone el interruptor lpm_prediction. Pertenece al antiguo controlador de reposo lpm_levels; los kernels con el gobernador qcom-cpu-lpm no lo tienen. ASB no escribe nada; la exportación de diagnóstico enumera los parámetros del controlador de reposo de este kernel.",
   "kernel_wb_observe_title": "Detectado durante la ventana de reposo",
   "kernel_wb_observe_idle": "No hay medición. Iníciala antes de apagar la pantalla y actualiza al despertar. La actividad con pantalla encendida también cuenta.",
   "kernel_wb_observe_running": "Ventana: {elapsed} · fuentes modificadas: {n}",
@@ -3363,7 +3363,7 @@
   "kernel_wb_reset_short": "contador reiniciado",
   "kernel_wb_block": "Bloquear",
   "kernel_wb_blocked": "Bloqueado",
-  "kernel_wb_abi": "ABI de KRILIKD: {v}",
+  "kernel_wb_abi": "ABI del bloqueador del kernel: {v}",
   "kernel_wb_sec": " s.",
   "kernel_wb_min": " min.",
   "kernel_wb_hour": " h.",
@@ -3383,5 +3383,11 @@
   "kernel_wb_sort_time": "Tiempo activo",
   "kernel_wb_sort_name": "Nombre",
   "kernel_wb_dialog_title": "Fuentes de activación observadas",
-  "kernel_wb_close": "Cerrar"
+  "kernel_wb_close": "Cerrar",
+  "kernel_wb_confirm_shared": "{n} fuentes comparten este nombre; la regla las bloquea todas.",
+  "kernel_wb_confirm_critical": "Parece una fuente del sistema (alarmas, gestor de energía, carga, entrada o temperatura). Bloquearla puede impedir que funcionen alarmas, el despertar o la carga.",
+  "kernel_wb_confirm_plain": "¿Bloquear «{name}» para todos los eventos futuros?",
+  "kernel_wb_new_short": "fuente nueva",
+  "kernel_wb_shared_short": "nombre compartido ×{n}",
+  "kernel_wb_critical_short": "fuente del sistema"
 }

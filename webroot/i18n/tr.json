@@ -494,11 +494,11 @@
     },
     "kernel_mglru_min_ttl": {
       "name": "MGLRU Nesil Koruması",
-      "desc": "MGLRU nesil korumasını 1000, 2000 veya 5000 ms yapar. Uzun koruma erken geri kazanımı azaltabilir ancak bellek boşaltmayı geciktirebilir; kısa koruma refault işini artırabilir. Stock kaydedilen değeri aynen geri yükler; yazılamayan veya uyuşmayan arayüzler açıkça bildirilir."
+      "desc": "En son kullanılan MGLRU neslini 1000 veya 2000 ms korur (/sys/kernel/mm/lru_gen/min_ttl_ms dosyasına yazar). Bu, çekirdeğin thrashing korumasıdır: bu çalışma kümesi bellekte kalamazsa çekirdeğin OOM killer'ı geri kazanmak yerine bir işlemi sonlandırır; daha uzun süre, daha az geri kazanım takılması karşılığında uygulamaların erken kapanma riskini getirir. Çekirdek belgeleri 1000 önerir. Stock, ASB'nin ilk yazımından önce kaydedilen tam değeri geri yükler; eksik, salt okunur veya uyuşmayan arayüz bildirilir."
     },
     "kernel_timer_migration": {
       "name": "Zamanlayıcı Taşıma",
-      "desc": "Çekirdeğin zamanlayıcıları CPU’lar arasında taşıyıp taşıyamayacağını denetler. Açık, zamanlayıcıları boştaki CPU’lardan zaten etkin olanlara taşıyıp bazı uyanışları önleyebilir; Kapalı konumlarını korur, ancak yük altında sonuç farklı olabilir. CPU idle davranışına bağlı olarak iki mod da gecikmeyi ve güç tüketimini iyileştirebilir veya kötüleştirebilir. Kapalı önceki ASB isteğini korur; Stock ve kaldırma, doğrulanmış readback sonrası kaydedilen değeri geri yükler."
+      "desc": "Boştayken daha az uyanmayı denemek için On seçin: zamanlayıcılar boştaki CPU'lardan zaten etkin olanlara taşınabilir. Off zamanlayıcıları yerinde tutar ve bazen yük altındaki gecikmeye yardımcı olur. Durum, çekirdeğin şu anda bildirdiği değeri gösterir; boştaki tüketim için On'u deneyin, ancak gecikme veya takılma olursa Off/Stock'a dönün. Hiçbir değer her zaman daha hızlı veya daha serin değildir."
     },
     "kernel_sched_nr_migrate": {
       "name": "Zamanlayıcı Taşıma Grubu",
@@ -506,7 +506,7 @@
     },
     "kernel_sched_autogroup": {
       "name": "Zamanlayıcı otomatik grubu",
-      "desc": "Açık, görevleri adil CPU paylaşımı için oturumlara göre gruplar; Kapalı bu gruplamayı kaldırır. Rekabet eden arka plan yükünde etkileşimli yanıtı ve arka plan işlerinin CPU payını değiştirebilir. Bu bir performans artırıcı veya güç tasarrufu modu değildir; pil kazancı garanti edilmez. Stock ve kaldırma kaydedilen 0/1 değerini geri yükler. Arayüz yoksa ASB, sırf bu kart için çekirdek seçeneğini açmak yerine «not exposed» bildirir.",
+      "desc": "Adil CPU paylaşımı için görevleri oturuma göre gruplar. GKI çekirdekleri normalde onsuz derlenir (CONFIG_SCHED_AUTOGROUP, üretici modüllerinin derlendiği signal_struct yapısını değiştirir); o zaman durum onu sunulmamış gösterir ve hiçbir şey yazılmaz. Çekirdek sağladığında On, arka plan yükünde oturumlar arası adaleti iyileştirir, Off gruplamayı kaldırır; doğrudan FPS veya pil ayarı değildir.",
       "descOpt": {
         "stock": "Otomatik zamanlayıcı gruplandırmasını değiştirme.",
         "off": "Otomatik görev gruplandırmasını kapat.",
@@ -524,11 +524,11 @@
     },
     "kernel_hrtimer_migration": {
       "name": "HR Zamanlayıcı Taşıma",
-      "desc": "/proc/sys/kernel/hrtimer_migration yolunu yalnızca satıcı bu upstream dışı arayüzü gerçekten sunarsa kullanır. Standart Linux 6.12'de bağımsız HR sysctl yoktur: ASB satırı Zamanlayıcı taşıma tarafından kapsandı olarak işaretler ve ikinci yazmayı yapmaz. Gerçek ayrı düğüm varsa Auto yalnızca Pil profilinde 0 ister. Etkiler garanti edilmez."
+      "desc": "Ayrı /proc/sys/kernel/hrtimer_migration dosyasını yalnızca çekirdek bu standart dışı arayüzü sunduğunda kullanır. 6.12 GKI dahil standart Linux çekirdeklerinde böyle bağımsız bir anahtar yoktur; o zaman bu satır yalnızca zamanlayıcı geçişini yansıtır ve hiçbir şey yazmaz, bu yüzden güç ve gecikme testleri için yukarıdaki ortak anahtarı kullanın."
     },
     "kernel_lpm_prediction": {
       "name": "Boşta Kalma Tahmini (LPM)",
-      "desc": "Çekirdek sunuyorsa LPM boşta kalma tahmincisini denetler. Auto yalnızca Pil profilinde 1 ister; manuel modlar profili geçersiz kılar."
+      "desc": "lpm_prediction anahtarı eski Snapdragon lpm_levels boşta kalma sürücüsüne aittir. Yeni Snapdragon çekirdekleri bu anahtarı olmayan qcom-cpu-lpm yöneticisini kullanır ve o zaman ASB hiçbir şey yazmaz. Bunu sunan bir çekirdekte Auto, tahmini yalnızca Battery profilinde açar; On uyanma gecikmesi pahasına boşta enerji tasarrufu sağlayabilir, Off ters dengeyi dener. Bu Android LPM veya radyo politikası değildir."
     },
     "kernel_usb_autosuspend": {
       "name": "USB otomatik askıya alma",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "yeniden başlatmadan sonra",
   "lsp_db_schema_empty": "ASB'nin bulduğu LSPosed veritabanında hiç tablo yok, bu yüzden okunacak bir modül listesi de yok. LSPosed modülleri gösteriyorsa onları başka bir yerde tutuyordur: tanılama dışa aktarımını gönderin.",
   "kc_why_kernel_sched_nr_migrate": "Zamanlayıcı hata ayıklaması (CONFIG_SCHED_DEBUG) ve debugfs ile derlenmiş bir çekirdek gerekir. ASB, debugfs'i yalnızca değeri okuduğu ya da yazdığı an için özel olarak bağlar; ikisi de derlemede varsa başka bir şey gerekmez.",
-  "kc_why_kernel_sched_autogroup": "GKI çekirdekleri autogroup olmadan derlenir. Onu açmak, üretici modüllerinin derlendiği bir çekirdek yapısını değiştirir; bu yüzden bir GKI çekirdeği bu modülleri bozmadan ona sahip olamaz.",
-  "kc_why_kernel_lpm_prediction": "Bu anahtar eski Snapdragon lpm_levels boşta kalma sürücüsüne aittir. Yeni Snapdragon çekirdekleri onsuz başka bir boşta kalma yöneticisi kullanır; tanılama dışa aktarımı bu çekirdeğin parametrelerini listeler.",
+  "kc_why_kernel_sched_autogroup": "Bu çekirdekte autogroup anahtarı yok. GKI çekirdekleri normalde CONFIG_SCHED_AUTOGROUP olmadan derlenir, çünkü üretici modüllerinin derlendiği signal_struct yapısını değiştirir; ASB bunu atlatmaz.",
+  "kc_why_kernel_lpm_prediction": "Bu çekirdek lpm_prediction anahtarı sunmuyor. Eski lpm_levels boşta kalma sürücüsüne aittir; qcom-cpu-lpm yöneticili çekirdeklerde yoktur. ASB hiçbir şey yazmaz; tanılama dışa aktarımı bu çekirdeğin boşta kalma sürücüsü parametrelerini listeler.",
   "kernel_wb_observe_title": "Boşta kalma penceresinde algılandı",
   "kernel_wb_observe_idle": "Ölçüm başlamadı. Ekranı kapatmadan önce başlatın, uyandıktan sonra güncelleyin. Ekran açık etkinliği de dahil edilir.",
   "kernel_wb_observe_running": "Pencere: {elapsed} · değişen kaynak: {n}",
@@ -3363,7 +3363,7 @@
   "kernel_wb_reset_short": "sayaç sıfırlandı",
   "kernel_wb_block": "Engelle",
   "kernel_wb_blocked": "Engellendi",
-  "kernel_wb_abi": "KRILIKD ABI düzeyi: {v}",
+  "kernel_wb_abi": "Çekirdek engelleyici ABI: {v}",
   "kernel_wb_sec": " sn",
   "kernel_wb_min": " dk",
   "kernel_wb_hour": " sa",
@@ -3383,5 +3383,11 @@
   "kernel_wb_sort_time": "Aktif süre",
   "kernel_wb_sort_name": "Ad",
   "kernel_wb_dialog_title": "Gözlemlenen uyandırma kaynakları",
-  "kernel_wb_close": "Kapat"
+  "kernel_wb_close": "Kapat",
+  "kernel_wb_confirm_shared": "{n} kaynak bu adı taşıyor; kural hepsini engeller.",
+  "kernel_wb_confirm_critical": "Bu bir sistem kaynağına benziyor (alarmlar, güç yöneticisi, şarj, giriş veya ısı). Engellemek alarmların, uyanmanın veya şarjın çalışmasını durdurabilir.",
+  "kernel_wb_confirm_plain": "“{name}” gelecekteki tüm olaylar için engellensin mi?",
+  "kernel_wb_new_short": "yeni kaynak",
+  "kernel_wb_shared_short": "ortak ad ×{n}",
+  "kernel_wb_critical_short": "sistem kaynağı"
 }

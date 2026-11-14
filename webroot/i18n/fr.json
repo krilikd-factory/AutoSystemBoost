@@ -604,11 +604,11 @@
     },
     "kernel_mglru_min_ttl": {
       "name": "Protection des générations MGLRU",
-      "desc": "Règle la protection des générations MGLRU sur 1000, 2000 ou 5000 ms. Une protection longue peut limiter la récupération prématurée mais retarder la libération; une protection courte peut augmenter les refautes. Stock restaure la valeur exacte enregistrée et signale les interfaces indisponibles."
+      "desc": "Protège la génération MGLRU la plus récemment utilisée pendant 1000 ou 2000 ms (écrit /sys/kernel/mm/lru_gen/min_ttl_ms). C’est la protection du noyau contre le thrashing : si cet ensemble de travail ne tient pas en mémoire, l’OOM killer du noyau termine un processus au lieu de récupérer de la mémoire ; une durée plus longue échange donc moins de blocages de récupération contre le risque de fermetures précoces d’applis. La documentation du noyau conseille 1000. Stock rétablit la valeur exacte capturée avant la première écriture d’ASB ; une interface absente, en lecture seule ou divergente est signalée."
     },
     "kernel_timer_migration": {
       "name": "Migration des minuteurs",
-      "desc": "Contrôle si le noyau peut migrer les minuteurs entre CPU. On peut les déplacer de CPU inactifs vers des CPU déjà actifs et éviter certains réveils ; Off conserve leur placement, avec un résultat différent selon la charge. Selon le comportement de CPU idle, chaque mode peut améliorer ou dégrader latence et consommation. Off conserve l’ancienne demande ASB ; Stock et la désinstallation restaurent la valeur enregistrée après vérification du readback."
+      "desc": "Pour tester moins de réveils au repos, choisissez On : les minuteurs peuvent passer des CPU inactifs à ceux déjà actifs. Off garde les minuteurs en place et aide parfois la latence sous charge. Le statut indique la valeur que le noyau rapporte maintenant ; testez On pour la consommation au repos, mais revenez à Off/Stock en cas de latence ou d’accrocs. Aucune valeur n’est universellement plus rapide ou plus fraîche."
     },
     "kernel_sched_nr_migrate": {
       "name": "Lot de migration de l’ordonnanceur",
@@ -616,7 +616,7 @@
     },
     "kernel_sched_autogroup": {
       "name": "Autogroup de l’ordonnanceur",
-      "desc": "On regroupe les tâches par session pour un partage équitable du CPU, Off désactive ce regroupement. Avec une charge de fond concurrente, cela peut modifier la réactivité interactive et la part de CPU des tâches de fond. Ce n’est ni un accélérateur ni un mode d’économie ; le gain de batterie n’est pas garanti. Stock et la désinstallation restaurent le 0/1 enregistré. Si l’interface est absente, ASB indique « not exposed » au lieu d’activer une option du noyau juste pour cette carte.",
+      "desc": "Regroupe les tâches par session pour un partage équitable du CPU. Les noyaux GKI sont normalement compilés sans (CONFIG_SCHED_AUTOGROUP modifie signal_struct, sur laquelle les modules du constructeur sont compilés) ; le statut l’indique alors comme absent et rien n’est écrit. Quand un noyau le fournit, On améliore l’équité entre sessions sous charge en arrière-plan et Off supprime le regroupement ; ce n’est pas un réglage direct de FPS ou de batterie.",
       "descOpt": {
         "stock": "Ne pas modifier le regroupement automatique.",
         "off": "Désactiver le regroupement automatique des tâches.",
@@ -634,11 +634,11 @@
     },
     "kernel_hrtimer_migration": {
       "name": "Migration des minuteurs HR",
-      "desc": "Utilise /proc/sys/kernel/hrtimer_migration uniquement si le fournisseur expose réellement cette interface non upstream. Linux 6.12 standard ne possède pas ce sysctl indépendant : ASB indique alors que la migration générale des minuteurs couvre ce réglage et n’écrit pas une seconde fois. Avec un vrai nœud séparé, Auto demande 0 uniquement en profil Batterie. Les effets ne sont pas garantis."
+      "desc": "N’utilise un /proc/sys/kernel/hrtimer_migration séparé que si le noyau expose cette interface non standard. Les noyaux Linux standard, y compris 6.12 GKI, n’ont pas ce réglage indépendant ; cette ligne ne fait alors que refléter la migration des minuteurs et n’écrit rien, utilisez donc le réglage commun ci-dessus pour les tests d’énergie et de latence."
     },
     "kernel_lpm_prediction": {
       "name": "Prédiction d’inactivité (LPM)",
-      "desc": "Contrôle le prédicteur d’inactivité LPM si le noyau l’expose. Auto demande 1 uniquement en profil Batterie ; les modes manuels priment."
+      "desc": "Le réglage lpm_prediction appartient à l’ancien pilote de veille Snapdragon lpm_levels. Les noyaux Snapdragon récents utilisent le gouverneur qcom-cpu-lpm, qui n’a pas ce réglage, et ASB n’écrit alors rien. Sur un noyau qui l’expose, Auto active la prédiction uniquement en profil Battery ; On peut économiser de l’énergie au repos au prix de la latence de réveil, Off teste le compromis inverse. Ce n’est ni le LPM d’Android ni la politique radio."
     },
     "kernel_usb_autosuspend": {
       "name": "Autosuspension USB",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "après redémarrage",
   "lsp_db_schema_empty": "La base LSPosed trouvée par ASB ne contient aucune table : il n’y a donc aucune liste de modules à lire. Si LSPosed affiche lui-même des modules, il les garde ailleurs : envoyez l’export de diagnostic.",
   "kc_why_kernel_sched_nr_migrate": "Nécessite un noyau compilé avec le débogage de l’ordonnanceur (CONFIG_SCHED_DEBUG) et debugfs. ASB monte debugfs en privé uniquement le temps de lire ou d’écrire la valeur : si les deux sont intégrés, rien d’autre n’est nécessaire.",
-  "kc_why_kernel_sched_autogroup": "Les noyaux GKI sont compilés sans autogroup. L’activer modifie une structure du noyau sur laquelle les modules du constructeur sont compilés : un noyau GKI ne peut donc pas l’obtenir sans casser ces modules.",
-  "kc_why_kernel_lpm_prediction": "Ce réglage appartient à l’ancien pilote de veille Snapdragon lpm_levels. Les noyaux Snapdragon récents utilisent un autre gouverneur de veille qui ne l’a pas ; l’export de diagnostic liste les paramètres de ce noyau.",
+  "kc_why_kernel_sched_autogroup": "Ce noyau n’a pas de réglage autogroup. Les noyaux GKI sont normalement compilés sans CONFIG_SCHED_AUTOGROUP, car il modifie signal_struct, sur laquelle les modules du constructeur sont compilés ; ASB ne contourne pas cela.",
+  "kc_why_kernel_lpm_prediction": "Ce noyau n’expose pas de réglage lpm_prediction. Il appartient à l’ancien pilote de veille lpm_levels ; les noyaux avec le gouverneur qcom-cpu-lpm n’en ont pas. ASB n’écrit rien ; l’export de diagnostic liste les paramètres du pilote de veille de ce noyau.",
   "kernel_wb_observe_title": "Détecté pendant la fenêtre de veille",
   "kernel_wb_observe_idle": "Aucune mesure. Démarrez avant d’éteindre l’écran, puis actualisez au réveil. L’activité écran allumé est également incluse.",
   "kernel_wb_observe_running": "Fenêtre : {elapsed} · sources modifiées : {n}",
@@ -3363,7 +3363,7 @@
   "kernel_wb_reset_short": "compteur remis à zéro",
   "kernel_wb_block": "Bloquer",
   "kernel_wb_blocked": "Bloqué",
-  "kernel_wb_abi": "ABI KRILIKD : {v}",
+  "kernel_wb_abi": "ABI du bloqueur noyau : {v}",
   "kernel_wb_sec": " sec",
   "kernel_wb_min": " min.",
   "kernel_wb_hour": " heures",
@@ -3383,5 +3383,11 @@
   "kernel_wb_sort_time": "Temps actif",
   "kernel_wb_sort_name": "Nom",
   "kernel_wb_dialog_title": "Sources de réveil observées",
-  "kernel_wb_close": "Fermer"
+  "kernel_wb_close": "Fermer",
+  "kernel_wb_confirm_shared": "{n} sources portent ce nom ; la règle les bloque toutes.",
+  "kernel_wb_confirm_critical": "Ceci ressemble à une source système (alarmes, gestion d’énergie, charge, saisie ou thermique). La bloquer peut empêcher alarmes, réveil ou charge de fonctionner.",
+  "kernel_wb_confirm_plain": "Bloquer « {name} » pour tous les événements à venir ?",
+  "kernel_wb_new_short": "nouvelle source",
+  "kernel_wb_shared_short": "nom partagé ×{n}",
+  "kernel_wb_critical_short": "source système"
 }

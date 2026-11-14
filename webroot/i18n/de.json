@@ -494,11 +494,11 @@
     },
     "kernel_mglru_min_ttl": {
       "name": "MGLRU-Generationsschutz",
-      "desc": "Setzt den Schutz von MGLRU-Generationen auf 1000, 2000 oder 5000 ms. Längerer Schutz kann vorzeitige Speicherfreigabe verringern, aber die Rückgewinnung verzögern; kürzerer Schutz kann mehr Refault-Arbeit erzeugen. Stock stellt den exakt gespeicherten Wert wieder her; fehlende oder schreibgeschützte Schnittstellen werden ehrlich gemeldet."
+      "desc": "Schützt die zuletzt genutzte MGLRU-Generation für 1000 oder 2000 ms (schreibt /sys/kernel/mm/lru_gen/min_ttl_ms). Das ist der Thrashing-Schutz des Kernels: Passt dieser Arbeitssatz nicht in den Speicher, beendet der OOM-Killer des Kernels einen Prozess statt zurückzufordern; eine längere Zeit tauscht also weniger Reclaim-Stockungen gegen das Risiko früh beendeter Apps. Die Kernel-Dokumentation empfiehlt 1000. Stock stellt den genauen Wert vor dem ersten ASB-Schreibvorgang wieder her; eine fehlende, schreibgeschützte oder abweichende Schnittstelle wird gemeldet."
     },
     "kernel_timer_migration": {
       "name": "Timer-Migration",
-      "desc": "Steuert, ob der Kernel Timer zwischen CPUs verschieben darf. Ein kann Timer von inaktiven auf bereits aktive CPUs verlagern und manche Aufwachvorgänge vermeiden; Aus belässt Timer am Ort, was unter Last anders wirken kann. Je nach CPU-Idle-Verhalten kann jeder Modus Latenz und Verbrauch verbessern oder verschlechtern. Aus behält die bisherige ASB-Anforderung; Stock und Deinstallation stellen nach geprüftem Readback den Ausgangswert wieder her."
+      "desc": "Um weniger Aufwachvorgänge im Leerlauf zu testen, wählen Sie On: Timer dürfen von untätigen CPUs auf bereits aktive wechseln. Off lässt Timer an ihrem Platz und kann die Latenz unter Last manchmal verbessern. Der Status zeigt den Wert, den der Kernel jetzt meldet; testen Sie On auf Leerlaufverbrauch, kehren Sie aber zu Off/Stock zurück, wenn Latenzen oder Ruckler auftreten. Kein Wert ist grundsätzlich schneller oder kühler."
     },
     "kernel_sched_nr_migrate": {
       "name": "Scheduler-Migrationsbatch",
@@ -506,7 +506,7 @@
     },
     "kernel_sched_autogroup": {
       "name": "Scheduler-Autogroup",
-      "desc": "Ein gruppiert Tasks nach Sitzungen für faire CPU-Verteilung, Aus deaktiviert diese Gruppierung. Bei konkurrierender Hintergrundlast kann dies die interaktive Reaktion und den CPU-Anteil Hintergrundaufgaben verändern. Es ist weder ein Leistungs- noch ein Energiesparmodus; ein Akku-Gewinn ist nicht garantiert. Stock und Deinstallation stellen die gespeicherten 0/1 wieder her. Fehlt die Schnittstelle, meldet ASB „not exposed“, statt nur für diese Karte eine Kernel-Option zu aktivieren.",
+      "desc": "Gruppiert Aufgaben nach Sitzung für eine faire CPU-Verteilung. GKI-Kernel werden normalerweise ohne gebaut (CONFIG_SCHED_AUTOGROUP ändert signal_struct, gegen das Herstellermodule gebaut sind); dann zeigt der Status die Schnittstelle als nicht vorhanden, und nichts wird geschrieben. Wo ein Kernel es bietet, verbessert On die Fairness zwischen Sitzungen bei Hintergrundlast, Off hebt die Gruppierung auf; es ist keine direkte FPS- oder Akku-Optimierung.",
       "descOpt": {
         "stock": "Automatische Scheduler-Gruppierung unverändert lassen.",
         "off": "Automatische Prozessgruppierung deaktivieren.",
@@ -524,11 +524,11 @@
     },
     "kernel_hrtimer_migration": {
       "name": "HR-Timer-Migration",
-      "desc": "Verwendet /proc/sys/kernel/hrtimer_migration nur bei einem echten Vendor-Interface. Standard-Linux 6.12 besitzt dieses unabhängige Sysctl nicht: ASB kennzeichnet die Zeile dann als durch Timer-Migration abgedeckt und schreibt kein zweites Mal. Bei einem echten separaten Knoten fordert Auto nur im Akkuprofil 0 an. Latenz- und Stromspareffekte sind nicht garantiert."
+      "desc": "Nutzt ein separates /proc/sys/kernel/hrtimer_migration nur, wenn der Kernel diese nicht standardmäßige Schnittstelle bereitstellt. Standard-Linux-Kernel, auch 6.12 GKI, haben keinen solchen eigenen Schalter; dann spiegelt diese Zeile nur die Timer-Migration wider und schreibt nichts, also nutzen Sie den gemeinsamen Schalter oben für Energie- und Latenztests."
     },
     "kernel_lpm_prediction": {
       "name": "Leerlauf-Vorhersage (LPM)",
-      "desc": "Steuert die LPM-Leerlaufvorhersage, falls der Kernel sie bereitstellt. Auto fordert nur im Akkuprofil 1 an; manuelle Modi haben Vorrang."
+      "desc": "Der Schalter lpm_prediction gehört zum älteren Snapdragon-Leerlauftreiber lpm_levels. Neuere Snapdragon-Kernel nutzen den Governor qcom-cpu-lpm ohne diesen Schalter, und dann schreibt ASB nichts. Auf einem Kernel, der ihn bietet, aktiviert Auto die Vorhersage nur im Profil Battery; On kann Leerlaufenergie auf Kosten der Aufwachlatenz sparen, Off testet den umgekehrten Kompromiss. Das ist weder Android-LPM noch Funkrichtlinie."
     },
     "kernel_usb_autosuspend": {
       "name": "USB-Autosuspend",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "nach Neustart",
   "lsp_db_schema_empty": "Die von ASB gefundene LSPosed-Datenbank enthält keine Tabellen, daher gibt es keine Modulliste zu lesen. Zeigt LSPosed selbst Module, liegen sie woanders: Senden Sie den Diagnoseexport.",
   "kc_why_kernel_sched_nr_migrate": "Benötigt einen Kernel mit Scheduler-Debugging (CONFIG_SCHED_DEBUG) und debugfs. ASB hängt debugfs privat nur für den Moment ein, in dem es den Wert liest oder schreibt; sind beide eingebaut, ist nichts weiter nötig.",
-  "kc_why_kernel_sched_autogroup": "GKI-Kernel werden ohne Autogroup gebaut. Das Einschalten ändert eine Kernelstruktur, gegen die die Herstellermodule kompiliert sind; ein GKI-Kernel kann es daher nicht erhalten, ohne diese Module zu brechen.",
-  "kc_why_kernel_lpm_prediction": "Dieser Schalter gehört zum älteren Snapdragon-Leerlauftreiber lpm_levels. Neuere Snapdragon-Kernel nutzen einen anderen Leerlauf-Governor ohne ihn; der Diagnoseexport listet die Parameter dieses Kernels auf.",
+  "kc_why_kernel_sched_autogroup": "Dieser Kernel hat keinen Autogroup-Schalter. GKI-Kernel werden normalerweise ohne CONFIG_SCHED_AUTOGROUP gebaut, weil es signal_struct ändert, gegen das Herstellermodule kompiliert sind; ASB umgeht das nicht.",
+  "kc_why_kernel_lpm_prediction": "Dieser Kernel bietet keinen lpm_prediction-Schalter. Er gehört zum älteren Leerlauftreiber lpm_levels; Kernel mit dem Governor qcom-cpu-lpm haben keinen. ASB schreibt nichts; der Diagnoseexport listet die Leerlauftreiber-Parameter dieses Kernels.",
   "kernel_wb_observe_title": "Im Leerlauffenster erkannt",
   "kernel_wb_observe_idle": "Noch keine Messung. Vor dem Ausschalten des Bildschirms starten und nach dem Aufwecken aktualisieren. Aktivität bei eingeschaltetem Bildschirm zählt ebenfalls.",
   "kernel_wb_observe_running": "Fenster: {elapsed} · geänderte Quellen: {n}",
@@ -3363,7 +3363,7 @@
   "kernel_wb_reset_short": "Zähler zurückgesetzt",
   "kernel_wb_block": "Blockieren",
   "kernel_wb_blocked": "Blockiert",
-  "kernel_wb_abi": "KRILIKD-ABI: {v}",
+  "kernel_wb_abi": "Kernel-Blocker-ABI: {v}",
   "kernel_wb_sec": " Sek.",
   "kernel_wb_min": " Min.",
   "kernel_wb_hour": " Std.",
@@ -3383,5 +3383,11 @@
   "kernel_wb_sort_time": "Aktive Zeit",
   "kernel_wb_sort_name": "Quellenname",
   "kernel_wb_dialog_title": "Beobachtete Wakeup-Quellen",
-  "kernel_wb_close": "Schließen"
+  "kernel_wb_close": "Schließen",
+  "kernel_wb_confirm_shared": "{n} Quellen tragen diesen Namen; die Regel blockiert sie alle.",
+  "kernel_wb_confirm_critical": "Das sieht nach einer Systemquelle aus (Wecker, Energieverwaltung, Laden, Eingabe oder Thermik). Ihr Blockieren kann Wecker, Aufwachen oder Laden stören.",
+  "kernel_wb_confirm_plain": "„{name}“ für alle künftigen Ereignisse blockieren?",
+  "kernel_wb_new_short": "neue Quelle",
+  "kernel_wb_shared_short": "gemeinsamer Name ×{n}",
+  "kernel_wb_critical_short": "Systemquelle"
 }
