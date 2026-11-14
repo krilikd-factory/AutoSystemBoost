@@ -10852,7 +10852,7 @@ let _ltpoStatus = '', _ltpoState = '', _ltpoVideoStatus = '', _ltpoPeak = { stat
  * apps the limit covers, and how many of them this ROM lets hold the CPU anyway - the
  * WAKE_LOCK app-op is not enforced on ColorOS/OxygenOS 16, so "limit" can be set and
  * dead at the same time. The badge below must not claim otherwise. */
-let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false;
+let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false, _wlFitNotKept = 0;
 let _mmfeedStatus = '', _mmfeedState = '';
 // Is this the reference model the flat-effects option was validated on?
 //
@@ -10960,6 +10960,7 @@ function wlFitParse(out) {
     limited: parseInt(kv.limited, 10) || 0,
     ignored: parseInt(kv.ignored, 10) || 0,
     refused: parseInt(kv.refused, 10) || 0,
+    notKept: parseInt(kv.not_kept, 10) || 0,
     ok: Object.prototype.hasOwnProperty.call(kv, 'installed')
   };
 }
@@ -10977,11 +10978,12 @@ async function loadWlFitStatus(force) {
     const r = await run('sh ' + MD + '/runtime/asb_wakelock_watch.sh fitness-status 2>/dev/null');
     const st = wlFitParse(r && r.stdout);
     _wlFitLimited = st.limited + st.preset;
+    _wlFitNotKept = st.notKept;
     /* An app-op the ROM would not even store is the same news as one it does not enforce. */
     _wlFitIgnored = st.ignored + (_wlFitLimited === 0 ? st.refused : 0);
     _wlFitInstalled = st.installed;
     _wlFitProbed = st.ok;
-  } catch (e) { _wlFitIgnored = 0; _wlFitLimited = 0; _wlFitInstalled = 0; _wlFitProbed = false; }
+  } catch (e) { _wlFitIgnored = 0; _wlFitLimited = 0; _wlFitInstalled = 0; _wlFitProbed = false; _wlFitNotKept = 0; }
 }
 
 /* fix187: LSPosed's verbose log as LSPosed itself has it. The card's value only says what
@@ -11304,6 +11306,7 @@ function cfgStatus(it, cur) {
   if (it.key === 'wakelock_fitness') {
     if (cur !== 'limit') return { cls:'neutral', text: String(Topt(cur, it.key)).toUpperCase() };
     if (_wlFitIgnored > 0) return { cls:'warn', text: T('st_wlf_ignored', 'ROM ignores it') };
+    if (_wlFitNotKept > 0) return { cls:'warn', text: T('st_wlf_not_kept', 'ROM does not keep it') };
     if (_wlFitLimited > 0) return { cls:'good', text: T('st_on', 'Enabled') };
     /* "no fitness apps" only when the watcher found none installed (fix177); apps there and
      * nothing limited yet is pending - the next pass (or the one this toggle ran) sets it. */
@@ -16463,6 +16466,14 @@ function deviceBatteryWear(d) {
   if (!(full > 0 && design > 0)) return null;
   return Math.round(full * 100 / design);
 }
+/* dev48: a gauge that reports the design figure as "full" (equal to the last mAh after dozens
+ * of cycles) gives no wear reading at all; 100% there is the firmware's number, not health. */
+function deviceBatteryWearMirrored(d) {
+  const full = deviceNum(deviceVal(d, 'battery', 'charge_full_uah'));
+  const design = deviceNum(deviceVal(d, 'battery', 'charge_full_design_uah'));
+  const cycles = deviceNum(deviceVal(d, 'battery', 'cycle_count'));
+  return full > 0 && full === design && cycles >= 50;
+}
 function deviceRootManagerDisplay(value, d) {
   const v = String(value || '').trim().toLowerCase();
   if (v !== 'ksu') return ({ magisk: 'Magisk', apatch: 'APatch' })[v] || value;
@@ -16505,10 +16516,23 @@ function deviceDisplayValue(sec, key, value, d) {
     if ((/_pct$/.test(key) || key === 'coverage_pct') && isFinite(deviceNum(value))) return value + '%';
     if (/_kb$/.test(key)) return deviceSizeKb(value);
     if (key === 'band') return T('dev_load_band_' + value, deviceFallbackLabel(value));
+    if (key === 'cpu_window_ms' && /^\d{1,9}$/.test(value)) return value + '\u00a0' + T('unit_ms', 'ms');
+  }
+  if (sec === 'asb' && key === 'smooth_log_last_epoch' && /^\d{9,}$/.test(value)) {
+    const dt = new Date(parseInt(value, 10) * 1000);
+    if (!isNaN(dt.getTime())) return dt.toLocaleString(ASB_LANG || undefined);
   }
   if (sec === 'zygisk_observer') {
-    if (key === 'enabled' || key === 'lifecycle_hints' || key === 'launch_hints' || key === 'spawn_ledger')
+    if (key === 'enabled' || key === 'lifecycle_hints' || key === 'launch_hints' || key === 'spawn_ledger' || key === 'auto_mode')
       return value === '1' ? T('st_on', 'Enabled') : T('st_off', 'Disabled');
+    if (key === 'state_age_ms' && /^\d{1,12}$/.test(value)) {
+      const ms = parseInt(value, 10);
+      return ms < 60000 ? (Math.round(ms / 100) / 10) + '\u00a0' + T('unit_s', 's') : deviceDuration(ms / 1000);
+    }
+    if (key === 'auto_updated' && /^\d{9,}$/.test(value)) {
+      const dt = new Date(parseInt(value, 10) * 1000);
+      if (!isNaN(dt.getTime())) return dt.toLocaleString(ASB_LANG || undefined);
+    }
     if (key === 'memory_kb') return deviceSizeKb(value);
     if (key === 'safe_mode') return T('dev_zygisk_safe_' + value, deviceFallbackLabel(value));
   }
@@ -16613,7 +16637,8 @@ function deviceInfoSnapshot(d) {
     const parts = [], tmp = deviceVal(d, 'battery', 'temp_tenths_c');
     if (tmp !== '—') parts.push(deviceDisplayValue('battery', 'temp_tenths_c', tmp, d));
     const wear = deviceBatteryWear(d);
-    if (wear !== null) parts.push(deviceFill('dev_bat_wear_fmt', '{pct}% of design capacity', { pct: wear }));
+    if (wear !== null && deviceBatteryWearMirrored(d)) parts.push(T('dev_bat_wear_mirrored', 'wear not reported by the firmware'));
+    else if (wear !== null) parts.push(deviceFill('dev_bat_wear_fmt', '{pct}% of design capacity', { pct: wear }));
     const cyc = deviceVal(d, 'battery', 'cycle_count');
     if (cyc !== '—') parts.push(deviceFill('dev_bat_cycles_fmt', '{n} cycles', { n: cyc }));
     cards.push(deviceSnapshotCard(T('dev_snap_battery', 'Battery now'), deviceDisplayValue('battery', 'capacity', cap, d),
@@ -16839,7 +16864,9 @@ function deviceZygiskOverview(d) {
     deviceFill('dev_zygisk_metric_allowlist', '{n} selected app(s)', { n: val('enabled_packages') }), 'neutral'));
   grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_cost', 'Observer IPC cost'),
     deviceFill('dev_zygisk_metric_cpu', '{n} ms CPU', { n: val('ipc_cpu_ms') }),
-    deviceFill('dev_zygisk_metric_cost_fmt', '{wake} wakeups · RSS {memory}', { wake: val('ipc_wakeups'), memory: deviceSizeKb(val('memory_kb')) }), 'neutral'));
+    deviceFill('dev_zygisk_metric_cost_fmt', '{wake} wakeups', { wake: val('ipc_wakeups') }), 'neutral'));
+  grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_rss', 'Memory of observed apps'),
+    deviceSizeKb(val('memory_kb')), T('dev_zygisk_metric_rss_sub', 'the apps themselves, not ASB overhead'), 'neutral'));
   wrap.appendChild(grid);
   const features = document.createElement('div'); features.className = 'dev-zygisk-features';
   [['enabled', 'dev_zygisk_feature_observer', 'Observer'], ['lifecycle_hints', 'dev_zygisk_feature_hints', 'Lifecycle hints'],
@@ -18521,6 +18548,12 @@ function deviceZygiskEditor(d, onDone) {
   const automatic = deviceVal(d, 'zygisk_observer', 'auto_mode') === '1';
   const current = deviceVal(d, 'zygisk_observer', 'enabled_package_list');
   input.value = current === 'none' || current === '—' ? '' : current;
+  /* dev48: an older collector cut this list at 600 characters, mid-name; saving such a list
+   * would have dropped every app after the cut. A list that does not match its own count is
+   * shown but never saved. */
+  const listed = input.value.split(/[\s,]+/).filter(function (x) { return x.length; }).length;
+  const counted = parseInt(deviceVal(d, 'zygisk_observer', 'enabled_packages'), 10);
+  const incomplete = isFinite(counted) && counted !== listed;
   if (automatic) {
     label.textContent = T('zy_auto_managed_label', 'Apps selected automatically by ASB');
     input.setAttribute('readonly', 'readonly');
@@ -18528,6 +18561,7 @@ function deviceZygiskEditor(d, onDone) {
   const actions = document.createElement('div'); actions.className = 'dev-zygisk-actions';
   const save = document.createElement('button'); save.type = 'button'; save.className = 'dev-zygisk-btn'; save.textContent = T('dev_zygisk_save', 'Save allowlist');
   if (automatic) save.hidden = true;
+  if (incomplete) { save.disabled = true; input.setAttribute('readonly', 'readonly'); }
   const safe = document.createElement('button'); safe.type = 'button'; safe.className = 'dev-zygisk-btn';
   const safeOn = deviceVal(d, 'zygisk_observer', 'safe_mode') === 'on';
   safe.textContent = T(safeOn ? 'dev_zygisk_safe_clear' : 'dev_zygisk_safe_enable', safeOn ? 'Clear safe mode' : 'Enable safe mode');
@@ -18554,6 +18588,10 @@ function deviceZygiskEditor(d, onDone) {
     : T('dev_zygisk_editor_note', 'An empty list observes nothing. Protected processes are rejected again by the native module. Enable the separate Zygisk Process Observer setting; saving this list does not enable it. Changes affect newly started processes only.'));
   note.classList.add('dev-evidence');
   wrap.appendChild(label); wrap.appendChild(input); wrap.appendChild(actions); wrap.appendChild(note);
+  if (incomplete) {
+    const cut = logReportNote(deviceFill('dev_zygisk_list_incomplete', 'This snapshot lists {shown} of {n} apps, so the list is not complete and cannot be saved from here. Refresh, or edit it on the Zygisk page.', { shown: listed, n: counted }), true);
+    cut.classList.add('dev-zygisk-cut'); wrap.appendChild(cut);
+  }
   return wrap;
 }
 function deviceInfoRender(d) {
@@ -18654,6 +18692,7 @@ function deviceInfoRender(d) {
       const sg = logReportNote(T(sectionGuide[0], sectionGuide[1])); sg.classList.add('dev-section-guide'); card.appendChild(sg);
     }
     keys.forEach(function (key) {
+      if (spec[0] === 'zygisk_observer' && key === 'enabled_package_list') return;
       const raw = String(sec[key]);
       const value = deviceDisplayValue(spec[0], key, raw, d);
       const row = logReportRow(deviceLabel(spec[0], key), value, false);
@@ -18675,6 +18714,10 @@ function deviceInfoRender(d) {
           const wv = wr.querySelector('.lgr-v');
           if (wv && wear < 80) wv.classList.add('dev-warn');
           card.appendChild(wr); shown++;
+          if (deviceBatteryWearMirrored(d)) {
+            const mn = logReportNote(deviceFill('dev_battery_wear_mirrored_note', 'The full-charge value equals the design capacity to the last mAh after {n} cycles: this firmware most likely reports the design figure there rather than a measured capacity, so this 100% is not a wear reading.', { n: deviceVal(d, 'battery', 'cycle_count') }));
+            mn.classList.add('dev-evidence'); card.appendChild(mn);
+          }
         }
       }
       if (spec[0] === 'system' && key === 'loadavg') {
