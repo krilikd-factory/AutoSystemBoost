@@ -287,7 +287,7 @@ if [ -f /data/adb/asb/wakelock_fitness_limited ] && command -v appops >/dev/null
   while IFS='|' read -r _fp _fo; do
     [ -n "$_fp" ] && _fw appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
   done < /data/adb/asb/wakelock_fitness_limited
-  rm -f /data/adb/asb/wakelock_fitness_limited /data/adb/asb/wakelock_fitness_ignored /data/adb/asb/wakelock_fitness_refused /data/adb/asb/dsp_effects_blocked 2>/dev/null
+  rm -f /data/adb/asb/wakelock_fitness_limited /data/adb/asb/wakelock_fitness_ignored /data/adb/asb/wakelock_fitness_refused /data/adb/asb/wakelock_fitness_reapply /data/adb/asb/dsp_effects_blocked 2>/dev/null
 fi
 # A per-uid mode set beside the package limit (fix177), handed back the same way.
 if [ -f /data/adb/asb/wakelock_fitness_uidmode ] && command -v appops >/dev/null 2>&1; then
