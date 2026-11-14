@@ -626,6 +626,11 @@ fi
 if [ -r "$SYS/kernel/asb_wakeup/blocked_events" ]; then
   _emit kernel_features wakeup_blocker_blocked_events "$(_read "$SYS/kernel/asb_wakeup/blocked_events")"
 fi
+if [ -r "$SYS/kernel/asb_wakeup/abi_version" ]; then
+  _emit kernel_features wakeup_blocker_abi "$(_read "$SYS/kernel/asb_wakeup/abi_version")"
+else
+  _emit kernel_features wakeup_blocker_abi 'legacy_or_unknown'
+fi
 # The reviewed KRILIKD/WildKernels driver exposes a read-only early-boot DT result.
 # It is evidence about the configured SDP budget, never a live charge-current measurement
 # and never a runtime writer. Do not collapse a present but NOT APPLIED report into success.
