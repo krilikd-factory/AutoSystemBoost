@@ -731,12 +731,12 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "233" ] || fail "expected 233 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "233" ] || fail "expected 233 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "234" ] || fail "expected 234 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "234" ] || fail "expected 234 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
-for _kc_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
+for _kc_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
   grep -qx "$_kc_key|advanced|webui_sensitive|shell" "$REG" || fail "$_kc_key consumer is not pinned to shell"
 done
 grep -qx 'net_mtu_probing|advanced|webui_sensitive|shell' "$REG" || fail 'net_mtu_probing consumer is not pinned to shell'

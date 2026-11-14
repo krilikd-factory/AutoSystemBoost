@@ -11192,6 +11192,51 @@ grep -Fq "notKept: parseInt(kv.not_kept, 10) || 0," "$H" && grep -Fq "if (_wlFit
 exit "$fail"
 )
 
+t_kernel_mglru_ttl_runtime() (
+# Runtime: the exposed MGLRU generation TTL has one bounded, reversible owner.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel MGLRU TTL: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state"
+printf '2000\n' > "$T/ttl"
+run() {
+  MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_MGLRU_MIN_TTL_NODE="$T/ttl" sh "$K" "$@"
+}
+printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
+out="$(run apply kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|2000' || fail "bounded apply/readback: $out"
+[ "$(cat "$T/ttl")" = 1000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'value or original baseline is wrong'
+printf 'kernel_mglru_min_ttl=5000\n' > "$T/mod/config/governor.conf"
+run apply kernel_mglru_min_ttl >/dev/null
+[ "$(cat "$T/ttl")" = 5000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'repeat apply replaced the original baseline'
+printf '9\n' > "$T/ttl"
+printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
+out="$(run apply kernel_mglru_min_ttl)"
+printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|restored|stock|2000|none' || fail "exact Stock restore: $out"
+[ "$(cat "$T/ttl")" = 2000 ] && [ ! -e "$T/state/kernel_mglru_min_ttl.prev" ] || fail 'restore left the wrong value or baseline'
+printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
+rm -f "$T/ttl"
+set +e; out="$(run apply kernel_mglru_min_ttl 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_mglru_min_ttl|not_exposed|' || fail "missing interface verdict: $out"
+[ ! -e "$T/state/kernel_mglru_min_ttl.prev" ] || fail 'missing interface created restore state'
+# The retired mglru_hold path cannot write 0 or bypass the registered owner.
+! grep -Eq '(echo|printf).*min_ttl_ms|min_ttl_ms.*(echo|printf)' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'legacy direct min_ttl writer remains'
+grep -Fq 'kernel_mglru_min_ttl' "$ROOT/service.sh" || fail 'reinforce path lost the TTL owner'
+grep -Fq 'asb_kernel_controls.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall lost the common exact-restore owner'
+mkdir -p "$T/cmod/config" "$T/cmod/runtime"
+cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
+cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
+MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_mglru_min_ttl 5000 >/dev/null
+set +e
+MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_mglru_min_ttl 1 >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail 'config writer accepted an arbitrary TTL'
+echo 'PASS kernel MGLRU TTL: fixed node, bounded values, stable baseline, exact restore, honest absence and no legacy direct writer'
+)
+
 t_diag_kernel_controls_readable_runtime() (
 # dev48 (audit F1): asbdiag printed the helper's raw pipe records, so the hrtimer row ("covered
 # by timer migration") read like a second, separate control. Each control is one readable line
