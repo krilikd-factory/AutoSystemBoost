@@ -4715,13 +4715,16 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
   filter: drop-shadow(0 6px 18px rgba(0,0,0,.55)) drop-shadow(0 0 var(--ufo-glow, 0px) rgba(0,255,200,.75));
 }
 .ufo-fly .ufo-body { width:1.75em; height:1.4375em; }
-.ufo-fly .ufo-drawn,.ufo-fly .ufo-emoji {
+.ufo-fly .ufo-drawn {
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  transform-origin:50% 50%; will-change:opacity,transform;
+  transform-origin:50% 50%;
 }
 .ufo-fly .ufo-drawn { opacity:1; }
 .ufo-fly .ufo-drawn .asb-ufo-art { display:block; width:100%; height:100%; overflow:visible; }
-.ufo-fly .ufo-emoji { opacity:0; font-size:1em; line-height:1; transform:scale(.78); }
+.ufo-cosmos {
+  position:fixed; inset:0; z-index:1999; display:block; pointer-events:none;
+  width:100vw; height:100vh; contain:strict;
+}
 /* Tractor beam: shown while the saucer leaves its nest and while it comes back to it. */
 .ufo-fly .ufo-beam {
   position: absolute;
@@ -5466,7 +5469,12 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
   box-shadow:0 0 22px rgba(0,240,180,.30); opacity:.52;
   animation:asbBootScan 3.4s cubic-bezier(.45,0,.55,1) infinite;
 }
-.asb-boot-panel { width:min(100%,340px); text-align:center; }
+.asb-boot-panel { width:min(100%,340px); text-align:center; animation:asbBootArrive .7s cubic-bezier(.16,1,.3,1) both; }
+.asb-boot-core::before {
+  content:""; position:absolute; inset:9%; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,rgba(0,212,255,.11),rgba(0,240,180,.035) 43%,transparent 70%);
+  transform:scale(.82); animation:asbBootHalo 2.4s ease-in-out infinite;
+}
 .asb-boot-kicker {
   display:flex; align-items:center; justify-content:center; gap:9px;
   color:var(--boot-muted); font:600 10px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;
@@ -5501,7 +5509,12 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
 .asb-boot-brand b { color:var(--boot-accent); font-weight:inherit; }
 .asb-boot-status { min-height:20px; margin-top:13px; color:var(--boot-muted); font-size:12px; font-weight:550; }
 .asb-boot-progress {
-  height:3px; margin:25px 8px 0; overflow:hidden; border-radius:99px; background:rgba(120,150,139,.20);
+  position:relative; height:3px; margin:25px 8px 0; overflow:hidden; border-radius:99px; background:rgba(120,150,139,.20);
+}
+.asb-boot-progress::after {
+  content:""; position:absolute; inset:0; width:34%; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.32),transparent);
+  animation:asbBootTrackShine 1.6s ease-in-out infinite;
 }
 .asb-boot-progress > i {
   display:block; width:100%; height:100%; border-radius:inherit;
@@ -5511,10 +5524,15 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
 }
 .asb-boot-count { margin-top:9px; color:var(--boot-muted); font:600 10px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:1.4px; }
 .asb-boot-stages { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:29px; }
-.asb-boot-stage { color:var(--boot-muted); font:600 9px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.8px; opacity:.52; transition:opacity .2s,color .2s; }
+.asb-boot-stage { position:relative; color:var(--boot-muted); font:600 9px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.8px; opacity:.52; transition:opacity .2s,color .2s; }
 .asb-boot-stage::before { content:""; display:block; width:4px; height:4px; margin:0 auto 8px; border-radius:50%; background:currentColor; }
+.asb-boot-stage::after { content:""; position:absolute; left:18%; right:18%; bottom:-7px; height:1px; background:currentColor; opacity:0; transform:scaleX(.25); }
 .asb-boot-stage.is-active { color:var(--boot-accent2); opacity:1; }
+.asb-boot-stage.is-active::before { animation:asbBootBeacon 1.05s ease-out infinite; }
+.asb-boot-stage.is-active::after { opacity:.7; animation:asbBootStageLine 1.35s ease-in-out infinite; }
 .asb-boot-stage.is-done { color:var(--boot-accent); opacity:1; }
+.asb-boot-intro.is-ready .asb-boot-ufo { animation:asbBootReady .48s cubic-bezier(.16,1,.3,1) both; }
+.asb-boot-intro.is-ready .asb-boot-progress::after { animation:none; opacity:0; }
 html[data-asb-theme="light"] .asb-boot-intro {
   --boot-accent:#007c63; --boot-accent2:#087f9a; --boot-text:#10211c; --boot-muted:#5d746b;
 }
@@ -5524,18 +5542,25 @@ html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
 @keyframes asbBootSpin { to { transform:rotate(360deg); } }
 @keyframes asbBootPulse { 50% { transform:scale(.92); opacity:.76; } }
 @keyframes asbBootScan { 0%,100% { transform:translateY(8vh); opacity:0; } 15%,85% { opacity:.52; } 50% { transform:translateY(82vh); } }
+@keyframes asbBootArrive { from { opacity:0; transform:translateY(12px) scale(.985); } to { opacity:1; transform:none; } }
+@keyframes asbBootHalo { 50% { transform:scale(1.15); opacity:.48; } }
+@keyframes asbBootBeacon { 0% { box-shadow:0 0 0 0 currentColor; } 70%,100% { box-shadow:0 0 0 7px transparent; } }
+@keyframes asbBootStageLine { 0%,100% { transform:scaleX(.25); opacity:.2; } 50% { transform:scaleX(1); opacity:.85; } }
+@keyframes asbBootTrackShine { from { transform:translateX(-110%); } to { transform:translateX(395%); } }
+@keyframes asbBootReady { 45% { transform:scale(1.075); box-shadow:0 0 42px rgba(0,240,180,.28); } to { transform:scale(1); } }
 @media (max-height:640px) {
   .asb-boot-core { --k:.8256; margin:24px auto 20px; }
   .asb-boot-stages { margin-top:20px; }
 }
 @media (prefers-reduced-motion:reduce) {
   .asb-boot-intro,.asb-boot-progress > i,.asb-boot-stage { transition:none !important; }
-  .asb-boot-scan,.asb-boot-orbit,.asb-boot-ufo { animation:none !important; }
+  .asb-boot-panel,.asb-boot-scan,.asb-boot-orbit,.asb-boot-ufo,.asb-boot-core::before,
+  .asb-boot-progress::after,.asb-boot-stage::before,.asb-boot-stage::after { animation:none !important; }
 }
 @media (forced-colors:active) {
   .asb-boot-intro { color:CanvasText !important; }
   .asb-boot-bg { background:Canvas !important; }
-  .asb-boot-grid,.asb-boot-scan { display:none; }
+  .asb-boot-grid,.asb-boot-scan,.asb-boot-core::before,.asb-boot-progress::after { display:none; }
   .asb-boot-kicker,.asb-boot-status,.asb-boot-count,.asb-boot-stage { color:CanvasText !important; }
   .asb-boot-orbit,.asb-boot-ring,.asb-boot-ufo,.asb-boot-progress { border-color:CanvasText !important; }
   .asb-boot-ufo { background:Canvas !important; color:CanvasText !important; box-shadow:none; }
@@ -7278,12 +7303,13 @@ function prettySoc(code) {
   return SOC_MAP[c] || c || 'Qualcomm Snapdragon';
 }
 
-/* fix328: the static header contains no pretend model while the local JSON is in flight.
- * Repeat openings synchronously reuse only these three non-sensitive display fields, then
- * still fetch the fresh file. This runs before the first paint; it is not a root read and
- * never turns the cached label into a claim about a live metric. */
+/* fix328/fix350: the static header contains no pretend model while the local JSON is in flight.
+ * Repeat openings synchronously reuse only these three non-sensitive display fields. Device
+ * identity does not change during a WebView session, so a valid cache needs no second fetch;
+ * cold concurrent callers join one request instead of starting a request per startup owner. */
 const DEVICE_HEADER_CACHE_KEY = 'asb_device_header_cache';
 const DEVICE_HEADER_CACHE_MAX_MS = 7 * 86400000;
+let _deviceHeaderLoad = null;
 function deviceHeaderPaint(model, soc, chip) {
   ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine', 'rpDeviceLine', 'devDeviceLine', 'zyDeviceLine'].forEach(function (id) {
     const el = document.getElementById(id);
@@ -7308,17 +7334,21 @@ function deviceHeaderCacheGet() {
 }
 async function loadDeviceInfo() {
   const cached = deviceHeaderCacheGet();
-  if (cached) deviceHeaderPaint(cached.model, cached.soc, cached.chip);
-  try {
-    const r = await fetch('device_info.json?ts=' + Date.now());
-    if (!r.ok) return;
-    const d = await r.json();
-    const model = prettyModel(d.model_code||'', d.name_code||'');
-    const soc   = prettySoc(d.soc_code||'');
-    const chip  = (d.soc_code||'').trim().toUpperCase() || 'DEVICE';
-    deviceHeaderPaint(model, soc, chip);
-    try { localStorage.setItem(DEVICE_HEADER_CACHE_KEY, JSON.stringify({ t:Date.now(), model:model, soc:soc, chip:chip })); } catch (e) {}
-  } catch(e) {}
+  if (cached) { deviceHeaderPaint(cached.model, cached.soc, cached.chip); return; }
+  if (_deviceHeaderLoad) return _deviceHeaderLoad;
+  _deviceHeaderLoad = (async function () {
+    try {
+      const r = await fetch('device_info.json?ts=' + Date.now());
+      if (!r.ok) return;
+      const d = await r.json();
+      const model = prettyModel(d.model_code||'', d.name_code||'');
+      const soc   = prettySoc(d.soc_code||'');
+      const chip  = (d.soc_code||'').trim().toUpperCase() || 'DEVICE';
+      deviceHeaderPaint(model, soc, chip);
+      try { localStorage.setItem(DEVICE_HEADER_CACHE_KEY, JSON.stringify({ t:Date.now(), model:model, soc:soc, chip:chip })); } catch (e) {}
+    } catch(e) {}
+  })();
+  try { await _deviceHeaderLoad; } finally { _deviceHeaderLoad = null; }
 }
 function liveHeaderSync() {
   [['deviceLine', 'liveDeviceLine'], ['socBadge', 'liveSocBadge'], ['verBadge', 'liveVerBadge']].forEach(function (p) {
@@ -7820,7 +7850,10 @@ function openLivePage() {
   if (_liveTimer) clearInterval(_liveTimer);
   setTimeout(function () {
     if (!_liveOpen) return;
-    if (_selectedProfile === 'stock') pollStockTelemetry(true, true);
+    /* Reuse a fresh Stock sample when returning to Monitor. pollStockTelemetry still reads
+     * immediately after its normal ten-second window; forcing a second root read here only
+     * repeated the same collector after the Home/startup warm-up. */
+    if (_selectedProfile === 'stock') pollStockTelemetry(true);
     pollLive(true);
   }, LIVE_OPEN_SETTLE_MS);
   _liveTimer = setInterval(() => { pollLive(true).then(lviSample, lviSample); }, 3000);
@@ -9831,7 +9864,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'repairs', icon:'wrench', titleKey:'cfg_inf_section_repairs',
       title:'System Repairs', hintKey:'cfg_inf_section_repairs_hint',
       hint:'One-tap, reversible repairs for specific OxygenOS/ColorOS problems.',
-      keys:['heytap_mcs','documentsui_fix'], card:'soterfix' }
+      keys:['heytap_mcs','documentsui_fix'] }
   ]
 };
 
@@ -10476,7 +10509,12 @@ function cfgRenderGroup(list, groupId) {
     navItems.push(['cfg-sec-' + groupId + '-' + section.id, T(section.titleKey, section.title), section.icon]);
     sectionItems.forEach(it => { rendered[it.key] = true; });
     if (groupId === 'kernel' && section.id === 'controls') cfgRenderKernelControlsHelp(list);
-    if (section.card === 'batteryfix') cfgRenderBatteryFixCard(list);
+    if (section.card === 'batteryfix') {
+      cfgRenderBatteryFixCard(list);
+      /* SOTER belongs to the same repair flow, directly after Battery Fix rather than
+       * below the unrelated package repairs. Both cards keep their own status owner. */
+      cfgRenderSoterFixCard(list);
+    }
     else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
     else if (section.card === 'wakeup') {
       // Kernel management is one reading flow: ordinary bounded controls first,
@@ -10492,7 +10530,6 @@ function cfgRenderGroup(list, groupId) {
       cfgRenderRow(list, it, false);
       if (ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0) kernelDecorateControlRow(list.lastChild, it.key);
     });
-    if (section.card === 'soterfix') cfgRenderSoterFixCard(list);
     if (groupId === 'battery' && section.id === 'standby') cfgRenderNotifCard(list);
   });
   // Future cards still appear rather than silently disappearing when a maintainer forgets
@@ -23554,7 +23591,7 @@ document.addEventListener('visibilitychange', () => {
  * written BEFORE work starts, so reloading or closing the manager cannot replay it.
  * No worker survives the WebView: these are the same bounded collectors used by pages. */
 const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1';
-const ASB_BOOT_INTRO_MIN_MS = 3200, ASB_BOOT_INTRO_MAX_MS = 9000;
+const ASB_BOOT_INTRO_MIN_MS = 1400, ASB_BOOT_INTRO_MAX_MS = 6500;
 function asbBootIntroSeen(id) {
   try { if (localStorage.getItem(ASB_BOOT_INTRO_KEY) === id) return true; } catch (e) {}
   try { return sessionStorage.getItem(ASB_BOOT_INTRO_KEY) === id; } catch (e) { return false; }
@@ -23701,6 +23738,7 @@ async function asbBootIntroStart() {
   overlay.hidden = false;
   overlay.setAttribute('aria-hidden', 'false');
   overlay.classList.remove('is-leaving');
+  overlay.classList.remove('is-ready');
   document.body.setAttribute('aria-busy', 'true');
   if (status) status.textContent = T('boot_intro_warm', 'Preloading ASB metrics…');
   const jobs = [
@@ -23725,7 +23763,10 @@ async function asbBootIntroStart() {
       new Promise(function (resolve) { timer = setTimeout(function () { resolve(false); }, ASB_BOOT_INTRO_MAX_MS); })
     ]);
     if (timer) clearTimeout(timer);
-    if (completed) asbBootIntroPaint(jobs.length, jobs.length);
+    if (completed) {
+      asbBootIntroPaint(jobs.length, jobs.length);
+      overlay.classList.add('is-ready');
+    }
     const remaining = ASB_BOOT_INTRO_MIN_MS - (Date.now() - started);
     if (remaining > 0) await new Promise(function (resolve) { setTimeout(resolve, remaining); });
     if (status) status.textContent = T('boot_intro_ready', 'Interface ready');
@@ -23741,6 +23782,7 @@ async function asbBootIntroStart() {
     overlay.hidden = true;
     overlay.setAttribute('aria-hidden', 'true');
     overlay.classList.remove('is-leaving');
+    overlay.classList.remove('is-ready');
     overlay.classList.remove('asb-boot-warp');
     document.body.classList.remove('asb-boot-flying');
     try { asbBootFlightRelease(overlay); } catch (e) {}
@@ -23841,13 +23883,15 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
  * one is running is ignored rather than stacking saucers. The listener is delegated from
  * document, so all three headers work without wiring each one.
  *
- * The flight is one continuous path, not a Lissajous that is cut off at ten seconds: a
- * wandering path is blended in from the header glyph's own position and blended back out
- * into it, with a smootherstep weight, so position, size and tilt all leave from and
- * return to exactly the glyph the user tapped. Tilt follows horizontal velocity through a
- * low-pass filter, so the saucer banks into turns instead of rocking on a timer. On landing
- * the overlay and the header glyph cross-fade in the same place at the same size, which
- * reads as one object settling back, not one disappearing and another appearing.
+ * The twenty-second flight is one continuous path: a wandering path is blended in from the
+ * header glyph's own position and blended back out into it, with a smootherstep weight, so
+ * position, size and tilt all leave from and return to exactly the glyph the user tapped.
+ * The original detailed SVG remains the saucer for the whole scene. A bounded canvas paints
+ * a fading cosmic wake and particles; a bounded set of visible cards sways and spills with
+ * an intensity envelope that reaches zero before landing. Their original inline styles are
+ * restored on both normal completion and a hidden-page abort. Tilt follows horizontal
+ * velocity through a low-pass filter, so the saucer banks into turns instead of rocking on
+ * a timer. On landing the overlay and header glyph cross-fade at the same place and size.
  *
  * Sound is synthesised, no file: a theremin-style sine with a 7 Hz vibrato (the classic
  * film-saucer warble), a quiet fifth above it and a low hum with tremolo. Pitch rises on
@@ -23857,7 +23901,8 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
  */
 (function () {
   var taps = 0, last = 0, flying = false;
-  var DUR = 10.0, LIFT = 1.1, IN_END = 2.6, OUT_START = DUR - 3.4, LAND = DUR - 1.0;
+  var DUR = 20.0, LIFT = 1.1, IN_END = 2.6, OUT_START = DUR - 4.4, LAND = DUR - 1.0;
+  var UFO_PARTICLE_CAP = 150, UFO_TRAIL_CAP = 54, UFO_CONTENT_CAP = 18;
 
   function smoother(x) { x = x < 0 ? 0 : (x > 1 ? 1 : x); return x * x * x * (x * (x * 6 - 15) + 10); }
   function lerp(a, b, k) { return a + (b - a) * k; }
@@ -23944,129 +23989,193 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
     } catch (e) { return null; }
   }
 
+  function ufoContentScene() {
+    var nodes = [];
+    try {
+      var all = document.querySelectorAll('.pbtn,.cfg-tile,.cfg-card,.bfx-card,.dev-card,.live-card,.zy-card');
+      for (var i = 0; i < all.length && nodes.length < UFO_CONTENT_CAP; i++) {
+        var n = all[i], r = n.getBoundingClientRect();
+        if (!r.width || !r.height || r.bottom < -80 || r.top > (window.innerHeight || 0) + 80) continue;
+        nodes.push({ el:n, transform:n.style.transform || '', opacity:n.style.opacity || '',
+          transition:n.style.transition || '', willChange:n.style.willChange || '' });
+      }
+    } catch (e) {}
+    nodes.forEach(function (n) { n.el.style.transition = 'none'; n.el.style.willChange = 'transform,opacity'; });
+    return {
+      update:function (t, amount) {
+        nodes.forEach(function (n, i) {
+          var base = n.transform && n.transform !== 'none' ? n.transform + ' ' : '';
+          if (amount < .001) {
+            n.el.style.transform = n.transform; n.el.style.opacity = n.opacity; return;
+          }
+          var phase = t * 3.4 + i * 1.73;
+          var drop = Math.max(0, Math.sin(t * 1.15 + i * 2.07)) * 18;
+          var dx = amount * (Math.sin(phase) * 9 + Math.sin(t * 7.1 + i) * 3);
+          var dy = amount * (Math.cos(phase * .83) * 7 + drop);
+          var rot = amount * Math.sin(phase * .71) * 5.5;
+          n.el.style.transform = base + 'translate(' + dx.toFixed(2) + 'px,' + dy.toFixed(2) + 'px) rotate(' + rot.toFixed(2) + 'deg)';
+          n.el.style.opacity = (1 - amount * .16 * (.5 + .5 * Math.sin(phase + .8))).toFixed(3);
+        });
+      },
+      restore:function () {
+        nodes.forEach(function (n) {
+          n.el.style.transform = n.transform; n.el.style.opacity = n.opacity;
+          n.el.style.transition = n.transition; n.el.style.willChange = n.willChange;
+        });
+        nodes.length = 0;
+      }
+    };
+  }
+
+  function ufoCosmosScene() {
+    var canvas = document.createElement('canvas'); canvas.className = 'ufo-cosmos';
+    canvas.setAttribute('aria-hidden', 'true');
+    var ctx = null; try { ctx = canvas.getContext('2d'); } catch (e) {}
+    document.documentElement.appendChild(canvas);
+    var points = [], particles = [], stars = [], w = 0, h = 0, last = 0;
+    function resize() {
+      var nw = window.innerWidth || 1, nh = window.innerHeight || 1;
+      if (nw === w && nh === h) return;
+      w = nw; h = nh;
+      var dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+      if (ctx && ctx.setTransform) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!stars.length) for (var i = 0; i < 42; i++) stars.push({ x:Math.random(), y:Math.random(), r:.35 + Math.random() * 1.15, p:Math.random() * 6.28 });
+    }
+    function trail(amount) {
+      if (!ctx || points.length < 2 || amount < .005) return;
+      var a = points[0], z = points[points.length - 1];
+      var g = ctx.createLinearGradient(a.x, a.y, z.x, z.y);
+      g.addColorStop(0, 'rgba(99,207,255,0)'); g.addColorStop(.42, 'rgba(195,138,255,.42)');
+      g.addColorStop(.76, 'rgba(87,241,208,.68)'); g.addColorStop(1, 'rgba(255,209,102,.88)');
+      ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+      for (var i = 1; i < points.length - 1; i++) {
+        var p = points[i], n = points[i + 1];
+        ctx.quadraticCurveTo(p.x, p.y, (p.x + n.x) / 2, (p.y + n.y) / 2);
+      }
+      ctx.lineTo(z.x, z.y); ctx.strokeStyle = g; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.shadowColor = 'rgba(99,207,255,.55)';
+      ctx.shadowBlur = 18; ctx.globalAlpha = .20 * amount; ctx.lineWidth = 14; ctx.stroke();
+      ctx.shadowBlur = 8; ctx.globalAlpha = .48 * amount; ctx.lineWidth = 5; ctx.stroke();
+      ctx.shadowBlur = 0; ctx.globalAlpha = .92 * amount; ctx.lineWidth = 1.25; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    return {
+      canvas:canvas, points:points, particles:particles,
+      frame:function (sx, sy, scale, amount, ts) {
+        resize(); if (!ctx) return;
+        var dt = last ? Math.min(.05, Math.max(0, (ts - last) / 1000)) : .016; last = ts;
+        ctx.clearRect(0, 0, w, h); ctx.globalCompositeOperation = 'lighter';
+        stars.forEach(function (s) {
+          ctx.globalAlpha = amount * (.12 + .20 * (.5 + .5 * Math.sin(ts * .0017 + s.p)));
+          ctx.fillStyle = '#b8e9ff'; ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.r, 0, 6.283); ctx.fill();
+        });
+        points.push({ x:sx, y:sy }); if (points.length > UFO_TRAIL_CAP) points.shift();
+        trail(amount);
+        var spawn = amount > .04 ? (Math.random() < .55 ? 2 : 1) : 0;
+        for (var j = 0; j < spawn; j++) {
+          var angle = Math.random() * 6.283, speed = 12 + Math.random() * 45;
+          particles.push({ x:sx, y:sy, vx:Math.cos(angle) * speed, vy:Math.sin(angle) * speed + 12,
+            life:.65 + Math.random() * .85, age:0, r:.6 + Math.random() * 1.8, c:j % 3 });
+          if (particles.length > UFO_PARTICLE_CAP) particles.shift();
+        }
+        var colors = ['#63cfff','#c38aff','#57f1d0'];
+        for (var i = particles.length - 1; i >= 0; i--) {
+          var p = particles[i]; p.age += dt;
+          if (p.age >= p.life) { particles.splice(i, 1); continue; }
+          p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .985; p.vy = p.vy * .985 + 5 * dt;
+          var left = 1 - p.age / p.life;
+          ctx.globalAlpha = left * .78; ctx.fillStyle = colors[p.c];
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (.45 + left) * Math.min(1.4, scale), 0, 6.283); ctx.fill();
+        }
+        ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over';
+      },
+      destroy:function () {
+        points.length = 0; particles.length = 0; stars.length = 0;
+        if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+      }
+    };
+  }
+
   function launch(logoC) {
     if (flying) return;
-    /* No reduced-motion opt-out here on purpose. Ten deliberate taps ARE the request for the
-     * animation, which is the case accessibility guidance allows. And a WebView reports
-     * reduced motion whenever the system animator scale is 0 (developer options, or another
-     * module), so the check silently disabled the egg for people who never asked for less
-     * motion - it simply looked broken. */
+    /* Ten deliberate taps explicitly request this scene, including on a WebView whose system
+     * animator scale is zero. There is no automatic playback and no persistent worker. */
     var glyph = logoC && logoC.querySelector('.logo-glyph');
     if (!glyph) return;
     flying = true;
 
     function home() {
       var r = glyph.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      return { x:r.left + r.width / 2, y:r.top + r.height / 2 };
     }
     var fs = parseFloat(getComputedStyle(glyph).fontSize) || 32;
-
-    var el = document.createElement('div');
-    el.className = 'ufo-fly';
-    el.style.fontSize = fs + 'px';
+    var cosmos = ufoCosmosScene(), content = ufoContentScene();
+    var el = document.createElement('div'); el.className = 'ufo-fly'; el.style.fontSize = fs + 'px';
     var beam = document.createElement('div'); beam.className = 'ufo-beam';
     var body = document.createElement('span'); body.className = 'ufo-body';
     var drawn = document.createElement('span'); drawn.className = 'ufo-drawn';
     drawn.innerHTML = '<svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg>';
-    var emoji = document.createElement('span'); emoji.className = 'ufo-emoji'; emoji.textContent = '🛸';
-    body.appendChild(drawn); body.appendChild(emoji);
-    el.setAttribute('aria-hidden', 'true');
-    el.appendChild(beam); el.appendChild(body);
-    document.body.appendChild(el);
-    /* Map screen coordinates into the overlay's own space. The WebUI zooms <body> on narrow
-     * screens (--asb-ui-scale), and a fixed child of a zoomed body is translated in unzoomed
-     * pixels while getBoundingClientRect reports zoomed ones - the saucer landed 12 px off
-     * its nest on a 412 px-wide screen. Two probe positions give offset and scale directly,
-     * whatever produced them. */
-    el.style.transform = 'translate(0px,0px)';
-    var p0 = el.getBoundingClientRect();
-    el.style.transform = 'translate(100px,100px)';
-    var p1 = el.getBoundingClientRect();
+    body.appendChild(drawn); el.setAttribute('aria-hidden', 'true');
+    el.appendChild(beam); el.appendChild(body); document.body.appendChild(el);
+    /* Probe the body's zoom once, then keep canvas in unzoomed document coordinates. */
+    el.style.transform = 'translate(0px,0px)'; var p0 = el.getBoundingClientRect();
+    el.style.transform = 'translate(100px,100px)'; var p1 = el.getBoundingClientRect();
     var kx = (p1.left - p0.left) / 100 || 1, ky = (p1.top - p0.top) / 100 || 1;
-    function local(x, y) { return { x: (x - p0.left) / kx, y: (y - p0.top) / ky }; }
-    /* Same box height as the header glyph, so the two centres are the same point. */
-    var gr = glyph.getBoundingClientRect();
-    el.style.lineHeight = (gr.height / ky).toFixed(2) + 'px';
-    var h0 = home();
-    var l0 = local(h0.x, h0.y);
+    function local(x, y) { return { x:(x - p0.left) / kx, y:(y - p0.top) / ky }; }
+    var gr = glyph.getBoundingClientRect(); el.style.lineHeight = (gr.height / ky).toFixed(2) + 'px';
+    var h0 = home(), l0 = local(h0.x, h0.y);
     el.style.transform = 'translate(' + l0.x + 'px,' + l0.y + 'px) translate(-50%,-50%)';
     document.body.classList.add('ufo-flying');
 
-    var snd = ufoSound();
-    var t0 = performance.now(), prevX = l0.x, tilt = 0, landedSound = false, ended = false;
-
+    var snd = ufoSound(), t0 = performance.now(), prevX = l0.x, tilt = 0;
+    var landedSound = false, ended = false, rafId = 0;
     function finish(fast) {
       if (ended) return; ended = true;
+      if (rafId && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(rafId);
       document.removeEventListener('visibilitychange', onVis);
-      if (snd) snd.stop(fast ? 0.15 : 0.7);
-      /* The normal path has already morphed back to the drawing. A hidden-page shortcut
-       * also restores that layer before returning it to the header. */
-      drawn.style.opacity = '1'; drawn.style.transform = 'scale(1)';
-      emoji.style.opacity = '0';
-      document.body.classList.remove('ufo-flying');
-      el.style.opacity = '0';
-      setTimeout(function () {
-        if (el.parentNode) el.parentNode.removeChild(el);
-        flying = false;
-      }, 320);
+      if (snd) snd.stop(fast ? .15 : .7);
+      content.restore(); cosmos.destroy();
+      document.body.classList.remove('ufo-flying'); el.style.opacity = '0';
+      if (fast) { if (el.parentNode) el.parentNode.removeChild(el); flying = false; }
+      else setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); flying = false; }, 300);
     }
     function onVis() { if (document.hidden) finish(true); }
     document.addEventListener('visibilitychange', onVis);
 
     function frame(ts) {
       if (ended) return;
-      var t = (ts - t0) / 1000;
-      var hs = home(), h = local(hs.x, hs.y);
+      var t = (ts - t0) / 1000, hs = home(), h = local(hs.x, hs.y);
       if (t >= DUR) {
         el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px) translate(-50%,-50%)';
-        finish(false);
-        return;
+        content.update(DUR, 0); finish(false); return;
       }
       var w = window.innerWidth / kx, hh = window.innerHeight / ky, m = 64;
-
-      /* wander weight: 0 at home, 1 in free flight */
       var b = smoother((t - LIFT) / (IN_END - LIFT)) * (1 - smoother((t - OUT_START) / (LAND - OUT_START)));
-
-      /* free-flight path, two incommensurate periods so it never visibly repeats */
-      var wx = m + (Math.sin(t * 0.92 + 0.4) * 0.5 + 0.5) * Math.max(0, w - m * 2);
-      var wy = m + (Math.sin(t * 1.31 + 1.9) * 0.5 + 0.5) * Math.max(0, hh - m * 2);
-      var wsc = 0.75 + (Math.sin(t * 1.7 + 0.6) * 0.5 + 0.5) * 1.05;
-
-      /* hover above the nest at take-off and landing: rise, then sink back with a damped bob */
+      var wx = m + (Math.sin(t * .92 + .4) * .5 + .5) * Math.max(0, w - m * 2);
+      var wy = m + (Math.sin(t * 1.31 + 1.9) * .5 + .5) * Math.max(0, hh - m * 2);
+      var wsc = .75 + (Math.sin(t * 1.7 + .6) * .5 + .5) * 1.05;
       var up = smoother(t / LIFT) * (1 - smoother((t - LAND) / (DUR - LAND)));
-      var bob = Math.sin(t * 6.0) * 2.2 * up * (1 - b);
-      var hx = h.x, hy = h.y - fs * 0.55 * up + bob;
-
-      var x = lerp(hx, wx, b), y = lerp(hy, wy, b);
-      var sc = lerp(1 + 0.12 * up, wsc, b);
-
-      /* bank into turns: tilt follows horizontal speed, smoothed */
+      var bob = Math.sin(t * 6) * 2.2 * up * (1 - b), hx = h.x, hy = h.y - fs * .55 * up + bob;
+      var x = lerp(hx, wx, b), y = lerp(hy, wy, b), sc = lerp(1 + .12 * up, wsc, b);
       var vx = x - prevX; prevX = x;
-      var want = Math.max(-18, Math.min(18, vx * 1.6));
-      tilt += (want - tilt) * 0.12;
-
-      el.style.transform =
-        'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%,-50%) ' +
-        'scale(' + sc.toFixed(3) + ') rotate(' + tilt.toFixed(2) + 'deg)';
-      /* One deliberate morph on take-off and its exact reverse on landing. The emoji owns
-       * free flight; both layers otherwise stay in the same measured header/flight box. */
-      var emojiK = smoother(t / 0.85) * (1 - smoother((t - (DUR - 1.05)) / 0.85));
-      drawn.style.opacity = (1 - emojiK).toFixed(3);
-      drawn.style.transform = 'scale(' + (1 - 0.18 * emojiK).toFixed(3) + ')';
-      emoji.style.opacity = emojiK.toFixed(3);
-      emoji.style.transform = 'scale(' + (0.78 + 0.22 * emojiK).toFixed(3) + ')';
+      var want = Math.max(-18, Math.min(18, vx * 1.6)); tilt += (want - tilt) * .12;
+      el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%,-50%) scale(' + sc.toFixed(3) + ') rotate(' + tilt.toFixed(2) + 'deg)';
+      drawn.style.opacity = '1';
       var beamK = up * (1 - b);
-      beam.style.opacity = (0.85 * beamK).toFixed(3);
-      beam.style.transform = 'scaleY(' + (0.3 + 0.7 * beamK).toFixed(3) + ')';
-      body.style.setProperty('--ufo-glow', (4 + 10 * Math.max(b, beamK)).toFixed(1) + 'px');
-
+      beam.style.opacity = (.85 * beamK).toFixed(3); beam.style.transform = 'scaleY(' + (.3 + .7 * beamK).toFixed(3) + ')';
+      body.style.setProperty('--ufo-glow', (4 + 12 * Math.max(b, beamK)).toFixed(1) + 'px');
+      var chaos = smoother((t - 1.6) / 2.2) * (1 - smoother((t - (DUR - 4.6)) / 3.2));
+      content.update(t, chaos);
+      cosmos.frame(p0.left + x * kx, p0.top + y * ky, sc, Math.max(b, chaos * .65), ts);
       if (snd) {
         snd.update(t, b, sc, (x / Math.max(1, w)) * 2 - 1);
         if (!landedSound && t >= OUT_START + 1.4) { landedSound = true; snd.land(); }
       }
-      requestAnimationFrame(frame);
+      rafId = requestAnimationFrame(frame);
     }
-    requestAnimationFrame(frame);
+    rafId = requestAnimationFrame(frame);
   }
 
   document.addEventListener('click', function (ev) {
