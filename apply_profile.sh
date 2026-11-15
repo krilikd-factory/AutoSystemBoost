@@ -348,6 +348,11 @@ run_worker() {
     [ -f "$MODDIR/runtime/asb_net_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_apply.sh" >/dev/null 2>&1
     asb_log "profile=$PROFILE: network settings from the WebUI re-asserted over the profile rails"
   fi
+  if [ "$PROFILE" != "stock" ] && profile_epoch_current && [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ] && asb_feature_enabled KERNEL; then
+    _kc_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_kernel_controls.sh" follow "$PROFILE" 2>/dev/null)"
+    _kc_sum="$(printf '%s\n' "$_kc_out" | awk -F'|' '$3 == "auto" { k = $1; sub(/^kernel_/, "", k); printf "%s%s=%s:%s", (n++ ? " " : ""), k, $2, $4 }')"
+    asb_log "profile=$PROFILE: kernel controls follow the profile ${_kc_sum:-(none set to auto)}"
+  fi
   asb_log "worker done profile=$PROFILE rc=$_rc"
 
   if [ "$_rc" = "0" ]; then
