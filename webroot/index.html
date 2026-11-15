@@ -417,6 +417,27 @@ body.live-active .page:not(.live-page) .dot::after {
   animation: none !important;
 }
 
+/* dev61: ambient motion while idle.
+ *
+ * dev17 kept the header sphere and the status dots turning on the page in front, because a
+ * frozen header read as a hung interface. A CSS loop, though, makes the browser compose a new
+ * frame on every vsync for as long as the page is open: on the owner's OP15 the Monitor then
+ * showed the GPU 60-70 % busy at its lowest clock with every app closed - the page measuring
+ * itself - and an adaptive-refresh panel gets no still screen to slow down on. Ten seconds
+ * after the last touch these loops now stand still in CSS and a 10 fps ticker steps them
+ * (asbAmbientTick), so the header keeps moving at a tenth of the frames; the next touch hands
+ * them back to the full-rate CSS animation from where they are. */
+html.asb-calm .logo-sphere-a, html.asb-calm .logo-sphere-b, html.asb-calm .logo-inner,
+html.asb-calm .dot, html.asb-calm .dot::after, html.asb-calm .zygisk-header-dot,
+html.asb-calm .zygisk-header-dot::after, html.asb-calm .dev-zygisk-link-dot,
+html.asb-calm .dev-zygisk-link-dot::after, html.asb-calm .pico-smart .ai-glow {
+  animation-play-state: paused !important;
+}
+
+/* dev61: the GPU tile's clock, small beside the busy share. */
+.live-cell-value .lv-sub { font-size: 11px; font-weight: 600; letter-spacing: 0; margin-left: 5px; opacity: .62;
+  -webkit-text-fill-color: currentColor; }
+
 /* The sweep is decoration; the wordmark has to hold up without it. */
 @media (prefers-reduced-motion: reduce) {
   .live-page, .live-page.open, body.config-active #livePage.open { transform: translateX(-50%) !important; }
@@ -2082,6 +2103,7 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
 .live-info-pressure { margin: 10px 0 2px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
 .live-info-pressure .lvp-cap { margin-bottom: 8px; color: var(--text-tertiary); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .live-info-pressure .lvp-wait { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.live-info-pressure .lvp-note { margin-top: 10px; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
 .live-info-pressure .dev-pressure { margin: 0; padding: 0; border: 0; background: none; }
 .live-info-pressure .lvp-parts { display: grid; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
 .live-info-pressure .lvp-row { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr) auto; align-items: center; gap: 9px; font-size: 11.5px; }
@@ -7225,6 +7247,38 @@ let _asbInputAt = -1e9;
  * does not set a timer per event. */
 const ASB_CALM_MS = 10000;
 let _asbCalmTimer = 0;
+/* dev61: while calm, the header loops stand still in CSS and this ticker steps them at 10 fps
+ * (see the html.asb-calm rule): the sphere and the dots keep moving, the page draws a tenth of
+ * the frames. Only loops on screen are stepped; with none (reduced motion, header scrolled
+ * away, page hidden) no timer runs. */
+const ASB_AMBIENT_STEP_MS = 100;
+const ASB_AMBIENT_NAMES = ['asbBootSpin', 'asbBootPulse', 'pulse', 'pulseRing', 'zyLivePulse', 'zyLiveRing', 'ai-spin'];
+let _asbCalmOn = false, _asbAmbientTimer = 0;
+function asbAmbientAnims() {
+  if (typeof document.getAnimations !== 'function') return [];
+  const vw = window.innerWidth || 0, vh = window.innerHeight || 0;
+  return document.getAnimations().filter(function (a) {
+    if (ASB_AMBIENT_NAMES.indexOf(a.animationName) < 0) return false;
+    const el = a.effect && a.effect.target;
+    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+    if (el.closest && el.closest('.asb-boot-intro')) return false;
+    if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
+  });
+}
+function asbAmbientTick() {
+  _asbAmbientTimer = 0;
+  if (!_asbCalmOn || document.hidden) return;
+  const list = asbAmbientAnims();
+  if (!list.length) return;
+  list.forEach(function (a) { try { a.currentTime = (Number(a.currentTime) || 0) + ASB_AMBIENT_STEP_MS; } catch (e) {} });
+  _asbAmbientTimer = setTimeout(asbAmbientTick, ASB_AMBIENT_STEP_MS);
+}
+function asbAmbientStop() {
+  _asbCalmOn = false;
+  if (_asbAmbientTimer) { clearTimeout(_asbAmbientTimer); _asbAmbientTimer = 0; }
+}
 function asbCalmArm() {
   if (_asbCalmTimer) return;
   _asbCalmTimer = setTimeout(function calmCheck() {
@@ -7232,16 +7286,24 @@ function asbCalmArm() {
     if (idle < ASB_CALM_MS) { _asbCalmTimer = setTimeout(calmCheck, ASB_CALM_MS - idle + 50); return; }
     _asbCalmTimer = 0;
     try { document.documentElement.classList.add('asb-calm'); } catch (e) {}
+    _asbCalmOn = true;
+    asbAmbientTick();
   }, ASB_CALM_MS);
 }
 function asbCalmWake() {
   _asbInputAt = performance.now();
+  asbAmbientStop();
   try { document.documentElement.classList.remove('asb-calm'); } catch (e) {}
   asbCalmArm();
 }
 ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach(function (t) {
   try { window.addEventListener(t, asbCalmWake, { passive: true, capture: true }); } catch (e) {}
 });
+try {
+  if (typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && _asbCalmOn && !_asbAmbientTimer) asbAmbientTick();
+  });
+} catch (e) {}
 asbCalmArm();
 /* dev4: a job never runs while another page is open or opening. In dev2 the Live pass and the
  * Zygisk header waited for gaps that ended right when the user tapped MONITOR or SETTINGS, and
@@ -8538,8 +8600,14 @@ function lvMonTilesCapture(profile) {
   LV_MON_TILE_IDS.forEach(function (id) {
     const el = _el(id); if (!el) return;
     const label = el.parentElement ? el.parentElement.querySelector('.live-cell-label') : null;
-    values[id] = { v: String(el.textContent || ''), c: String(el.className || 'live-cell-value'),
+    /* dev61: the GPU tile's clock is a child span; kept apart so a restore does not glue it on. */
+    const sub = el.querySelector ? el.querySelector('.lv-sub') : null;
+    let text = String(el.textContent || '');
+    const st = sub ? String(sub.textContent || '') : '';
+    if (st && text.slice(-st.length) === st) text = text.slice(0, -st.length);
+    values[id] = { v: text, c: String(el.className || 'live-cell-value'),
       t: String(el.title || ''), l: label ? String(label.textContent || '') : '' };
+    if (st) values[id].s = st;
   });
   _lvMonCache.tiles = { at: Date.now(), profile: String(profile || ''), lang: ASB_LANG, values: values };
   lvMonSmartCapture(profile);
@@ -8553,6 +8621,10 @@ function lvMonTilesRestore() {
     const v = snap.values[id], el = _el(id);
     if (!v || !el || typeof v.v !== 'string') return;
     el.textContent = v.v; el.className = typeof v.c === 'string' ? v.c : 'live-cell-value';
+    if (typeof v.s === 'string' && v.s) {
+      const sub = document.createElement('span'); sub.className = 'lv-sub'; sub.textContent = v.s;
+      el.appendChild(sub);
+    }
     el.title = typeof v.t === 'string' ? v.t : '';
     const label = el.parentElement ? el.parentElement.querySelector('.live-cell-label') : null;
     if (label && typeof v.l === 'string' && v.l) label.textContent = v.l;
@@ -9046,19 +9118,35 @@ const LVI_PRESSURE_PARTS = [
   ['load_per_core', 'load_component', function (v) { return v; }],
   ['memory_used_pct', 'memory_used_pct', function (v) { return v + ' %'; }],
   ['cpu_busy_pct', 'cpu_busy_pct', function (v) { return v + ' %'; }],
-  ['gpu_busy_pct', 'gpu_busy_pct', function (v) { return v + ' %'; }]
+  ['gpu_busy_pct', 'gpu_component', lviPressureGpu]
 ];
+/* dev61: with Linux pressure stall information the bars are the time tasks waited for the CPU,
+ * memory and storage over the last 10 s - an idle phone reads idle, where load average (it
+ * counts tasks asleep on storage) and the share of memory in use (Android keeps apps cached
+ * on purpose) read "moderate" on a phone doing nothing. */
+const LVI_PRESSURE_PARTS_PSI = [
+  ['psi_cpu_some_avg10', 'psi_cpu_component', function (v) { return v + ' %'; }],
+  ['psi_memory_some_avg10', 'psi_memory_component', function (v) { return v + ' %'; }],
+  ['psi_io_some_avg10', 'psi_io_component', function (v) { return v + ' %'; }],
+  ['cpu_busy_pct', 'cpu_busy_pct', function (v) { return v + ' %'; }],
+  ['gpu_busy_pct', 'gpu_component', lviPressureGpu]
+];
+function lviPressureGpu(v, d) {
+  const clk = d ? deviceVal(d, 'system_load', 'gpu_clock_mhz') : '';
+  return v + ' %' + (/^\d+$/.test(clk) ? ' \u00b7 ' + clk + ' ' + T('unit_mhz', 'MHz') : '');
+}
 function lviPressureTone(n) {
   return n < 25 ? 'light' : n < 50 ? 'moderate' : n < 75 ? 'high' : 'very_high';
 }
-function lviPressureRender(box, d) {
+function lviPressureRender(box, d, key) {
   box.textContent = '';
   const cap = document.createElement('div'); cap.className = 'lvp-cap';
   cap.textContent = T('dev_sec_system_load', 'Current system load');
   box.appendChild(cap);
   box.appendChild(devicePressureScale(d));
   const parts = document.createElement('div'); parts.className = 'lvp-parts';
-  LVI_PRESSURE_PARTS.forEach(function (p) {
+  const psi = /^\d+(\.\d+)?$/.test(deviceVal(d, 'system_load', 'psi_cpu_some_avg10'));
+  (psi ? LVI_PRESSURE_PARTS_PSI : LVI_PRESSURE_PARTS).forEach(function (p) {
     const raw = deviceVal(d, 'system_load', p[0]);
     const fillRaw = deviceVal(d, 'system_load', p[1]);
     const ok = /^\d+(\.\d+)?$/.test(raw) && /^\d+(\.\d+)?$/.test(fillRaw);
@@ -9071,12 +9159,17 @@ function lviPressureRender(box, d) {
       const fill = document.createElement('span'); fill.className = 'lvp-fill lvp-' + lviPressureTone(pct);
       fill.style.width = (pct > 0 ? Math.max(pct, 2) : 0) + '%';
       bar.appendChild(fill);
-      val.textContent = p[2](raw);
+      val.textContent = p[2](raw, d);
     } else val.textContent = T('lvi_pressure_na', 'not exposed');
     row.appendChild(lbl); row.appendChild(bar); row.appendChild(val);
     parts.appendChild(row);
   });
   box.appendChild(parts);
+  const note = document.createElement('div'); note.className = 'lvp-note';
+  note.textContent = (psi ? T('lvp_basis_psi', 'Measured as the time tasks waited for the CPU, memory and storage over the last 10 s, plus the CPU and GPU work right now.')
+    : T('lvp_basis_load', 'This kernel exposes no pressure stall information, so load average and the share of memory in use stand in; both read high on an idle Android phone.'))
+    + (key === 'apphint' ? ' ' + T('lvp_vs_class', 'This is pressure on the whole phone, including this page drawing itself; the load class above is what the app in front asks for, so the two can differ.') : '');
+  box.appendChild(note);
   box.hidden = false;
 }
 async function lviPressureLoad(box, key, tok) {
@@ -9100,7 +9193,7 @@ async function lviPressureLoad(box, key, tok) {
     box.appendChild(bad);
     return;
   }
-  lviPressureRender(box, d);
+  lviPressureRender(box, d, key);
 }
 async function lviRecordsAppend(src, tok) {
   try {
@@ -9153,9 +9246,9 @@ const LVI_TEXT = {
   skin: ['lvi_skin', 'Temperature of the shell - what your hand feels. It moves slowly and trails the CPU by minutes. Up to about 38 °C feels neutral, above about 42 °C the phone feels warm, and around 45 °C the system starts holding performance back.'],
   board: ['lvi_board', 'Temperature of the main board under the shell. It sits between the CPU and the shell and shows heat soaking into the phone: after a game or a long charge it stays high even when the CPU has already cooled.'],
   fsm: ['lvi_fsm', 'What ASB thinks the phone is doing: DEEP_IDLE - asleep with the screen off, LIGHT_IDLE - screen on with nothing to do, MODERATE - ordinary use, HEAVY - an app launch or a heavy page, SUSTAINED - long heavy work with heat, GAMING - a game. Each state has its own frequency ceilings.'],
-  gpu: ['lvi_gpu', 'How busy the graphics processor is, as a share of time. Scrolling and video sit around 5-30%, games at 50-100%. A game state is entered only when the load stays high, not on a single spike.'],
+  gpu: ['lvi_gpu', 'How busy the graphics processor is, as a share of time. Scrolling and video sit around 5-30%, games at 50-100%. A game state is entered only when the load stays high, not on a single spike. The small figure is the clock: a high share at the lowest clock - this page drawing itself, for example - is light work, and the colour follows busy share × clock.'],
   headroom: ['lvi_headroom', 'How much of the CPU hardware maximum the current ceilings allow, on the most limited cluster. 100% means nothing holds the CPU back. A low figure on a cool phone is a profile or vendor limit, not heat.'],
-  capsrc: ['lvi_capsrc', 'Who set the CPU frequency ceiling right now: “ASB” - the profile and Smart; “Vendor” - the OnePlus thermal or performance service; “Thermal” - a thermal overlay; “Shell” - the profile script, for a few seconds after a switch until the governor takes over again. When the vendor holds a lower ceiling ASB leaves it alone rather than fighting it.'],
+  capsrc: ['lvi_capsrc', 'Who set the CPU frequency ceiling right now: “ASB” - the profile and Smart; “Vendor” - the OnePlus thermal or performance service; “Thermal” - a thermal overlay; “Shell” - the profile script, for a few seconds after a switch until the governor takes over again. When the vendor holds a lower ceiling ASB leaves it alone rather than fighting it. “Vendor ↑” - the vendor briefly raised the ceiling above ASB’s (a launch or touch boost); that is not a limit and is not counted as one.'],
   clamps: ['lvi_clamps', 'How often the vendor service pushed the ceiling below what ASB asked for: in the last hour, and since ASB started. A few an hour is normal; dozens mean a hot phone or an aggressive vendor mode.'],
   learner: ['lvi_learner', 'How many stretches of use (“{ses}” on the tile) Smart has learned from, across all twelve slots. Every 20 minutes of use and every night adds one. The more there are, the more Smart decides from measurements of your phone instead of defaults.'],
   /* fix189: the same tile on Battery, Balanced and Performance counts that profile's own
@@ -17523,7 +17616,7 @@ const DEVICE_GROUP_GUIDES = {
 const DEVICE_SECTION_GUIDES = {
   cpu_policy: ['dev_guide_cpu_policy', 'Current limits and the hardware range are different. A current limit alone does not identify ASB, the vendor or another writer.'],
   memory: ['dev_guide_memory', 'MemAvailable estimates memory available for new work. Cache is reusable and is not simply wasted memory.'],
-  system_load: ['dev_guide_system_load', 'A bounded 0-100 pressure heuristic from measured components only. Missing components are excluded and weights are renormalized; below 40% coverage the result is unknown. This is not device health, a trend, or an A/B comparison.'],
+  system_load: ['dev_guide_system_load', 'A bounded 0–100 pressure heuristic from measured components only. Missing components are excluded and weights are renormalized; below 40% coverage the result is unknown. This is not device health, a trend, or an A/B comparison. With pressure stall information (PSI) the score uses the time tasks waited for the CPU, memory and storage instead of load average and the share of memory in use.'],
   zygisk_observer: ['dev_guide_zygisk_observer', 'Process telemetry plus an optional bounded request for fresh governor evidence. Configuration, injection evidence, hint acknowledgement and overhead are separate facts. Missing crash/ANR attribution and app activity sources remain unknown or not exposed.'],
   lsposed_hooks: ['dev_guide_lsposed_hooks', 'LSPosed does not count individual hook calls or their energy, and ASB adds no hook of its own to measure them. This card joins evidence per hooked app: enabled modules and their scope, LSPosed log volume and errors, crash and ANR records whose stack passes through a hook, CPU time of hooked apps and restart loops from the Zygisk start ledger. A finding is a correlation to check by disabling one module for one app, not a proven cause.'],
   kernel_origin: ['dev_guide_kernel_origin', 'Stock-like and custom-like describe exposed indicators, not a guaranteed builder or provenance. Capability decisions still use each exposed control node.'],
@@ -17749,6 +17842,8 @@ function deviceDisplayValue(sec, key, value, d) {
     if (/_kb$/.test(key)) return deviceSizeKb(value);
     if (key === 'band') return T('dev_load_band_' + value, deviceFallbackLabel(value));
     if (key === 'cpu_window_ms' && /^\d{1,9}$/.test(value)) return value + '\u00a0' + T('unit_ms', 'ms');
+    if (/^psi_[a-z]+_some_avg10$/.test(key) && isFinite(deviceNum(value))) return value + '%';
+    if (key === 'gpu_clock_mhz' && /^\d{1,6}$/.test(value)) return value + '\u00a0' + T('unit_mhz', 'MHz');
   }
   if (sec === 'asb' && key === 'smooth_log_last_epoch' && /^\d{9,}$/.test(value)) {
     const dt = new Date(parseInt(value, 10) * 1000);
@@ -23933,7 +24028,29 @@ function liveBatchParts(visible, prime) {
   parts.push(['status', MD + '/bin/asb status']);
   parts.push(['recovery', 'cat /dev/.asb/recovery.json']);
   if (visible) parts.push(['lpm', 'cat /dev/.asb/lpm_mode']);
+  /* dev61: the GPU clock beside its busy share. 70 % busy at the lowest clock is the panel
+   * composing a light page, not load; the tile now says which. The frequency table is read
+   * once per page life. */
+  if (visible) {
+    parts.push(['gpuclk', 'cat ' + LV_GPU_KGSL + '/devfreq/cur_freq']);
+    if (!_lvGpuMaxHz) parts.push(['gpufreqs', 'cat ' + LV_GPU_KGSL + '/devfreq/available_frequencies']);
+  }
   return parts;
+}
+const LV_GPU_KGSL = '/sys/class/kgsl/kgsl-3d0';
+let _lvGpuMaxHz = 0, _lvGpuMinHz = 0, _lvGpuClkHz = 0;
+function lvGpuClockRead(lb) {
+  if (lb && lb.gpufreqs && lb.gpufreqs.stdout) {
+    const f = String(lb.gpufreqs.stdout).split(/\s+/).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return x > 0; });
+    if (f.length) { _lvGpuMaxHz = Math.max.apply(null, f); _lvGpuMinHz = Math.min.apply(null, f); }
+  }
+  const c = lb && lb.gpuclk ? parseInt(String(lb.gpuclk.stdout || '').trim(), 10) : NaN;
+  _lvGpuClkHz = c > 0 ? c : 0;
+}
+/* Work = busy share x clock / top clock: the part of the GPU's capacity in use. */
+function lvGpuWork(busy) {
+  if (!(busy >= 0) || !(_lvGpuClkHz > 0) || !(_lvGpuMaxHz > 0)) return null;
+  return Math.round(busy * Math.min(_lvGpuClkHz, _lvGpuMaxHz) / _lvGpuMaxHz);
 }
 async function pollLive(visible) {
   /* Nothing to draw for nobody. The manager keeps this WebView alive in the background,
@@ -23971,6 +24088,7 @@ async function pollLive(visible) {
     /* fix278: every read of this pass shares one root shell (was five, every 3 s). */
     const _lb = await runBatch(liveBatchParts(visible, prime));
     if (_lb.meter) lvMeterApply(_lb.meter.stdout || '', false);
+    if (visible) lvGpuClockRead(_lb);
     /* Ordinary cold start paints Home from this same read. The boot preview's visible
      * warmer paints it after the complete Live pass instead of forcing another shell. */
     if (_lb.meter && !visible) homeMeterPaint();
@@ -24053,10 +24171,11 @@ async function pollLive(visible) {
     /* Whose ceiling binds (fix190): the tile read only the main cluster, so with the vendor's
      * boot clamp on the prime (1632000, 35 %) it said "ASB" on Performance - which caps
      * nothing - beside "Headroom 35 %", a figure taken from the most limited cluster. A foreign
-     * owner on either cluster is the one shown; the tooltip names both. */
+     * owner on either cluster is the one shown; the tooltip names both. dev61: a clamp or a
+     * thermal overlay outranks a vendor boost on the other cluster (a boost is not a limit). */
     const _cs0 = (st && st.cap_source_p0) || '', _cs1 = (st && st.cap_source_p6) || '';
-    const _csForeign = function (c) { return c === 'vendor_clamp' || c === 'vendor_raised' || c === 'thermal_overlay'; };
-    const capSrc = (_csForeign(_cs1) && !_csForeign(_cs0)) ? _cs1 : (_cs0 || _cs1);
+    const _csRank = function (c) { return (c === 'vendor_clamp' || c === 'thermal_overlay') ? 2 : (c === 'vendor_raised' ? 1 : 0); };
+    const capSrc = _csRank(_cs1) > _csRank(_cs0) ? _cs1 : (_cs0 || _cs1);
     const advActive = (st && st.adv_active) || 0;
     let recCount = 0, recDisabled = 0, recReason = '';
     try {
@@ -24072,8 +24191,7 @@ async function pollLive(visible) {
       chip.classList.remove('has-issue', 'has-error');
       if (recDisabled === 1) chip.classList.add('has-error');
       else if (recCount > 0) chip.classList.add('has-issue');
-      else if (capSrc === 'vendor_clamp' || capSrc === 'vendor_raised' ||
-               capSrc === 'thermal_overlay') chip.classList.add('has-issue');
+      else if (capSrc === 'vendor_clamp' || capSrc === 'thermal_overlay') chip.classList.add('has-issue');
       else if (advActive === 1) chip.classList.add('has-issue');
     }
 
@@ -24266,7 +24384,7 @@ async function pollLive(visible) {
       'shell_overridden_up': 'Shell',
       'shell_overridden_down': 'Shell',
       'vendor_clamp': 'Vendor',
-      'vendor_raised': 'Vendor',
+      'vendor_raised': 'Vendor \u2191',
       'thermal_overlay': 'Thermal',
       'policy_unknown': '—',
       'mismatch': '—'
@@ -24285,7 +24403,7 @@ async function pollLive(visible) {
       'shell_overridden_up': T('cap_tip_shell', 'Caps were written by the profile script.'),
       'shell_overridden_down': T('cap_tip_shell', 'Caps were written by the profile script.'),
       'vendor_clamp': T('cap_tip_clamp', 'The vendor thermal HAL is clamping below the requested cap.'),
-      'vendor_raised': T('cap_tip_raised', 'The vendor raised the cap above the requested value.'),
+      'vendor_raised': T('cap_tip_raised', 'The vendor raised the ceiling above ASB’s for a moment - a launch or touch boost. That is not a limit, so the clamp counter beside it does not count it.'),
       'thermal_overlay': T('cap_tip_thermal', 'A thermal overlay is in charge of the cap.'),
       'policy_unknown': T('cap_tip_unknown', 'The cpufreq policy could not be read.'),
       'mismatch': T('cap_tip_unknown', 'The cpufreq policy could not be read.')
@@ -24303,7 +24421,7 @@ async function pollLive(visible) {
     if (capSrc === 'asb' || capSrc === 'asb_dynamic') { capEl.classList.add('cap-asb'); asbMetricPaint('liveCapSrc', 'metric-normal'); }
     else if (capSrc && capSrc.startsWith('shell')) { capEl.classList.add('cap-shell'); asbMetricPaint('liveCapSrc', 'metric-normal'); }
     else if (capSrc === 'vendor_clamp') asbMetricPaint('liveCapSrc', 'metric-bad');
-    else if (capSrc === 'vendor_raised') asbMetricPaint('liveCapSrc', 'metric-hot');
+    else if (capSrc === 'vendor_raised') asbMetricPaint('liveCapSrc', 'metric-info');
     else if (capSrc === 'thermal_overlay') asbMetricPaint('liveCapSrc', 'metric-hot');
     else asbMetricPaint('liveCapSrc', 'metric-neutral');
 
@@ -24314,9 +24432,18 @@ async function pollLive(visible) {
       // during a WebUI-only update, but never present an unsupported backend as a real 0% load.
       const gpuValid = (st && Object.prototype.hasOwnProperty.call(st, 'gpu_valid'))
         ? String(st.gpu_valid) === '1' : gpu !== null;
+      const gpuWork = (gpuValid && gpu !== null) ? lvGpuWork(gpu) : null;
       gpuEl.textContent = (gpu === null || !gpuValid) ? '—' : (gpu + '%');
-      gpuEl.title = gpuValid ? '' : 'GPU utilisation node is unavailable on this driver; ASB keeps CPU/thermal policy fail-closed.';
-      asbMetricPaint('liveGpu', gpuValid && gpu !== null ? asbLoadMetric(gpu) : 'metric-neutral');
+      if (gpuWork !== null) {
+        const sub = document.createElement('span'); sub.className = 'lv-sub';
+        sub.textContent = Math.round(_lvGpuClkHz / 1e6) + ' ' + T('unit_mhz', 'MHz');
+        gpuEl.appendChild(sub);
+      }
+      gpuEl.title = !gpuValid ? 'GPU utilisation node is unavailable on this driver; ASB keeps CPU/thermal policy fail-closed.'
+        : (gpuWork !== null ? T('lv_gpu_work_tip', '{busy}% busy at {mhz} of {max} MHz: about {work}% of what the GPU can do.')
+            .replace('{busy}', String(gpu)).replace('{mhz}', String(Math.round(_lvGpuClkHz / 1e6)))
+            .replace('{max}', String(Math.round(_lvGpuMaxHz / 1e6))).replace('{work}', String(gpuWork)) : '');
+      asbMetricPaint('liveGpu', gpuValid && gpu !== null ? asbLoadMetric(gpuWork !== null ? gpuWork : gpu) : 'metric-neutral');
     }
     // Modem LPM. Read straight from /dev/.asb/lpm_mode - the governor owns that file and
     // the action screen already reports it; this puts the same reading on the monitor so
