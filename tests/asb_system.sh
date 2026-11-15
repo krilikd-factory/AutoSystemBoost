@@ -6718,8 +6718,8 @@ need "$BASELINE" 'manual audio'
 need "$APPLY" 'stock|performance|balanced|battery)'
 need "$APPLY" 'if [ "$PROFILE" = "stock" ]; then'
 need "$APPLY" 'asb_stock_enter'
-need "$APPLY" 'description=status: Stock 👶🏻 | active ✅'
-need "$CORE" 'description=status: Stock 👶🏻 | active ✅'
+need "$APPLY" 'description=[Stock 👶🏻 active ✅]'
+need "$CORE" 'description=[Stock 👶🏻 active ✅]'
 ! grep -Fq 'Stock ◻️ | ASB performance policy stopped' "$APPLY" || fail 'legacy Stock status remains in apply fallback'
 ! grep -Fq 'Stock ◻️ | ASB performance policy stopped' "$CORE" || fail 'legacy Stock status remains in profile core'
 need "$APPLY" 'asb_stock_start_governor'
@@ -7278,19 +7278,19 @@ need_line "$MODPATH/config/governor.conf" 'net_wifi_leave=1'
 need_line "$MODPATH/config/governor.conf" 'audio_profile=eq_friendly'
 need_line "$MODPATH/config/governor.conf" 'sustained_temp_enter=63'
 need_line "$MODPATH/current_profile" 'smart'
-need_line "$MODPATH/module.prop" 'description=status: Smart Mode 🤖 | active ✅'
+need_line "$MODPATH/module.prop" 'description=[Smart Mode 🤖 active ✅]'
 # Exercise the exact installer description writer for every preserved profile. This is
 # presentation-only: no runtime profile code is sourced and no governor is started.
 for _profile in stock performance battery balanced smart none; do
   printf '%s\n' "$_profile" > "$MODPATH/current_profile"
   asb_restore_profile_description
   case "$_profile" in
-    stock) _expected='description=status: Stock 👶🏻 | active ✅' ;;
-    performance) _expected='description=status: Performance 🔥 | active ✅' ;;
-    battery) _expected='description=status: Battery 🔋 | active ✅' ;;
-    balanced) _expected='description=status: Balanced ⚖️ | active ✅' ;;
-    smart) _expected='description=status: Smart Mode 🤖 | active ✅' ;;
-    none) _expected='description=status: no profile selected — open the WebUI to choose one' ;;
+    stock) _expected='description=[Stock 👶🏻 active ✅]' ;;
+    performance) _expected='description=[Performance 🔥 active ✅]' ;;
+    battery) _expected='description=[Battery 🔋 active ✅]' ;;
+    balanced) _expected='description=[Balanced ⚖️ active ✅]' ;;
+    smart) _expected='description=[Smart Mode 🤖 active ✅]' ;;
+    none) _expected='description=[no profile selected — open the WebUI to choose one]' ;;
   esac
   need_line "$MODPATH/module.prop" "$_expected"
 done
@@ -9599,11 +9599,11 @@ echo 'PASS mglru ttl migration: Hold -> 1000 ms, Aggressive -> 2000 ms, 5000 -> 
 )
 
 t_module_desc_zygisk_dev57() (
-# dev57: the root manager's module card shows the Zygisk state next to the profile:
-# "status: Smart Mode 🤖 | active ✅ | Zygisk ✅ connected". Off, not installed, safe mode,
-# connected (the companion wrote its state file this boot), idle (nothing selected) and
-# waiting are told apart. The profile writer appends it; a bounded refresh after boot and
-# after a Zygisk change rewrites only the suffix. Install-time lines stay as they were.
+# dev57: the root manager's module card shows the Zygisk state next to the profile.
+# dev58: the owner's format, "[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]", written by
+# one helper from current_profile (no parsing of whatever an older version left), and the
+# post-boot refresh polls every 10 s while the state is "waiting" (at most 10 minutes) instead
+# of first looking after 2 minutes; the WebUI refreshes the card once per session.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/runtime/asb_module_desc.sh"
@@ -9612,65 +9612,86 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 M="$T/mod"; Z="$T/zdir"; R="$T/run"
 mkdir -p "$M/config" "$M/zygisk" "$M/runtime" "$Z" "$R"
 cfg() { printf 'zygisk_enabled=%s\nzygisk_launch=%s\nzygisk_ledger=0\n' "$1" "${2:-0}" > "$M/config/governor.conf"; }
-suf() { MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" sh "$H" suffix; }
-cfg 0
-[ "$(suf)" = ' | Zygisk ⏸️ off' ] || fail "off: $(suf)"
-cfg 1
-[ "$(suf)" = ' | Zygisk ⛔ not installed' ] || fail "not installed: $(suf)"
-: > "$M/zygisk/arm64-v8a.so"
-[ "$(suf)" = ' | Zygisk 💤 idle' ] || fail "idle: $(suf)"
-cfg 1 1
-[ "$(suf)" = ' | Zygisk ⏳ waiting' ] || fail "waiting (cold-start lift on): $(suf)"
-cfg 1 0; printf 'com.example.app\n' > "$Z/packages.list"
-[ "$(suf)" = ' | Zygisk ⏳ waiting' ] || fail "waiting (allowlist): $(suf)"
-: > "$R/state.arm64-v8a.tsv"
-[ "$(suf)" = ' | Zygisk ⏳ waiting' ] || fail 'an empty state file is not evidence'
-printf 'Z\tevents_total\t3\n' > "$R/state.arm64-v8a.tsv"
-[ "$(suf)" = ' | Zygisk ✅ connected' ] || fail "connected: $(suf)"
-: > "$Z/disable"
-[ "$(suf)" = ' | Zygisk 🛟 safe mode' ] || fail "safe mode outranks state: $(suf)"
+hx() { MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" sh "$H" "$@"; }
+chk() { [ "$(hx state)" = "$1" ] && [ "$(hx suffix)" = "$2" ] || fail "want $1 / $2, got $(hx state) / $(hx suffix)"; }
+cfg 0; chk off '[Zygisk 🧩 off ⏸️]'
+cfg 1; chk not_installed '[Zygisk 🧩 not installed ⛔]'
+: > "$M/zygisk/arm64-v8a.so"; chk idle '[Zygisk 🧩 idle 💤]'
+cfg 1 1; chk waiting '[Zygisk 🧩 waiting ⏳]'
+cfg 1 0; printf 'com.example.app\n' > "$Z/packages.list"; chk waiting '[Zygisk 🧩 waiting ⏳]'
+: > "$R/state.arm64-v8a.tsv"; chk waiting '[Zygisk 🧩 waiting ⏳]'
+printf 'Z\tevents_total\t3\n' > "$R/state.arm64-v8a.tsv"; chk connected '[Zygisk 🧩 connected ✅]'
+: > "$Z/disable"; chk safe '[Zygisk 🧩 safe mode 🛟]'
 rm -f "$Z/disable"
-printf 'id=AutoSystemBoost\nname=ASB\ndescription=status: Smart Mode 🤖 | active ✅\nversion=V66\n' > "$M/module.prop"
-ref() { MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" sh "$H" refresh; }
-ref
-grep -qxF 'description=status: Smart Mode 🤖 | active ✅ | Zygisk ✅ connected' "$M/module.prop" || fail "refresh: $(cat "$M/module.prop")"
-[ "$(wc -l < "$M/module.prop")" = 4 ] && grep -qx 'version=V66' "$M/module.prop" && grep -qx 'id=AutoSystemBoost' "$M/module.prop" || fail 'other lines changed'
-cp "$M/module.prop" "$T/before"; touch -d '2001-01-01' "$M/module.prop"
-ref
-[ "$(stat -c %Y "$M/module.prop")" = "$(stat -c %Y "$T/before" 2>/dev/null || echo x)" ] || cmp -s "$M/module.prop" "$T/before" || fail 'unchanged refresh rewrote the file'
+printf 'smart\n' > "$M/current_profile"
+[ "$(hx line)" = 'description=[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]' ] || fail "owner's format: $(hx line)"
+for p in performance battery balanced stock smart none ''; do
+  printf '%s\n' "$p" > "$M/current_profile"
+  case "$p" in
+    performance) w='[Performance 🔥 active ✅]' ;; battery) w='[Battery 🔋 active ✅]' ;; balanced) w='[Balanced ⚖️ active ✅]' ;;
+    stock) w='[Stock 👶🏻 active ✅]' ;; smart) w='[Smart Mode 🤖 active ✅]' ;; *) w='[no profile selected — open the WebUI to choose one]' ;;
+  esac
+  case "$p" in ''|none) want="description=$w" ;; *) want="description=$w   [Zygisk 🧩 connected ✅]" ;; esac
+  [ "$(hx line)" = "$want" ] || fail "$p: $(hx line)"
+done
+# Every writer of the plain profile part says the same words.
+for f in "$ROOT/runtime/profile_core.sh" "$ROOT/runtime/asb_utils.sh" "$ROOT/apply_profile.sh" "$ROOT/common/install.sh"; do
+  for w in '[Performance 🔥 active ✅]' '[Battery 🔋 active ✅]' '[Smart Mode 🤖 active ✅]' '[Stock 👶🏻 active ✅]' '[Balanced ⚖️ active ✅]'; do
+    grep -Fq "description=$w" "$f" || fail "${f##*/} lacks $w"
+  done
+  grep -q 'description=status:' "$f" && fail "${f##*/} still writes the old status: format"
+done
+grep -qx 'description=\[no profile selected — open the WebUI to choose one\]' "$ROOT/module.prop" || fail 'template line'
+# refresh: rewrites the whole line from current_profile, replaces an old-format line, writes nothing when equal.
+printf 'smart\n' > "$M/current_profile"
+printf 'id=AutoSystemBoost\nname=ASB\ndescription=status: Smart Mode 🤖 | active ✅ | Zygisk ⏳ waiting\nversion=V66\n' > "$M/module.prop"
+hx refresh
+grep -qxF 'description=[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]' "$M/module.prop" || fail "refresh: $(cat "$M/module.prop")"
+[ "$(wc -l < "$M/module.prop")" = 4 ] && grep -qx 'version=V66' "$M/module.prop" || fail 'other lines changed'
+touch -d '2001-01-01' "$M/module.prop"; hx refresh
 [ "$(date -r "$M/module.prop" +%Y)" = 2001 ] || fail 'unchanged refresh touched module.prop'
-cfg 0; ref
-grep -qxF 'description=status: Smart Mode 🤖 | active ✅ | Zygisk ⏸️ off' "$M/module.prop" || fail "suffix not replaced: $(grep description "$M/module.prop")"
-[ "$(grep -o 'Zygisk' "$M/module.prop" | wc -l)" = 1 ] || fail 'suffix duplicated'
-sed -i 's/^description=.*/description=status: no profile selected — open the WebUI to choose one/' "$M/module.prop"; ref
-grep -qxF 'description=status: no profile selected — open the WebUI to choose one' "$M/module.prop" || fail 'no-profile line got a suffix'
+cfg 0; hx refresh
+grep -qxF 'description=[Smart Mode 🤖 active ✅]   [Zygisk 🧩 off ⏸️]' "$M/module.prop" || fail "state change: $(grep description "$M/module.prop")"
+# settle: polls while waiting, stops at the first final state or after its step budget.
+cfg 1 0; rm -f "$R/state.arm64-v8a.tsv"
+( sleep 1; printf 'Z\tevents_total\t1\n' > "$R/state.arm64-v8a.tsv" ) &
+MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" ASB_MD_SETTLE_SLEEP=0.2 ASB_MD_SETTLE_STEPS=50 sh "$H" settle
+wait
+grep -qxF 'description=[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]' "$M/module.prop" || fail "settle did not pick up the connection: $(grep description "$M/module.prop")"
+rm -f "$R/state.arm64-v8a.tsv"
+s0="$(date +%s)"
+MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" ASB_MD_SETTLE_SLEEP=0.1 ASB_MD_SETTLE_STEPS=5 sh "$H" settle
+[ $(( $(date +%s) - s0 )) -le 3 ] || fail 'settle is not bounded'
+grep -qxF 'description=[Smart Mode 🤖 active ✅]   [Zygisk 🧩 waiting ⏳]' "$M/module.prop" || fail 'settle left a stale line'
 # The profile writer (runtime/profile_core.sh) appends the same suffix; install-time stays plain.
 cp "$H" "$M/runtime/asb_module_desc.sh"
 printf 'description=old\n' > "$M/module.prop"
 { echo 'MODDIR="$1"'; sed -n '/^asb_update_desc() {/,/^}/p' "$ROOT/runtime/profile_core.sh"; echo 'asb_update_desc'; } > "$T/desc.sh"
-cfg 1 0
+printf 'Z\tevents_total\t3\n' > "$R/state.arm64-v8a.tsv"
 printf 'battery\n' > "$M/current_profile"
 ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" bash "$T/desc.sh" "$M"
-grep -qxF 'description=status: Battery 🔋 | active ✅ | Zygisk ✅ connected' "$M/module.prop" || fail "profile writer: $(cat "$M/module.prop")"
+grep -qxF 'description=[Battery 🔋 active ✅]   [Zygisk 🧩 connected ✅]' "$M/module.prop" || fail "profile writer: $(cat "$M/module.prop")"
 printf 'none\n' > "$M/current_profile"
 ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" bash "$T/desc.sh" "$M"
-grep -qxF 'description=status: no profile selected — open the WebUI to choose one' "$M/module.prop" || fail 'profile writer added a suffix to the no-profile line'
+grep -qxF 'description=[no profile selected — open the WebUI to choose one]' "$M/module.prop" || fail 'profile writer added a suffix to the no-profile line'
 rm -f "$M/runtime/asb_module_desc.sh"; printf 'smart\n' > "$M/current_profile"
 ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" bash "$T/desc.sh" "$M"
-grep -qxF 'description=status: Smart Mode 🤖 | active ✅' "$M/module.prop" || fail 'missing helper must leave the plain line'
+grep -qxF 'description=[Smart Mode 🤖 active ✅]' "$M/module.prop" || fail 'missing helper must leave the plain line'
 grep -q 'asb_module_desc' "$ROOT/common/install.sh" && fail 'install-time description must stay helper-free'
 python3 - "$ROOT/service.sh" "$ROOT/webroot/index.html" <<'PY' || fail 'refresh callers'
 import sys
 s = open(sys.argv[1], encoding='utf-8').read()
-i = s.index('for _mdw in 120 180 600 900 1800; do')
+i = s.index('asb_module_desc.sh" settle')
 blk = s[s.rindex('(\n', 0, i):s.index(') &', i)]
-assert 'until [ "$(getprop sys.boot_completed)" = "1" ]' in blk and 'asb_module_desc.sh" refresh' in blk and 'while' not in blk
+assert 'until [ "$(getprop sys.boot_completed)" = "1" ]' in blk and 'for _mdw in 300 900 1800; do' in blk and 'while' not in blk
 h = open(sys.argv[2], encoding='utf-8').read()
 z = h[h.index("if (/^zygisk_/.test(key)) {"):h.index("return;", h.index("if (/^zygisk_/.test(key)) {"))]
 assert "asb_module_desc.sh') + ' refresh" in z
+f = h[h.index('async function zygiskHeaderRefresh()'):h.index('\n}\n', h.index('async function zygiskHeaderRefresh()'))]
+assert 'if (!_asbModuleDescSynced) {' in f and "asb_module_desc.sh') + ' refresh" in f and f.index('zygiskHeaderPublish(d);') < f.index('_asbModuleDescSynced = true')
 PY
 grep -nE '^[[:space:]]*#|[[:space:]]#[[:space:]]' "$H" | grep -v '^1:#!' && fail 'comments in module shell code'
-echo 'PASS module desc zygisk: off / not installed / safe mode / connected / idle / waiting, suffix replaced not duplicated, unchanged refresh writes nothing, no-profile line untouched, profile writer appends it, bounded boot refresh and Zygisk-change refresh'
+echo 'PASS module desc zygisk: "[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]", six Zygisk states, one wording in every writer, old-format lines replaced, unchanged refresh writes nothing, bounded 10 s settle after boot, profile writer appends it, WebUI refresh once per session'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

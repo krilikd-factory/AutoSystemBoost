@@ -8233,7 +8233,7 @@ order = re.search(r'const DEVICE_SECTION_ORDER = \[(.*?)\n\];', h, re.S).group(1
 specs = re.findall(r"\['([a-z_]+)', '(dev_sec_[a-z_]+)', '[^']*', '([a-z]+)'", order)
 assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','system_load','kernel','kernel_origin',
                                  'kernel_btf','kernel_ebpf','kernel_fuse_bpf','kernel_features','kernel_runtime','kernel_external','kernel_config',
-                                 'root','susfs','metamodule','zygisk_observer','lsposed_hooks','asb','asb_caps','meta'], specs
+                                 'root','susfs','metamodule','companion_modules','zygisk_observer','lsposed_hooks','asb','asb_caps','meta'], specs
 groups = [x[2] for x in specs]
 assert groups == sorted(groups, key=['hw','sw','kernel','root','asb'].index), 'a group is split: ' + str(groups)
 assert specs[0][1] == 'dev_sec_device' and specs[6][1] == 'dev_sec_firmware', 'the phone identity opens the hardware group'
@@ -9327,7 +9327,7 @@ want kernel_features oplus_sdp_900ma 'node present but unreadable'
 rmdir "$T/proc/sdp900ma"
 sed -i 's/^CONFIG_OPLUS_SDP_900MA=y$/# CONFIG_OPLUS_SDP_900MA is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run --kernel)"; want kernel_features oplus_sdp_900ma 'not observed; exposed config says not set'
-printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
+printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule|companion_modules)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "--kernel collected a sensitive identifier"
 rm -f "$T/proc/sys/kernel/sched_schedstats"
 sed -i 's/^CONFIG_SCHEDSTATS=y$/# CONFIG_SCHEDSTATS is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
@@ -9767,7 +9767,7 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 78, len(new)
+assert len(new) == 79, len(new)
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -9794,7 +9794,8 @@ cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
 eval(h.match(/\nconst KERNEL_WB_CRITICAL = [^\n]*/)[0].replace('const ','global.'));
-for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupSelectSources','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupRisk','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
+eval(h.match(/\nconst KERNEL_HIDE_WHEN_ABSENT = [^\n]*/)[0].replace('const ','global.'));
+for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupSelectSources','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupRisk','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelHiddenAbsent','kernelDefaultFact','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_hrtimer_migration|covered_by_timer_migration|auto|0|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
 if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_hrtimer_migration.state!=='covered_by_timer_migration'||c.kernel_hrtimer_migration.live!=='0'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
@@ -13202,6 +13203,9 @@ JS
   sed -n '/^function kernelStateText(/,/^}/p' "$H"
   sed -n '/^function kernelControlAvailability(/,/^}/p' "$H"
   sed -n '/^function kernelUnavailableWhy(/,/^}/p' "$H"
+  sed -n '/^const KERNEL_HIDE_WHEN_ABSENT = /p' "$H"
+  sed -n '/^function kernelHiddenAbsent(/,/^}/p' "$H"
+  sed -n '/^function kernelDefaultFact(/,/^}/p' "$H"
   sed -n '/^function kernelDecorateControlRow(/,/^}/p' "$H"
   cat <<'JS'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
@@ -13211,7 +13215,8 @@ _kernelPanel.controls = { kernel_sched_nr_migrate: { state: 'not_exposed', live:
   kernel_lpm_prediction: { state: 'not_exposed', live: '' }, kernel_sched_stats: { state: 'not_exposed', live: '' } };
 let r = row(); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate'); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate');
 chk(/CONFIG_SCHED_DEBUG/.test(why(r)) && /privately/.test(why(r)) && r.children.filter(c => c.className === 'kernel-why').length === 1, 'nr_migrate why: ' + why(r));
-r = row(); kernelDecorateControlRow(r, 'kernel_sched_autogroup'); chk(/GKI kernels are normally built without CONFIG_SCHED_AUTOGROUP/.test(why(r)), 'autogroup why');
+// dev58: a missing autogroup is hidden (the help card carries the reason), not explained in place.
+r = row(); kernelDecorateControlRow(r, 'kernel_sched_autogroup'); chk(r.classList.s.has('kernel-absent-hidden') && why(r) === '', 'autogroup hidden');
 r = row(); kernelDecorateControlRow(r, 'kernel_lpm_prediction'); chk(/lpm_levels/.test(why(r)), 'lpm why');
 r = row(); kernelDecorateControlRow(r, 'kernel_sched_stats'); chk(why(r) === '', 'a control without a reason got one');
 _kernelPanel.controls.kernel_sched_nr_migrate = { state: 'writable', live: '8' };
@@ -13522,6 +13527,107 @@ if (!/^Auto:/.test(un)) throw new Error('unowned auto: ' + un);
 if (!/next pass/.test(f('deferred', '1024', 'auto'))) throw new Error('deferred');
 JS
 echo 'PASS webui kernel cards/header dev57: plain guide (battery / performance / unsure) and per-option lines on all eleven kernel cards in 13 languages with the visible labels, Auto on timer migration and the migration batch, RT boost card wired everywhere, Auto release worded as the kernel value, larger header saucer with unchanged layout below and matching boot core'
+)
+
+t_webui_companion_lpm_autogroup_dev58() (
+# dev58, from the owner's dev57 phone export:
+#  - the build summary and the Device page named the NoMount metamodule version but not the
+#    VPN Hide companion module; both kernel companion modules now have one line each (version,
+#    enabled/disabled/pending update, kernel side), on the Device page and in asbdiag;
+#  - Idle Prediction (LPM): the kernel ships prediction on (qcom-cpu-lpm prediction_disabled=0),
+#    so Stock, Auto and On cannot change anything there; the card now says so from the read
+#    status, and the text no longer claims that prediction picks deeper sleep (it avoids deep
+#    sleeps that would be left at once);
+#  - Scheduler Autogroup cannot exist on GKI and would not act on Android apps: the dead card is
+#    hidden when the kernel does not expose it, and the help card says why.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL companion/lpm/autogroup dev58: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/data/modules/vpnhide_builtin" "$T/data/modules_update/vpnhide_builtin" "$T/data/modules/nomount" "$T/proc" "$T/sys/module/nomount"
+printf 'id=vpnhide_builtin\nname=VPN Hide (Built-in kernel)\nversion=v1.3.1\nversionCode=10301\n' > "$T/data/modules/vpnhide_builtin/module.prop"
+printf 'id=vpnhide_builtin\nversion=v1.3.2\nversionCode=10302\n' > "$T/data/modules_update/vpnhide_builtin/module.prop"
+printf 'id=nomount\nversion=v2.3.0 (720)\nversionCode=720\n' > "$T/data/modules/nomount/module.prop"
+: > "$T/proc/vpnhide_ctl"; echo 23 > "$T/sys/module/nomount/version"
+col() {
+  ASB_DEVINFO_MODDIR="$T/mod" ASB_DEVINFO_SYS="$T/sys" ASB_DEVINFO_PROC="$T/proc" ASB_DEVINFO_DATA="$T/data" \
+  ASB_DEVINFO_PROP_FILE="$T/props" ASB_DEVINFO_SUSFS="$T/none" ASB_DEVINFO_STATE="$T/state" ASB_DEVINFO_KSUD="$T/none" \
+  ASB_DEVINFO_DEV="$T/dev" ASB_DEVINFO_TC="$T/none" sh "$ROOT/tools/asb_device_info.sh" 2>/dev/null | grep '^D	companion_modules	'
+}
+out="$(col)"
+printf '%s\n' "$out" | grep -Fqx "$(printf 'D\tcompanion_modules\tnomount\tv2.3.0 (720) · enabled · kernel driver version 23')" || fail "nomount: $out"
+printf '%s\n' "$out" | grep -Fqx "$(printf 'D\tcompanion_modules\tvpnhide\tv1.3.1 (10301) · enabled · update to v1.3.2 (10302) after reboot · kernel interface /proc/vpnhide_ctl present')" || fail "vpnhide: $out"
+: > "$T/data/modules/nomount/disable"; rm -rf "$T/data/modules/vpnhide_builtin" "$T/proc/vpnhide_ctl"
+out="$(col)"
+printf '%s\n' "$out" | grep -Fq 'nomount	v2.3.0 (720) · disabled' || fail "disabled: $out"
+printf '%s\n' "$out" | grep -Fqx "$(printf 'D\tcompanion_modules\tvpnhide\tv1.3.2 (10302) · installed, active after reboot · kernel interface /proc/vpnhide_ctl not exposed')" || fail "pending install: $out"
+rm -rf "$T/data/modules_update" "$T/data/modules/nomount"
+out="$(col)"
+[ "$(printf '%s\n' "$out" | grep -c '	not installed · ')" = 2 ] || fail "not installed: $out"
+for f in tools/asb_diag.sh system/bin/asbdiag; do
+  grep -Fq 'NOTE "kernel companion module $_cmn: $_cmv"' "$ROOT/$f" || fail "$f has no companion module line"
+  grep -Fq 'for _cmi in nomount:NoMount vpnhide_builtin:"VPN Hide"; do' "$ROOT/$f" || fail "$f module list"
+done
+python3 - "$ROOT/webroot" <<'PY' || fail 'webui contract'
+import json, re, sys, pathlib
+W = pathlib.Path(sys.argv[1]); h = (W / 'index.html').read_text(encoding='utf-8')
+assert "  ['metamodule', 'dev_sec_metamodule', 'Metamodule', 'root'],\n  ['companion_modules', 'dev_sec_companion_modules', 'Kernel companion modules', 'root']," in h
+en = json.loads((W / 'i18n/en.json').read_text(encoding='utf-8'))
+keys = ('dev_sec_companion_modules', 'dev_companion_modules_nomount', 'dev_companion_modules_vpnhide',
+        'kc_lpm_default_on', 'kc_lpm_default_off', 'kernel_absent_autogroup')
+for p in sorted((W / 'i18n').glob('*.json')):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in keys:
+        assert isinstance(d.get(k), str) and d[k].strip(), (p.name, k)
+        if p.stem != 'en' and k not in ('dev_companion_modules_nomount',): assert d[k] != en[k], (p.name, k)
+    assert d['cfg']['kernel_sched_autogroup']['name'] in d['kernel_absent_autogroup'], p.name
+    lpm = d['cfg']['kernel_lpm_prediction']['desc']
+    assert 'prediction_disabled' in lpm, p.name
+desc = en['cfg']['kernel_lpm_prediction']['desc']
+assert 'deeper sleep state sooner' not in desc and 'lighter sleep state' in desc
+assert "'%s'" % en['kc_lpm_default_on'] in h and "'%s'" % en['kc_lpm_default_off'] in h
+assert "const KERNEL_HIDE_WHEN_ABSENT = ['kernel_sched_autogroup'];" in h
+assert '.cfg-row.kernel-absent-hidden { display:none; }' in h
+help_fn = h[h.index('function cfgRenderKernelControlsHelp('):h.index('\n}\n', h.index('function cfgRenderKernelControlsHelp('))]
+assert "kernelHiddenAbsent().indexOf('kernel_sched_autogroup') >= 0" in help_fn and "T('kernel_absent_autogroup'" in help_fn
+PY
+node - "$ROOT/webroot/index.html" <<'JS' || fail 'runtime'
+const h = require('fs').readFileSync(process.argv[2], 'utf8');
+function grab(name) { const i = h.indexOf('function ' + name + '('); if (i < 0) throw Error('missing ' + name); return h.slice(i, h.indexOf('\n}\n', i) + 2); }
+const src = h.slice(h.indexOf('const KERNEL_HIDE_WHEN_ABSENT'), h.indexOf('\n', h.indexOf('const KERNEL_HIDE_WHEN_ABSENT'))) + '\n' +
+  grab('kernelHiddenAbsent') + grab('kernelDefaultFact') + grab('kernelDecorateControlRow') + grab('kernelControlAvailability') +
+  'return { kernelHiddenAbsent, kernelDefaultFact, kernelDecorateControlRow };';
+global._kernelPanel = { loading:false, controls:{} };
+global.ASB_KERNEL_STATUS_KEYS = ['kernel_lpm_prediction', 'kernel_sched_autogroup'];
+const T = (k, fb) => fb;
+const kernelStateText = s => s, kernelUnavailableWhy = () => 'why';
+const bfxEl = (tag, cls, txt) => ({ tag, className: cls, textContent: txt });
+const f = new Function('T', 'kernelStateText', 'kernelUnavailableWhy', 'bfxEl', src)(T, kernelStateText, kernelUnavailableWhy, bfxEl);
+const P = _kernelPanel.controls;
+P.kernel_lpm_prediction = { state:'writable', mode:'auto', live:'1', baseline:'none' };
+if (!/ships prediction on/.test(f.kernelDefaultFact('kernel_lpm_prediction'))) throw Error('default on');
+P.kernel_lpm_prediction = { state:'writable', mode:'on', live:'1', baseline:'0' };
+if (!/ships prediction off/.test(f.kernelDefaultFact('kernel_lpm_prediction'))) throw Error('baseline wins over live');
+P.kernel_lpm_prediction = { state:'writable', mode:'auto', live:'unknown', baseline:'none' };
+if (f.kernelDefaultFact('kernel_lpm_prediction') !== '') throw Error('unknown must say nothing');
+if (f.kernelDefaultFact('kernel_timer_migration') !== '') throw Error('other keys');
+function row() { const kids = []; const cl = new Set(); return { kids, cl, classList:{ add:c => cl.add(c), contains:c => cl.has(c) },
+  appendChild:x => kids.push(x), querySelector:sel => sel === '.cfg-status' ? null : (kids.find(k => sel === '.' + String(k.className).split(' ').pop()) || null),
+  querySelectorAll:() => [] }; }
+P.kernel_sched_autogroup = { state:'not_exposed', mode:'stock', live:'unknown', baseline:'none' };
+const ag = row(); f.kernelDecorateControlRow(ag, 'kernel_sched_autogroup');
+if (!ag.cl.has('kernel-absent-hidden') || ag.kids.length) throw Error('autogroup must be hidden, not explained');
+if (f.kernelHiddenAbsent().join() !== 'kernel_sched_autogroup') throw Error('hidden list');
+P.kernel_sched_autogroup = { state:'writable', mode:'stock', live:'1', baseline:'none' };
+const ag2 = row(); f.kernelDecorateControlRow(ag2, 'kernel_sched_autogroup');
+if (ag2.cl.has('kernel-absent-hidden') || f.kernelHiddenAbsent().length) throw Error('an exposed autogroup stays visible');
+P.kernel_lpm_prediction = { state:'writable', mode:'auto', live:'1', baseline:'none' };
+const lp = row(); f.kernelDecorateControlRow(lp, 'kernel_lpm_prediction');
+if (lp.kids.length !== 1 || lp.kids[0].className !== 'kernel-why kernel-fact') throw Error('fact line');
+f.kernelDecorateControlRow(lp, 'kernel_lpm_prediction');
+if (lp.kids.length !== 1) throw Error('fact added twice');
+JS
+echo 'PASS companion/lpm/autogroup dev58: NoMount and VPN Hide module versions with state and kernel side on the Device page and in asbdiag, LPM card says what the kernel ships and describes prediction correctly, a missing Autogroup is hidden with the reason in the help card, 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
