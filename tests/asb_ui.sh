@@ -10132,6 +10132,8 @@ t_webui_fix322_liquid_glass_material() (
 # Contract (fix322): Glass is a layered, neutral material system rather than a set of
 # nearly opaque green cards. Keep this final cascade focused on paint: header/dock geometry
 # and all profile, Smart, evidence and navigation behaviour remain owned by earlier code.
+# fix351 retunes the same contract to the ColorOS 17 references: slightly clearer surfaces,
+# a stronger blur ladder, a cool-tinted wash and the lower-edge "underlight" inner shadow.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -10144,21 +10146,31 @@ assert s.count(marker) == 1
 b = s[s.index(marker):s.index('</style>', s.index(marker))]
 assert b.count('html:root[data-asb-glass="1"]') >= 20
 for token in (
-    '--glass-surface:rgba(12,18,15,.58)',
-    '--glass-surface-quiet:rgba(8,13,10,.46)',
-    '--glass-surface-strong:rgba(10,15,13,.78)',
-    '--glass-nav-surface:rgba(6,10,8,.86)',
+    '--glass-surface:rgba(12,18,15,.52)',
+    '--glass-surface-quiet:rgba(8,13,10,.42)',
+    '--glass-surface-strong:rgba(10,15,13,.74)',
+    '--glass-nav-surface:rgba(6,10,8,.84)',
     '--glass-nav-wash:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.008) 48%,rgba(255,255,255,.018))',
+    '--glass-control:rgba(20,27,24,.44)',
     '--glass-edge:rgba(255,255,255,.16)',
-    '--glass-blur:blur(20px) saturate(1.24)',
-    '--glass-surface:rgba(255,255,255,.44)',
-    '--glass-surface-strong:rgba(250,252,251,.72)',
+    '--glass-underlight:rgba(255,255,255,.055)',
+    '--glass-wash:linear-gradient(135deg,rgba(255,255,255,.115),rgba(255,255,255,.024) 46%,rgba(196,214,255,.05))',
+    '--glass-blur:blur(22px) saturate(1.28)',
+    '--glass-surface:rgba(255,255,255,.42)',
+    '--glass-surface-quiet:rgba(255,255,255,.32)',
+    '--glass-surface-strong:rgba(250,252,251,.70)',
     '--glass-nav-surface:var(--glass-surface-strong)',
     '--glass-nav-wash:var(--glass-wash)',
+    '--glass-control:rgba(255,255,255,.36)',
     '--glass-edge:rgba(70,85,80,.15)',
+    '--glass-underlight:rgba(255,255,255,.50)',
+    '--glass-wash:linear-gradient(135deg,rgba(255,255,255,.64),rgba(255,255,255,.18) 50%,rgba(244,248,255,.36))',
     'linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%)',
 ):
     assert token in b, token
+# fix351: every painted surface family carries the lower inner edge light; the count is
+# exact so a silently dropped family fails here instead of on the device.
+assert b.count('inset 0 -1px 0 var(--glass-underlight)') == 10
 # The same canvas reaches drill-in pages; the status scrim has no hard opaque cutoff.
 assert 'background:var(--glass-canvas-image) !important' in b
 assert 'html:root[data-asb-glass="1"] #reportPage,\nhtml:root[data-asb-glass="1"] #devicePage,\nhtml:root[data-asb-glass="1"] #zygiskPage' in b
@@ -10175,7 +10187,7 @@ for cls in ('.cfg-tile', '.cfg-row', '.cfg-zygisk-card', '.live-cell', '.smart-b
 floating = b[b.index('html:root[data-asb-glass="1"] .asb-tabbar,'):]
 floating = floating[:floating.index('}')]
 assert 'html:root[data-asb-glass="1"] .report-nav,\nhtml:root[data-asb-glass="1"] .zy-page-nav,\nhtml:root[data-asb-glass="1"] .dev-page-nav,\nhtml:root[data-asb-glass="1"] .cfg-page-nav,\nhtml:root[data-asb-glass="1"] .log-menu' in floating
-assert 'var(--glass-surface-strong)' in floating and 'blur(26px)' in floating
+assert 'var(--glass-surface-strong)' in floating and 'blur(28px)' in floating
 assert 'border-color:var(--glass-edge) !important' in floating
 # fix332: only navigation docks get the darker dark-Glass material; light Glass and
 # header capsules keep their approved paints. The rule must follow the dense base rule.
@@ -10224,7 +10236,7 @@ for bg, colors in {'#151c18':('#f2fff9','#b8cec4','#91aa9f'),
     for fg in colors:
         assert contrast(fg, bg) >= 4.5, (fg, bg, contrast(fg, bg))
 PY
-echo "PASS WebUI fix322 Liquid Glass: layered dark/light materials, neutral floating chrome, quiet nesting, pressed states and no-blur/reduced-transparency/forced-colours fallbacks"
+echo "PASS WebUI fix322 Liquid Glass: layered dark/light materials with ColorOS-style underlight and blur ladder (fix351), neutral floating chrome, quiet nesting, pressed states and no-blur/reduced-transparency/forced-colours fallbacks"
 )
 
 t_webui_fix324_boot_intro() (
@@ -10238,10 +10250,16 @@ python3 - "$ROOT" <<'PY' || fail 'source/visual/localization contract'
 import json, re, sys
 from pathlib import Path
 root=Path(sys.argv[1]); s=(root/'webroot/index.html').read_text(encoding='utf-8')
-# Rejected on-device: a green full-screen wash. Dark is black, light remains ambient.
+# Rejected on-device: a green full-screen wash. The dark base stays genuinely black;
+# fix351 adds only a faint NEUTRAL ambient (cool greys, no accent hue) over that base so
+# the backdrop blur has real texture, as on the ColorOS 17 reference surfaces.
 dark=re.search(r'html:root\[data-asb-glass="1"\] \{([\s\S]*?)\n\}',s).group(1)
-assert '--glass-canvas-image:#000;' in dark
-assert 'radial-gradient' not in dark and '#151c18' not in dark
+canvas=dark[dark.index('--glass-canvas-image:'):]
+canvas=canvas[:canvas.index(';')]
+assert canvas.endswith(',#000'), canvas
+assert 'radial-gradient' in canvas and '#151c18' not in dark
+# No accent hue in the dark ambient: green/teal light stays on controls, never the canvas.
+assert '130,157,143' not in canvas and '0,240,180' not in canvas and '0,124,99' not in canvas
 light=re.search(r'html:root\[data-asb-glass="1"\]\[data-asb-theme="light"\] \{([\s\S]*?)\n\}',s).group(1)
 assert 'radial-gradient' in light and 'linear-gradient(180deg,#e4e5f9' in light
 mark=s[s.index('<div class="asb-boot-intro"'):s.index('<div class="status-bar-scrim"')]
@@ -10899,8 +10917,9 @@ b = s[s.index(marker):s.index('/* WebViews without backdrop filtering', s.index(
 # Fixed pages do not contribute to body height: the root, not that short body, owns canvas.
 assert 'html:root[data-asb-glass="1"] { background:var(--glass-canvas-image); }' in b
 assert 'html:root[data-asb-glass="1"] .page,\nhtml:root[data-asb-glass="1"] .live-page,\nhtml:root[data-asb-glass="1"] .config-page' in b and 'background:transparent !important' in b
-# fix324: dark Glass is explicitly black; the coloured full-screen wash was rejected on-device.
-assert '--glass-canvas-image:#000;' in s
+# fix324: dark Glass keeps a genuinely black base; the coloured full-screen wash was
+# rejected on-device. fix351 layers only a faint neutral ambient over that base.
+assert 'radial-gradient(ellipse 70% 30% at 62% 46%,rgba(64,76,88,.05),transparent 70%),#000;' in s
 assert 'radial-gradient(ellipse 120% 48% at 0% 0%,rgba(130,157,143,.28)' not in s
 assert 'linear-gradient(180deg,#111713 0%,#050807 48%,#000 100%)' not in s
 # Parent dock keeps the shared floating material; child buttons cannot become loose circles.
