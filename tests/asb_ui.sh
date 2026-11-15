@@ -8223,7 +8223,7 @@ assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','rekern
                             'bbr_v1','bbr_v2','bbr_v3',
                             'net_sch_cake','net_sch_cake_config','net_sch_cake_module',
                             'net_sch_cake_symbols','net_sch_cake_qdisc','net_sch_cake_evidence',
-                            'wireguard','vpn_hide','ip_set','cifs','usb_arsenal','oplus_sdp_900ma',
+                            'wireguard','vpn_hide','ip_set','cifs','usb_arsenal','usb_webcam_uvc','usb_webcam_service','oplus_sdp_900ma',
                             'lto','tmpfs_xattr_posix_acl','unicode_bypass_fix','unicode_bypass_evidence',
                             'droidspaces','ntsync','overlayfs','sched_stats','sched_stats_config','sched_stats_node',
                             'wakeup_blocker','wakeup_blocker_rules','wakeup_blocker_blocked_events',
@@ -11828,6 +11828,7 @@ global.kernelPanelEnsure=()=>{};global.kernelDecorateControlRow=()=>{};
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 global.cfgRenderWakeupBlockerCard=list=>list.appendChild(E('section','kernel-card'));
 global.cfgRenderKernelControlsHelp=list=>list.appendChild(E('section','kernel-card'));
+global.cfgRenderCameraToolsCards=list=>list.appendChild(E('section','camtools-card'));
 eval(between('const CFG_GROUP_OF = {','function cfgGroupOf').replace(/^const /gm,'var '));
 eval(grab('cfgGroupOf'));eval(between('const CFG_ITEMS = [','// Icon + status hints').replace(/^const /gm,'var '));
 eval(between('const CFG_CAT = {','function cfgGroupOf').replace(/^const /gm,'var '));
@@ -11838,7 +11839,7 @@ cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));cfgRe
 eval(grab('cfgGroupCatClass'));eval(grab('cfgCatClass'));eval(grab('cfgRenderSection'));eval(grab('cfgRenderGroup'));
 for(const n of ['asbPageJumpIsDock','asbPageJumpIndicator','asbPageJumpActive','asbPageJumpClear','asbPageJumpWatch','asbPageJumpIcon','asbPageJump'])eval(grab(n));
 function find(n,id){if(n.id===id)return n;for(const c of n.children){const x=find(c,id);if(x)return x}return null;}
-const expected={audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],kernel:['controls'],feel:['feel'],zygisk:['zygisk'],ui:['services','diag']};
+const expected={audio:['dsp','playback','safety'],camera:['processing','perf','tools'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],kernel:['controls'],feel:['feel'],zygisk:['zygisk'],ui:['services','diag']};
 function countMatching(n,p){return (p(n)?1:0)+n.children.reduce((v,c)=>v+countMatching(c,p),0)}
 for(const [group,sections] of Object.entries(expected)){
  const page=E('div','live-page config-page');page.id='configPage';page.clientHeight=600;page.scrollHeight=2400;page.scrollTop=0;page.scrollCalls=[];
@@ -12962,7 +12963,7 @@ fbm = dict(re.findall(r"\n    ([a-z_]+): '([^']*)'", b[b.index('const fb = {'):b
 assert set(fbm) == {'done','done_no_service','service_down','clear_failed','not_installed','busy','lock_error','unknown'}
 for k, v in fbm.items(): assert en['soter_res_' + k] == v, k
 keys = sorted(k for k in en if k.startswith('soter_'))
-assert len(keys) == 33, len(keys)
+assert len(keys) == 44, len(keys)
 assert 'soter_confirm' not in en
 for p in sorted((root / 'webroot/i18n').glob('*.json')):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -13035,6 +13036,113 @@ const settle=()=>new Promise(r=>setImmediate(r));
 JS
 node "$T/t.js" "$ROOT/webroot/index.html" >/dev/null || fail 'card runtime'
 echo "PASS webui soter fix: directly below Battery Fix and before package repairs, fixed status/run/auto protocol, one tap runs the repair, opt-in boot repair switch reads back its state, done/no-service/down/refused/busy/absent/stopped/unreadable states, sanitized rows, 13 locales"
+)
+
+t_webui_camera_tools_soter_boot_dev59() (
+# dev59: Camera -> Camera Tools: two cards around runtime/asb_camera_tools.sh (USB webcam
+# readiness/switch/start/stop, fast camera start with compile switch and cold-launch
+# measurement). Polling only while a compilation runs, bounded. SOTER card: a row for the
+# automatic repair in this boot (waiting / unlocked / done with unlock delay / never started)
+# and the notification texts stored in the UI language. 13 locales.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL webui camera tools / soter boot: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'P' || fail 'static wiring and locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+cam = h[h.index('  camera: ['):h.index('\n  ],', h.index('  camera: ['))]
+assert "id:'tools'" in cam and "card:'camtools'" in cam and cam.index("id:'perf'") < cam.index("id:'tools'")
+assert h.count("else if (section.card === 'camtools') cfgRenderCameraToolsCards(list);") == 1
+b = h[h.index('/* Camera → Camera Tools (dev59).'):h.index("// null = the hub is showing")]
+assert "const CAMTOOLS_SCRIPT = MD + '/runtime/asb_camera_tools.sh';" in b
+assert 'setInterval(' not in b and b.count('setTimeout(') == 2 and '_ctPoll < 75' in b
+for verb in ("' status'", "'webcam ' + want", "'webcam start'", "'webcam stop'", "'launch ' + want", "'launch measure'"):
+    assert verb in b, verb
+assert "  webcam: '<circle" in h and "  camera_launch: '<path" in h
+en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
+for k, fb in re.findall(r"T\('((?:ct|soter)_[a-z_]+)', '([^']*)'\)", b + h[h.index('/* Infirmary → System Repairs → SOTER Repair'):h.index('/* Infirmary → Junk Cleanup')]):
+    assert en.get(k) == fb, ('JS fallback differs from en.json', k)
+for k, fb in re.findall(r"bfxT\('((?:ct|soter)_[a-z_]+)', '([^']*)'", h):
+    assert en.get(k) == fb, ('bfxT fallback differs', k)
+ct = sorted(k for k in en if k.startswith('ct_'))
+assert len(ct) == 72, len(ct)
+for p in sorted((root / 'webroot/i18n').glob('*.json')):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in ct + ['cfg_camera_section_tools', 'cfg_camera_section_tools_hint', 'dev_kernel_features_usb_webcam_uvc', 'dev_kernel_features_usb_webcam_service']:
+        assert isinstance(d.get(k), str) and d[k].strip(), (p.name, k)
+    assert '{ms}' in d['ct_la_measured'] and '{s}' in d['soter_boot_unlock_after'], p.name
+assert "'usb_webcam_uvc', 'usb_webcam_service'" in h
+P
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui camera tools: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const b=h.slice(h.indexOf('/* Camera → Camera Tools (dev59).'),h.indexOf('// null = the hub is showing'));
+const sb=h.slice(h.indexOf('/* Infirmary → System Repairs → SOTER Repair (dev47).'),h.indexOf('/* Infirmary → Junk Cleanup (dev32).'));
+function el(tag){const n={tag,children:[],className:'',disabled:false,style:{},_t:'',id:'',attrs:{},
+ set textContent(v){this._t=String(v);this.children=[];},get textContent(){return this._t+this.children.map(c=>c.textContent).join(' ');},
+ set innerHTML(v){this._html=v;},setAttribute(k,v){this.attrs[k]=String(v);},getAttribute(k){return k in this.attrs?this.attrs[k]:null;},
+ appendChild(c){this.children.push(c);return c;}};return n;}
+global.document={createElement:el};
+const T=(k,f)=>f; function bfxT(k,f,v){let s=f;Object.keys(v||{}).forEach(x=>{s=s.split('{'+x+'}').join(v[x]);});return s;}
+function bfxEl(tag,cls,text){const e=el(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function techIcon(){return '<svg/>';} function uiSound(){} let toasts=[];function toast(t,k){toasts.push([t,k]);}
+function shQuote(v){return "'"+v+"'";} const MD='/m'; var ASB_LANG='ru';
+let cmds=[],replies={};async function run(c){cmds.push(c);const k=Object.keys(replies).find(x=>c.endsWith(x));return {stdout:k?replies[k]:''};}
+const list=el('div');
+function _el(id){const f=n=>{if(n.id===id)return n;for(const c of n.children||[]){const r=f(c);if(r)return r;}return null;};return f(list);}
+let timers=0; global.setTimeout=function(fn){timers++;return 0;};
+eval((sb+b).replace(/^const /gm,'var ').replace(/^let /gm,'var '));
+const settle=()=>new Promise(r=>setImmediate(r));
+(async()=>{
+ replies[' status']='camtools|webcam|enabled=0|app=1|app_enabled=0|prop=unset|kernel=ok|function=missing|gadget=g1|udc=x|usb=mtp|last=-\ncamtools|launch|enabled=0|pkg=com.oplus.camera|filter=speed-profile|state=idle|state_time=0|history=-';
+ cfgRenderCameraToolsCards(list); await settle();
+ const wcRows=_el('ctWcRows').textContent, laRows=_el('ctLaRows').textContent;
+ if(!/included, disabled/.test(wcRows)||!/UVC gadget driver available/.test(wcRows)||!/not created yet/.test(wcRows))throw Error('webcam rows: '+wcRows);
+ if(_el('ctWcChip').textContent!=='Off'||!_el('ctWcStart').disabled)throw Error('webcam off chip/start');
+ if(_el('ctWcSwitch').getAttribute('aria-disabled')!=='false')throw Error('webcam switch locked with the app present');
+ if(!/com\.oplus\.camera/.test(laRows)||!/profile-guided/.test(laRows)||!/none yet/.test(laRows))throw Error('launch rows: '+laRows);
+ if(timers!==0)throw Error('polled while idle');
+ replies['webcam on']='camtools|webcam_set|state=on|function=created|reboot=1';
+ await ctWebcamToggle(); await settle();
+ if(!cmds.some(c=>/ webcam on$/.test(c))||!toasts.some(t=>/reboot once/.test(t[0])))throw Error('webcam toggle');
+ replies[' status']='camtools|webcam|enabled=1|app=1|app_enabled=1|prop=true|kernel=ok|function=created|gadget=g1|udc=x|usb=mtp|last=-\ncamtools|launch|enabled=1|pkg=com.oplus.camera|filter=speed-profile|state=running|state_time=1|history=1700000000:812:speed-profile';
+ await ctLoad(false); await settle();
+ if(_el('ctWcChip').textContent!=='Ready'||_el('ctWcStart').disabled)throw Error('ready webcam cannot start');
+ if(_el('ctLaChip').textContent!=='Compiling…'||timers!==1||!_el('ctLaMeasure').disabled)throw Error('running compile: poll '+timers);
+ if(!/812 ms \(speed-profile, /.test(_el('ctLaRows').textContent))throw Error('history row: '+_el('ctLaRows').textContent);
+ replies['webcam start']='camtools|webcam_start|state=refused|usb=mtp';
+ await ctWebcamStart(); await settle();
+ if(!/did not switch to webcam mode/.test(_el('ctWcNote').textContent))throw Error('refusal note');
+ replies[' status']='camtools|webcam|enabled=1|app=1|app_enabled=1|prop=true|kernel=ok|function=created|gadget=g1|udc=x|usb=uvc|last=active\ncamtools|launch|enabled=1|pkg=com.oplus.camera|filter=speed|state=compile_done|state_time=2|history=-';
+ await ctLoad(false); await settle();
+ if(_el('ctWcChip').textContent!=='Active'||_el('ctWcStop').disabled)throw Error('active webcam');
+ if(_el('ctLaChip').textContent!=='Compiled'||_el('ctLaMeasure').disabled)throw Error('compiled launch');
+ replies['launch measure']='camtools|measure|state=done|ms=640|launch=COLD|filter=speed';
+ await ctLaunchMeasure(); await settle();
+ if(_el('ctLaNote').textContent!=='Cold start: 640 ms (speed)')throw Error('measure note: '+_el('ctLaNote').textContent);
+ replies[' status']='junk';
+ await ctLoad(false); await settle();
+ if(!/Could not read the state/.test(_el('ctWcRows').textContent))throw Error('unreadable state');
+ const host=el('div'); host.id='soterRows'; list.appendChild(host);
+ const chip=el('span'); chip.id='soterChip'; list.appendChild(chip);
+ cmds=[];
+ soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=done|boot_result=done|boot_unlock=35|boot_via=ce_available|boot_time=1700000000|boot_first=service_down|notify_lang=en'));
+ const sr=host.textContent;
+ if(!/Automatic repair, this boot/.test(sr)||!/unlocked 35 s after boot/.test(sr)||!/second try/.test(sr))throw Error('boot row: '+sr);
+ if(!cmds.some(c=>/ texts 'ru' 'SOTER Repair' 'SOTER was repaired/.test(c)))throw Error('notification texts not stored for the UI language: '+cmds.join(' | '));
+ cmds=[];
+ soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=none|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=ru'));
+ if(!/has not started in this boot/.test(host.textContent)||cmds.length)throw Error('none row / texts re-stored');
+ soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=waiting|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=ru'));
+ if(!/waiting for the first unlock/.test(host.textContent))throw Error('waiting row');
+ soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=0|boot_state=off|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=none'));
+ if(/this boot/.test(host.textContent))throw Error('boot row shown with the switch off');
+ console.log('ok');
+})().catch(e=>{console.error(e.stack||e);process.exit(1);});
+JS
+OUT="$(node "$T/t.js" "$ROOT/webroot/index.html")" && [ "$OUT" = ok ] || fail "card runtime: $OUT"
+echo 'PASS webui camera tools / soter boot: Camera Tools section after Camera Performance, webcam readiness rows and chip states, toggle/start/stop/refusal, compile switch with bounded polling only while compiling, measured cold-start history, unreadable state; SOTER per-boot row (waiting/none/done with unlock delay and retry), notification texts stored in the UI language, 13 locales'
 )
 
 t_webui_device_page_dev48_runtime() (

@@ -3059,10 +3059,14 @@ grep -q 'is a transfer - 5G kept' "$T/st/lte_screenoff.log" || f "kept-for-trans
 # The transfer ends, a stream goes on (~100 KiB/s): LTE.
 i=0; while [ "$i" -lt 12 ] && [ ! -f "$SAVE" ]; do b=$((b + 50000)); rx $b; sleep 0.5; i=$((i + 1)); done
 [ -f "$SAVE" ] || f "a stream after the transfer did not switch to LTE"
+# The watcher saves the 5G mask first and writes the LTE mask right after; under a loaded CI
+# runner the check can land between the two (CI run of 2026-11-15). Wait briefly for the mask.
+i=0; while [ "$i" -lt 30 ] && [ "$(mask)" != "$NR_OFF" ]; do sleep 0.1; i=$((i + 1)); done
 [ "$(mask)" = "$NR_OFF" ] || f "mask not LTE for the stream"
 # A transfer starts on LTE: 5G back, then held.
 i=0; while [ "$i" -lt 12 ] && [ -f "$SAVE" ]; do b=$((b + 600000)); rx $b; sleep 0.5; i=$((i + 1)); done
 [ -f "$SAVE" ] && f "a transfer on LTE did not give 5G back"
+i=0; while [ "$i" -lt 30 ] && [ "$(mask)" != "$NR_ON" ]; do sleep 0.1; i=$((i + 1)); done
 [ "$(mask)" = "$NR_ON" ] || f "mask not 5G after the transfer give-back"
 # The state handback and its log line are separate watcher operations. Under a parallel
 # regression the saved file can disappear just before the line is flushed; wait briefly
@@ -11151,11 +11155,13 @@ cat > "$T/bin/am" <<'SH'
 echo "am $*" >> "$LOG"
 SH
 chmod 0755 "$T/bin/"*
-export PATH="$T/bin:$PATH" PROPS="$T/props" LOG="$T/log" ASB_SOTER_STATE_DIR="$T/state" ASB_SOTER_PACKAGES_LIST="$T/packages.list" ASB_SOTER_WAIT_STEPS=3 ASB_SOTER_READY_STEPS=2
+printf '1' > "$T/props/sys.boot_completed"; printf 'true' > "$T/props/sys.user.0.ce_available"
+printf 'boot-a\n' > "$T/boot_id"; printf '123.45 99.0\n' > "$T/uptime"
+export PATH="$T/bin:$PATH" PROPS="$T/props" LOG="$T/log" ASB_SOTER_STATE_DIR="$T/state" ASB_SOTER_PACKAGES_LIST="$T/packages.list" ASB_SOTER_WAIT_STEPS=3 ASB_SOTER_READY_STEPS=2 ASB_SOTER_BOOT_ID="$T/boot_id" ASB_SOTER_UPTIME="$T/uptime" ASB_SOTER_CE_ROOT="$T/ce"
 ! grep -q '^[[:space:]]*#' <(tail -n +2 "$S") || fail 'comment lines in module shell code'
 printf 'com.android.shell 2000 0 /data/user_de/0/com.android.shell\n' > "$T/packages.list"
 OUT="$(sh "$S" status)"
-[ "$OUT" = 'soter|status|installed=0|services=none|last_time=0|last_result=none|last_trigger=manual|auto=0' ] || fail "absent status: $OUT"
+[ "$OUT" = 'soter|status|installed=0|services=none|last_time=0|last_result=none|last_trigger=manual|auto=0|boot_state=off|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=none' ] || fail "absent status: $OUT"
 [ ! -e "$T/state" ] || fail 'status wrote state'
 OUT="$(sh "$S" run)"
 grep -q '^soter|result|state=not_installed|cleared=0|' <<<"$OUT" || fail "absent run: $OUT"
@@ -11163,12 +11169,14 @@ grep -q '^soter|result|state=not_installed|cleared=0|' <<<"$OUT" || fail "absent
 printf 'com.tencent.soter.soterserver 10123 0 /data/user/0/com.tencent.soter.soterserver\n' >> "$T/packages.list"
 printf 'running' > "$T/props/init.svc.vendor.soter"
 OUT="$(sh "$S" status)"
-grep -q '^soter|status|installed=1|services=vendor.soter:running|last_time=[0-9]*|last_result=not_installed|last_trigger=manual|auto=0$' <<<"$OUT" || fail "present status: $OUT"
+grep -q '^soter|status|installed=1|services=vendor.soter:running|last_time=[0-9]*|last_result=not_installed|last_trigger=manual|auto=0|boot_state=off|' <<<"$OUT" || fail "present status: $OUT"
 : > "$LOG"
 OUT="$(sh "$S" run)"
 [ "$OUT" = 'soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running' ] || fail "done run: $OUT"
 _pass1="$(printf 'am force-stop com.tencent.soter.soterserver\nstop vendor.soter\npm clear com.tencent.soter.soterserver\nstart vendor.soter')"
-[ "$(cat "$LOG")" = "$(printf '%s\n%s' "$_pass1" "$_pass1")" ] || fail "wrong sequence: $(cat "$LOG")"
+[ "$(grep -v '^pidof' "$LOG")" = "$(printf '%s\n%s' "$_pass1" "$_pass1")" ] || fail "wrong sequence: $(cat "$LOG")"
+grep -q ' run trigger=manual result=done passes=2 took=[0-9]*s clear=\[Success\] before=\[services=vendor.soter:running proc=- files=locked\] after=\[services=vendor.soter:running ' "$T/state/log" || fail "run not logged: $(cat "$T/state/log")"
+grep -q '^[0-9-]* [0-9:]* up=123s ' "$T/state/log" || fail 'log line lacks time and uptime'
 grep -qx 'result=done' "$T/state/last" && grep -qx 'trigger=manual' "$T/state/last" && grep -qx 'passes=2' "$T/state/last" || fail 'result not recorded'
 [ ! -d "$T/state/run.lock" ] || fail 'lock left behind'
 : > "$LOG"; touch "$LOG.clearfail"; OUT="$(sh "$S" run)"; rm -f "$LOG.clearfail"
@@ -11187,11 +11195,14 @@ OUT="$(sh "$S" boot)"
 grep -q '^soter|result|state=auto_off|cleared=0|passes=0|' <<<"$OUT" || fail "boot ran without the opt-in: $OUT"
 [ "$(grep -c '^pm clear' "$LOG")" = 1 ] || fail 'boot without the opt-in cleared data'
 [ "$(sh "$S" auto on)" = 'soter|auto|state=1' ] && [ -f "$T/state/auto" ] || fail 'auto on'
-grep -q '|auto=1$' <<<"$(sh "$S" status)" || fail 'status does not show the opt-in'
+grep -q '|auto=1|boot_state=none|' <<<"$(sh "$S" status)" || fail 'status does not show the opt-in'
 : > "$LOG"; OUT="$(sh "$S" boot)"
 [ "$OUT" = 'soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running' ] || fail "boot run: $OUT"
 grep -qx 'trigger=boot' "$T/state/last" || fail 'boot trigger not recorded'
-grep -q '|last_result=done|last_trigger=boot|auto=1$' <<<"$(sh "$S" status)" || fail 'status lacks the boot trigger'
+grep -q '|last_result=done|last_trigger=boot|auto=1|boot_state=done|boot_result=done|boot_unlock=0|boot_via=ce_available|' <<<"$(sh "$S" status)" || fail "status lacks the boot trigger: $(sh "$S" status)"
+printf 'boot-b\n' > "$T/boot_id"
+grep -q '|auto=1|boot_state=none|boot_result=none|' <<<"$(sh "$S" status)" || fail 'a record of an earlier boot is shown as this boot'
+printf 'boot-a\n' > "$T/boot_id"
 [ "$(sh "$S" auto off)" = 'soter|auto|state=0' ] && [ ! -e "$T/state/auto" ] || fail 'auto off'
 set +e; OUT="$(sh "$S" auto maybe)"; rc=$?; set -e
 [ "$rc" = 2 ] || fail 'bad auto value accepted'
@@ -11200,16 +11211,22 @@ rm -f "$T/props/init.svc.vendor.soter"; : > "$LOG"
 OUT="$(sh "$S" run)"
 [ "$OUT" = 'soter|result|state=done_no_service|cleared=1|passes=2|services=none' ] || fail "no service: $OUT"
 ! grep -q '^st' "$LOG" || fail 'started or stopped a service the ROM does not declare'
-mkdir "$T/state/run.lock"; OUT="$(sh "$S" run)"
+mkdir "$T/state/run.lock"; touch "$T/state/run.lock"; OUT="$(sh "$S" run)"
 grep -q '^soter|result|state=busy|' <<<"$OUT" || fail "busy: $OUT"
 [ -d "$T/state/run.lock" ] || fail 'a busy run removed the holder lock'
-rmdir "$T/state/run.lock"
+touch -d '@1000' "$T/state/run.lock" 2>/dev/null || touch -t 197001010100 "$T/state/run.lock"
+OUT="$(sh "$S" run)"
+grep -q '^soter|result|state=done_no_service|' <<<"$OUT" || fail "a lock older than 10 minutes blocked the repair: $OUT"
+grep -q 'lock older than 10 min removed' "$T/state/log" || fail 'stale lock removal not logged'
+[ ! -d "$T/state/run.lock" ] || fail 'lock left behind after the stale-lock run'
 rm -f "$T/packages.list"; OUT="$(sh "$S" status)"
 grep -q '^soter|status|installed=1|' <<<"$OUT" || fail "pm fallback: $OUT"
 set +e; OUT="$(sh "$S" bogus)"; rc=$?; set -e
 [ "$rc" = 2 ] && [ "$OUT" = 'soter|error|unknown_command' ] || fail 'unknown command accepted'
 grep -q 'soter_fix/run.lock' "$ROOT/post-fs-data.sh" && grep -q 'junk_cleanup/run.lock' "$ROOT/post-fs-data.sh" || fail 'a reboot mid-run leaves a stale lock'
-echo "PASS soter fix: absent/present status, two-pass force-stop/stop/clear/start sequence, bounded service stabilization, transient crash rejection, early stop on refusal or a dead service, opt-in boot repair, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
+grep -q '^soter|log|empty$' <<<"$(ASB_SOTER_STATE_DIR="$T/none" sh "$S" log)" || fail 'empty log not reported'
+[ "$(sh "$S" log 2 | wc -l | tr -d ' ')" = 2 ] || fail 'log tail is not bounded'
+echo "PASS soter fix: absent/present status, persistent per-run log, stale-lock recovery, two-pass force-stop/stop/clear/start sequence, bounded service stabilization, transient crash rejection, early stop on refusal or a dead service, opt-in boot repair, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
 )
 
 t_wakelock_fitness_reapply_evidence_runtime() (
@@ -11393,67 +11410,145 @@ grep -Fq 'not in force on this phone: the governor loaded ${_dba} device-adaptiv
 echo "PASS diag kernel controls: one readable line per control, hrtimer explained as the same mechanism, shipped rails marked as fallback when device bounds are live"
 )
 
-t_soter_boot_waits_for_unlock_dev57() (
-# dev57: the opted-in boot repair ran 45 s after boot_completed, which on a phone that has
-# not been unlocked yet is before the SOTER server app (not direct-boot aware) and the
-# user's credential-encrypted storage are available - the manual button, pressed later,
-# worked. The boot run now waits for sys.user.0.ce_available (after 10 minutes also the
-# activity manager's RUNNING_UNLOCKED state), gives up after 6 hours without an unlock,
-# settles 60 s, and retries once after 120 s when the first result is not a final one.
+t_soter_boot_sequence_dev59() (
+# dev57: the opted-in boot repair waits for the first unlock instead of running 45 s after
+# boot_completed (the SOTER server app is not direct-boot aware). dev59: the owner still had
+# to press the button after every reboot, and nothing on the phone said whether the boot run
+# had happened. The whole boot sequence now lives in asb_soter_fix.sh `boot` and leaves
+# evidence: a persistent per-boot record (boot_id) shown by `status`, a log line for every
+# phase, a verification pass a few minutes later (stopped services restarted, SOTER logcat
+# lines kept), and a notification text the WebUI stores in the user's language. The unlock is
+# detected by sys.user.0.ce_available, by the SOTER server's credential-encrypted data
+# directory becoming visible, or (every 60 s) by the activity manager's RUNNING_UNLOCKED.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-fail() { echo "FAIL soter boot unlock wait: $*" >&2; exit 1; }
+S="$ROOT/runtime/asb_soter_fix.sh"
+fail() { echo "FAIL soter boot sequence: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
-python3 - "$ROOT/service.sh" "$T/block.sh" "$T" <<'PY' || fail 'boot block not found'
+mkdir -p "$T/bin" "$T/props" "$T/ce"
+cat > "$T/bin/getprop" <<'SH'
+#!/bin/sh
+if [ $# -eq 0 ]; then
+  for f in "$PROPS"/init.svc.*; do [ -f "$f" ] && printf '[%s]: [%s]\n' "${f##*/}" "$(cat "$f")"; done
+  exit 0
+fi
+if [ "$1" = sys.user.0.ce_available ] && [ -f "$Q/unlock_at" ]; then
+  n=$(cat "$Q/polls" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$Q/polls"
+  [ "$n" -ge "$(cat "$Q/unlock_at")" ] && { echo true; exit 0; }
+  exit 0
+fi
+cat "$PROPS/$1" 2>/dev/null
+SH
+cat > "$T/bin/sleep" <<'SH'
+#!/bin/sh
+echo "sleep $1" >> "$Q/log"
+if [ "$1" = "$VERIFY" ] && [ -f "$Q/crash_before_verify" ]; then printf 'stopped' > "$PROPS/init.svc.vendor.soter"; fi
+if [ -f "$Q/dir_at" ]; then
+  n=$(cat "$Q/sleeps" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$Q/sleeps"
+  [ "$n" -ge "$(cat "$Q/dir_at")" ] && mkdir -p "$CE/com.tencent.soter.soterserver/shared_prefs"
+fi
+exit 0
+SH
+cat > "$T/bin/am" <<'SH'
+#!/bin/sh
+echo "am $*" >> "$Q/log"
+[ "$1" = get-started-user-state ] && [ -f "$Q/am_unlocked" ] && echo 'RUNNING_UNLOCKED'
+exit 0
+SH
+cat > "$T/bin/pm" <<'SH'
+#!/bin/sh
+echo "pm $*" >> "$Q/log"
+case "$1" in clear)
+  r="$(head -n 1 "$Q/clear" 2>/dev/null)"; sed -i 1d "$Q/clear" 2>/dev/null
+  [ "$r" = fail ] && { echo 'Failed'; exit 1; }; echo 'Success' ;;
+esac
+SH
+cat > "$T/bin/stop" <<'SH'
+#!/bin/sh
+echo "stop $1" >> "$Q/log"; printf 'stopped' > "$PROPS/init.svc.$1"
+SH
+cat > "$T/bin/start" <<'SH'
+#!/bin/sh
+echo "start $1" >> "$Q/log"; printf 'running' > "$PROPS/init.svc.$1"
+SH
+cat > "$T/bin/cmd" <<'SH'
+#!/bin/sh
+printf '%s\n' "$*" >> "$Q/notify"
+SH
+cat > "$T/bin/logcat" <<'SH'
+#!/bin/sh
+printf '11-15 10:00:01.000  1234  1240 E Soter   : ask generation failed|code=-1\n11-15 10:00:02.000  1234  1240 I Other   : unrelated\n'
+SH
+cat > "$T/bin/pidof" <<'SH'
+#!/bin/sh
+echo 4321
+SH
+chmod 0755 "$T/bin/"*
+printf 'com.tencent.soter.soterserver 10123 0 /data/user/0/com.tencent.soter.soterserver\n' > "$T/packages.list"
+printf 'boot-1\n' > "$T/boot_id"; printf '88.2 1.0\n' > "$T/uptime"
+export PATH="$T/bin:$PATH" PROPS="$T/props" Q="$T" CE="$T/ce" VERIFY=7 \
+  ASB_SOTER_STATE_DIR="$T/state" ASB_SOTER_PACKAGES_LIST="$T/packages.list" ASB_SOTER_CE_ROOT="$T/ce" \
+  ASB_SOTER_BOOT_ID="$T/boot_id" ASB_SOTER_UPTIME="$T/uptime" ASB_SOTER_WAIT_STEPS=2 ASB_SOTER_READY_STEPS=1 \
+  ASB_SOTER_SETTLE=5 ASB_SOTER_RETRY_WAIT=6 ASB_SOTER_VERIFY_WAIT=7 ASB_SOTER_UNLOCK_STEP=5 ASB_SOTER_UNLOCK_MAX=120
+! grep -q '^[[:space:]]*#' <(tail -n +2 "$S") || fail 'comment lines in module shell code'
+reset_case() {
+  rm -rf "$T/state" "$T/ce"; mkdir -p "$T/state" "$T/ce"; : > "$T/state/auto"
+  rm -f "$T/log" "$T/notify" "$T/polls" "$T/sleeps" "$T/unlock_at" "$T/dir_at" "$T/am_unlocked" "$T/crash_before_verify" "$T/clear"
+  printf '1' > "$T/props/sys.boot_completed"; printf 'running' > "$T/props/init.svc.vendor.soter"; : > "$T/log"
+}
+reset_case; printf '4\n' > "$T/unlock_at"
+OUT="$(sh "$S" boot)"
+[ "$OUT" = 'soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running' ] || fail "prop unlock: $OUT"
+[ "$(grep -c '^sleep 5$' "$T/log")" -ge 4 ] || fail "settle/polls: $(cat "$T/log")"
+awk '/^sleep 5$/{s=NR} /^pm clear/{if(!c)c=NR} END{exit !(s && c && s < c)}' "$T/log" || fail 'repair ran before the settle'
+grep -q 'boot: unlocked 15s after boot_completed (via ce_available); repair in 5s' "$T/state/log" || fail "unlock log: $(cat "$T/state/log")"
+grep -q 'run trigger=boot result=done passes=2' "$T/state/log" || fail 'boot run not logged'
+grep -q 'boot: verify 7s later services=vendor.soter:running proc=4321 files=' "$T/state/log" || fail "verify log: $(cat "$T/state/log")"
+grep -q 'logcat: 11-15 10:00:01.000  1234  1240 E Soter   : ask generation failed code=-1' "$T/state/log" || fail 'SOTER logcat line not kept (or the separator survived)'
+! grep -q 'unrelated' "$T/state/log" || fail 'unrelated logcat lines kept'
+grep -qx 'boot_id=boot-1' "$T/state/boot" && grep -qx 'state=done' "$T/state/boot" && grep -qx 'result=done' "$T/state/boot" || fail "boot record: $(cat "$T/state/boot")"
+grep -q '|boot_state=done|boot_result=done|boot_unlock=15|boot_via=ce_available|boot_time=[0-9]*|boot_first=none|' <<<"$(sh "$S" status)" || fail "status boot fields: $(sh "$S" status)"
+grep -q '^notification post -S bigtext -t SOTER asb_soter SOTER was repaired after the reboot' "$T/notify" || fail "default notification: $(cat "$T/notify" 2>/dev/null)"
+grep -q 'trigger=boot' "$T/state/last" || fail 'trigger not recorded'
+reset_case; mkdir -p "$T/ce"; printf '3\n' > "$T/dir_at"
+OUT="$(sh "$S" texts ru 'Ремонт SOTER' 'SOTER восстановлен|снова' 'Не удалось')"
+[ "$OUT" = 'soter|texts|state=1' ] || fail "texts: $OUT"
+grep -q '|notify_lang=ru$' <<<"$(sh "$S" status)" || fail 'stored language not reported'
+OUT="$(sh "$S" boot)"
+grep -q 'via ce_storage' "$T/state/log" || fail "CE directory unlock not detected: $(cat "$T/state/log")"
+grep -qx 'notification post -S bigtext -t Ремонт SOTER asb_soter SOTER восстановлен снова' "$T/notify" || fail "localized notification: $(cat "$T/notify")"
+reset_case; printf '1\n' > "$T/unlock_at"; printf 'fail\nok\nok\n' > "$T/clear"
+OUT="$(sh "$S" boot)"
+[ "$(printf '%s\n' "$OUT" | tail -n 1)" = 'soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running' ] || fail "retry result: $OUT"
+grep -q 'boot: first try clear_failed, retry in 6s' "$T/state/log" && grep -qx 'sleep 6' "$T/log" || fail 'no bounded retry'
+grep -qx 'first=clear_failed' "$T/state/boot" || fail 'first try not recorded'
+reset_case; printf '1\n' > "$T/unlock_at"; printf 'fail\nfail\n' > "$T/clear"
+OUT="$(sh "$S" boot)"
+[ "$(grep -c '^pm clear' "$T/log")" = 2 ] || fail 'retry is not bounded to one'
+grep -q 'asb_soter The automatic SOTER repair did not finish' "$T/notify" || fail 'failure notification missing'
+reset_case; printf '9999\n' > "$T/unlock_at"; touch "$T/am_unlocked"
+OUT="$(sh "$S" boot)"
+grep -q 'via user_state' "$T/state/log" && grep -q '^am get-started-user-state 0$' "$T/log" || fail "activity-manager unlock: $(cat "$T/state/log")"
+grep -q 'unlocked 60s after' "$T/state/log" || fail 'activity manager not asked once a minute'
+reset_case; printf '9999\n' > "$T/unlock_at"
+OUT="$(sh "$S" boot)"
+grep -q '^soter|result|state=no_unlock|' <<<"$OUT" || fail "give-up: $OUT"
+! grep -q '^pm clear' "$T/log" || fail 'repaired while the phone stayed locked'
+grep -qx 'state=skipped' "$T/state/boot" && grep -qx 'result=no_unlock' "$T/state/boot" || fail 'skip not recorded'
+reset_case; printf '1\n' > "$T/unlock_at"; touch "$T/crash_before_verify"
+OUT="$(sh "$S" boot)"
+grep -q 'restarted stopped service(s) vendor.soter' "$T/state/log" && [ "$(cat "$T/props/init.svc.vendor.soter")" = running ] || fail 'verify did not restart a stopped service'
+reset_case; rm -f "$T/state/auto"; printf '1\n' > "$T/unlock_at"
+OUT="$(sh "$S" boot)"
+grep -q '^soter|result|state=auto_off|' <<<"$OUT" && [ ! -s "$T/log" ] || fail 'ran without the opt-in'
+python3 - "$ROOT/service.sh" <<'PY' || fail 'service.sh boot block'
 import sys
 s = open(sys.argv[1], encoding='utf-8').read()
-start = s.index('(\n  [ -f /data/adb/asb/soter_fix/auto ]')
-end = s.index('\n) &\n', start)
-block = s[start + 1:end].replace('/data/adb/asb', sys.argv[3] + '/state')
-assert 'sleep 45' not in block and 'sys.user.0.ce_available' in block and 'RUNNING_UNLOCKED' in block
-open(sys.argv[2], 'w', encoding='utf-8').write(block + '\n')
+a = s.index('(\n  [ -f /data/adb/asb/soter_fix/auto ]')
+b = s.index('\n) &\n', a)
+blk = s[a:b]
+assert 'asb_soter_fix.sh" boot' in blk and 'sleep' not in blk and 'getprop' not in blk, blk
 PY
-mkdir -p "$T/m/runtime" "$T/state/soter_fix"
-cat > "$T/m/runtime/asb_soter_fix.sh" <<'EOF'
-q="$QDIR/results"
-r="$(head -n 1 "$q")"; sed -i 1d "$q"
-echo "run $1" >> "$QDIR/log"
-printf 'soter|result|state=%s|cleared=1|passes=2|services=vendor.soter:running\n' "$r"
-EOF
-run_case() {
-  : > "$T/log"; printf '0\n' > "$T/n"; printf '%s\n' $2 > "$T/results"
-  {
-    echo 'getprop() { case "$1" in sys.boot_completed) echo 1 ;; sys.user.0.ce_available) n=$(cat "$QDIR/n"); n=$((n + 1)); echo "$n" > "$QDIR/n"; [ "$UNLOCK_AT" -gt 0 ] && [ "$n" -ge "$UNLOCK_AT" ] && echo true ;; esac; return 0; }'
-    echo 'am() { [ "$AM_UNLOCKED" = 1 ] && echo "RUNNING_UNLOCKED"; return 0; }'
-    echo 'sleep() { echo "sleep $1" >> "$QDIR/log"; }'
-    echo 'asb_log() { echo "LOG $*" >> "$QDIR/log"; }'
-    cat "$T/block.sh"
-  } > "$T/run.sh"
-  QDIR="$T" UNLOCK_AT="$1" AM_UNLOCKED="${3:-0}" MODDIR="$T/m" bash "$T/run.sh" || fail "block exited non-zero for case $1"
-}
-: > "$T/state/soter_fix/auto"
-run_case 4 'done'
-[ "$(grep -c '^sleep 10$' "$T/log")" = 3 ] || fail "polls before unlock: $(cat "$T/log")"
-grep -n '' "$T/log" | grep -q 'sleep 60' || fail 'no settle after unlock'
-[ "$(grep -c '^run boot$' "$T/log")" = 1 ] || fail "runs: $(cat "$T/log")"
-awk '/^sleep 60$/{s=NR} /^run boot$/{r=NR} END{exit !(s && r && s < r)}' "$T/log" || fail 'repair ran before the settle'
-grep -qx 'LOG soter_fix: boot repair done - unlocked 30s after boot_completed' "$T/log" || fail "log: $(cat "$T/log")"
-run_case 1 'service_down done'
-[ "$(grep -c '^run boot$' "$T/log")" = 2 ] && grep -qx 'sleep 120' "$T/log" || fail "no retry: $(cat "$T/log")"
-grep -qx 'LOG soter_fix: boot repair done (first try service_down, retried) - unlocked 0s after boot_completed' "$T/log" || fail "retry log: $(cat "$T/log")"
-run_case 1 'busy clear_failed'
-[ "$(grep -c '^run boot$' "$T/log")" = 2 ] || fail 'retry is bounded to one'
-grep -qx 'LOG soter_fix: boot repair clear_failed (first try busy, retried) - unlocked 0s after boot_completed' "$T/log" || fail "second failure log: $(cat "$T/log")"
-run_case 0 'done'
-! grep -q '^run' "$T/log" || fail 'repaired while the phone stayed locked'
-grep -qx 'LOG soter_fix: boot repair skipped - the phone was not unlocked within 21600s of boot' "$T/log" || fail "give-up log: $(tail -2 "$T/log")"
-[ "$(grep -c '^sleep 10$' "$T/log")" = 60 ] && [ "$(grep -c '^sleep 60$' "$T/log")" = 350 ] || fail 'poll cadence is not 10 s for 10 minutes, then 60 s'
-run_case 0 'done' 1
-[ "$(grep -c '^run boot$' "$T/log")" = 1 ] && grep -q 'unlocked 600s after boot_completed' "$T/log" || fail "activity-manager fallback: $(tail -2 "$T/log")"
-rm -f "$T/state/soter_fix/auto"
-run_case 4 'done'
-[ ! -s "$T/log" ] || fail 'ran without the opt-in'
-grep -q 'soter_auto_note' "$ROOT/webroot/index.html" || fail 'UI note key missing'
 python3 - "$ROOT/webroot/i18n" <<'PY' || fail 'note does not say the repair waits for the unlock'
 import json, sys, pathlib
 en = json.load(open(pathlib.Path(sys.argv[1]) / 'en.json', encoding='utf-8'))
@@ -11461,7 +11556,151 @@ assert 'unlock' in en['soter_auto_note'], en['soter_auto_note']
 ru = json.load(open(pathlib.Path(sys.argv[1]) / 'ru.json', encoding='utf-8'))
 assert 'разблокир' in ru['soter_auto_note'], ru['soter_auto_note']
 PY
-echo 'PASS soter boot unlock wait: waits for the first unlock (ce_available, then RUNNING_UNLOCKED after 10 min), 10 s then 60 s polls, gives up after 6 h, settles 60 s, one bounded retry, opt-in only'
+echo 'PASS soter boot sequence: boot_completed then the first unlock (ce_available, CE data directory, RUNNING_UNLOCKED once a minute), settle, one bounded retry, per-boot record in status, phase log, verify pass with service restart and SOTER logcat lines, localized notification, opt-in only'
+)
+
+t_camera_tools_dev59() (
+# dev59: Camera Tools. runtime/asb_camera_tools.sh owns two opt-in features. USB webcam:
+# Android's own webcam service streams through the kernel's UVC gadget driver once
+# ro.usb.uvc.enabled is true (set from post-fs-data) and a uvc.0 function with descriptors
+# exists in the USB gadget; start/stop switch the USB functions and restore the previous ones.
+# Fast camera start: ART speed compilation of the app the camera intent resolves to, a reset
+# back to Android's default, a boot re-check after app updates, and a cold-launch measurement
+# (am start -W -S) kept as history. No comments in module shell code.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_camera_tools.sh"
+fail() { echo "FAIL camera tools: $*" >&2; exit 1; }
+[ -x "$S" ] || fail 'not executable'
+! grep -q '^[[:space:]]*#' <(tail -n +2 "$S") || fail 'comment lines in module shell code'
+T="$(mktemp -d)"; trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/bin" "$T/props" "$T/cfg/g1/functions/mtp.gs0" "$T/state" "$T/run"
+: > "$T/cfg/g1/UDC"; printf 'a600000.dwc3\n' > "$T/cfg/g1/UDC"
+cat > "$T/bin/getprop" <<'SH'
+#!/bin/sh
+cat "$PROPS/$1" 2>/dev/null
+SH
+cat > "$T/bin/resetprop" <<'SH'
+#!/bin/sh
+echo "resetprop $*" >> "$Q/log"
+case "$1" in
+  -n) printf '%s' "$3" > "$PROPS/$2" ;;
+  --delete) rm -f "$PROPS/$2" ;;
+esac
+SH
+cat > "$T/bin/pm" <<'SH'
+#!/bin/sh
+echo "pm $*" >> "$Q/log"
+case "$1 $2" in
+  'list packages') [ "${3:-}" = -d ] && [ -f "$Q/app_disabled" ] && echo 'package:com.android.DeviceAsWebcam'; exit 0 ;;
+  'art dump') printf '[%s]\n  path: /x/base.apk\n    arm64: [status=%s] [reason=x]\n' "$3" "$(cat "$Q/filter")"; exit 0 ;;
+esac
+case "$1" in enable) rm -f "$Q/app_disabled" ;; disable-user) : > "$Q/app_disabled" ;; esac
+exit 0
+SH
+cat > "$T/bin/svc" <<'SH'
+#!/bin/sh
+echo "svc $*" >> "$Q/log"
+case "$2" in
+  getFunctions) cat "$Q/usb" ;;
+  setFunctions) if [ "${3:-}" = uvc ] && [ -f "$Q/hal_refuses" ]; then :; else printf '%s\n' "${3:-none}" > "$Q/usb"; fi ;;
+esac
+SH
+cat > "$T/bin/cmd" <<'SH'
+#!/bin/sh
+echo "cmd $*" >> "$Q/log"
+case "$*" in
+  'package resolve-activity --brief -a android.media.action.STILL_IMAGE_CAMERA') printf 'priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\ncom.oplus.camera/.Camera\n' ;;
+  'package compile -m speed -f com.oplus.camera') [ -f "$Q/compile_fails" ] && { echo 'Failure: x'; exit 1; }; printf 'speed' > "$Q/filter"; echo Success ;;
+  'package compile --reset com.oplus.camera') printf 'speed-profile' > "$Q/filter"; echo Success ;;
+esac
+SH
+cat > "$T/bin/am" <<'SH'
+#!/bin/sh
+echo "am $*" >> "$Q/log"
+printf 'Starting: Intent { cmp=com.oplus.camera/.Camera }\nStatus: ok\nLaunchState: COLD\nActivity: com.oplus.camera/.Camera\nTotalTime: %s\nWaitTime: 900\nComplete\n' "$(cat "$Q/ms")"
+SH
+cat > "$T/bin/sleep" <<'SH'
+#!/bin/sh
+exit 0
+SH
+chmod 0755 "$T/bin/"*
+printf 'com.android.shell 2000 0 /x\n' > "$T/packages.list"
+printf 'speed-profile' > "$T/filter"; printf 'mtp\n' > "$T/usb"; printf '812' > "$T/ms"; printf '1' > "$T/props/sys.boot_completed"
+export PATH="$T/bin:$PATH" PROPS="$T/props" Q="$T" ASB_CAMTOOLS_STATE="$T/state" ASB_CAMTOOLS_RUN="$T/run" \
+  ASB_CAMTOOLS_GADGET_ROOT="$T/cfg" ASB_CAMTOOLS_PACKAGES_LIST="$T/packages.list" ASB_CAMTOOLS_BOOT_DELAY=0
+OUT="$(sh "$S" status)"
+grep -qx 'camtools|webcam|enabled=0|app=0|app_enabled=0|prop=unset|kernel=ok|function=missing|gadget=g1|udc=a600000.dwc3|usb=mtp|last=-' <<<"$OUT" || fail "status without the app: $OUT"
+grep -qx 'camtools|launch|enabled=0|pkg=com.oplus.camera|filter=speed-profile|state=idle|state_time=0|history=-' <<<"$OUT" || fail "launch status: $OUT"
+[ ! -d "$T/cfg/g1/functions/uvc.asbprobe" ] && [ "$(cat "$T/run/kernel_uvc")" = ok ] || fail 'the kernel probe was not cleaned up or cached'
+[ "$(sh "$S" webcam on)" = 'camtools|webcam_set|state=no_app' ] && [ ! -f "$T/state/webcam" ] || fail 'switched on without the webcam service'
+printf 'com.android.DeviceAsWebcam 10200 0 /x\n' >> "$T/packages.list"; : > "$T/app_disabled"
+OUT="$(sh "$S" webcam on)"
+[ "$OUT" = 'camtools|webcam_set|state=on|function=created|reboot=1' ] || fail "webcam on: $OUT"
+grep -qx 'pm enable com.android.DeviceAsWebcam' "$T/log" && [ -f "$T/state/webcam.app_enabled_by_asb" ] || fail 'disabled webcam service not enabled'
+[ "$(cat "$T/props/ro.usb.uvc.enabled")" = true ] || fail 'webcam switch not set'
+F="$T/cfg/g1/functions/uvc.0"
+[ "$(cat "$F/function_name")" = 'Android Webcam' ] || fail 'function name'
+for fr in 1080p:1920:1080:4147200 720p:1280:720:1843200 480p:640:480:614400; do
+  n="${fr%%:*}"; r="${fr#*:}"; w="${r%%:*}"; r="${r#*:}"; h="${r%%:*}"; b="${r#*:}"
+  [ "$(cat "$F/streaming/mjpeg/m/$n/wWidth")" = "$w" ] && [ "$(cat "$F/streaming/mjpeg/m/$n/wHeight")" = "$h" ] \
+    && [ "$(cat "$F/streaming/mjpeg/m/$n/dwMaxVideoFrameBufferSize")" = "$b" ] \
+    && [ "$(cat "$F/streaming/mjpeg/m/$n/dwFrameInterval")" = 333333 ] || fail "frame $n"
+done
+[ "$(readlink "$F/streaming/header/h/m")" = "$F/streaming/mjpeg/m" ] || fail 'format not linked into the streaming header'
+for c in fs hs ss; do [ "$(readlink "$F/streaming/class/$c/h")" = "$F/streaming/header/h" ] || fail "streaming class $c"; done
+for c in fs ss; do [ "$(readlink "$F/control/class/$c/h")" = "$F/control/header/h" ] || fail "control class $c"; done
+grep -q '^camtools|webcam|enabled=1|app=1|app_enabled=1|prop=true|kernel=ok|function=created|' <<<"$(sh "$S" status)" || fail "status after on: $(sh "$S" status)"
+[ "$(sh "$S" webcam prepare)" = 'camtools|webcam_prepare|state=present' ] || fail 'prepare is not idempotent'
+OUT="$(sh "$S" webcam start)"
+[ "$OUT" = 'camtools|webcam_start|state=active|usb=uvc' ] && [ "$(cat "$T/state/webcam.before")" = mtp ] || fail "start: $OUT"
+OUT="$(sh "$S" webcam stop)"
+[ "$OUT" = 'camtools|webcam_stop|state=done|usb=mtp' ] || fail "stop did not restore the previous USB mode: $OUT"
+: > "$T/hal_refuses"
+OUT="$(sh "$S" webcam start)"; rm -f "$T/hal_refuses"
+[ "$OUT" = 'camtools|webcam_start|state=refused|usb=mtp' ] && grep -q '|last=refused$' <<<"$(sh "$S" status | head -n 1)" || fail "refusal: $OUT"
+rm -f "$T/props/ro.usb.uvc.enabled"
+[ "$(sh "$S" webcam start)" = 'camtools|webcam_start|state=needs_reboot' ] || fail 'started before the switch was live'
+sh "$S" webcam prop; [ "$(cat "$T/props/ro.usb.uvc.enabled")" = true ] || fail 'post-fs-data prop'
+OUT="$(sh "$S" webcam off)"
+[ "$OUT" = 'camtools|webcam_set|state=off|reboot=1' ] && [ ! -f "$T/props/ro.usb.uvc.enabled" ] && [ -f "$T/app_disabled" ] || fail "off did not hand back the ROM state: $OUT"
+sh "$S" webcam prop; [ ! -f "$T/props/ro.usb.uvc.enabled" ] || fail 'prop set while off'
+OUT="$(sh "$S" launch-worker com.oplus.camera compile)"
+grep -qx 'cmd package compile -m speed -f com.oplus.camera' "$T/log" && grep -qx 'state=compile_done' "$T/state/launch.state" && [ "$(cat "$T/state/launch.pkg")" = com.oplus.camera ] || fail 'compile worker'
+grep -q '|filter=speed|state=compile_done|' <<<"$(sh "$S" status)" || fail 'status after compile'
+OUT="$(sh "$S" launch measure)"
+[ "$OUT" = 'camtools|measure|state=done|ms=812|launch=COLD|filter=speed' ] || fail "measure: $OUT"
+grep -qx 'am start -W -S -n com.oplus.camera/.Camera' "$T/log" || fail 'not a cold start of the resolved component'
+grep -q '|history=[0-9]*:812:speed$' <<<"$(sh "$S" status)" || fail 'history not reported'
+sh "$S" launch-worker com.oplus.camera reset >/dev/null
+grep -qx 'state=reset_done' "$T/state/launch.state" && [ ! -f "$T/state/launch.pkg" ] || fail 'reset'
+: > "$T/compile_fails"; sh "$S" launch-worker com.oplus.camera compile >/dev/null; rm -f "$T/compile_fails"
+grep -qx 'state=compile_failed' "$T/state/launch.state" || fail 'a refused compile was reported as done'
+OUT="$(sh "$S" launch on)"
+grep -q '^camtools|launch_compile|state=started|pkg=com.oplus.camera$' <<<"$OUT" && [ -f "$T/state/launch" ] || fail "launch on: $OUT"
+i=0; while [ "$i" -lt 50 ] && ! grep -qx 'state=compile_done' "$T/state/launch.state"; do /bin/sleep 0.1; i=$((i + 1)); done
+grep -qx 'state=compile_done' "$T/state/launch.state" || fail 'background worker did not finish'
+mkdir "$T/run/compile.lock"
+[ "$(sh "$S" launch measure)" = 'camtools|measure|state=busy' ] || fail 'measured during a compilation'
+printf 'state=running\ntime=1\n' > "$T/state/launch.state"; rmdir "$T/run/compile.lock"
+grep -q '|state=interrupted|' <<<"$(sh "$S" status)" || fail 'a running state without its lock is not reported as interrupted'
+printf 'speed-profile' > "$T/filter"; : > "$T/log"
+sh "$S" boot
+grep -qx 'cmd package compile -m speed -f com.oplus.camera' "$T/log" || fail 'boot check did not compile after an update'
+: > "$T/log"; sh "$S" boot
+! grep -q 'package compile' "$T/log" || fail 'boot check compiled an already compiled app'
+set +e; sh "$S" launch-worker 'x;y' compile; rc=$?; set -e
+[ "$rc" = 2 ] || fail 'worker accepted an unsafe package name'
+rm -rf "$F"; chmod 0555 "$T/cfg/g1/functions"; rm -f "$T/run/kernel_uvc"
+grep -q '|kernel=absent|' <<<"$(sh "$S" status)" || fail 'kernel refusal not reported'
+chmod 0755 "$T/cfg/g1/functions"
+grep -q 'camera_tools/webcam' "$ROOT/post-fs-data.sh" && grep -q 'asb_camera_tools.sh" webcam prop' "$ROOT/post-fs-data.sh" || fail 'post-fs-data hook'
+grep -q 'asb_camera_tools.sh" boot' "$ROOT/service.sh" || fail 'service.sh hook'
+grep -q 'webcam.app_enabled_by_asb' "$ROOT/uninstall.sh" && grep -q 'camera_tools/launch.pkg' "$ROOT/uninstall.sh" || fail 'uninstall does not hand back the webcam service or the compilation'
+for _wf in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
+  grep -Fq '"runtime/asb_camera_tools.sh"' "$_wf" || fail "$_wf does not require the helper"
+done
+echo 'PASS camera tools: webcam readiness (service app, kernel UVC probe, gadget function, switch), descriptor tree, start/stop with restore, HAL refusal, off hands back the ROM state, speed compile/reset worker, boot re-check, cold-launch measurement history, busy/interrupted states'
 )
 
 t_kernel_profile_follow_dev57() (

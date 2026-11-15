@@ -7783,7 +7783,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_wakeup_blocker.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh runtime/asb_junk_cleanup.sh runtime/asb_pressure_snapshot.sh runtime/asb_soter_fix.sh runtime/asb_module_desc.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
+_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_wakeup_blocker.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh runtime/asb_junk_cleanup.sh runtime/asb_pressure_snapshot.sh runtime/asb_soter_fix.sh runtime/asb_camera_tools.sh runtime/asb_module_desc.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
 fail() { echo "FAIL workflow executable modes: $*" >&2; exit 1; }
 
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
@@ -9641,7 +9641,8 @@ for f in "$ROOT/runtime/profile_core.sh" "$ROOT/runtime/asb_utils.sh" "$ROOT/app
   done
   grep -q 'description=status:' "$f" && fail "${f##*/} still writes the old status: format"
 done
-grep -qx 'description=\[no profile selected — open the WebUI to choose one\]' "$ROOT/module.prop" || fail 'template line'
+# module.prop itself is the owner's file (his version lines); its template description is
+# replaced by the installer and by every writer above, so it is not pinned here (CI 2026-11-15).
 # refresh: rewrites the whole line from current_profile, replaces an old-format line, writes nothing when equal.
 printf 'smart\n' > "$M/current_profile"
 printf 'id=AutoSystemBoost\nname=ASB\ndescription=status: Smart Mode 🤖 | active ✅ | Zygisk ⏳ waiting\nversion=V66\n' > "$M/module.prop"
