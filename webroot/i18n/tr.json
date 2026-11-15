@@ -434,10 +434,10 @@
     },
     "kernel_sched_stats": {
       "name": "Zamanlayıcı Hata Ayıklama İstatistikleri",
-      "desc": "Kapalı, /proc/sys/kernel/sched_schedstats üzerinden ek zamanlayıcı istatistiklerini devre dışı bırakır. Bu, hata ayıklama muhasebesinin küçük ek yükünü kaldırır ama schedstats tanılamasını da kaldırır; zamanlama politikası ve CPU frekansları değişmez. Performans veya pil etkisi bu muhasebeyle sınırlıdır ve ölçüm olmadan iddia edilmez. Stock baseline yokken yazma yapmaz, Kapalı sonrasında özgün 0/1 değerini geri yükler; kaldırma da aynısını yapar.",
+      "desc": "Zamanlayıcının hata ayıklama araçları için topladığı ek istatistikler. Günlük kullanımda gerekmez. Çoğu çekirdekte zaten kapalıdır; o zaman iki seçenek aynıdır.\n\n🔋 Pil ömrü: Kapalı\n⚡ Performans: Kapalı\n✋ Emin değilseniz: Kapalı",
       "descOpt": {
-        "stock": "Zamanlayıcı hata ayıklama hesaplamasını değiştirme.",
-        "off": "Yalnızca sunulan yazılabilir sched_stats düğümünü kapat; Stock veya kaldırmada kayıtlı değeri geri yükle."
+        "stock": "Çekirdeğin kendi değeri. Takılmaları veya zamanlayıcı sorunlarını incelerken seçin.",
+        "off": "Hata ayıklama istatistiği yok, dolayısıyla küçük ek yükü de yok. Stok seçildiğinde veya kaldırmada geri yüklenir."
       }
     },
     "heytap_mcs": {
@@ -490,49 +490,104 @@
     },
     "mglru_mode": {
       "name": "MGLRU Modu",
-      "desc": "MGLRU’nun bellek sayfalarını seçme ve geri kazanma biçimini değiştirir: Kapalı 0, Açık 7, Smart ise yüke göre 5 veya 7 ister. Bellek baskısında uygun politika reclaim işini azaltıp yanıtı veya uygulama tutmayı iyileştirebilir; uygun olmayan politika reclaim, yeniden yükleme ve takılmayı artırabilir. Pil etkisi yüke bağlıdır ve garanti edilmez. Stock ve kaldırma kaydedilen maskeyi geri yükler; kırpılmış readback başarı değil uyumsuzluktur."
+      "desc": "RAM azaldığında çekirdeğin hangi belleği boşaltacağını nasıl seçtiği. MGLRU yeni yöntemdir: kullandığınız uygulamaları bellekte daha güvenilir tutmak ve temizlik için daha az işlemci emeği harcamak üzere tasarlanmıştır.\n\n🔋 Pil ömrü: Smart\n⚡ Performans: Açık\n✋ Emin değilseniz: Smart (varsayılan)",
+      "descOpt": {
+        "stock": "Çekirdeğin kendi ayarını bırakır.",
+        "off": "Eski boşaltma yöntemi. Yalnızca karşılaştırma için ya da bir şey MGLRU ile kötü çalışırsa.",
+        "on": "Tüm parçalarıyla MGLRU (7). Uygulamaları bellekte en tutarlı biçimde tutar.",
+        "smart": "ASB yüke göre hafif (5) ve tam (7) sürüm arasında geçiş yapar. Bazı çekirdekler yalnızca temel modu (1) kabul eder; o zaman Açık ve Smart aynı çalışır."
+      }
     },
     "kernel_mglru_min_ttl": {
       "name": "MGLRU Nesil Koruması",
-      "desc": "En son kullanılan MGLRU neslini 1000 veya 2000 ms korur (/sys/kernel/mm/lru_gen/min_ttl_ms dosyasına yazar). Bu, çekirdeğin thrashing korumasıdır: bu çalışma kümesi bellekte kalamazsa çekirdeğin OOM killer'ı geri kazanmak yerine bir işlemi sonlandırır; daha uzun süre, daha az geri kazanım takılması karşılığında uygulamaların erken kapanma riskini getirir. Çekirdek belgeleri 1000 önerir. Stock, ASB'nin ilk yazımından önce kaydedilen tam değeri geri yükler; eksik, salt okunur veya uyuşmayan arayüz bildirilir."
+      "desc": "Az önce kullandığınız uygulamaların belleğini 1 ya da 2 saniye korur, böylece hemen boşaltılmaz. Bu bellek bile tutulamazsa çekirdek, tüm telefonu sonsuz yeniden yüklemeyle yavaşlatmak yerine bir uygulamayı kapatır.\n\n🔋 Pil ömrü: Stok\n⚡ Performans: 1000 ms (RAM doluyken daha az takılma)\n✋ Emin değilseniz: Stok",
+      "descOpt": {
+        "stock": "Çekirdeğin kendi değeri, genellikle 0 (koruma yok). Aynen geri yüklenir.",
+        "1000": "Çekirdek belgelerinin önerdiği değer. Bellek doluyken daha az takılma.",
+        "2000": "Daha güçlü koruma. Arka plandaki uygulamalar daha erken kapanabilir."
+      }
     },
     "kernel_timer_migration": {
       "name": "Zamanlayıcı Taşıma",
-      "desc": "Boştayken daha az uyanmayı denemek için On seçin: zamanlayıcılar boştaki CPU'lardan zaten etkin olanlara taşınabilir. Off zamanlayıcıları yerinde tutar ve bazen yük altındaki gecikmeye yardımcı olur. Durum, çekirdeğin şu anda bildirdiği değeri gösterir; boştaki tüketim için On'u deneyin, ancak gecikme veya takılma olursa Off/Stock'a dönün. Hiçbir değer her zaman daha hızlı veya daha serin değildir."
+      "desc": "Boştaki bir işlemci çekirdeğinin zamanlayıcılarını kimin işleyeceğine karar verir. Açık (çekirdeğin varsayılanı): meşgul bir çekirdek onları üstlenir, boştaki çekirdekler daha uzun uyur. Kapalı: her çekirdek kendi zamanlayıcılarını kendisi işler.\n\n🔋 Pil ömrü: Açık ya da Otomatik\n⚡ Performans: Kapalı ya da Otomatik\n✋ Emin değilseniz: Otomatik",
+      "descOpt": {
+        "stock": "Çekirdeğin kendi değerini bırakır (normalde Açık).",
+        "auto": "ASB profilini izler: «Performans»ta Kapalı, diğer tüm profillerde çekirdeğin değeri.",
+        "off": "Zamanlayıcılar kendi çekirdeğinde kalır. Yüksek yükte tepkiyi daha dengeli tutabilir; boştaki çekirdekler daha sık uyanır.",
+        "on": "Boştaki çekirdekler zamanlayıcılarını meşgul olana devreder ve daha uzun uyur. Çekirdeğin enerji tasarrufu seçimi."
+      }
     },
     "kernel_sched_nr_migrate": {
       "name": "Zamanlayıcı Taşıma Grubu",
-      "desc": "/sys/kernel/debug/sched/nr_migrate üzerinden zamanlayıcının bir dengeleme geçişinde taşıyacağı en fazla görev sayısını belirler. Düşük değerler geçiş başına taşıma işini azaltır ama yük dengesizliğini daha uzun sürdürebilir; yüksek değerler yükü daha erken dengelerken daha fazla taşıma ve önbellek kaybına yol açar. Performans ve pil etkileri yüke bağlıdır. 4, önceki Balanced isteğidir, kanıtlanmış bir optimum değildir; Stock ve kaldırma kaydedilen tamsayıyı geri yükler."
+      "desc": "Zamanlayıcının bir dengeleme adımında işlemci çekirdekleri arasında kaç görevi taşıyabileceği. Küçük sayılar: kısa ve hafif adımlar, ama yük daha yavaş dengelenir. Büyük sayılar: yük daha hızlı dağılır, daha çok taşıma olur.\n\n🔋 Pil ömrü: 2 ya da Otomatik\n⚡ Performans: 8 ya da Otomatik\n✋ Emin değilseniz: Otomatik",
+      "descOpt": {
+        "stock": "Çekirdeğin kendi değeri (genellikle 32).",
+        "auto": "ASB profilini izler: «Pil» 2, «Dengeli» ve «Smart» 4, «Performans» 8.",
+        "1": "En az dengeleme işi; dengesiz yük daha uzun sürebilir.",
+        "2": "Hafif. Pil ömrü için iyi bir seçim.",
+        "4": "Orta yol (eski varsayılan).",
+        "8": "Oyunları ve ağır çoklu görevi daha hızlı dağıtır.",
+        "16": "Sunulan en agresif değer; en çok görev taşıması."
+      }
     },
     "kernel_sched_autogroup": {
       "name": "Zamanlayıcı otomatik grubu",
-      "desc": "Adil CPU paylaşımı için görevleri oturuma göre gruplar. GKI çekirdekleri normalde onsuz derlenir (CONFIG_SCHED_AUTOGROUP, üretici modüllerinin derlendiği signal_struct yapısını değiştirir); o zaman durum onu sunulmamış gösterir ve hiçbir şey yazılmaz. Çekirdek sağladığında On, arka plan yükünde oturumlar arası adaleti iyileştirir, Off gruplamayı kaldırır; doğrudan FPS veya pil ayarı değildir.",
+      "desc": "İşlemleri adil işlemci paylaşımı için oturuma göre gruplayan bir masaüstü Linux özelliği. Telefon GKI çekirdekleri bu özellik olmadan derlenir; bu yüzden kart genellikle çekirdeğin arayüzü sunmadığını gösterir ve hiçbir şey yazılmaz. Android uygulamaları zaten kendisi gruplar (ön plan, arka plan).\n\n🔋 Pil ömrü: Stok\n⚡ Performans: Stok\n✋ Emin değilseniz: Stok",
       "descOpt": {
-        "stock": "Otomatik zamanlayıcı gruplandırmasını değiştirme.",
-        "off": "Otomatik görev gruplandırmasını kapat.",
-        "on": "Otomatik görev gruplandırmasını aç."
+        "stock": "Çekirdeğin kendi değerini bırakır.",
+        "off": "Oturuma göre gruplama yok.",
+        "on": "Görevleri oturuma göre gruplar. Android'in kendi uygulama grupları etkilenmez."
       }
     },
     "kernel_sched_child_runs_first": {
       "name": "Alt işlem önce çalışır",
-      "desc": "fork() sonrasında Açık, zamanlayıcıdan alt süreci üst süreçten önce çalıştırmasını ister; Kapalı ters sırayı seçer. Bazı yüklerde süreç başlatma gecikmesini ve copy-on-write davranışını değiştirebilir, bazılarında yarar sağlamaz veya sonucu kötüleştirir. Genel bir FPS, performans veya pil iyileştirmesi değildir. Stock ve kaldırma kaydedilen 0/1 değerini geri yükler; başarı yalnızca readback eşleştiğinde bildirilir.",
+      "desc": "Bir işlem yeni bir işlem başlattıktan sonra önce kimin çalışacağı: yeni (çocuk) işlem mi, onu oluşturan mı. Çoğunlukla uygulama ve hizmetlerin başlatılmasını etkileyen dar bir ayar. Yeni çekirdeklerde bu anahtar artık olmayabilir; o zaman kart çekirdeğin arayüzü sunmadığını gösterir.\n\n🔋 Pil ömrü: Stok\n⚡ Performans: uygulama açılışları için Açık denenebilir; bir şey kötüleşirse geri alın\n✋ Emin değilseniz: Stok",
       "descOpt": {
-        "stock": "Alt işlem önceliği ilkesini değiştirme.",
-        "off": "Alt işlemin önce çalışmasını isteme.",
-        "on": "Alt işlemi üst işlemden önce çalıştır."
+        "stock": "Çekirdeğin kendi sırasını bırakır (normalde önce ebeveyn).",
+        "off": "Yeniyi başlatan işlem önce devam eder.",
+        "on": "Yeni işlem önce çalışır. Bazı uygulama açılışlarını hızlandırabilir."
       }
     },
     "kernel_hrtimer_migration": {
       "name": "HR Zamanlayıcı Taşıma",
-      "desc": "Ayrı /proc/sys/kernel/hrtimer_migration dosyasını yalnızca çekirdek bu standart dışı arayüzü sunduğunda kullanır. 6.12 GKI dahil standart Linux çekirdeklerinde böyle bağımsız bir anahtar yoktur; o zaman bu satır yalnızca zamanlayıcı geçişini yansıtır ve hiçbir şey yazmaz, bu yüzden güç ve gecikme testleri için yukarıdaki ortak anahtarı kullanın."
+      "desc": "Yalnızca yüksek hassasiyetli zamanlayıcılar için ayrı bir anahtarı olan çekirdekler içindir. 6.12 GKI dahil standart çekirdeklerde bu yoktur: o zaman bu kart yalnızca «Zamanlayıcı Taşıma» değerini gösterir ve hiçbir şey yazmaz.\n\n🔋 Pil ömrü / ⚡ Performans: bunun yerine «Zamanlayıcı Taşıma»yı ayarlayın\n✋ Emin değilseniz: Otomatik",
+      "descOpt": {
+        "auto": "«Zamanlayıcı Taşıma» ile aynı kural: yalnızca «Performans»ta Kapalı.",
+        "stock": "Çekirdeğin kendi değerini bırakır.",
+        "off": "Yüksek hassasiyetli zamanlayıcılar kendi çekirdeğinde kalır.",
+        "on": "Yüksek hassasiyetli zamanlayıcılar meşgul bir çekirdeğe geçebilir."
+      }
     },
     "kernel_lpm_prediction": {
       "name": "Boşta Kalma Tahmini (LPM)",
-      "desc": "Snapdragon cpuidle sürücüsünün boşta durum tahmini: lpm_levels sürücülü eski çekirdeklerde lpm_prediction, yenilerinde qcom-cpu-lpm yöneticisinin prediction_disabled değeri (ASB orada ters değeri yazar ve kartın terimleriyle gösterir, 1 = tahmin açık). Auto, tahmini yalnızca Battery profilinde açar; On uyanma gecikmesi pahasına boşta enerji tasarrufu sağlayabilir, Off ters dengeyi dener; Stock çekirdeğin kendi değerini geri yükler. Bu Android LPM veya radyo politikası değildir."
+      "desc": "Snapdragon işlemci boşta sürücüsü: bir çekirdeğin ne kadar uyuyacağını tahmin etmeye çalışır ve daha erken, daha derin bir uyku durumu seçer. Derin uyku enerji tasarrufu sağlar, ama ondan uyanmak biraz daha uzun sürer. Yeni çekirdeklerde anahtarın adı prediction_disabled'dır; kart yine de 1 = tahmin açık gösterir.\n\n🔋 Pil ömrü: Açık ya da Otomatik\n⚡ Performans: Kapalı\n✋ Emin değilseniz: Otomatik",
+      "descOpt": {
+        "auto": "Yalnızca «Pil» profilinde Açık; diğerlerinde çekirdeğin kendi değeri.",
+        "stock": "Çekirdeğin kendi değerini bırakır.",
+        "off": "Tahmin yok. Biraz daha hızlı uyanma, belki boştayken daha fazla tüketim.",
+        "on": "Tahmin açık. Boştayken enerji tasarrufu sağlayabilir; uyanma biraz daha yavaş olabilir."
+      }
     },
     "kernel_usb_autosuspend": {
       "name": "USB otomatik askıya alma",
-      "desc": "Yeni USB çevre birimleri için varsayılan autosuspend gecikmesini ayarlar: Açık = 2 saniye, Kapalı = −1. Şarjı, ADB’yi, gadget’ı, tethering’i veya VPN Hide’ı değiştirmez."
+      "desc": "Boştaki bir USB aygıtının (DAC, kulaklık, oyun kumandası, USB bellek) ne kadar sürede uykuya alınacağı. Yalnızca USB bağlantı noktasına bir şey takılıyken önemlidir; şarjı etkilemez.\n\n🔋 Pil ömrü: Açık\n⚡ Performans: Stok\n✋ Emin değilseniz: Stok. Kapalı'yı yalnızca bir USB aygıtı bağlantıyı kesiyor ya da cızırdıyorsa seçin",
+      "descOpt": {
+        "stock": "Çekirdeğin kendi değerini bırakır (genellikle 2 saniye).",
+        "off": "Bundan sonra takılan USB aygıtları hiç uyumaz. Bağlantısı kopan aygıtları düzeltir; takılı kaldıkça daha fazla güç harcar.",
+        "on": "Boştaki USB aygıtları 2 saniye sonra uyur."
+      }
+    },
+    "kernel_rt_boost": {
+      "name": "Gerçek zamanlı hızlandırma (ses · kamera · ekran)",
+      "desc": "Gerçek zamanlı iş parçacıklarının istediği en düşük işlemci hızı: ses çalma ve kaydı, ekran görüntüsünün birleştirilmesi, bazı kamera iş parçacıkları ve kesme işleyicileri. Daha yüksek bir taban onlara daha hızlı bir başlangıç verir; bu, işlemci yavaş çalışırken cızırdayan sese veya atlanan karelere karşı yardımcı olabilir, ama bu iş parçacıkları her çalıştığında enerjiye mal olur. 1024 tam hız, 0 yalnızca yükün gerektirdiği kadar demektir. Snapdragon telefonlar açılışta genellikle 0 ayarlar; ASB'nin uygulama grubu başına işlemci sınırları bunun üstünde geçerlidir.\n\n🔋 Pil ömrü: 0 ya da Otomatik\n⚡ Performans: 256 ya da Otomatik\n✋ Emin değilseniz: Otomatik",
+      "descOpt": {
+        "stock": "Açılıştan sonraki çekirdek değeri (Snapdragon'da genellikle 0, düz Linux'ta 1024).",
+        "auto": "ASB profilini izler: «Pil» 0, «Performans» 256, «Dengeli» ve «Smart»ta çekirdeğin değeri.",
+        "0": "Ek hızlandırma yok. En düşük tüketim; yavaş işlemcide bu iş parçacıkları düşük frekanstan başlar.",
+        "128": "Ses ve kamera iş parçacıkları için hafif bir taban. Küçük ek maliyet.",
+        "256": "Belirgin bir taban; oyunlar ve video kaydı için. Bu iş parçacıkları çalıştıkça daha fazla tüketim.",
+        "512": "Güçlü bir taban. Yalnızca cızırtı veya takılma sürerse; bu seçenekler arasında en yüksek tüketim."
+      }
     }
   },
   "nav_live": "İzleme",
@@ -732,21 +787,22 @@
       "off": "Kapalı"
     },
     "mglru_mode": {
-      "stock": "stok",
-      "off": "kapalı",
-      "on": "açık",
+      "stock": "Stok",
+      "off": "Kapalı",
+      "on": "Açık",
       "smart": "Smart"
     },
     "kernel_mglru_min_ttl": {
-      "stock": "stok",
+      "stock": "Stok",
       "1000": "1000 ms",
       "2000": "2000 ms",
       "5000": "5000 ms"
     },
     "kernel_timer_migration": {
-      "stock": "stok",
-      "off": "kapalı",
-      "on": "açık"
+      "stock": "Stok",
+      "off": "Kapalı",
+      "on": "Açık",
+      "auto": "Otomatik"
     },
     "kernel_sched_nr_migrate": {
       "1": "1",
@@ -754,7 +810,47 @@
       "4": "4",
       "8": "8",
       "16": "16",
-      "stock": "stok"
+      "stock": "Stok",
+      "auto": "Otomatik"
+    },
+    "kernel_hrtimer_migration": {
+      "auto": "Otomatik",
+      "stock": "Stok",
+      "off": "Kapalı",
+      "on": "Açık"
+    },
+    "kernel_lpm_prediction": {
+      "auto": "Otomatik",
+      "stock": "Stok",
+      "off": "Kapalı",
+      "on": "Açık"
+    },
+    "kernel_sched_stats": {
+      "stock": "Stok",
+      "off": "Kapalı"
+    },
+    "kernel_sched_autogroup": {
+      "stock": "Stok",
+      "off": "Kapalı",
+      "on": "Açık"
+    },
+    "kernel_sched_child_runs_first": {
+      "stock": "Stok",
+      "off": "Kapalı",
+      "on": "Açık"
+    },
+    "kernel_usb_autosuspend": {
+      "stock": "Stok",
+      "off": "Kapalı",
+      "on": "Açık"
+    },
+    "kernel_rt_boost": {
+      "stock": "Stok",
+      "auto": "Otomatik",
+      "0": "0",
+      "128": "128",
+      "256": "256",
+      "512": "512"
     }
   },
   "prof_none": "seçilmedi",
@@ -3340,7 +3436,7 @@
   "bfx_reset_absent": "bu Android'de bulunmayan: {n}",
   "bfx_reset_failed": "silinemeyen: {n}",
   "soter_auto": "Her yeniden başlatmadan sonra otomatik onar",
-  "soter_auto_note": "Aynı onarımı her açılıştan yaklaşık bir dakika sonra çalıştırır. Her çalıştırma yeni SOTER anahtarları oluşturur; bu yüzden parmak iziyle ödeme bu uygulamalarda her yeniden başlatmadan sonra tekrar açılmalıdır.",
+  "soter_auto_note": "Aynı onarımı her yeniden başlatmadan sonra, telefonun kilidini ilk açışınızdan yaklaşık bir dakika sonra çalıştırır (SOTER anahtarları kilidi açılmış depolamaya ihtiyaç duyar). Her çalıştırma yeni SOTER anahtarları oluşturur; bu yüzden parmak iziyle ödeme bu uygulamalarda her yeniden başlatmadan sonra tekrar açılmalıdır.",
   "soter_auto_on": "SOTER onarımı her yeniden başlatmadan sonra çalışacak",
   "soter_auto_off": "Otomatik SOTER onarımı kapalı",
   "soter_auto_failed": "Otomatik onarım değiştirilemedi",
@@ -3389,5 +3485,9 @@
   "kernel_wb_confirm_plain": "“{name}” gelecekteki tüm olaylar için engellensin mi?",
   "kernel_wb_new_short": "yeni kaynak",
   "kernel_wb_shared_short": "ortak ad ×{n}",
-  "kernel_wb_critical_short": "sistem kaynağı"
+  "kernel_wb_critical_short": "sistem kaynağı",
+  "kc_why_kernel_rt_boost": "Bu çekirdekte sched_util_clamp_min_rt_default yok: CONFIG_UCLAMP_TASK olmadan derlenmiş. ASB hiçbir şey yazmaz.",
+  "kc_verdict_deferred": "açılış betikleri bu değeri hâlâ ayarlıyor; sonraki geçişte uygulanır",
+  "kc_verdict_auto_kernel": "Otomatik: bu profil için çekirdeğin kendi değeri",
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Gerçek zamanlı iş parçacığı hızlandırma tabanı"
 }

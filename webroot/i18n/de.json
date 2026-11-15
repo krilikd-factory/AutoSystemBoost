@@ -434,10 +434,10 @@
     },
     "kernel_sched_stats": {
       "name": "Scheduler-Debugstatistik",
-      "desc": "Aus deaktiviert zusätzliche Scheduler-Statistiken über /proc/sys/kernel/sched_schedstats. Dadurch entfällt der kleine Overhead dieser Debug-Buchführung, aber auch die schedstats-Diagnose; Scheduling-Politik und CPU-Frequenzen bleiben unverändert. Leistungs- oder Akku-Effekte beschränken sich auf diese Buchführung und werden ohne Messung nicht behauptet. Stock schreibt ohne Baseline nichts und stellt nach Aus die ursprünglichen 0/1 wieder her; die Deinstallation handelt ebenso.",
+      "desc": "Zusätzliche Statistiken, die der Scheduler für Debugging-Werkzeuge sammelt. Im Alltag werden sie nicht gebraucht. Die meisten Kernel haben sie schon aus; dann sind beide Optionen gleich.\n\n🔋 Akkulaufzeit: Aus\n⚡ Leistung: Aus\n✋ Unsicher: Aus",
       "descOpt": {
-        "stock": "Scheduler-Debug-Abrechnung unverändert lassen.",
-        "off": "Nur einen verfügbaren beschreibbaren sched_stats-Knoten deaktivieren; bei Stock oder Deinstallation aufgezeichneten Wert wiederherstellen."
+        "stock": "Der eigene Wert des Kernels. Wähle ihn, während du Ruckler oder Scheduler-Probleme untersuchst.",
+        "off": "Keine Debug-Statistiken und damit auch nicht ihr kleiner Mehraufwand. Wird bei „Standard“ oder Deinstallation zurückgesetzt."
       }
     },
     "heytap_mcs": {
@@ -490,49 +490,104 @@
     },
     "mglru_mode": {
       "name": "MGLRU-Modus",
-      "desc": "Ändert, wie MGLRU Speicherseiten auswählt und freigibt: Aus fordert 0, Ein 7 und Smart je nach Last 5 oder 7 an. Bei Speicherdruck kann eine passende Politik Reclaim-Arbeit verringern und Reaktion oder App-Erhaltung verbessern; eine unpassende kann Reclaim, Nachladen und Ruckler erhöhen. Der Akku-Effekt hängt von der Last ab und ist nicht garantiert. Stock und Deinstallation stellen die gespeicherte Maske wieder her; ein begrenzter Readback gilt als Fehler, nicht als Erfolg."
+      "desc": "Wie der Kernel auswählt, welcher Speicher freigegeben wird, wenn der RAM knapp wird. MGLRU ist das neuere Verfahren: Es soll die Apps, die du nutzt, zuverlässiger im Speicher halten und für das Aufräumen weniger CPU-Arbeit brauchen.\n\n🔋 Akkulaufzeit: Smart\n⚡ Leistung: Ein\n✋ Unsicher: Smart (Voreinstellung)",
+      "descOpt": {
+        "stock": "Lässt die eigene Einstellung des Kernels.",
+        "off": "Altes Verfahren zum Freigeben. Nur zum Vergleich oder wenn etwas mit MGLRU nicht richtig läuft.",
+        "on": "MGLRU mit allen Teilen (7). Hält Apps am beständigsten im Speicher.",
+        "smart": "ASB wechselt je nach Last zwischen der leichteren (5) und der vollen (7) Variante. Manche Kernel nehmen nur den Grundmodus (1) an; dann wirken Ein und Smart gleich."
+      }
     },
     "kernel_mglru_min_ttl": {
       "name": "MGLRU-Generationsschutz",
-      "desc": "Schützt die zuletzt genutzte MGLRU-Generation für 1000 oder 2000 ms (schreibt /sys/kernel/mm/lru_gen/min_ttl_ms). Das ist der Thrashing-Schutz des Kernels: Passt dieser Arbeitssatz nicht in den Speicher, beendet der OOM-Killer des Kernels einen Prozess statt zurückzufordern; eine längere Zeit tauscht also weniger Reclaim-Stockungen gegen das Risiko früh beendeter Apps. Die Kernel-Dokumentation empfiehlt 1000. Stock stellt den genauen Wert vor dem ersten ASB-Schreibvorgang wieder her; eine fehlende, schreibgeschützte oder abweichende Schnittstelle wird gemeldet."
+      "desc": "Schützt den Speicher der gerade benutzten Apps 1 oder 2 Sekunden lang, damit er nicht sofort freigegeben wird. Lässt sich selbst dieser Speicher nicht halten, beendet der Kernel eine App, statt das ganze Telefon mit ständigem Neuladen auszubremsen.\n\n🔋 Akkulaufzeit: Standard\n⚡ Leistung: 1000 ms (weniger Hänger bei vollem RAM)\n✋ Unsicher: Standard",
+      "descOpt": {
+        "stock": "Der eigene Wert des Kernels, meist 0 (kein Schutz). Wird genau so wiederhergestellt.",
+        "1000": "Der Wert, den die Kernel-Dokumentation empfiehlt. Weniger Hänger bei vollem Speicher.",
+        "2000": "Stärkerer Schutz. Hintergrund-Apps werden eventuell früher beendet."
+      }
     },
     "kernel_timer_migration": {
       "name": "Timer-Migration",
-      "desc": "Um weniger Aufwachvorgänge im Leerlauf zu testen, wählen Sie On: Timer dürfen von untätigen CPUs auf bereits aktive wechseln. Off lässt Timer an ihrem Platz und kann die Latenz unter Last manchmal verbessern. Der Status zeigt den Wert, den der Kernel jetzt meldet; testen Sie On auf Leerlaufverbrauch, kehren Sie aber zu Off/Stock zurück, wenn Latenzen oder Ruckler auftreten. Kein Wert ist grundsätzlich schneller oder kühler."
+      "desc": "Legt fest, wer die Timer eines ruhenden CPU-Kerns bearbeitet. Ein (Voreinstellung des Kernels): Ein beschäftigter Kern übernimmt sie, ruhende Kerne können länger schlafen. Aus: Jeder Kern bearbeitet seine Timer selbst.\n\n🔋 Akkulaufzeit: Ein oder Auto\n⚡ Leistung: Aus oder Auto\n✋ Unsicher: Auto",
+      "descOpt": {
+        "stock": "Lässt den eigenen Wert des Kernels (normalerweise Ein).",
+        "auto": "Folgt dem ASB-Profil: Aus in „Leistung“, in allen anderen Profilen der Wert des Kernels.",
+        "off": "Timer bleiben auf ihrem Kern. Kann die Reaktion unter hoher Last gleichmäßiger halten; ruhende Kerne wachen öfter auf.",
+        "on": "Ruhende Kerne geben ihre Timer an einen beschäftigten ab und schlafen länger. Die Wahl des Kernels zum Energiesparen."
+      }
     },
     "kernel_sched_nr_migrate": {
       "name": "Scheduler-Migrationsbatch",
-      "desc": "Begrenzt über /sys/kernel/debug/sched/nr_migrate, wie viele Tasks ein Scheduler-Balancing-Durchlauf höchstens verschiebt. Kleinere Werte reduzieren Migrationsarbeit pro Durchlauf, können Ungleichgewichte aber länger bestehen lassen; größere gleichen früher aus, verursachen jedoch mehr Migrationen und Cache-Verluste. Leistungs- und Akku-Effekte hängen von der Last ab. 4 ist die bisherige Balanced-Anforderung, kein bewiesenes Optimum; Stock und Deinstallation stellen die Ausgangszahl wieder her."
+      "desc": "Wie viele Aufgaben der Scheduler in einem Ausgleichsschritt zwischen CPU-Kernen verschieben darf. Kleine Zahlen: kurze, leichte Schritte, die Last gleicht sich aber langsamer aus. Große Zahlen: Die Last verteilt sich schneller, mit mehr Umzügen.\n\n🔋 Akkulaufzeit: 2 oder Auto\n⚡ Leistung: 8 oder Auto\n✋ Unsicher: Auto",
+      "descOpt": {
+        "stock": "Der eigene Wert des Kernels (meist 32).",
+        "auto": "Folgt dem ASB-Profil: „Akku“ 2, „Ausgewogen“ und „Smart“ 4, „Leistung“ 8.",
+        "1": "Am wenigsten Ausgleichsarbeit; ungleiche Last kann länger bestehen.",
+        "2": "Leicht. Eine gute Wahl für die Akkulaufzeit.",
+        "4": "Mittelweg (die frühere Voreinstellung).",
+        "8": "Verteilt Spiele und schweres Multitasking schneller.",
+        "16": "Der aggressivste angebotene Wert; die meisten Aufgabenwechsel."
+      }
     },
     "kernel_sched_autogroup": {
       "name": "Scheduler-Autogroup",
-      "desc": "Gruppiert Aufgaben nach Sitzung für eine faire CPU-Verteilung. GKI-Kernel werden normalerweise ohne gebaut (CONFIG_SCHED_AUTOGROUP ändert signal_struct, gegen das Herstellermodule gebaut sind); dann zeigt der Status die Schnittstelle als nicht vorhanden, und nichts wird geschrieben. Wo ein Kernel es bietet, verbessert On die Fairness zwischen Sitzungen bei Hintergrundlast, Off hebt die Gruppierung auf; es ist keine direkte FPS- oder Akku-Optimierung.",
+      "desc": "Eine Funktion von Desktop-Linux, die Prozesse für eine faire CPU-Verteilung nach Sitzung gruppiert. GKI-Kernel für Telefone werden ohne sie gebaut, daher meldet die Karte meist, dass der Kernel keine Schnittstelle bereitstellt, und schreibt nichts. Android gruppiert Apps ohnehin selbst (Vordergrund, Hintergrund).\n\n🔋 Akkulaufzeit: Standard\n⚡ Leistung: Standard\n✋ Unsicher: Standard",
       "descOpt": {
-        "stock": "Automatische Scheduler-Gruppierung unverändert lassen.",
-        "off": "Automatische Prozessgruppierung deaktivieren.",
-        "on": "Automatische Prozessgruppierung aktivieren."
+        "stock": "Lässt den eigenen Wert des Kernels.",
+        "off": "Keine Gruppierung nach Sitzung.",
+        "on": "Gruppiert Aufgaben nach Sitzung. Androids eigene App-Gruppen bleiben unberührt."
       }
     },
     "kernel_sched_child_runs_first": {
       "name": "Kindprozess zuerst",
-      "desc": "Nach fork() bittet Ein den Scheduler, den Kindprozess vor dem Elternprozess auszuführen; Aus wählt die umgekehrte Reihenfolge. Das kann in manchen Lasten Startlatenz und Copy-on-Write-Verhalten ändern, in anderen nutzlos oder nachteilig sein. Es ist keine allgemeine FPS-, Leistungs- oder Akku-Optimierung. Stock und Deinstallation stellen die gespeicherten 0/1 wieder her; Erfolg wird nur bei übereinstimmendem Readback gemeldet.",
+      "desc": "Wer nach dem Start eines neuen Prozesses zuerst läuft: der neue (Kind-)Prozess oder der, der ihn erzeugt hat. Eine schmale Einstellung, die vor allem den Start von Apps und Diensten betrifft. Neuere Kernel haben diesen Schalter eventuell nicht mehr; dann meldet die Karte, dass der Kernel keine Schnittstelle bereitstellt.\n\n🔋 Akkulaufzeit: Standard\n⚡ Leistung: Ein kann für App-Starts ausprobiert werden; zurückstellen, wenn etwas schlechter wird\n✋ Unsicher: Standard",
       "descOpt": {
-        "stock": "Kind-zuerst-Scheduling unverändert lassen.",
-        "off": "Keinen vorrangigen Start des Kindprozesses anfordern.",
-        "on": "Kindprozess vor dem Elternprozess starten lassen."
+        "stock": "Lässt die eigene Reihenfolge des Kernels (normalerweise zuerst der Elternprozess).",
+        "off": "Der Prozess, der den neuen gestartet hat, läuft zuerst weiter.",
+        "on": "Der neue Prozess läuft zuerst. Kann manchen App-Start beschleunigen."
       }
     },
     "kernel_hrtimer_migration": {
       "name": "HR-Timer-Migration",
-      "desc": "Nutzt ein separates /proc/sys/kernel/hrtimer_migration nur, wenn der Kernel diese nicht standardmäßige Schnittstelle bereitstellt. Standard-Linux-Kernel, auch 6.12 GKI, haben keinen solchen eigenen Schalter; dann spiegelt diese Zeile nur die Timer-Migration wider und schreibt nichts, also nutzen Sie den gemeinsamen Schalter oben für Energie- und Latenztests."
+      "desc": "Nur für Kernel mit einem eigenen Schalter für hochauflösende Timer. Standard-Kernel, auch 6.12 GKI, haben keinen: Dann zeigt diese Karte nur den Wert von „Timer-Migration“ und schreibt nichts.\n\n🔋 Akkulaufzeit / ⚡ Leistung: stattdessen „Timer-Migration“ einstellen\n✋ Unsicher: Auto",
+      "descOpt": {
+        "auto": "Gleiche Regel wie bei „Timer-Migration“: Aus nur in „Leistung“.",
+        "stock": "Lässt den eigenen Wert des Kernels.",
+        "off": "Hochauflösende Timer bleiben auf ihrem Kern.",
+        "on": "Hochauflösende Timer dürfen auf einen beschäftigten Kern wechseln."
+      }
     },
     "kernel_lpm_prediction": {
       "name": "Leerlauf-Vorhersage (LPM)",
-      "desc": "Leerlaufvorhersage des Snapdragon-cpuidle-Treibers: lpm_prediction auf älteren Kerneln mit dem Treiber lpm_levels, prediction_disabled des Governors qcom-cpu-lpm auf neueren (dort schreibt ASB den invertierten Wert und zeigt ihn in den Begriffen der Karte, 1 = Vorhersage an). Auto aktiviert die Vorhersage nur im Profil Battery; On kann Leerlaufenergie auf Kosten der Aufwachlatenz sparen, Off testet den umgekehrten Kompromiss; Stock stellt den eigenen Wert des Kernels wieder her. Das ist weder Android-LPM noch Funkrichtlinie."
+      "desc": "Leerlauftreiber der Snapdragon-CPU: versucht vorherzusagen, wie lange ein Kern schläft, und wählt früher einen tieferen Schlafzustand. Tiefer Schlaf spart Energie, das Aufwachen dauert aber etwas länger. In neueren Kerneln heißt der Schalter prediction_disabled; die Karte zeigt trotzdem 1 = Vorhersage an.\n\n🔋 Akkulaufzeit: Ein oder Auto\n⚡ Leistung: Aus\n✋ Unsicher: Auto",
+      "descOpt": {
+        "auto": "Ein nur im Profil „Akku“; in den anderen der eigene Wert des Kernels.",
+        "stock": "Lässt den eigenen Wert des Kernels.",
+        "off": "Keine Vorhersage. Etwas schnelleres Aufwachen, eventuell mehr Verbrauch im Leerlauf.",
+        "on": "Vorhersage an. Kann im Leerlauf Energie sparen; das Aufwachen kann etwas langsamer sein."
+      }
     },
     "kernel_usb_autosuspend": {
       "name": "USB-Autosuspend",
-      "desc": "Legt die Standard-Autosuspend-Verzögerung neu erkannter USB-Peripherie fest: Ein = 2 Sekunden, Aus = −1. Laden, ADB, Gadget, Tethering und VPN Hide bleiben unverändert."
+      "desc": "Wie schnell ein ungenutztes USB-Gerät (DAC, Headset, Gamepad, USB-Stick) schlafen gelegt wird. Spielt nur eine Rolle, solange etwas am USB-Anschluss steckt; das Laden wird nicht beeinflusst.\n\n🔋 Akkulaufzeit: Ein\n⚡ Leistung: Standard\n✋ Unsicher: Standard. Aus nur wählen, wenn ein USB-Gerät immer wieder abbricht oder knackt",
+      "descOpt": {
+        "stock": "Lässt den eigenen Wert des Kernels (meist 2 Sekunden).",
+        "off": "Danach angeschlossene USB-Geräte schlafen nie. Hilft Geräten, die abbrechen; verbraucht mehr Strom, solange sie angeschlossen sind.",
+        "on": "Ungenutzte USB-Geräte schlafen nach 2 Sekunden."
+      }
+    },
+    "kernel_rt_boost": {
+      "name": "Echtzeit-Boost (Audio · Kamera · Display)",
+      "desc": "Die Mindest-CPU-Geschwindigkeit, die Echtzeit-Threads anfordern: Wiedergabe und Aufnahme von Ton, das Zusammensetzen des Bildschirmbilds, einige Kamera-Threads und Interrupt-Handler. Eine höhere Untergrenze gibt ihnen einen schnelleren Start, was gegen knackenden Ton oder ausgelassene Bilder bei langsamer CPU helfen kann, kostet aber Energie, wann immer diese Threads laufen. 1024 bedeutet volle Geschwindigkeit, 0 nur so schnell, wie die Last es braucht. Snapdragon-Telefone setzen beim Start meist 0; die CPU-Grenzen von ASB pro App-Gruppe gelten zusätzlich.\n\n🔋 Akkulaufzeit: 0 oder Auto\n⚡ Leistung: 256 oder Auto\n✋ Unsicher: Auto",
+      "descOpt": {
+        "stock": "Der Wert des Kernels nach dem Start (auf Snapdragon meist 0, bei reinem Linux 1024).",
+        "auto": "Folgt dem ASB-Profil: „Akku“ 0, „Leistung“ 256, in „Ausgewogen“ und „Smart“ der Wert des Kernels.",
+        "0": "Kein zusätzlicher Boost. Geringster Verbrauch; bei langsamer CPU starten diese Threads mit niedrigem Takt.",
+        "128": "Eine leichte Untergrenze für Audio- und Kamera-Threads. Geringer Mehrverbrauch.",
+        "256": "Eine spürbare Untergrenze, für Spiele und Videoaufnahmen. Mehr Verbrauch, solange diese Threads laufen.",
+        "512": "Eine starke Untergrenze. Nur wenn Knacken oder Ruckeln bleibt; der höchste Verbrauch dieser Optionen."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -733,8 +788,8 @@
     },
     "mglru_mode": {
       "stock": "Standard",
-      "off": "aus",
-      "on": "ein",
+      "off": "Aus",
+      "on": "Ein",
       "smart": "Smart"
     },
     "kernel_mglru_min_ttl": {
@@ -745,8 +800,9 @@
     },
     "kernel_timer_migration": {
       "stock": "Standard",
-      "off": "aus",
-      "on": "ein"
+      "off": "Aus",
+      "on": "Ein",
+      "auto": "Auto"
     },
     "kernel_sched_nr_migrate": {
       "1": "1",
@@ -754,7 +810,47 @@
       "4": "4",
       "8": "8",
       "16": "16",
-      "stock": "Standard"
+      "stock": "Standard",
+      "auto": "Auto"
+    },
+    "kernel_hrtimer_migration": {
+      "auto": "Auto",
+      "stock": "Standard",
+      "off": "Aus",
+      "on": "Ein"
+    },
+    "kernel_lpm_prediction": {
+      "auto": "Auto",
+      "stock": "Standard",
+      "off": "Aus",
+      "on": "Ein"
+    },
+    "kernel_sched_stats": {
+      "stock": "Standard",
+      "off": "Aus"
+    },
+    "kernel_sched_autogroup": {
+      "stock": "Standard",
+      "off": "Aus",
+      "on": "Ein"
+    },
+    "kernel_sched_child_runs_first": {
+      "stock": "Standard",
+      "off": "Aus",
+      "on": "Ein"
+    },
+    "kernel_usb_autosuspend": {
+      "stock": "Standard",
+      "off": "Aus",
+      "on": "Ein"
+    },
+    "kernel_rt_boost": {
+      "stock": "Standard",
+      "auto": "Auto",
+      "0": "0",
+      "128": "128",
+      "256": "256",
+      "512": "512"
     }
   },
   "prof_none": "nicht gewählt",
@@ -3340,7 +3436,7 @@
   "bfx_reset_absent": "in diesem Android nicht vorhanden: {n}",
   "bfx_reset_failed": "nicht entfernbar: {n}",
   "soter_auto": "Nach jedem Neustart automatisch reparieren",
-  "soter_auto_note": "Führt dieselbe Reparatur etwa eine Minute nach jedem Start aus. Jeder Lauf erzeugt neue SOTER-Schlüssel, daher muss das Bezahlen per Fingerabdruck in diesen Apps nach jedem Neustart wieder eingeschaltet werden.",
+  "soter_auto_note": "Führt dieselbe Reparatur nach jedem Neustart aus, etwa eine Minute nach dem ersten Entsperren des Telefons (SOTER-Schlüssel brauchen den entsperrten Speicher). Jeder Lauf erzeugt neue SOTER-Schlüssel, daher muss das Bezahlen per Fingerabdruck in diesen Apps nach jedem Neustart wieder eingeschaltet werden.",
   "soter_auto_on": "Die SOTER-Reparatur läuft nach jedem Neustart",
   "soter_auto_off": "Automatische SOTER-Reparatur ist aus",
   "soter_auto_failed": "Die automatische Reparatur ließ sich nicht ändern",
@@ -3389,5 +3485,9 @@
   "kernel_wb_confirm_plain": "„{name}“ für alle künftigen Ereignisse blockieren?",
   "kernel_wb_new_short": "neue Quelle",
   "kernel_wb_shared_short": "gemeinsamer Name ×{n}",
-  "kernel_wb_critical_short": "Systemquelle"
+  "kernel_wb_critical_short": "Systemquelle",
+  "kc_why_kernel_rt_boost": "Dieser Kernel hat kein sched_util_clamp_min_rt_default: Er ist ohne CONFIG_UCLAMP_TASK gebaut. ASB schreibt nichts.",
+  "kc_verdict_deferred": "Startskripte setzen diesen Wert noch; wird im nächsten Durchlauf angewendet",
+  "kc_verdict_auto_kernel": "Auto: der eigene Wert des Kernels für dieses Profil",
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Untergrenze des Echtzeit-Thread-Boosts"
 }

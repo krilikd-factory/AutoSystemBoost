@@ -544,10 +544,10 @@
     },
     "kernel_sched_stats": {
       "name": "Statistiques de débogage du planificateur",
-      "desc": "Off désactive les statistiques supplémentaires de l’ordonnanceur via /proc/sys/kernel/sched_schedstats. Cela supprime le faible surcoût de cette comptabilité de débogage, mais aussi le diagnostic schedstats ; la politique d’ordonnancement et les fréquences CPU ne changent pas. Tout effet sur performances ou batterie se limite à cette comptabilité et n’est pas affirmé sans mesure. Stock n’écrit rien sans baseline et restaure le 0/1 initial après Off ; la désinstallation fait de même.",
+      "desc": "Statistiques supplémentaires que l’ordonnanceur collecte pour les outils de débogage. L’usage quotidien n’en a pas besoin. La plupart des noyaux les ont déjà désactivées ; les deux choix sont alors identiques.\n\n🔋 Autonomie : Off\n⚡ Performances : Off\n✋ Dans le doute : Off",
       "descOpt": {
-        "stock": "Ne pas changer la comptabilité de débogage du planificateur.",
-        "off": "Désactiver seulement un nœud sched_stats exposé et accessible en écriture ; restaurer la valeur enregistrée avec Stock ou à la désinstallation."
+        "stock": "La valeur propre du noyau. À choisir pendant la recherche de saccades ou de problèmes d’ordonnanceur.",
+        "off": "Pas de statistiques de débogage, donc pas leur petit surcoût. Rétabli avec Stock ou à la désinstallation."
       }
     },
     "heytap_mcs": {
@@ -600,49 +600,104 @@
     },
     "mglru_mode": {
       "name": "Mode MGLRU",
-      "desc": "Modifie la sélection et la récupération des pages mémoire par MGLRU : Off demande 0, On 7 et Smart 5 ou 7 selon la charge. Sous pression mémoire, une politique adaptée peut réduire le reclaim et améliorer la réactivité ou la conservation des apps ; une politique inadaptée peut augmenter reclaim, rechargements et à-coups. L’effet sur la batterie dépend de la charge et n’est pas garanti. Stock et la désinstallation restaurent le masque enregistré ; un readback tronqué est un échec, pas un succès."
+      "desc": "La façon dont le noyau choisit la mémoire à libérer quand la RAM vient à manquer. MGLRU est la méthode récente : elle est conçue pour garder plus sûrement en mémoire les applis que vous utilisez et pour demander moins de travail au processeur lors du nettoyage.\n\n🔋 Autonomie : Smart\n⚡ Performances : On\n✋ Dans le doute : Smart (par défaut)",
+      "descOpt": {
+        "stock": "Laisse le réglage propre du noyau.",
+        "off": "Ancienne méthode de libération. Seulement pour comparer, ou si quelque chose fonctionne mal avec MGLRU.",
+        "on": "MGLRU avec toutes ses parties (7). Garde les applis en mémoire de la façon la plus régulière.",
+        "smart": "ASB alterne entre la variante légère (5) et complète (7) selon la charge. Certains noyaux n’acceptent que le mode de base (1) ; On et Smart agissent alors de la même façon."
+      }
     },
     "kernel_mglru_min_ttl": {
       "name": "Protection des générations MGLRU",
-      "desc": "Protège la génération MGLRU la plus récemment utilisée pendant 1000 ou 2000 ms (écrit /sys/kernel/mm/lru_gen/min_ttl_ms). C’est la protection du noyau contre le thrashing : si cet ensemble de travail ne tient pas en mémoire, l’OOM killer du noyau termine un processus au lieu de récupérer de la mémoire ; une durée plus longue échange donc moins de blocages de récupération contre le risque de fermetures précoces d’applis. La documentation du noyau conseille 1000. Stock rétablit la valeur exacte capturée avant la première écriture d’ASB ; une interface absente, en lecture seule ou divergente est signalée."
+      "desc": "Protège pendant 1 ou 2 secondes la mémoire des applis que vous venez d’utiliser, pour qu’elle ne soit pas libérée aussitôt. Si même cette mémoire ne peut pas être gardée, le noyau ferme une appli au lieu de ralentir tout le téléphone par des rechargements sans fin.\n\n🔋 Autonomie : Stock\n⚡ Performances : 1000 ms (moins de blocages quand la RAM est pleine)\n✋ Dans le doute : Stock",
+      "descOpt": {
+        "stock": "La valeur propre du noyau, en général 0 (aucune protection). Rétablie exactement.",
+        "1000": "La valeur que conseille la documentation du noyau. Moins de blocages quand la mémoire est pleine.",
+        "2000": "Protection plus forte. Les applis en arrière-plan peuvent être fermées plus tôt."
+      }
     },
     "kernel_timer_migration": {
       "name": "Migration des minuteurs",
-      "desc": "Pour tester moins de réveils au repos, choisissez On : les minuteurs peuvent passer des CPU inactifs à ceux déjà actifs. Off garde les minuteurs en place et aide parfois la latence sous charge. Le statut indique la valeur que le noyau rapporte maintenant ; testez On pour la consommation au repos, mais revenez à Off/Stock en cas de latence ou d’accrocs. Aucune valeur n’est universellement plus rapide ou plus fraîche."
+      "desc": "Décide qui traite les minuteurs d’un cœur de processeur au repos. On (choix par défaut du noyau) : un cœur occupé les reprend, et les cœurs au repos dorment plus longtemps. Off : chaque cœur traite lui-même ses minuteurs.\n\n🔋 Autonomie : On ou Auto\n⚡ Performances : Off ou Auto\n✋ Dans le doute : Auto",
+      "descOpt": {
+        "stock": "Laisse la valeur propre du noyau (normalement On).",
+        "auto": "Suit le profil ASB : Off en « Performance », la valeur du noyau dans tous les autres profils.",
+        "off": "Les minuteurs restent sur leur cœur. Peut garder la réactivité plus régulière sous forte charge ; les cœurs au repos se réveillent plus souvent.",
+        "on": "Les cœurs au repos confient leurs minuteurs à un cœur occupé et dorment plus longtemps. Le choix du noyau pour économiser l’énergie."
+      }
     },
     "kernel_sched_nr_migrate": {
       "name": "Lot de migration de l’ordonnanceur",
-      "desc": "Limite via /sys/kernel/debug/sched/nr_migrate le nombre de tâches déplacées par passe d’équilibrage. Des valeurs faibles réduisent le travail par passe mais peuvent prolonger le déséquilibre ; des valeurs élevées équilibrent plus tôt au prix de migrations et pertes de cache supplémentaires. Les effets sur performances et batterie dépendent de la charge. 4 est l’ancienne demande Balanced, pas un optimum prouvé ; Stock et la désinstallation restaurent l’entier initial."
+      "desc": "Combien de tâches l’ordonnanceur peut déplacer entre les cœurs du processeur en une étape d’équilibrage. Petits nombres : étapes courtes et légères, mais la charge s’équilibre plus lentement. Grands nombres : la charge se répartit plus vite, avec plus de déplacements.\n\n🔋 Autonomie : 2 ou Auto\n⚡ Performances : 8 ou Auto\n✋ Dans le doute : Auto",
+      "descOpt": {
+        "stock": "La valeur propre du noyau (en général 32).",
+        "auto": "Suit le profil ASB : « Batterie » 2, « Équilibré » et « Smart » 4, « Performance » 8.",
+        "1": "Le moins de travail d’équilibrage ; une charge inégale peut durer plus longtemps.",
+        "2": "Léger. Un bon choix pour l’autonomie.",
+        "4": "Juste milieu (l’ancienne valeur par défaut).",
+        "8": "Répartit plus vite les jeux et le multitâche lourd.",
+        "16": "La valeur la plus agressive proposée ; le plus de déplacements de tâches."
+      }
     },
     "kernel_sched_autogroup": {
       "name": "Autogroup de l’ordonnanceur",
-      "desc": "Regroupe les tâches par session pour un partage équitable du CPU. Les noyaux GKI sont normalement compilés sans (CONFIG_SCHED_AUTOGROUP modifie signal_struct, sur laquelle les modules du constructeur sont compilés) ; le statut l’indique alors comme absent et rien n’est écrit. Quand un noyau le fournit, On améliore l’équité entre sessions sous charge en arrière-plan et Off supprime le regroupement ; ce n’est pas un réglage direct de FPS ou de batterie.",
+      "desc": "Une fonction de Linux de bureau qui regroupe les processus par session pour partager équitablement le processeur. Les noyaux GKI de téléphone sont compilés sans elle, la carte indique donc en général que le noyau n’expose pas l’interface et rien n’est écrit. Android regroupe déjà lui-même les applis (premier plan, arrière-plan).\n\n🔋 Autonomie : Stock\n⚡ Performances : Stock\n✋ Dans le doute : Stock",
       "descOpt": {
-        "stock": "Ne pas modifier le regroupement automatique.",
-        "off": "Désactiver le regroupement automatique des tâches.",
-        "on": "Activer le regroupement automatique des tâches."
+        "stock": "Laisse la valeur propre du noyau.",
+        "off": "Pas de regroupement par session.",
+        "on": "Regroupe les tâches par session. Les groupes d’applis propres à Android ne sont pas touchés."
       }
     },
     "kernel_sched_child_runs_first": {
       "name": "Processus enfant prioritaire",
-      "desc": "Après fork(), On demande à l’ordonnanceur d’exécuter l’enfant avant le parent ; Off choisit l’ordre inverse. Selon la charge, cela peut modifier la latence de démarrage et le copy-on-write, être sans effet ou dégrader le résultat. Ce n’est pas une optimisation générale des FPS, des performances ou de la batterie. Stock et la désinstallation restaurent le 0/1 enregistré ; le succès exige un readback concordant.",
+      "desc": "Qui s’exécute en premier quand un processus en lance un nouveau : le nouveau processus (enfant) ou celui qui l’a créé. Un réglage étroit qui touche surtout le lancement des applis et des services. Les noyaux récents peuvent ne plus avoir cet interrupteur ; la carte indique alors que le noyau n’expose pas l’interface.\n\n🔋 Autonomie : Stock\n⚡ Performances : On peut être essayé pour le lancement des applis ; revenez en arrière si quelque chose empire\n✋ Dans le doute : Stock",
       "descOpt": {
-        "stock": "Ne pas modifier la priorité du processus enfant.",
-        "off": "Ne pas demander l’exécution prioritaire du processus enfant.",
-        "on": "Exécuter le processus enfant avant son parent."
+        "stock": "Laisse l’ordre propre du noyau (normalement le parent d’abord).",
+        "off": "Le processus qui a lancé le nouveau continue en premier.",
+        "on": "Le nouveau processus s’exécute en premier. Peut accélérer certains lancements d’applis."
       }
     },
     "kernel_hrtimer_migration": {
       "name": "Migration des minuteurs HR",
-      "desc": "N’utilise un /proc/sys/kernel/hrtimer_migration séparé que si le noyau expose cette interface non standard. Les noyaux Linux standard, y compris 6.12 GKI, n’ont pas ce réglage indépendant ; cette ligne ne fait alors que refléter la migration des minuteurs et n’écrit rien, utilisez donc le réglage commun ci-dessus pour les tests d’énergie et de latence."
+      "desc": "Uniquement pour les noyaux qui ont un interrupteur séparé pour les minuteurs haute précision. Les noyaux standard, y compris 6.12 GKI, n’en ont pas : cette carte affiche alors seulement la valeur de « Migration des minuteurs » et n’écrit rien.\n\n🔋 Autonomie / ⚡ Performances : réglez plutôt « Migration des minuteurs »\n✋ Dans le doute : Auto",
+      "descOpt": {
+        "auto": "Même règle que « Migration des minuteurs » : Off seulement en « Performance ».",
+        "stock": "Laisse la valeur propre du noyau.",
+        "off": "Les minuteurs haute précision restent sur leur cœur.",
+        "on": "Les minuteurs haute précision peuvent passer sur un cœur occupé."
+      }
     },
     "kernel_lpm_prediction": {
       "name": "Prédiction d’inactivité (LPM)",
-      "desc": "Prédiction des états de veille du pilote cpuidle Snapdragon : lpm_prediction sur les anciens noyaux avec le pilote lpm_levels, prediction_disabled du gouverneur qcom-cpu-lpm sur les plus récents (ASB y écrit la valeur inversée et l’affiche dans les termes de la carte, 1 = prédiction active). Auto active la prédiction uniquement en profil Battery ; On peut économiser de l’énergie au repos au prix de la latence de réveil, Off teste le compromis inverse ; Stock rétablit la valeur propre du noyau. Ce n’est ni le LPM d’Android ni la politique radio."
+      "desc": "Pilote de repos du processeur Snapdragon : il essaie de prévoir combien de temps un cœur va dormir et choisit plus tôt un sommeil plus profond. Le sommeil profond économise l’énergie, mais le réveil prend un peu plus de temps. Sur les noyaux récents l’interrupteur s’appelle prediction_disabled ; la carte affiche quand même 1 = prédiction active.\n\n🔋 Autonomie : On ou Auto\n⚡ Performances : Off\n✋ Dans le doute : Auto",
+      "descOpt": {
+        "auto": "On seulement dans le profil « Batterie » ; la valeur propre du noyau dans les autres.",
+        "stock": "Laisse la valeur propre du noyau.",
+        "off": "Pas de prédiction. Réveil un peu plus rapide, consommation au repos peut-être plus élevée.",
+        "on": "Prédiction active. Peut économiser de l’énergie au repos ; le réveil peut être un peu plus lent."
+      }
     },
     "kernel_usb_autosuspend": {
       "name": "Autosuspension USB",
-      "desc": "Définit le délai d’autosuspension des nouveaux périphériques USB : Activé = 2 secondes, Désactivé = −1. Ne modifie ni charge, ADB, gadget, tethering ou VPN Hide."
+      "desc": "Le délai avant qu’un périphérique USB inactif (DAC, casque, manette, clé USB) soit mis en veille. Ne compte que lorsqu’un appareil est branché sur le port USB ; la charge n’est pas concernée.\n\n🔋 Autonomie : On\n⚡ Performances : Stock\n✋ Dans le doute : Stock. Choisissez Off seulement si un appareil USB se déconnecte ou grésille",
+      "descOpt": {
+        "stock": "Laisse la valeur propre du noyau (en général 2 secondes).",
+        "off": "Les appareils USB branchés ensuite ne se mettent jamais en veille. Règle les appareils qui décrochent ; consomme plus tant qu’ils sont branchés.",
+        "on": "Les appareils USB inactifs se mettent en veille après 2 secondes."
+      }
+    },
+    "kernel_rt_boost": {
+      "name": "Boost temps réel (audio · caméra · écran)",
+      "desc": "La vitesse minimale du processeur que demandent les threads temps réel : lecture et enregistrement du son, composition de l’image à l’écran, certains threads de la caméra et les gestionnaires d’interruptions. Un plancher plus élevé leur donne un départ plus rapide, ce qui peut aider contre le son qui grésille ou les images perdues quand le processeur tourne lentement, mais coûte de l’énergie chaque fois que ces threads tournent. 1024 signifie pleine vitesse, 0 seulement la vitesse dont la charge a besoin. Les téléphones Snapdragon mettent en général 0 au démarrage ; les limites de processeur d’ASB par groupe d’applis s’appliquent par-dessus.\n\n🔋 Autonomie : 0 ou Auto\n⚡ Performances : 256 ou Auto\n✋ Dans le doute : Auto",
+      "descOpt": {
+        "stock": "La valeur du noyau après le démarrage (en général 0 sur Snapdragon, 1024 sous Linux standard).",
+        "auto": "Suit le profil ASB : « Batterie » 0, « Performance » 256, la valeur du noyau en « Équilibré » et « Smart ».",
+        "0": "Pas de boost supplémentaire. Consommation la plus basse ; sur un processeur lent, ces threads partent d’une fréquence basse.",
+        "128": "Un plancher léger pour les threads audio et caméra. Petit surcoût.",
+        "256": "Un plancher net, pour les jeux et l’enregistrement vidéo. Plus de consommation tant que ces threads tournent.",
+        "512": "Un plancher fort. Seulement si le grésillement ou les saccades persistent ; la consommation la plus élevée de ces options."
+      }
     }
   },
   "opt": {
@@ -834,21 +889,22 @@
       "off": "off"
     },
     "mglru_mode": {
-      "stock": "stock",
-      "off": "off",
-      "on": "on",
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On",
       "smart": "Smart"
     },
     "kernel_mglru_min_ttl": {
-      "stock": "stock",
+      "stock": "Stock",
       "1000": "1000 ms",
       "2000": "2000 ms",
       "5000": "5000 ms"
     },
     "kernel_timer_migration": {
-      "stock": "stock",
-      "off": "off",
-      "on": "on"
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On",
+      "auto": "Auto"
     },
     "kernel_sched_nr_migrate": {
       "1": "1",
@@ -856,7 +912,47 @@
       "4": "4",
       "8": "8",
       "16": "16",
-      "stock": "stock"
+      "stock": "Stock",
+      "auto": "Auto"
+    },
+    "kernel_hrtimer_migration": {
+      "auto": "Auto",
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_lpm_prediction": {
+      "auto": "Auto",
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_sched_stats": {
+      "stock": "Stock",
+      "off": "Off"
+    },
+    "kernel_sched_autogroup": {
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_sched_child_runs_first": {
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_usb_autosuspend": {
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_rt_boost": {
+      "stock": "Stock",
+      "auto": "Auto",
+      "0": "0",
+      "128": "128",
+      "256": "256",
+      "512": "512"
     }
   },
   "prof_none": "non sélectionné",
@@ -3340,7 +3436,7 @@
   "bfx_reset_absent": "absents sur cet Android : {n}",
   "bfx_reset_failed": "impossibles à supprimer : {n}",
   "soter_auto": "Réparer automatiquement après chaque redémarrage",
-  "soter_auto_note": "Lance la même réparation environ une minute après chaque démarrage. Chaque passage crée de nouvelles clés SOTER : le paiement par empreinte doit donc être réactivé dans ces applis après chaque redémarrage.",
+  "soter_auto_note": "Lance la même réparation après chaque redémarrage, environ une minute après le premier déverrouillage du téléphone (les clés SOTER ont besoin du stockage déverrouillé). Chaque passage crée de nouvelles clés SOTER : le paiement par empreinte doit donc être réactivé dans ces applis après chaque redémarrage.",
   "soter_auto_on": "La réparation SOTER s’exécutera après chaque redémarrage",
   "soter_auto_off": "La réparation SOTER automatique est désactivée",
   "soter_auto_failed": "Impossible de modifier la réparation automatique",
@@ -3389,5 +3485,9 @@
   "kernel_wb_confirm_plain": "Bloquer « {name} » pour tous les événements à venir ?",
   "kernel_wb_new_short": "nouvelle source",
   "kernel_wb_shared_short": "nom partagé ×{n}",
-  "kernel_wb_critical_short": "source système"
+  "kernel_wb_critical_short": "source système",
+  "kc_why_kernel_rt_boost": "Ce noyau n’a pas de sched_util_clamp_min_rt_default : il est compilé sans CONFIG_UCLAMP_TASK. ASB n’écrit rien.",
+  "kc_verdict_deferred": "les scripts de démarrage règlent encore cette valeur ; appliqué au prochain passage",
+  "kc_verdict_auto_kernel": "Auto : la valeur propre du noyau pour ce profil",
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Plancher du boost des threads temps réel"
 }

@@ -434,10 +434,10 @@
     },
     "kernel_sched_stats": {
       "name": "Statistik Debug Penjadwal",
-      "desc": "Off menonaktifkan statistik scheduler tambahan melalui /proc/sys/kernel/sched_schedstats. Ini menghilangkan overhead kecil pencatatan debug tersebut, tetapi juga menghilangkan diagnostik schedstats; kebijakan penjadwalan dan frekuensi CPU tidak berubah. Dampak performa atau baterai hanya terkait pencatatan ini dan tidak diklaim tanpa pengukuran. Stock tidak menulis tanpa baseline dan setelah Off memulihkan 0/1 awal; penghapusan melakukan hal yang sama.",
+      "desc": "Statistik tambahan yang dikumpulkan penjadwal untuk alat debug. Pemakaian sehari-hari tidak membutuhkannya. Sebagian besar kernel sudah mematikannya; maka kedua pilihan sama saja.\n\n🔋 Daya tahan baterai: Off\n⚡ Performa: Off\n✋ Jika ragu: Off",
       "descOpt": {
-        "stock": "Jangan ubah akuntansi debug scheduler.",
-        "off": "Nonaktifkan hanya node sched_stats yang tersedia dan dapat ditulis; pulihkan nilai tercatat pada Stock atau penghapusan."
+        "stock": "Nilai kernel sendiri. Pilih saat menyelidiki patah-patah atau masalah penjadwal.",
+        "off": "Tanpa statistik debug, jadi tanpa beban kecilnya. Dikembalikan saat Stock atau pencopotan."
       }
     },
     "heytap_mcs": {
@@ -490,49 +490,104 @@
     },
     "mglru_mode": {
       "name": "Mode MGLRU",
-      "desc": "Mengubah cara MGLRU memilih dan merebut kembali halaman memori: Off meminta 0, On 7, dan Smart 5 atau 7 sesuai beban. Saat memori tertekan, kebijakan yang sesuai dapat mengurangi kerja reclaim dan memperbaiki respons atau retensi aplikasi; kebijakan yang tidak sesuai dapat menambah reclaim, pemuatan ulang, dan tersendat. Dampak baterai bergantung pada beban dan tidak dijamin. Stock dan penghapusan memulihkan mask tersimpan; readback yang terpotong dianggap ketidakcocokan, bukan keberhasilan."
+      "desc": "Cara kernel memilih memori mana yang dibebaskan saat RAM hampir habis. MGLRU adalah metode yang lebih baru: dirancang untuk menyimpan aplikasi yang Anda pakai di memori dengan lebih andal dan butuh lebih sedikit kerja prosesor saat membersihkan.\n\n🔋 Daya tahan baterai: Smart\n⚡ Performa: On\n✋ Jika ragu: Smart (bawaan)",
+      "descOpt": {
+        "stock": "Membiarkan pengaturan kernel sendiri.",
+        "off": "Metode pembersihan lama. Hanya untuk perbandingan, atau jika sesuatu bermasalah dengan MGLRU.",
+        "on": "MGLRU dengan semua bagiannya (7). Paling konsisten menyimpan aplikasi di memori.",
+        "smart": "ASB berganti antara varian ringan (5) dan penuh (7) sesuai beban. Beberapa kernel hanya menerima mode dasar (1); maka On dan Smart bekerja sama."
+      }
     },
     "kernel_mglru_min_ttl": {
       "name": "Perlindungan Generasi MGLRU",
-      "desc": "Melindungi generasi MGLRU yang paling baru dipakai selama 1000 atau 2000 ms (menulis /sys/kernel/mm/lru_gen/min_ttl_ms). Ini pelindung thrashing kernel: jika working set itu tidak muat di memori, OOM killer kernel mengakhiri sebuah proses alih-alih merebut kembali memori, jadi waktu lebih lama menukar lebih sedikit jeda reclaim dengan risiko aplikasi ditutup lebih awal. Dokumentasi kernel menyarankan 1000. Stock memulihkan nilai persis yang dicatat sebelum penulisan pertama ASB; antarmuka yang tidak ada, hanya-baca, atau tidak cocok dilaporkan."
+      "desc": "Melindungi memori aplikasi yang baru Anda pakai selama 1 atau 2 detik agar tidak langsung dibebaskan. Jika memori itu pun tidak bisa dipertahankan, kernel menutup satu aplikasi alih-alih memperlambat seluruh ponsel dengan memuat ulang tanpa henti.\n\n🔋 Daya tahan baterai: Stock\n⚡ Performa: 1000 ms (lebih sedikit macet saat RAM penuh)\n✋ Jika ragu: Stock",
+      "descOpt": {
+        "stock": "Nilai kernel sendiri, biasanya 0 (tanpa perlindungan). Dikembalikan persis.",
+        "1000": "Nilai yang disarankan dokumentasi kernel. Lebih sedikit macet saat memori penuh.",
+        "2000": "Perlindungan lebih kuat. Aplikasi latar belakang bisa ditutup lebih cepat."
+      }
     },
     "kernel_timer_migration": {
       "name": "Migrasi Timer",
-      "desc": "Untuk menguji lebih sedikit bangun saat idle, pilih On: timer boleh pindah dari CPU yang idle ke CPU yang sudah aktif. Off menjaga timer di tempatnya dan terkadang membantu latensi saat beban. Status menunjukkan nilai yang dilaporkan kernel sekarang; uji On untuk konsumsi idle, tetapi kembali ke Off/Stock jika muncul latensi atau patah-patah. Tidak ada nilai yang selalu lebih cepat atau lebih dingin."
+      "desc": "Menentukan siapa yang menangani timer milik inti CPU yang sedang diam. On (bawaan kernel): inti yang sibuk mengambil alih, sehingga inti yang diam bisa tidur lebih lama. Off: setiap inti menangani timernya sendiri.\n\n🔋 Daya tahan baterai: On atau Otomatis\n⚡ Performa: Off atau Otomatis\n✋ Jika ragu: Otomatis",
+      "descOpt": {
+        "stock": "Membiarkan nilai kernel sendiri (biasanya On).",
+        "auto": "Mengikuti profil ASB: Off di «Performa», nilai kernel di semua profil lain.",
+        "off": "Timer tetap di intinya. Bisa menjaga respons lebih stabil saat beban berat; inti yang diam lebih sering bangun.",
+        "on": "Inti yang diam menyerahkan timernya ke inti yang sibuk dan tidur lebih lama. Pilihan kernel untuk menghemat daya."
+      }
     },
     "kernel_sched_nr_migrate": {
       "name": "Batch Migrasi Penjadwal",
-      "desc": "Membatasi jumlah maksimum tugas yang dipindahkan dalam satu tahap penyeimbangan scheduler melalui /sys/kernel/debug/sched/nr_migrate. Nilai lebih kecil mengurangi kerja migrasi per tahap tetapi dapat mempertahankan ketimpangan beban lebih lama; nilai lebih besar menyeimbangkan lebih cepat dengan biaya migrasi dan gangguan cache tambahan. Dampak performa dan baterai bergantung pada beban. 4 adalah permintaan Balanced sebelumnya, bukan nilai optimum yang terbukti; Stock dan penghapusan memulihkan bilangan bulat awal."
+      "desc": "Berapa banyak tugas yang boleh dipindahkan penjadwal antar-inti CPU dalam satu langkah penyeimbangan. Angka kecil: langkah pendek dan ringan, tetapi beban lebih lambat merata. Angka besar: beban lebih cepat tersebar, dengan lebih banyak perpindahan.\n\n🔋 Daya tahan baterai: 2 atau Otomatis\n⚡ Performa: 8 atau Otomatis\n✋ Jika ragu: Otomatis",
+      "descOpt": {
+        "stock": "Nilai kernel sendiri (biasanya 32).",
+        "auto": "Mengikuti profil ASB: «Baterai» 2, «Seimbang» dan «Smart» 4, «Performa» 8.",
+        "1": "Kerja penyeimbangan paling sedikit; beban tidak merata bisa bertahan lebih lama.",
+        "2": "Ringan. Pilihan bagus untuk daya tahan baterai.",
+        "4": "Jalan tengah (nilai bawaan sebelumnya).",
+        "8": "Lebih cepat menyebarkan game dan multitasking berat.",
+        "16": "Nilai paling agresif yang ditawarkan; perpindahan tugas paling banyak."
+      }
     },
     "kernel_sched_autogroup": {
       "name": "Autogroup penjadwal",
-      "desc": "Mengelompokkan tugas per sesi untuk pembagian CPU yang adil. Kernel GKI biasanya dibangun tanpanya (CONFIG_SCHED_AUTOGROUP mengubah signal_struct yang menjadi dasar kompilasi modul vendor); maka status menampilkannya sebagai tidak tersedia dan tidak ada yang ditulis. Bila kernel menyediakannya, On meningkatkan keadilan antar-sesi saat ada beban latar dan Off menghapus pengelompokan; ini bukan penyetelan langsung FPS atau baterai.",
+      "desc": "Fitur Linux desktop yang mengelompokkan proses per sesi agar CPU dibagi adil. Kernel GKI ponsel dibuat tanpa fitur ini, jadi kartu biasanya menunjukkan bahwa kernel tidak menyediakan antarmuka dan tidak ada yang ditulis. Android sudah mengelompokkan aplikasi sendiri (latar depan, latar belakang).\n\n🔋 Daya tahan baterai: Stock\n⚡ Performa: Stock\n✋ Jika ragu: Stock",
       "descOpt": {
-        "stock": "Biarkan pengelompokan otomatis tidak berubah.",
-        "off": "Nonaktifkan pengelompokan tugas otomatis.",
-        "on": "Aktifkan pengelompokan tugas otomatis."
+        "stock": "Membiarkan nilai kernel sendiri.",
+        "off": "Tanpa pengelompokan per sesi.",
+        "on": "Mengelompokkan tugas per sesi. Kelompok aplikasi milik Android tidak terpengaruh."
       }
     },
     "kernel_sched_child_runs_first": {
       "name": "Proses anak lebih dulu",
-      "desc": "Setelah fork(), On meminta scheduler menjalankan proses anak sebelum induk; Off memilih urutan sebaliknya. Pada sebagian beban ini dapat mengubah latensi mulai proses dan perilaku copy-on-write; pada beban lain mungkin tidak bermanfaat atau memperburuk hasil. Ini bukan optimasi umum untuk FPS, performa, atau baterai. Stock dan penghapusan memulihkan 0/1 tersimpan; keberhasilan hanya dilaporkan jika readback cocok.",
+      "desc": "Siapa yang berjalan lebih dulu setelah sebuah proses memulai proses baru: proses baru (anak) atau yang membuatnya. Pengaturan sempit yang terutama memengaruhi cara aplikasi dan layanan dimulai. Kernel yang lebih baru mungkin tidak lagi punya sakelar ini; maka kartu menunjukkan bahwa kernel tidak menyediakan antarmuka.\n\n🔋 Daya tahan baterai: Stock\n⚡ Performa: On bisa dicoba untuk membuka aplikasi; kembalikan jika ada yang memburuk\n✋ Jika ragu: Stock",
       "descOpt": {
-        "stock": "Biarkan kebijakan proses anak tidak berubah.",
-        "off": "Jangan meminta proses anak berjalan lebih dulu.",
-        "on": "Jalankan proses anak sebelum proses induk."
+        "stock": "Membiarkan urutan kernel sendiri (biasanya induk lebih dulu).",
+        "off": "Proses yang memulai proses baru berlanjut lebih dulu.",
+        "on": "Proses baru berjalan lebih dulu. Bisa mempercepat sebagian pembukaan aplikasi."
       }
     },
     "kernel_hrtimer_migration": {
       "name": "Migrasi Timer HR",
-      "desc": "Memakai /proc/sys/kernel/hrtimer_migration terpisah hanya jika kernel menyediakan antarmuka non-standar itu. Kernel Linux standar, termasuk 6.12 GKI, tidak punya sakelar independen seperti itu; maka baris ini hanya mencerminkan migrasi timer dan tidak menulis apa pun, jadi gunakan kontrol bersama di atas untuk uji daya dan latensi."
+      "desc": "Hanya untuk kernel yang punya sakelar terpisah untuk timer presisi tinggi. Kernel standar, termasuk 6.12 GKI, tidak memilikinya: kartu ini lalu hanya menampilkan nilai «Migrasi Timer» dan tidak menulis apa pun.\n\n🔋 Daya tahan baterai / ⚡ Performa: atur «Migrasi Timer» saja\n✋ Jika ragu: Otomatis",
+      "descOpt": {
+        "auto": "Aturan yang sama dengan «Migrasi Timer»: Off hanya di «Performa».",
+        "stock": "Membiarkan nilai kernel sendiri.",
+        "off": "Timer presisi tinggi tetap di intinya.",
+        "on": "Timer presisi tinggi boleh pindah ke inti yang sibuk."
+      }
     },
     "kernel_lpm_prediction": {
       "name": "Prediksi Idle (LPM)",
-      "desc": "Prediksi status idle dari driver cpuidle Snapdragon: lpm_prediction pada kernel lama dengan driver lpm_levels, prediction_disabled milik governor qcom-cpu-lpm pada yang lebih baru (di sana ASB menulis nilai terbalik dan menampilkannya dalam istilah kartu, 1 = prediksi aktif). Auto menyalakan prediksi hanya di profil Battery; On dapat menghemat daya idle dengan biaya latensi bangun, Off menguji kompromi sebaliknya; Stock mengembalikan nilai bawaan kernel. Ini bukan LPM Android atau kebijakan radio."
+      "desc": "Driver diam CPU Snapdragon: mencoba menebak berapa lama inti akan tidur dan lebih cepat memilih kondisi tidur yang lebih dalam. Tidur dalam menghemat daya, tetapi bangun darinya sedikit lebih lama. Di kernel baru sakelarnya bernama prediction_disabled; kartu tetap menampilkan 1 = prediksi aktif.\n\n🔋 Daya tahan baterai: On atau Otomatis\n⚡ Performa: Off\n✋ Jika ragu: Otomatis",
+      "descOpt": {
+        "auto": "On hanya di profil «Baterai»; di profil lain nilai kernel sendiri.",
+        "stock": "Membiarkan nilai kernel sendiri.",
+        "off": "Tanpa prediksi. Bangun sedikit lebih cepat, mungkin konsumsi diam lebih besar.",
+        "on": "Prediksi aktif. Bisa menghemat daya saat diam; bangun bisa sedikit lebih lambat."
+      }
     },
     "kernel_usb_autosuspend": {
       "name": "Autosuspend USB",
-      "desc": "Mengatur jeda autosuspend default untuk periferal USB baru: Aktif = 2 detik, Nonaktif = −1. Tidak mengubah pengisian, ADB, gadget, tethering, atau VPN Hide."
+      "desc": "Seberapa cepat perangkat USB yang diam (DAC, headset, gamepad, flashdisk) ditidurkan. Hanya berpengaruh selama ada sesuatu yang tercolok di port USB; pengisian daya tidak terpengaruh.\n\n🔋 Daya tahan baterai: On\n⚡ Performa: Stock\n✋ Jika ragu: Stock. Pilih Off hanya jika perangkat USB terus terputus atau berderak",
+      "descOpt": {
+        "stock": "Membiarkan nilai kernel sendiri (biasanya 2 detik).",
+        "off": "Perangkat USB yang dicolok setelahnya tidak pernah tidur. Memperbaiki perangkat yang terputus; lebih boros selama tercolok.",
+        "on": "Perangkat USB yang diam tidur setelah 2 detik."
+      }
+    },
+    "kernel_rt_boost": {
+      "name": "Dorongan real-time (audio · kamera · layar)",
+      "desc": "Kecepatan CPU minimum yang diminta thread real-time: pemutaran dan perekaman suara, penyusunan gambar di layar, sebagian thread kamera, dan penangan interupsi. Batas bawah yang lebih tinggi memberi mereka awal yang lebih cepat, yang bisa membantu melawan suara berderak atau frame yang hilang saat CPU berjalan lambat, tetapi memakan daya setiap kali thread itu berjalan. 1024 berarti kecepatan penuh, 0 hanya sebesar yang dibutuhkan beban. Ponsel Snapdragon biasanya menyetel 0 saat boot; batas CPU ASB per kelompok aplikasi tetap berlaku di atasnya.\n\n🔋 Daya tahan baterai: 0 atau Otomatis\n⚡ Performa: 256 atau Otomatis\n✋ Jika ragu: Otomatis",
+      "descOpt": {
+        "stock": "Nilai kernel setelah boot (biasanya 0 di Snapdragon, 1024 di Linux biasa).",
+        "auto": "Mengikuti profil ASB: «Baterai» 0, «Performa» 256, nilai kernel di «Seimbang» dan «Smart».",
+        "0": "Tanpa dorongan tambahan. Konsumsi terendah; pada CPU lambat thread ini mulai dari frekuensi rendah.",
+        "128": "Batas bawah ringan untuk thread audio dan kamera. Biaya tambahan kecil.",
+        "256": "Batas bawah yang terasa, untuk game dan perekaman video. Lebih boros selama thread itu berjalan.",
+        "512": "Batas bawah kuat. Hanya jika derak atau patah-patah tetap ada; konsumsi tertinggi dari pilihan ini."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -732,21 +787,22 @@
       "off": "Mati"
     },
     "mglru_mode": {
-      "stock": "stock",
-      "off": "off",
-      "on": "on",
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On",
       "smart": "Smart"
     },
     "kernel_mglru_min_ttl": {
-      "stock": "stock",
+      "stock": "Stock",
       "1000": "1000 ms",
       "2000": "2000 ms",
       "5000": "5000 ms"
     },
     "kernel_timer_migration": {
-      "stock": "stock",
-      "off": "off",
-      "on": "on"
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On",
+      "auto": "Otomatis"
     },
     "kernel_sched_nr_migrate": {
       "1": "1",
@@ -754,7 +810,47 @@
       "4": "4",
       "8": "8",
       "16": "16",
-      "stock": "stock"
+      "stock": "Stock",
+      "auto": "Otomatis"
+    },
+    "kernel_hrtimer_migration": {
+      "auto": "Otomatis",
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_lpm_prediction": {
+      "auto": "Otomatis",
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_sched_stats": {
+      "stock": "Stock",
+      "off": "Off"
+    },
+    "kernel_sched_autogroup": {
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_sched_child_runs_first": {
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_usb_autosuspend": {
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "kernel_rt_boost": {
+      "stock": "Stock",
+      "auto": "Otomatis",
+      "0": "0",
+      "128": "128",
+      "256": "256",
+      "512": "512"
     }
   },
   "prof_none": "belum dipilih",
@@ -3340,7 +3436,7 @@
   "bfx_reset_absent": "tidak ada di Android ini: {n}",
   "bfx_reset_failed": "gagal dihapus: {n}",
   "soter_auto": "Perbaiki otomatis setelah setiap mulai ulang",
-  "soter_auto_note": "Menjalankan perbaikan yang sama sekitar satu menit setelah setiap boot. Setiap proses membuat kunci SOTER baru, jadi pembayaran sidik jari harus diaktifkan lagi di aplikasi tersebut setelah setiap mulai ulang.",
+  "soter_auto_note": "Menjalankan perbaikan yang sama setelah setiap mulai ulang, sekitar satu menit setelah Anda pertama kali membuka kunci ponsel (kunci SOTER butuh penyimpanan yang sudah tidak terkunci). Setiap proses membuat kunci SOTER baru, jadi pembayaran sidik jari harus diaktifkan lagi di aplikasi tersebut setelah setiap mulai ulang.",
   "soter_auto_on": "Perbaikan SOTER akan berjalan setelah setiap mulai ulang",
   "soter_auto_off": "Perbaikan SOTER otomatis nonaktif",
   "soter_auto_failed": "Tidak dapat mengubah perbaikan otomatis",
@@ -3389,5 +3485,9 @@
   "kernel_wb_confirm_plain": "Blokir “{name}” untuk semua peristiwa berikutnya?",
   "kernel_wb_new_short": "sumber baru",
   "kernel_wb_shared_short": "nama bersama ×{n}",
-  "kernel_wb_critical_short": "sumber sistem"
+  "kernel_wb_critical_short": "sumber sistem",
+  "kc_why_kernel_rt_boost": "Kernel ini tidak punya sched_util_clamp_min_rt_default: dibuat tanpa CONFIG_UCLAMP_TASK. ASB tidak menulis apa pun.",
+  "kc_verdict_deferred": "skrip boot masih menyetel nilai ini; diterapkan pada putaran berikutnya",
+  "kc_verdict_auto_kernel": "Otomatis: nilai kernel sendiri untuk profil ini",
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Batas bawah dorongan thread real-time"
 }
