@@ -2963,12 +2963,12 @@ asb_restore_profile_description() {
   [ -r "$MODPATH/current_profile" ] && [ -f "$MODPATH/module.prop" ] || return 0
   _pd_profile="$(cat "$MODPATH/current_profile" 2>/dev/null | tr -d ' \r\n')"
   case "$_pd_profile" in
-    performance) _pd_desc='description=status: Performance 🔥 | active ✅' ;;
-    battery)     _pd_desc='description=status: Battery 🔋 | active ✅' ;;
-    smart)       _pd_desc='description=status: Smart Mode 🤖 | active ✅' ;;
-    stock)       _pd_desc='description=status: Stock 👶🏻 | active ✅' ;;
-    balanced)    _pd_desc='description=status: Balanced ⚖️ | active ✅' ;;
-    none|'')     _pd_desc='description=status: no profile selected — open the WebUI to choose one' ;;
+    performance) _pd_desc='description=[Performance 🔥 active ✅]' ;;
+    battery)     _pd_desc='description=[Battery 🔋 active ✅]' ;;
+    smart)       _pd_desc='description=[Smart Mode 🤖 active ✅]' ;;
+    stock)       _pd_desc='description=[Stock 👶🏻 active ✅]' ;;
+    balanced)    _pd_desc='description=[Balanced ⚖️ active ✅]' ;;
+    none|'')     _pd_desc='description=[no profile selected — open the WebUI to choose one]' ;;
     *) return 0 ;;
   esac
   _pd_tmp="$MODPATH/module.prop.profile.$$"
