@@ -847,7 +847,7 @@ t_zygisk_allowlist_runtime() (
   mkdir -p "$T/mod/config" "$T/state"
   printf 'zygisk_enabled=0\nzygisk_mode=observer\n' > "$T/mod/config/governor.conf"
   run() { ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_DIR="$T/state" sh "$ROOT/runtime/asb_zygisk.sh" "$@"; }
-  run list | grep -q . && fail 'default allowlist is not empty'
+  run list | grep . >/dev/null && fail 'default allowlist is not empty'
   run set-packages com.example.app org.example.game:remote >/dev/null 2>&1 && fail 'process suffix was accepted'
   run set-packages com.android.systemui >/dev/null 2>&1 && fail 'SystemUI was accepted'
   run set-packages com.topjohnwu.magisk >/dev/null 2>&1 && fail 'root manager was accepted'
@@ -902,15 +902,15 @@ SH
   run auto-enable > "$T/enable.out" || fail "automatic enable failed: $(cat "$T/enable.out")"
   grep -qx 'result=enabled' "$T/enable.out" && grep -qx 'packages=64' "$T/enable.out" || fail "wrong enable result: $(cat "$T/enable.out")"
   [ "$(run list | wc -l)" = 64 ] || fail 'automatic list exceeded or missed the 64-package bound'
-  run list | grep -qx 'com.example.p69' || fail 'usage history did not prioritise frequently opened apps'
-  run list | grep -qx 'com.example.p05' || fail 'second usage-ranked app missing'
-  run list | grep -qE 'com\.android\.systemui|com\.topjohnwu\.magisk' && fail 'protected/system package entered automatic list'
+  run list | grep -x 'com.example.p69' >/dev/null || fail 'usage history did not prioritise frequently opened apps'
+  run list | grep -x 'com.example.p05' >/dev/null || fail 'second usage-ranked app missing'
+  run list | grep -E 'com\.android\.systemui|com\.topjohnwu\.magisk' >/dev/null && fail 'protected/system package entered automatic list'
   grep -qx 'zygisk_enabled=1' "$T/mod/config/governor.conf" && grep -qx 'zygisk_ledger=1' "$T/mod/config/governor.conf" || fail 'Observe did not enable observer + ledger'
   grep -qx 'zygisk_hints=0' "$T/mod/config/governor.conf" && grep -qx 'zygisk_launch=0' "$T/mod/config/governor.conf" || fail 'Observe enabled launch policy'
   [ ! -e "$T/state/zygisk_guard" ] && [ ! -e "$T/state/zygisk_aot" ] || fail 'Observe enabled AppOps guard or ART'
   grep -qx 'mode=observe' "$T/state/zygisk_observer/auto" || fail 'Observe marker absent'
   grep -qx 'observer=1' "$T/mod/zygisk/policy" && grep -qx 'ledger=1' "$T/mod/zygisk/policy" || fail 'automatic policy incomplete'
-  run status | grep -qx 'automatic=on' && run status | grep -qx 'automatic_profile=observe' || fail 'status does not expose automatic ownership/profile'
+  run status | grep -x 'automatic=on' >/dev/null && run status | grep -x 'automatic_profile=observe' >/dev/null || fail 'status does not expose automatic ownership/profile'
   # Unchanged refresh does not advance policy generation or rewrite the policy.
   before="$(sha256sum "$T/mod/zygisk/policy")"; sleep 1
   run auto-refresh > "$T/refresh.out"
@@ -919,9 +919,9 @@ SH
   # outage keeps the last good list instead of proving that no apps exist.
   printf 'com.example.new 1000 0\n' >> "$T/state/zygisk_aot_count"
   printf 'com.example.new\n' >> "$T/packages"
-  run auto-refresh >/dev/null; run list | grep -qx 'com.example.new' || fail 'new user app not added on refresh'
+  run auto-refresh >/dev/null; run list | grep -x 'com.example.new' >/dev/null || fail 'new user app not added on refresh'
   : > "$T/packages"; run auto-refresh >/dev/null
-  run list | grep -qx 'com.example.new' || fail 'empty Package Manager response erased the last good list'
+  run list | grep -x 'com.example.new' >/dev/null || fail 'empty Package Manager response erased the last good list'
   run auto-enable launch > "$T/launch.out" || fail 'Launch profile failed'
   grep -qx 'zygisk_launch=1' "$T/mod/config/governor.conf" && grep -qx 'zygisk_hints=0' "$T/mod/config/governor.conf" || fail "Launch profile has wrong observer switches: $(cat "$T/launch.out") $(cat "$T/state/zygisk_observer/auto") $(grep '^zygisk_' "$T/mod/config/governor.conf" | tr '\n' ' ')"
   [ ! -e "$T/state/zygisk_guard" ] && [ ! -e "$T/state/zygisk_aot" ] || fail 'Launch enabled AppOps guard or ART'
@@ -933,7 +933,7 @@ SH
   for kv in zygisk_enabled=1 zygisk_hints=1 zygisk_launch=1 zygisk_ledger=1; do grep -qx "$kv" "$T/mod/config/governor.conf" || fail "Auto has wrong switch set: $kv"; done
   grep -qx wakers "$T/state/zygisk_guard" && grep -qx 'mode=auto' "$T/state/zygisk_observer/auto" || fail 'Auto did not retain evidence guard and marker'
   [ ! -e "$T/state/zygisk_aot" ] || fail 'Auto implicitly enabled ART'
-  run status | grep -qx 'automatic_profile=auto' || fail 'Auto profile absent from status'
+  run status | grep -x 'automatic_profile=auto' >/dev/null || fail 'Auto profile absent from status'
   run auto-enable observe >/dev/null || fail 'switch back to Observe failed'
   [ ! -e "$T/state/zygisk_guard" ] && [ ! -e "$T/state/zygisk_aot" ] || fail 'Observe retained automatic guard/ART'
   run auto-disable > "$T/disable.out" || fail 'automatic disable failed'
@@ -967,12 +967,12 @@ t_zygisk_policy_sync_runtime() (
   printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\nzygisk_launch=0\nzygisk_ledger=0\n' > "$T/mod/config/governor.conf"
   run() { ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_DIR="$T/state" ASB_ZYGISK_AOT_EXCLUDE="$T/state/zygisk_aot_exclude" sh "$ROOT/runtime/asb_zygisk.sh" "$@"; }
   P="$T/mod/zygisk/policy"
-  run sync | grep -qx 'policy=absent' || fail 'disabled master wrote a policy'
+  run sync | grep -x 'policy=absent' >/dev/null || fail 'disabled master wrote a policy'
   [ ! -e "$P" ] || fail 'policy exists while disabled'
   run enable
   [ ! -e "$P" ] || fail 'enabled with nothing selected still wrote a policy'
   sed -i 's/^zygisk_launch=0/zygisk_launch=1/' "$T/mod/config/governor.conf"
-  run sync | grep -q '^policy=written .*launch=1 ledger=0' || fail 'cold-start policy not written'
+  run sync | grep '^policy=written .*launch=1 ledger=0' >/dev/null || fail 'cold-start policy not written'
   grep -qx 'v=2' "$P" && grep -qx 'launch=1' "$P" && grep -qx 'observer=0' "$P" || fail "policy content: $(cat "$P")"
   [ "$(stat -c %a "$P")" = 600 ] || fail "policy is not root-only: $(stat -c %a "$P")"
   ! grep -q '^pkg=' "$P" || fail 'launch-only policy names packages'
@@ -1017,7 +1017,7 @@ SH
   [ ! -e "$P.rollback.tmp" ] && [ ! -e "$T/mod/zygisk/classes.rollback.tmp" ] || fail 'rollback temporary files survived'
   rm -f "$T/mod/runtime/asb_zygisk_link.sh"
   run disable; [ ! -e "$P" ] || fail 'disable left the policy'
-  run status | grep -qx 'policy=absent' || fail 'status does not report the policy'
+  run status | grep -x 'policy=absent' >/dev/null || fail 'status does not report the policy'
   grep -q 'asb_zygisk.sh" sync' "$ROOT/post-fs-data.sh" || fail 'boot does not regenerate the policy before zygote'
   grep -q "asb_zygisk.sh') + ' sync" "$ROOT/webroot/index.html" || fail 'WebUI switches do not regenerate the policy'
   echo 'PASS observer policy sync: atomic generation, absent when off/safe/empty, native parser agrees, boot and WebUI regenerate'
@@ -1217,10 +1217,10 @@ EOF
   grep -Fqx "$(printf 'D\tzygisk_observer\tenabled_packages\t2')" "$T/link2.out" || fail 'observed apps not seen by link-status'
   printf 'version=2\nmode=auto\nupdated=6\n' > "$T/adb/asb/zygisk_observer/auto"
   env -u ASB_ZYGISK_DIR ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZYGISK_PROC="$T/proc" ASB_ZYGISK_DATA="$T/adb" \
-    sh "$ROOT/runtime/asb_zygisk.sh" link-status | grep -Fqx "$(printf 'D\tzygisk_observer\tauto_profile\tauto')" || fail 'Auto automatic profile was not exposed by diagnostics'
+    sh "$ROOT/runtime/asb_zygisk.sh" link-status | grep -Fx "$(printf 'D\tzygisk_observer\tauto_profile\tauto')" >/dev/null || fail 'Auto automatic profile was not exposed by diagnostics'
   : > "$T/adb/asb/zygisk_observer/disable"
   env -u ASB_ZYGISK_DIR ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZYGISK_PROC="$T/proc" ASB_ZYGISK_DATA="$T/adb" \
-    sh "$ROOT/runtime/asb_zygisk.sh" link-status | grep -Fqx "$(printf 'D\tzygisk_observer\tsafe_mode\ton')" || fail 'safe mode not seen by link-status'
+    sh "$ROOT/runtime/asb_zygisk.sh" link-status | grep -Fx "$(printf 'D\tzygisk_observer\tsafe_mode\ton')" >/dev/null || fail 'safe mode not seen by link-status'
   {
     sed -n '/^T_ZY_HEAD=/,/^T_ZY_UNKNOWN=/p' "$ROOT/action.sh"
     printf '_f() { _sfmt="$1"; shift; printf "$_sfmt\\n" "$@"; }\n'
@@ -1304,7 +1304,7 @@ function cfgRenderRow(list,it){const cur=_cfgVals[it.key]===undefined?it.def:_cf
 function deviceSnapshotCard(title,value,detail,tone){const e=mk('div');e.textContent=title+' '+value+' '+detail+' '+tone;return e;} function deviceSizeKb(v){return v+' KiB';}
 let commands=[],refreshes=0,toastText=''; async function asbPaintYield(){paintYields++;} async function run(c){commands.push(c);return {errno:0,stdout:''};} function runOk(r){return r.errno===0;} function runText(r){return r.stdout||'';} function toast(t){toastText=t;} function asbDeviceInfoLoad(){refreshes++;}
 JS
-    sed -n '/^const TECH_ICON_PATHS = {/,/^};/p; /^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskModeLabel(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^const ZYGISK_CONTROL_KEYS =/p; /^const ZYGISK_FEATURE_KEYS =/p; /^let _zygiskControlBusy/p; /^let _zygiskControlsExpanded/p; /^function zygiskControlsCard(/,/^}/p; /^async function zygiskControlSet(/,/^}/p; /^function zygiskOpenSettings(/,/^}/p; /^function zygiskOffCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskOverview(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
+    sed -n '/^const TECH_ICON_PATHS = {/,/^};/p; /^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^const _asbBatchCache = /p; /^const _asbBatchPerf = /p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskModeLabel(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^const ZYGISK_CONTROL_KEYS =/p; /^const ZYGISK_FEATURE_KEYS =/p; /^let _zygiskControlBusy/p; /^let _zygiskControlsExpanded/p; /^function zygiskControlsCard(/,/^}/p; /^async function zygiskControlSet(/,/^}/p; /^function zygiskOpenSettings(/,/^}/p; /^function zygiskOffCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskOverview(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 function find(n,c){if(n.className&&n.className.split(/\s+/).includes(c))return n;for(const x of n.children||[]){const r=find(x,c);if(r)return r;}return null;}
@@ -1758,9 +1758,9 @@ CPP
   printf '%s\n' "$((now+42))|com.example.hooked|1250|1" "$((now+43))|com.example.hooked|1200|1" >> "$T/asb/zygisk_aot_launch"
   out="$(run classes)"; [ "$out" = 'result=written slow=2 fast=2' ] || fail "measured hooked app was not promoted: $out"
   grep -qx 'slow=com.example.hooked' "$C" || fail "three slow hooked launches did not produce the measured class"
-  run status | grep -qE '^app\|com\.example\.hooked\|slow\|slow\|measured\|3\|1250\|2\|' || fail "promoted hooked row is not measured: $(run status | grep hooked)"
+  run status | grep -E '^app\|com\.example\.hooked\|slow\|slow\|measured\|3\|1250\|2\|' >/dev/null || fail "promoted hooked row is not measured: $(run status | grep hooked)"
   printf 'v=1\nslow=com.example.oldstale\n' > "$C"
-  run status | grep -qxF 'app|com.example.oldstale|slow|normal|-|0|0|0|-|0|-1|-|-|-|0' || fail "a class in effect without evidence is not shown as changing: $(run status | grep oldstale)"
+  run status | grep -xF 'app|com.example.oldstale|slow|normal|-|0|0|0|-|0|-1|-|-|-|0' >/dev/null || fail "a class in effect without evidence is not shown as changing: $(run status | grep oldstale)"
   printf '%s\n' "$((now+70)).100  1000  1500 I am_proc_start: [0,4001,10201,com.example.newapp,next-top-activity,{com.example.newapp/.Main}]" \
     "$((now+70)).600  1000  1500 I wm_activity_launch_time: [0,111,com.example.newapp/.Main,1500]" > "$T/events"
   run classes --no-scan >/dev/null
@@ -1771,7 +1771,7 @@ CPP
   sed -i 's/^zygisk_launch=1/zygisk_launch=0/' "$T/mod/config/governor.conf"
   out="$(run classes)"; [ "$out" = 'result=absent slow=0 fast=0' ] && [ ! -e "$C" ] || fail "classes survived the lift being switched off: $out"
   [ -s "$T/asb/zygisk_lsposed_modules" ] || fail 'the guard lost the module list with the lift off'
-  run status | grep -qx 'classes=absent' || fail 'status after withdraw'
+  run status | grep -x 'classes=absent' >/dev/null || fail 'status after withdraw'
   sed -i 's/^zygisk_launch=0/zygisk_launch=1/' "$T/mod/config/governor.conf"; : > "$T/asb/zygisk_observer/disable"
   out="$(run classes)"; [ "$out" = 'result=absent slow=0 fast=0' ] || fail "safe mode kept classes: $out"
   rm -f "$T/asb/zygisk_observer/disable"

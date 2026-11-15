@@ -2433,6 +2433,9 @@ int main(void) {
     profile(PROFILE_SMART);
     asb_state_t d1 = fsm_desired_base(&m), d2 = fsm_desired_base(&m), d3 = fsm_desired_base(&m);
     CHECK(d1 != ASB_STATE_GAMING && d2 != ASB_STATE_GAMING, "GAMING before three saturated ticks: %s %s", asb_state_names[d1], asb_state_names[d2]);
+    /* dev63: quiet CPU must not force a saturated renderer back into the lower GPU envelope. */
+    CHECK(d1 == ASB_STATE_MODERATE && d2 == ASB_STATE_MODERATE,
+          "saturated GPU starved in LIGHT_IDLE before the 3D latch: %s %s", asb_state_names[d1], asb_state_names[d2]);
     CHECK(d3 == ASB_STATE_GAMING, "three saturated ticks did not latch GAMING: %s", asb_state_names[d3]);
     CHECK(g_gpu_bound_entries == 1, "the latch was not counted once: %lu", g_gpu_bound_entries);
     m = scene(60);

@@ -543,14 +543,14 @@ printf 'bucket-learning-fixture\n' > "$SMART/buckets.bin"
 printf '1\n' > "$SMART/smart_mode_enabled"
 
 # 0. Is there learning to offer?
-run smart-available | grep -qx 'smart_learning=available' || fail "learning on the phone not reported"
+run smart-available | grep -x 'smart_learning=available' >/dev/null || fail "learning on the phone not reported"
 
 # 1. Save without learning: settings only, and the .asb carries no learning folder.
 out="$(run create shareable --no-smart $KEYS)"
 printf '%s\n' "$out" | grep -qx 'smart_learning=skipped_by_choice' || fail "--no-smart ignored: $out"
 [ ! -d "$STATE/config_profiles/shareable.smart" ] || fail "learning saved although left out"
 mkdir -p "$TMP/out"
-run export-path shareable "$TMP/out" | grep -qx "exported=$TMP/out/shareable.asb" || fail "not one .asb file"
+run export-path shareable "$TMP/out" | grep -x "exported=$TMP/out/shareable.asb" >/dev/null || fail "not one .asb file"
 if tar -tzf "$TMP/out/shareable.asb" | grep -q 'shareable.smart'; then fail "learning inside a settings-only file"; fi
 # ...and replacing a profile that had learning drops the old learning.
 run create both $KEYS >/dev/null
@@ -573,8 +573,8 @@ cp "$OLD/daily.conf" "$OLD/daily (1).conf"
 out="$(run import-path "$OLD/daily (1).conf")"
 printf '%s\n' "$out" | grep -qx 'imported=daily-1' || fail "renamed copy without checksum refused: $out"
 printf '%s\n' "$out" | grep -qx 'format=older_checked_line_by_line' || fail "line-by-line path not reported"
-run list | grep -q '^daily-1|.*|ok|empty$' || fail "imported copy not stored with a fresh checksum"
-run restore daily-1 $KEYS | grep -qx 'restored=daily-1' || fail "imported copy does not restore"
+run list | grep '^daily-1|.*|ok|empty$' >/dev/null || fail "imported copy not stored with a fresh checksum"
+run restore daily-1 $KEYS | grep -x 'restored=daily-1' >/dev/null || fail "imported copy does not restore"
 
 # 4. A pre-V64 whole-config backup with an inline comment, a value the current module rejects
 #    and a key that no longer exists: the rest opens, the bad one is named.
@@ -731,12 +731,12 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "235" ] || fail "expected 235 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "235" ] || fail "expected 235 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "237" ] || fail "expected 237 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "237" ] || fail "expected 237 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
-for _kc_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost; do
+for _kc_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore; do
   grep -qx "$_kc_key|advanced|webui_sensitive|shell" "$REG" || fail "$_kc_key consumer is not pinned to shell"
 done
 grep -qx 'net_mtu_probing|advanced|webui_sensitive|shell' "$REG" || fail 'net_mtu_probing consumer is not pinned to shell'
@@ -755,7 +755,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "103" ] || fail "expected 103 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "105" ] || fail "expected 105 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -799,7 +799,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (233 keys; 41 user, 61 advanced, 131 internal)'
+echo 'PASS config ownership registry contract (237 keys; 41 user, 64 advanced, 132 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -2381,9 +2381,15 @@ H="$(cd "$(dirname "$0")/.." && pwd)/webroot/index.html"
 fail=0
 sed -n '/^async function pollLive(visible) {/,/^  try {/p' "$H" | grep -q 'if (document.hidden) return;' \
   || { echo "FAIL webui: pollLive runs while hidden" >&2; fail=1; }
-sed -n "/^document.addEventListener('visibilitychange', () => {/,/^});/p" "$H" | tr '\n' ' ' \
-  | grep -q "if (document.hidden) return;   if (_liveOpen) pollLive(true);   else asbStartupLater(asbStartupLive, 300, 0);" \
-  || { echo "FAIL webui: no catch-up poll when the page is shown again" >&2; fail=1; }
+VIS="$(sed -n "/^document.addEventListener('visibilitychange', () => {/,/^});/p" "$H")"
+printf '%s\n' "$VIS" | grep -Fq 'if (_liveOpen) liveMonitorSchedule(0);' \
+  || { echo "FAIL webui: no scheduled catch-up poll when Monitor is shown again" >&2; fail=1; }
+printf '%s\n' "$VIS" | grep -Fq 'asbStartupLater(asbStartupLive, 300, 0);' \
+  || { echo "FAIL webui: no Home catch-up poll when the page is shown again" >&2; fail=1; }
+printf '%s\n' "$VIS" | grep -Fq 'liveBackgroundSchedule();' \
+  || { echo "FAIL webui: background schedule is not restored on visibility" >&2; fail=1; }
+[ "$(printf '%s\n' "$VIS" | grep -Fc 'clearTimeout')" -eq 2 ] \
+  || { echo "FAIL webui: hidden-page timeouts are not both cleared" >&2; fail=1; }
 [ "$fail" = 0 ] && echo "PASS webui hidden poll"
 exit "$fail"
 
@@ -5565,26 +5571,26 @@ printf '{"count":5,"t2s":30}\n' > "$MOD/runtime/pstats_balanced.json"
 printf '{"count":3,"t2s":10}\n' > "$MOD/runtime/pstats_performance.json"
 
 _create_out="$(run create battery-test $KEYS)"
-printf '%s\n' "$_create_out" | grep -q '^smart_learning=saved$' || { echo 'FAIL: Smart learning was not saved' >&2; exit 1; }
-printf '%s\n' "$_create_out" | grep -q '^smart_learning_files=11$' || { echo 'FAIL: complete Smart payload count missing' >&2; exit 1; }
-printf '%s\n' "$_create_out" | grep -q '^smart_learning_bytes=[1-9][0-9]*$' || { echo 'FAIL: Smart payload byte count missing' >&2; exit 1; }
-run list | grep -q '^battery-test|.*|ok|saved$' || { echo 'FAIL: profile not listed with saved Smart learning' >&2; exit 1; }
+printf '%s\n' "$_create_out" | grep '^smart_learning=saved$' >/dev/null || { echo 'FAIL: Smart learning was not saved' >&2; exit 1; }
+printf '%s\n' "$_create_out" | grep '^smart_learning_files=11$' >/dev/null || { echo 'FAIL: complete Smart payload count missing' >&2; exit 1; }
+printf '%s\n' "$_create_out" | grep '^smart_learning_bytes=[1-9][0-9]*$' >/dev/null || { echo 'FAIL: Smart payload byte count missing' >&2; exit 1; }
+run list | grep '^battery-test|.*|ok|saved$' >/dev/null || { echo 'FAIL: profile not listed with saved Smart learning' >&2; exit 1; }
 [ -f "$STATE/config_profiles/battery-test.conf" ] || { echo 'FAIL: profile missing' >&2; exit 1; }
 [ -f "$STATE/config_profiles/battery-test.smart/manifest" ] || { echo 'FAIL: Smart learning manifest missing' >&2; exit 1; }
 grep -Fqx '# ASB_SMART_PROFILE_SCHEMA=3' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: Smart schema 3 manifest missing' >&2; exit 1; }
 grep -q '^session_history.jsonl|' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: session history missing from Smart payload' >&2; exit 1; }
 grep -q '^session_stats.json|' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: session aggregate missing from Smart payload' >&2; exit 1; }
 grep -q '^pstats_battery.json|' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: battery persistent stats missing from Smart payload' >&2; exit 1; }
-run preview battery-test $KEYS | grep -q 'Smart learning' || { echo 'FAIL: preview did not disclose Smart learning payload' >&2; exit 1; }
+run preview battery-test $KEYS | grep 'Smart learning' >/dev/null || { echo 'FAIL: preview did not disclose Smart learning payload' >&2; exit 1; }
 
 # Restore must be one writer transaction and restore every learning artifact atomically.
 sed -i 's/^gnss_trim=.*/gnss_trim=1/' "$MOD/config/governor.conf"
 rm -f "$SMART/buckets.bin" "$SMART/buckets.bin.bak" "$SMART/smart_appheat.bin" "$SMART/night_window.conf" "$SMART/smart_mode_enabled" "$SMART/smart_prev_profile" "$SMART/session_history.jsonl"
 rm -f "$MOD/runtime/session_stats.json" "$MOD/runtime/pstats_battery.json" "$MOD/runtime/pstats_balanced.json" "$MOD/runtime/pstats_performance.json"
 _restore_out="$(run restore battery-test $KEYS)"
-printf '%s\n' "$_restore_out" | grep -q '^smart_learning=restored$' || { echo 'FAIL: Smart learning did not restore' >&2; exit 1; }
-printf '%s\n' "$_restore_out" | grep -q '^smart_learning_files=11$' || { echo 'FAIL: Smart restore count missing' >&2; exit 1; }
-printf '%s\n' "$_restore_out" | grep -q '^smart_learning_bytes=[1-9][0-9]*$' || { echo 'FAIL: Smart restore byte count missing' >&2; exit 1; }
+printf '%s\n' "$_restore_out" | grep '^smart_learning=restored$' >/dev/null || { echo 'FAIL: Smart learning did not restore' >&2; exit 1; }
+printf '%s\n' "$_restore_out" | grep '^smart_learning_files=11$' >/dev/null || { echo 'FAIL: Smart restore count missing' >&2; exit 1; }
+printf '%s\n' "$_restore_out" | grep '^smart_learning_bytes=[1-9][0-9]*$' >/dev/null || { echo 'FAIL: Smart restore byte count missing' >&2; exit 1; }
 need "$MOD/config/governor.conf" 'gnss_trim=0'
 [ -s "$SMART/buckets.bin" ] && [ -s "$SMART/buckets.bin.bak" ] && [ -s "$SMART/smart_appheat.bin" ] && [ -s "$SMART/night_window.conf" ] && [ "$(cat "$SMART/smart_mode_enabled")" = 1 ] && [ "$(cat "$SMART/smart_prev_profile")" = balanced ] || { echo 'FAIL: restored compact learner state missing' >&2; exit 1; }
 grep -Fq '"bat_ttd":75' "$SMART/session_history.jsonl" || { echo 'FAIL: session history was not restored' >&2; exit 1; }
@@ -5601,7 +5607,7 @@ run export battery-test downloads >/dev/null
 [ -f "$EXPORT_ROOT/Download/ASB-Profiles/battery-test.smart/smart_mode_enabled" ] || { echo 'FAIL: Downloads Smart mode state missing' >&2; exit 1; }
 [ -f "$EXPORT_ROOT/Download/ASB-Profiles/battery-test.smart/session_history.jsonl" ] || { echo 'FAIL: Downloads session history missing' >&2; exit 1; }
 [ -f "$EXPORT_ROOT/Download/ASB-Profiles/battery-test.smart/pstats_battery.json" ] || { echo 'FAIL: Downloads battery persistent stats missing' >&2; exit 1; }
-run list-external downloads | grep -q '^battery-test|.*|ok|saved$' || { echo 'FAIL: exported profile not listed with Smart learning' >&2; exit 1; }
+run list-external downloads | grep '^battery-test|.*|ok|saved$' >/dev/null || { echo 'FAIL: exported profile not listed with Smart learning' >&2; exit 1; }
 if run export battery-test ../../escape >/dev/null 2>&1; then echo 'FAIL: arbitrary export destination accepted' >&2; exit 1; fi
 run delete battery-test >/dev/null
 run import-external downloads battery-test >/dev/null
@@ -5610,7 +5616,7 @@ run import-external downloads battery-test >/dev/null
 # A corrupt sidecar is skipped, while the independently checksummed settings profile remains restorable.
 printf 'tamper' >> "$STATE/config_profiles/battery-test.smart/buckets.bin"
 rm -f "$SMART/buckets.bin"
-run restore battery-test $KEYS | grep -q 'smart_learning=skipped_invalid' || { echo 'FAIL: corrupt Smart learning was not rejected' >&2; exit 1; }
+run restore battery-test $KEYS | grep 'smart_learning=skipped_invalid' >/dev/null || { echo 'FAIL: corrupt Smart learning was not rejected' >&2; exit 1; }
 [ ! -e "$SMART/buckets.bin" ] || { echo 'FAIL: corrupt Smart learning reached live state' >&2; exit 1; }
 
 # Invalid names cannot escape the profile store and checksum corruption blocks restore.
@@ -5624,7 +5630,7 @@ run delete battery-test >/dev/null
 # validates its ASB header, computes a checksum and exposes it as a bounded profile row.
 mkdir -p "$EXPORT_ROOT/Documents"
 printf '# ASB_BACKUP_SCHEMA=2\ngnss_trim=1\n' > "$EXPORT_ROOT/Documents/asb_settings_backup.conf"
-run list-external documents | grep -q '^asb-settings-backup|1|ok|empty$' || { echo 'FAIL: legacy Documents backup was not migrated' >&2; exit 1; }
+run list-external documents | grep '^asb-settings-backup|1|ok|empty$' >/dev/null || { echo 'FAIL: legacy Documents backup was not migrated' >&2; exit 1; }
 [ -f "$EXPORT_ROOT/Documents/ASB-Profiles/asb-settings-backup.conf.sha256" ] || { echo 'FAIL: migrated backup lacks checksum' >&2; exit 1; }
 run import-external documents asb-settings-backup >/dev/null
 run restore asb-settings-backup $KEYS >/dev/null
@@ -9693,6 +9699,29 @@ assert 'if (!_asbModuleDescSynced) {' in f and "asb_module_desc.sh') + ' refresh
 PY
 grep -nE '^[[:space:]]*#|[[:space:]]#[[:space:]]' "$H" | grep -v '^1:#!' && fail 'comments in module shell code'
 echo 'PASS module desc zygisk: "[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]", six Zygisk states, one wording in every writer, old-format lines replaced, unchanged refresh writes nothing, bounded 10 s settle after boot, profile writer appends it, WebUI refresh once per session'
+)
+
+t_benchmark_learning_isolation_dev63() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL benchmark learning isolation dev63: $*" >&2; exit 1; }
+python3 - "$G" <<'PY' || fail 'source contract changed'
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+a = s.index('static void persistent_stats_save_ex(const asb_fsm_t *fsm, int learn) {')
+b = s.index('\nstatic void persistent_stats_save(', a)
+f = s[a:b]
+assert 'if (pidx < 0 || pidx > 2) pidx = 1;' in f, 'Smart must retain its explicit Balanced-store mapping'
+assert 'if (fsm->ses_intent == INTENT_BENCHMARK) {' in f, 'benchmark guard must cover every profile that can receive that intent'
+assert 'pidx == PROFILE_PERFORMANCE && fsm->ses_intent == INTENT_BENCHMARK' not in f, 'Performance-only benchmark guard returned'
+assert f.index('if (fsm->ses_intent == INTENT_BENCHMARK) {') < f.index('if (!skip_per_profile) {'), 'guard runs after learning'
+a = s.index('if (fsm_profile_is_battery) {', s.index('if (!fsm.ses_intent_locked && fsm.ses_start_ts > 0)'))
+b = s.index('} else if (have_thermal && total_act > 30', a)
+assert 'INTENT_BENCHMARK' not in s[a:b], 'Battery classifier must not be relabelled from benchmark evidence'
+assert 'fsm.ses_intent = INTENT_BENCHMARK;' in s[b:b+500], 'non-Battery thermal burst classifier disappeared'
+PY
+echo 'PASS benchmark learning isolation dev63: Smart benchmark bursts no longer teach the shared Balanced store; Battery classification and ordinary sessions unchanged'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

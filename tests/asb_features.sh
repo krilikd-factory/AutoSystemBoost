@@ -3329,7 +3329,7 @@ grep -q 'bad save' "$T/st/lte_screenoff.log" 2>/dev/null && f "a 3-field record 
 
 # Status shows the reason.
 fresh; cfg 1 1; ticks 100 100 100
-sh "$L" status | grep -qx 'reason=light' || f "status has no reason=light"
+sh "$L" status | grep -x 'reason=light' >/dev/null || f "status has no reason=light"
 sh "$L" restore >/dev/null 2>&1
 
 # Routes: Wi-Fi is not mobile; rmnet and a VPN over rmnet are.
@@ -4196,18 +4196,18 @@ export ASB_BFIX_STATE_DIR="$T/d" ASB_BFIX_SYSDIR="$T/sys" ASB_BFIX_NO_DEXOPT=1
 for b in batterystats.bin batterystats-checkin.bin batterystats-daily.xml packages.xml; do echo seed > "$T/sys/$b"; done
 
 # Eligibility gate.
-ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" eligible | grep -q 'eligible=0 reason=not_charging' || f "discharging at 100 not blocked"
-ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=95  sh "$A" eligible | grep -q 'eligible=0 reason=not_full' || f "95% on charge not blocked"
-ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" eligible | grep -q 'eligible=1' || f "100% on charge not eligible"
+ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" eligible | grep 'eligible=0 reason=not_charging' >/dev/null || f "discharging at 100 not blocked"
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=95  sh "$A" eligible | grep 'eligible=0 reason=not_full' >/dev/null || f "95% on charge not blocked"
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" eligible | grep 'eligible=1' >/dev/null || f "100% on charge not eligible"
 
 # run refused when not eligible: no flag armed.
-ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep -q 'result=refused' || f "run not refused while discharging"
+ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep 'result=refused' >/dev/null || f "run not refused while discharging"
 [ -f "$T/d/battery_fix.pending" ] && f "a refused run still armed the reset"
 
 # run armed when eligible.
-ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep -q 'result=armed reset_on=reboot' || f "eligible run did not arm"
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep 'result=armed reset_on=reboot' >/dev/null || f "eligible run did not arm"
 [ -f "$T/d/battery_fix.pending" ] || f "armed run wrote no pending flag"
-sh "$A" status | grep -q 'reset=pending' || f "status does not show the pending reset"
+sh "$A" status | grep 'reset=pending' >/dev/null || f "status does not show the pending reset"
 
 # boot deletes exactly the three files, keeps the decoy, clears the flag.
 sh "$A" boot
@@ -4216,7 +4216,7 @@ for b in batterystats.bin batterystats-checkin.bin batterystats-daily.xml; do
 done
 [ -e "$T/sys/packages.xml" ] || f "boot deleted a file it must never touch"
 [ -f "$T/d/battery_fix.pending" ] && f "pending flag not cleared after boot"
-sh "$A" status | grep -q 'reset=none' || f "status still pending after boot"
+sh "$A" status | grep 'reset=none' >/dev/null || f "status still pending after boot"
 grep -q 'batterystats.bin' "$T/d/battery_fix.last" || f "last log did not record what was removed"
 
 # boot is a no-op without a flag (idempotent across reboots).
@@ -4226,7 +4226,7 @@ sh "$A" boot
 
 # cancel clears an armed reset.
 ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run >/dev/null
-sh "$A" cancel | grep -q 'result=cancelled' || f "cancel did not report cancelled"
+sh "$A" cancel | grep 'result=cancelled' >/dev/null || f "cancel did not report cancelled"
 [ -f "$T/d/battery_fix.pending" ] && f "cancel left the pending flag"
 
 # post-fs-data wires the one-shot boot, gated on the flag.
@@ -4248,7 +4248,7 @@ export ASB_BFIX_COMPILE_CMD="sh $T/fc.sh"
 st() { sh "$A" status; }
 kv() { st | tr ' ' '\n' | sed -n "s/^$1=//p"; }
 out="$(ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='a.one b.bad c.three' sh "$A" run)"
-echo "$out" | grep -q 'result=armed reset_on=reboot compile=started' || f "eligible run did not start the recompile: $out"
+echo "$out" | grep 'result=armed reset_on=reboot compile=started' >/dev/null || f "eligible run did not start the recompile: $out"
 [ "$(kv compile)" = done ] || f "finished recompile not reported done: $(st)"
 [ "$(kv total)/$(kv done)/$(kv ok)/$(kv fail)" = 3/3/2/1 ] || f "progress counts wrong: $(st)"
 [ "$(kv cur)" = - ] || f "a finished run still names a current app"
@@ -4256,7 +4256,7 @@ case "$(kv finished)" in ''|-|*[!0-9]*) f "finished time missing" ;; esac
 [ -d "$T/d/battery_fix.lock" ] && f "the worker left its lock behind"
 ls "$T/d"/battery_fix.pkgs.* >/dev/null 2>&1 && f "the worker left its package list behind"
 for k in eligible reason level charging reset compile phase total done ok fail cur started finished now last_reset removed missing fresh; do
-  st | grep -q "\(^\| \)$k=" || f "status lacks $k"
+  st | grep "\(^\| \)$k=" >/dev/null || f "status lacks $k"
 done
 
 out="$(ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='' sh "$A" run)"
@@ -4267,12 +4267,12 @@ i=0; while [ "$i" -lt 30 ] && [ "$(kv done)" != 1 ]; do sleep 0.2; i=$((i + 1));
 [ "$(kv compile)" = running ] || f "a running recompile is not reported running: $(st)"
 case "$(kv cur)" in p.*) : ;; *) f "the current app is not named: $(st)" ;; esac
 [ "$(kv total)" = 6 ] || f "total not known while running"
-sh "$A" run | grep -q 'compile=busy' || f "a second run started another worker"
-sh "$A" stop | grep -q 'result=stopping' || f "stop not accepted while running"
+sh "$A" run | grep 'compile=busy' >/dev/null || f "a second run started another worker"
+sh "$A" stop | grep 'result=stopping' >/dev/null || f "stop not accepted while running"
 i=0; while [ "$i" -lt 40 ] && [ "$(kv compile)" = running ]; do sleep 0.2; i=$((i + 1)); done
 [ "$(kv compile)" = stopped ] || f "stop did not end the recompile: $(st)"
 d="$(kv done)"; [ "$d" -ge 1 ] && [ "$d" -lt 6 ] || f "stop did not take effect after the current app: done=$d"
-sh "$A" stop | grep -q 'result=idle' || f "stop reported work when nothing runs"
+sh "$A" stop | grep 'result=idle' >/dev/null || f "stop reported work when nothing runs"
 [ -f "$T/d/battery_fix.stop" ] && f "the stop request outlived the run"
 
 # dev21: an externally terminated worker runs the same cleanup as normal Stop. Its last
@@ -4319,10 +4319,27 @@ ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_REFUSE_AFTER=2 ASB_BFIX_SYNC=1 ASB_B
 [ "$(kv compile)" = refused ] || f "two leading failures with limit 2 should stop: $(st)"
 ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_REFUSE_AFTER=2 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='z.one x.bad y.bad w.bad' sh "$A" run >/dev/null
 [ "$(kv compile)/$(kv ok)/$(kv fail)" = done/1/3 ] || f "one success must keep the run going: $(st)"
-st | grep -q '^err_text=Failure: compile error$' || f "a mixed run lost its first failure reason"
+st | grep '^err_text=Failure: compile error$' >/dev/null || f "a mixed run lost its first failure reason"
 ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='a.ok' sh "$A" run >/dev/null
-st | grep -q '^err_text=' && f "a clean run still shows a failure reason"
-grep -q 'pm compile -m speed-profile "\$1"' "$A" || f "no pm fallback when cmd rejects the options"
+st | grep '^err_text=' >/dev/null && f "a clean run still shows a failure reason"
+grep -q 'pm compile -m speed-profile -f "\$1"' "$A" || f "no pm fallback when cmd rejects the options or the Binder transaction fails"
+mkdir -p "$T/bin"
+cat > "$T/bin/cmd" <<'EOF'
+#!/bin/sh
+echo 'cmd: Failure calling service package: Failed transaction (2147483646)'
+EOF
+cat > "$T/bin/pm" <<'EOF'
+#!/bin/sh
+echo "$*" >> "$PM_FALLBACK_LOG"
+echo 'Success'
+EOF
+chmod 0755 "$T/bin/cmd" "$T/bin/pm"
+export PM_FALLBACK_LOG="$T/pm-fallback.log"
+unset ASB_BFIX_COMPILE_CMD
+PATH="$T/bin:$PATH" ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='binder.one' sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv ok)/$(kv fail)" = done/1/0 ] || f "pm fallback did not recover a Binder transaction failure: $(st)"
+grep -qx 'compile -m speed-profile -f binder.one' "$PM_FALLBACK_LOG" || f "pm fallback lost the force flag: $(cat "$PM_FALLBACK_LOG" 2>/dev/null)"
+unset ASB_BFIX_COMPILE_CMD
 
 # Files Android never created are absent, not failures; a boot clock earlier than the arm
 # time is not written as the reset time; `settle` derives it later in the same boot.
@@ -4342,7 +4359,11 @@ v="$(sed -n 's/^done_at=//p' "$T/d/battery_fix.last")"
 case "$v" in ''|*[!0-9]*) f "settle did not derive the reset time" ;; *)
   d=$(( n0 - 480 - v )); [ "$d" -ge -2 ] && [ "$d" -le 2 ] || f "settled time is off by $d s" ;; esac
 grep -q 'absent=' "$T/d/battery_fix.last" && grep -q 'removed=batterystats.bin' "$T/d/battery_fix.last" || f "settle lost the file accounting"
-st | tr ' ' '\n' | grep -q '^absent=batterystats-checkin.bin,batterystats-daily.xml$' || f "status lacks absent files"
+sed -i 's/^done_at=.*/done_at=1000/' "$T/d/battery_fix.last"
+ASB_BFIX_BOOT_ID=bootA ASB_BFIX_UPTIME=500 sh "$A" settle
+v2="$(sed -n 's/^done_at=//p' "$T/d/battery_fix.last")"
+case "$v2" in ''|*[!0-9]*) f "rebuilt RTC timestamp is invalid: $v2" ;; *) d=$((v2-v)); [ "$d" -ge -2 ] && [ "$d" -le 2 ] || f "a wrong RTC reset timestamp was not rebuilt from uptime: before=$v after=$v2" ;; esac
+st | tr ' ' '\n' | grep '^absent=batterystats-checkin.bin,batterystats-daily.xml$' >/dev/null || f "status lacks absent files"
 grep -q "grep -q '^done_at=\$' /data/adb/asb/battery_fix.last" "$ROOT/service.sh" && grep -q 'asb_battery_fix.sh" settle' "$ROOT/service.sh" || f "service.sh never settles the reset time"
 ! grep -q '^[[:space:]]*#' <(tail -n +2 "$A") || f "comment lines in module shell code"
 
@@ -8796,8 +8817,8 @@ D="$T/lspd/config/modules_config.db"; mkdir -p "$T/lspd/config" "$T/lspd/log" "$
 mk_db "$D" lspd
 [ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=default_on
 format=v1" ] || fail "no row is LSPosed's default (on, schema named)"
-out="$("$T/bin/asb" --lspd verbose-set off "$D")"; printf '%s\n' "$out" | grep -qx 'verbose=off' || fail "set off: $out"
-printf '%s\n' "$out" | grep -qx 'before=default_on' || fail "before: $out"
+out="$("$T/bin/asb" --lspd verbose-set off "$D")"; printf '%s\n' "$out" | grep -x 'verbose=off' >/dev/null || fail "set off: $out"
+printf '%s\n' "$out" | grep -x 'before=default_on' >/dev/null || fail "before: $out"
 [ "$(row "$D")" = "ACED0005737200116A6176612E6C616E672E426F6F6C65616ECD207280D59CFAEE0200015A000576616C7565787000" ] || fail "not Java's Boolean false: $(row "$D")"
 "$T/bin/asb" --lspd verbose-set on "$D" >/dev/null; [ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=on
 format=v1" ] || fail "set on (schema named)"
@@ -8805,9 +8826,9 @@ format=v1" ] || fail "set on (schema named)"
 python3 -c "import sqlite3; db=sqlite3.connect('$D'); assert db.execute(\"SELECT count(*) FROM configs WHERE \`key\`='misc_path'\").fetchone()[0]==1" || fail "another row was touched"
 mk_db "$T/other.db" other
 out="$("$T/bin/asb" --lspd verbose-set off "$T/other.db" || true)"
-printf '%s\n' "$out" | grep -q 'reason=unexpected_schema' || fail "another layout was not refused: $out"
+printf '%s\n' "$out" | grep 'reason=unexpected_schema' >/dev/null || fail "another layout was not refused: $out"
 python3 -c "import sqlite3; db=sqlite3.connect('$T/other.db'); assert db.execute('SELECT v FROM settings').fetchone()[0]=='1'" || fail "a foreign database was written"
-out="$("$T/bin/asb" --lspd verbose-get "$T/none.db" || true)"; printf '%s\n' "$out" | grep -q 'reason=no_database' || fail "missing db: $out"
+out="$("$T/bin/asb" --lspd verbose-get "$T/none.db" || true)"; printf '%s\n' "$out" | grep 'reason=no_database' >/dev/null || fail "missing db: $out"
 # The script, as the card runs it.
 for i in 1 2 3; do head -c 2048 /dev/zero > "$T/lspd/log/verbose_2026-10-1${i}T10_00_00.log"; touch -d "2026-10-1${i} 10:00" "$T/lspd/log/verbose_2026-10-1${i}T10_00_00.log"; done
 head -c 1024 /dev/zero > "$T/lspd/log/modules_2026-10-13T10_00_00.log"
@@ -8815,7 +8836,7 @@ mkdir -p "$T/lspd/log.old"; head -c 1024 /dev/zero > "$T/lspd/log.old/verbose_20
 head -c 1024 /dev/zero > "$T/lspd/log.old/modules_2026-10-10T10_00_00.log"
 run() { ( MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_LSPD_DIR="$T/lspd" ASB_LSPD_PREV="$T/asb/prev" ASB_GOV_BIN="$T/bin/asb" sh "$ROOT/runtime/asb_lsposed.sh" "$@" ); }
 echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot freed_kib=7$' || fail "apply off: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=off_after_reboot freed_kib=7$' >/dev/null || fail "apply off: $out"
 [ -f "$T/lspd/log/verbose_2026-10-13T10_00_00.log" ] || fail "the newest verbose log (held open) was deleted"
 # Emptied, not deleted (fix189): LSPosed deletes the eldest of this boot's files itself, and a
 # file already gone stalls that for the rest of the boot.
@@ -8829,7 +8850,7 @@ out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot fre
 [ -f "$T/lspd/log/modules_2026-10-13T10_00_00.log" ] && [ ! -s "$T/lspd/log/modules_2026-10-13T10_00_00.log" ] || fail "the modules log not emptied in place"
 [ ! -f "$T/lspd/log.old/modules_2026-10-10T10_00_00.log" ] || fail "the previous boot's modules log kept"
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "LSPosed's earlier value not remembered"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' || fail "second apply: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=already_off' >/dev/null || fail "second apply: $out"
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "the remembered value was overwritten by ASB's own"
 mv "$T/bin/asb" "$T/bin/asb.real"
 cat > "$T/bin/asb" <<X
@@ -8838,36 +8859,36 @@ printf '%s\n' "\$*" >> "$T/lspd.calls"
 exec "$T/bin/asb.real" "\$@"
 X
 chmod 755 "$T/bin/asb"
-out="$(run status)"; printf '%s\n' "$out" | grep -qx 'verbose=off' && printf '%s\n' "$out" | grep -qx 'present=1' || fail "status: $out"
+out="$(run status)"; printf '%s\n' "$out" | grep -x 'verbose=off' >/dev/null && printf '%s\n' "$out" | grep -x 'present=1' >/dev/null || fail "status: $out"
 [ "$(grep -c 'verbose-get' "$T/lspd.calls")" = 1 ] || fail "status repeated the same database read: $(cat "$T/lspd.calls")"
 rm -f "$T/bin/asb"; mv "$T/bin/asb.real" "$T/bin/asb"
 # fix213 (audit K8): the status passes the parsed schema version through to the WebUI.
-printf '%s\n' "$out" | grep -qx 'format=v1' || fail "status does not name the schema: $out"
-printf '%s\n' "$out" | grep -qx 'modules_kib=0' && printf '%s\n' "$out" | grep -qx 'oldlog_kib=0' || fail "the modules log is not reported apart: $out"
+printf '%s\n' "$out" | grep -x 'format=v1' >/dev/null || fail "status does not name the schema: $out"
+printf '%s\n' "$out" | grep -x 'modules_kib=0' >/dev/null && printf '%s\n' "$out" | grep -x 'oldlog_kib=0' >/dev/null || fail "the modules log is not reported apart: $out"
 # Written during this boot: the daemon still runs with the old value, the card must say so.
-printf '%s\n' "$out" | grep -qx 'pending_reboot=1' || fail "a write from this boot is not reported as waiting for a reboot: $out"
+printf '%s\n' "$out" | grep -x 'pending_reboot=1' >/dev/null || fail "a write from this boot is not reported as waiting for a reboot: $out"
 echo 1000 > "$T/asb/prev_at"
-run status | grep -qx 'pending_reboot=0' || fail "a write from before this boot still reads as pending"
+run status | grep -x 'pending_reboot=0' >/dev/null || fail "a write from before this boot still reads as pending"
 # Uninstall puts LSPosed's value back whatever the card says.
 grep -q 'asb_lsposed.sh" restore' "$ROOT/uninstall.sh" || fail "uninstall leaves LSPosed's setting changed"
-out="$(run restore)"; printf '%s\n' "$out" | grep -q '^result=restored prev=default_on' || fail "restore: $out"
+out="$(run restore)"; printf '%s\n' "$out" | grep '^result=restored prev=default_on' >/dev/null || fail "restore: $out"
 [ "$(row "$D")" = none ] && [ ! -f "$T/asb/prev" ] || fail "restore did not put LSPosed's default back"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot' || fail "off again: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=off_after_reboot' >/dev/null || fail "off again: $out"
 echo 'lsposed_verbose=keep' > "$T/mod/config/governor.conf"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=restored prev=default_on' || fail "keep: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=restored prev=default_on' >/dev/null || fail "keep: $out"
 [ "$(row "$D")" = none ] && [ ! -f "$T/asb/prev" ] || fail "LSPosed's default not put back"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=untouched' || fail "keep twice: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=untouched' >/dev/null || fail "keep twice: $out"
 # fix188: LSPosed's log already off (the OP15 user had switched it off in the manager): ASB
 # writes nothing and records nothing, so nothing later claims ASB switched it off.
 "$T/bin/asb" --lspd verbose-set off "$D" >/dev/null
 echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' || fail "already off: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=already_off' >/dev/null || fail "already off: $out"
 [ ! -f "$T/asb/prev" ] || fail "a value ASB never replaced was recorded as its earlier one"
-run status | grep -q '^asb_changed=' && fail "status claims ASB changed LSPosed"
+run status | grep '^asb_changed=' >/dev/null && fail "status claims ASB changed LSPosed"
 echo off > "$T/asb/prev"   # what fix187 left on such a phone
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' && [ ! -f "$T/asb/prev" ] || fail "fix187's 'off' record not cleared: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=already_off' >/dev/null && [ ! -f "$T/asb/prev" ] || fail "fix187's 'off' record not cleared: $out"
 echo off > "$T/asb/prev"; echo 'lsposed_verbose=keep' > "$T/mod/config/governor.conf"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=untouched' || fail "keep after an already-off claims a restore: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=untouched' >/dev/null || fail "keep after an already-off claims a restore: $out"
 [ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=off
 format=v1" ] || fail "keep changed a value ASB never wrote"
 grep -q "LSPosed's log was already off when the card was set" "$ROOT/tools/asb_diag.sh" || fail "asbdiag still says ASB switched an already-off log"
@@ -8876,17 +8897,17 @@ grep -q "LSPosed's log was already off when the card was set" "$ROOT/tools/asb_d
 # at all on keep.
 head -c 3072 /dev/zero > "$T/lspd/log/modules_2026-10-14T10_00_00.log"
 echo 'lsposed_verbose=keep' > "$T/mod/config/governor.conf"
-out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=skip' || fail "sweep on keep: $out"
+out="$(run sweep)"; printf '%s\n' "$out" | grep -x 'result=skip' >/dev/null || fail "sweep on keep: $out"
 [ "$(wc -c < "$T/lspd/log/modules_2026-10-14T10_00_00.log")" = 3072 ] || fail "sweep touched the logs on keep"
 echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
-out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=swept freed_kib=3' || fail "sweep on off: $out"
+out="$(run sweep)"; printf '%s\n' "$out" | grep -x 'result=swept freed_kib=3' >/dev/null || fail "sweep on off: $out"
 [ ! -s "$T/lspd/log/modules_2026-10-14T10_00_00.log" ] || fail "sweep left the modules log full"
 [ -s "$T/lspd/log/verbose_2026-10-13T10_00_00.log" ] || fail "sweep emptied the live verbose log the daemon holds open"
 [ "$(row "$D")" = "ACED0005737200116A6176612E6C616E672E426F6F6C65616ECD207280D59CFAEE0200015A000576616C7565787000" ] || fail "sweep wrote LSPosed's setting"
 [ ! -f "$T/asb/prev" ] || fail "sweep recorded a previous value it never replaced"
 rm -rf "$T/lspd"; echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=absent' || fail "no LSPosed: $out"
-out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=absent' || fail "sweep without LSPosed: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep '^result=absent' >/dev/null || fail "no LSPosed: $out"
+out="$(run sweep)"; printf '%s\n' "$out" | grep -x 'result=absent' >/dev/null || fail "sweep without LSPosed: $out"
 echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs and the modules log freed; sweep only while the card says off; foreign layouts untouched"
 )
 
@@ -9045,7 +9066,7 @@ LIB="$(python3 -c 'import ctypes.util; print(ctypes.util.find_library("sqlite3")
 [ -n "$LIB" ] || { echo "SKIP lsposed lite: no libsqlite3 on this host"; exit 0; }
 S="$ROOT/runtime/asb_lsposed_lite.sh"
 sh -n "$S" || fail "syntax"
-sed 1d "$S" | grep -qE '^[[:space:]]*#' && fail "comments in module shell code"
+sed 1d "$S" | grep -E '^[[:space:]]*#' >/dev/null && fail "comments in module shell code"
 cat > "$T/m.c" <<CSRC
 #define ASB_LSPD_SQLITE_LIB "$LIB"
 #include "$ROOT/src/asb_lspd.h"
@@ -9106,47 +9127,47 @@ run() { PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_LL_DIR="$T/ll" ASB_LSPD_DIR="$T/
   ASB_LL_BOOTID="$T/bootid" ASB_LL_UPTIME="$T/up" ASB_LL_DM="$T/dm" ASB_LL_UIDCPU="$T/cpu" ASB_LL_KEEP="$T/asb/keep" ASB_LL_NOTIF="$T/asb/nf" \
   ASB_LL_HEAVY_OUT="$T/run/heavy" ASB_LL_SYNC=1 ASB_LL_AB_H=0 ASB_LL_AB_OFF_S=20000 ASB_LL_AB_ON_S=3000 sh "$S" "$@"; }
 st="$(run status)"
-printf '%s\n' "$st" | grep -qx 'database=ok' && printf '%s\n' "$st" | grep -qx 'evidence_age=-1' || fail "status before evidence: $st"
+printf '%s\n' "$st" | grep -x 'database=ok' >/dev/null && printf '%s\n' "$st" | grep -x 'evidence_age=-1' >/dev/null || fail "status before evidence: $st"
 [ -d "$T/ll" ] && fail "a status read created state"
 out="$(run refresh)"; [ "$out" = result=started ] || fail "refresh: $out"
 grep -q '^us=ok$' "$T/ll/evidence" && grep -q '^c|com.mod.beta|com.app.crash|6$' "$T/ll/evidence" && grep -q '^i|com.app.one|10101$' "$T/ll/evidence" \
   || fail "evidence: $(cat "$T/ll/evidence")"
-grep -q 'com.app.one|' "$T/ll/evidence" | grep -q '^c|' && fail "a crash without a module frame was attributed"
+grep -q 'com.app.one|' "$T/ll/evidence" | grep '^c|' >/dev/null && fail "a crash without a module frame was attributed"
 st="$(run status)"
-printf '%s\n' "$st" | grep -q '^mod|com.mod.alpha|1|7|framework|watch|framework,systemui,unused|' || fail "alpha row: $(printf '%s\n' "$st" | grep '^mod|com.mod.alpha')"
-printf '%s\n' "$st" | grep -q '^mod|com.mod.beta|1|2|apps|heavy|crash|' || fail "beta row: $(printf '%s\n' "$st" | grep '^mod|com.mod.beta')"
-printf '%s\n' "$st" | grep -q '^mod|com.mod.off|0|1|apps|off|' || fail "off row: $st"
+printf '%s\n' "$st" | grep '^mod|com.mod.alpha|1|7|framework|watch|framework,systemui,unused|' >/dev/null || fail "alpha row: $(printf '%s\n' "$st" | grep '^mod|com.mod.alpha')"
+printf '%s\n' "$st" | grep '^mod|com.mod.beta|1|2|apps|heavy|crash|' >/dev/null || fail "beta row: $(printf '%s\n' "$st" | grep '^mod|com.mod.beta')"
+printf '%s\n' "$st" | grep '^mod|com.mod.off|0|1|apps|off|' >/dev/null || fail "off row: $st"
 [ "$(sort "$T/run/heavy" | tr '\n' ' ')" = 'com.app.crash com.app.one ' ] || fail "Smart's list of apps hooked by a costly module: $(cat "$T/run/heavy" 2>/dev/null)"
-printf '%s\n' "$st" | grep -qx 'heavy_apps=2' || fail "status does not count the hooked apps: $(printf '%s\n' "$st" | grep heavy_apps)"
+printf '%s\n' "$st" | grep -x 'heavy_apps=2' >/dev/null || fail "status does not count the hooked apps: $(printf '%s\n' "$st" | grep heavy_apps)"
 rm -f "$T/run/heavy"; run tick; [ -s "$T/run/heavy" ] || fail "the tick did not write the list again after a reboot"
 grep -q 'lsp_heavy_apps' "$ROOT/src/asb_governor.c" || fail "the governor does not read the list"
-printf '%s\n' "$st" | grep -q '^cand|com.mod.alpha|com.app.idle|0|unused|40|40|0|1$' || fail "idle candidate: $(printf '%s\n' "$st" | grep '^cand')"
-printf '%s\n' "$st" | grep -q '^cand|com.mod.alpha|com.app.two|0|unused|10|30|0|0$' || fail "a protected app was offered to the automatic pass: $(printf '%s\n' "$st" | grep '^cand')"
-printf '%s\n' "$st" | grep -q '^cand|com.mod.beta|com.app.crash|0|crash|' || fail "crash candidate: $(printf '%s\n' "$st" | grep '^cand')"
-printf '%s\n' "$st" | grep -qE '^cand\|[^|]*\|(system|android|com.android.systemui|com.mod.alpha|com.app.one|com.app.gone)\|' && fail "a protected, used or missing scope became a candidate"
-printf '%s\n' "$st" | grep -q '^cand|com.mod.off|' && fail "a disabled module got a candidate for the automatic pass"
-out="$(run trim com.mod.alpha)"; printf '%s\n' "$out" | grep -qx 'trimmed=2' || fail "trim: $out"
-rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.idle\|com.mod.alpha:com.app.two' && fail "trim left the unused scopes: $(rows)"
-rows | sed -n 1p | grep -q 'com.mod.alpha:system' && rows | sed -n 1p | grep -q 'com.mod.alpha:com.android.systemui' && rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.one' \
+printf '%s\n' "$st" | grep '^cand|com.mod.alpha|com.app.idle|0|unused|40|40|0|1$' >/dev/null || fail "idle candidate: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep '^cand|com.mod.alpha|com.app.two|0|unused|10|30|0|0$' >/dev/null || fail "a protected app was offered to the automatic pass: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep '^cand|com.mod.beta|com.app.crash|0|crash|' >/dev/null || fail "crash candidate: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep -E '^cand\|[^|]*\|(system|android|com.android.systemui|com.mod.alpha|com.app.one|com.app.gone)\|' >/dev/null && fail "a protected, used or missing scope became a candidate"
+printf '%s\n' "$st" | grep '^cand|com.mod.off|' >/dev/null && fail "a disabled module got a candidate for the automatic pass"
+out="$(run trim com.mod.alpha)"; printf '%s\n' "$out" | grep -x 'trimmed=2' >/dev/null || fail "trim: $out"
+rows | sed -n 1p | grep 'com.mod.alpha:com.app.idle\|com.mod.alpha:com.app.two' >/dev/null && fail "trim left the unused scopes: $(rows)"
+rows | sed -n 1p | grep 'com.mod.alpha:system' >/dev/null && rows | sed -n 1p | grep 'com.mod.alpha:com.android.systemui' >/dev/null && rows | sed -n 1p | grep 'com.mod.alpha:com.app.one' >/dev/null \
   || fail "trim removed a protected or used scope: $(rows)"
-run status | grep -qx 'pending_reboot=1' || fail "no reboot notice after a write"
+run status | grep -x 'pending_reboot=1' >/dev/null || fail "no reboot notice after a write"
 id="$(run status | awk -F'|' '$1 == "j" && $7 == "com.app.two" { print $2 }')"
 out="$(run undo "$id")"; [ "$out" = result=ok ] || fail "undo: $out"
-rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.two' || fail "undo did not put the scope back"
-out="$(run disable com.mod.beta)"; [ "$out" = result=ok ] && rows | tail -1 | grep -q 'com.mod.beta=0' || fail "disable: $out $(rows)"
-out="$(run undo-all)"; printf '%s\n' "$out" | grep -qx 'undone=2' || fail "undo-all: $out"
+rows | sed -n 1p | grep 'com.mod.alpha:com.app.two' >/dev/null || fail "undo did not put the scope back"
+out="$(run disable com.mod.beta)"; [ "$out" = result=ok ] && rows | tail -1 | grep 'com.mod.beta=0' >/dev/null || fail "disable: $out $(rows)"
+out="$(run undo-all)"; printf '%s\n' "$out" | grep -x 'undone=2' >/dev/null || fail "undo-all: $out"
 [ "$(rows)" = "$orig" ] || fail "undo-all did not restore LSPosed exactly: $(rows)"
 for bad in 'com.x;id' '../x' 'lspd' ''; do out="$(run trim "$bad")"; [ "$out" = result=bad_request ] || [ "$bad" = lspd ] || fail "unsafe name accepted: $bad"; done
-out="$(run drop com.mod.alpha system 0)"; [ "$out" = result=bad_request ] && rows | sed -n 1p | grep -q 'com.mod.alpha:system' || fail "the framework scope could be dropped: $out"
-out="$(run drop com.mod.alpha com.android.systemui 0)"; [ "$out" = result=failed ] && rows | sed -n 1p | grep -q 'com.mod.alpha:com.android.systemui' || fail "the SystemUI scope could be dropped: $out"
+out="$(run drop com.mod.alpha system 0)"; [ "$out" = result=bad_request ] && rows | sed -n 1p | grep 'com.mod.alpha:system' >/dev/null || fail "the framework scope could be dropped: $out"
+out="$(run drop com.mod.alpha com.android.systemui 0)"; [ "$out" = result=failed ] && rows | sed -n 1p | grep 'com.mod.alpha:com.android.systemui' >/dev/null || fail "the SystemUI scope could be dropped: $out"
 run auto on >/dev/null; run tick
-rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.idle' && fail "the automatic pass kept an unused, busy scope: $(rows)"
-rows | sed -n 1p | grep -q 'com.mod.beta:com.app.crash' && fail "the automatic pass kept a crash-loop scope: $(rows)"
-rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.two' || fail "the automatic pass touched a protected app: $(rows)"
-rows | tail -1 | grep -q 'com.mod.alpha=1 com.mod.beta=1' || fail "the automatic pass disabled a module: $(rows)"
+rows | sed -n 1p | grep 'com.mod.alpha:com.app.idle' >/dev/null && fail "the automatic pass kept an unused, busy scope: $(rows)"
+rows | sed -n 1p | grep 'com.mod.beta:com.app.crash' >/dev/null && fail "the automatic pass kept a crash-loop scope: $(rows)"
+rows | sed -n 1p | grep 'com.mod.alpha:com.app.two' >/dev/null || fail "the automatic pass touched a protected app: $(rows)"
+rows | tail -1 | grep 'com.mod.alpha=1 com.mod.beta=1' >/dev/null || fail "the automatic pass disabled a module: $(rows)"
 n1="$(grep -c 'active$' "$T/ll/journal")"
 run tick; [ "$(grep -c 'active$' "$T/ll/journal")" = "$n1" ] || fail "a second automatic pass ran within a day"
-run status | grep -q '^j|[0-9]*|[0-9]*|auto|scope_del|com.mod.alpha|com.app.idle|0|1|active$' || fail "automatic change not journaled: $(cat "$T/ll/journal")"
+run status | grep '^j|[0-9]*|[0-9]*|auto|scope_del|com.mod.alpha|com.app.idle|0|1|active$' >/dev/null || fail "automatic change not journaled: $(cat "$T/ll/journal")"
 run undo-all >/dev/null; [ "$(rows)" = "$orig" ] || fail "automatic changes not undone: $(rows)"
 run auto off >/dev/null
 out="$(run ab-start com.mod.off)"; [ "$out" = result=not_enabled ] || fail "A/B on a disabled module: $out"
@@ -9155,15 +9176,15 @@ grep -q '^uids=' "$T/ll/ab" && grep -q '^uids=.*1000' "$T/ll/ab" || fail "A/B re
 echo 'smart 4000 1000 30000 2000 3' > "$T/dm"; printf '1000: 90000000 10000000\n10101: 0 0\n10102: 0 0\n10103: 0 0\n' > "$T/cpu"
 out="$(run trim com.mod.alpha)"; [ "$out" = result=busy_ab ] || fail "a trim ran during the A/B test: $out"
 run tick
-grep -q '^phase=b_wait$' "$T/ll/ab" && rows | tail -1 | grep -q 'com.mod.alpha=0' || fail "phase A did not end with the module off: $(cat "$T/ll/ab") $(rows)"
+grep -q '^phase=b_wait$' "$T/ll/ab" && rows | tail -1 | grep 'com.mod.alpha=0' >/dev/null || fail "phase A did not end with the module off: $(cat "$T/ll/ab") $(rows)"
 grep -q '^a_off=240$' "$T/ll/ab" || fail "phase A rate: $(cat "$T/ll/ab")"
 run tick; grep -q '^phase=b_wait$' "$T/ll/ab" || fail "phase B started without a reboot"
 echo boot-2 > "$T/bootid"; printf '1000: 0 0\n10101: 0 0\n' > "$T/cpu"; run tick
 grep -q '^phase=b$' "$T/ll/ab" || fail "phase B did not start after the reboot: $(cat "$T/ll/ab")"
 echo 'smart 8000 2000 60000 3000 6' > "$T/dm"; printf '1000: 1000000 0\n10101: 0 0\n' > "$T/cpu"; run tick
 grep -q '^phase=done$' "$T/ll/ab" && grep -q '^result=worse$' "$T/ll/ab" && grep -q '^b_off=120$' "$T/ll/ab" || fail "A/B result: $(cat "$T/ll/ab")"
-rows | tail -1 | grep -q 'com.mod.alpha=1' || fail "the module was not given back after the A/B test: $(rows)"
-run status | grep -q '^mod|com.mod.alpha|1|7|framework|heavy|.*ab_worse' || fail "the A/B result does not reach the verdict: $(run status | grep '^mod|com.mod.alpha')"
+rows | tail -1 | grep 'com.mod.alpha=1' >/dev/null || fail "the module was not given back after the A/B test: $(rows)"
+run status | grep '^mod|com.mod.alpha|1|7|framework|heavy|.*ab_worse' >/dev/null || fail "the A/B result does not reach the verdict: $(run status | grep '^mod|com.mod.alpha')"
 H="$ROOT/webroot/index.html"
 if command -v node >/dev/null 2>&1; then
   run status > "$T/st.txt"
@@ -9185,8 +9206,8 @@ JS
 fi
 grep -Fq "['lsp', 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh') + ' status']" "$H" || fail "the Zygisk page does not read it"
 grep -Fq "(a1 !== undefined ? ' ' + shQuote(String(a1)) : '')" "$H" || fail "the WebUI does not quote what it sends"
-sed -n '/^function lspLiteCard(/,/^}/p' "$H" | grep -q 'confirm(' && fail "a browser confirm() is used"
-sed -n '/^function lspLiteButton(/,/^}/p' "$H" | grep -q 'lspLiteArmed(key)' || fail "no second-tap confirmation"
+sed -n '/^function lspLiteCard(/,/^}/p' "$H" | grep 'confirm(' >/dev/null && fail "a browser confirm() is used"
+sed -n '/^function lspLiteButton(/,/^}/p' "$H" | grep 'lspLiteArmed(key)' >/dev/null || fail "no second-tap confirmation"
 run ab-start com.mod.beta >/dev/null; run disable com.mod.alpha >/dev/null
 run restore-all; [ -d "$T/ll" ] && fail "uninstall left state"
 [ -f "$T/run/heavy" ] && fail "uninstall left the hooked-app list"
@@ -9715,6 +9736,121 @@ ASB_TEST_MODE=normal ASB_TEST_COUNT="$T/count" ASB_TEST_CURRENT="$T/current" \
   /bin/sh "$W" && fail 'watcher started without timeout'
 [ ! -s "$T/writes" ] || fail 'missing timeout caused a Settings write'
 echo "PASS LTPO touch runtime: advertised steps, instant touch restore, guards, ownership and fatal-input handling"
+)
+
+
+t_ltpo_idle_speed_dev63() (
+# dev63: user-visible idle-drop presets drive the existing event wait, never a synthetic
+# Android 1 Hz mode. Different advertised mode ladders and legacy configs stay valid.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+W="$ROOT/runtime/asb_ltpo_touch.sh"
+fail() { echo "FAIL LTPO idle speed dev63: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/bin" "$T/mod/config" "$T/mod/runtime" "$T/state"
+cp "$ROOT/runtime/asb_ltpo_lock.sh" "$T/mod/runtime/"
+: > "$T/event0"
+cat > "$T/bin/getevent" <<'SH'
+#!/bin/sh
+n=0; [ ! -f "$ASB_TEST_COUNT" ] || n="$(cat "$ASB_TEST_COUNT")"
+n=$((n + 1)); printf '%s\n' "$n" > "$ASB_TEST_COUNT"
+case "${ASB_TEST_KIND:-flat}:$n" in
+  flat:1|touch:1|touch:3|steps:1|steps:2|steps:3) exit 42 ;;
+  touch:2) exit 0 ;;
+  flat:2|touch:4|steps:4) : > "$ASB_LTPO_STATE_DIR/ltpo_touch.stop"; exit 1 ;;
+esac
+exit 1
+SH
+cat > "$T/bin/timeout" <<'SH'
+#!/bin/sh
+printf '%s\n' "$1" >> "$ASB_TEST_TIMEOUTS"
+shift
+"$@"; rc=$?
+[ "$rc" != 42 ] || exit 124
+exit "$rc"
+SH
+cat > "$T/bin/settings" <<'SH'
+#!/bin/sh
+if [ "$1" = get ]; then cat "$ASB_TEST_CURRENT" 2>/dev/null || echo null; exit 0; fi
+if [ "$1" = put ]; then
+  printf '%s\n' "$4" > "$ASB_TEST_CURRENT"
+  printf '%s=%s\n' "$3" "$4" >> "$ASB_TEST_WRITES"
+fi
+SH
+cat > "$T/bin/sleep" <<'SH'
+#!/bin/sh
+exit 0
+SH
+chmod 0755 "$T/bin/"*
+run_case() {
+  kind="$1"; preset="$2"; legacy="$3"
+  rm -rf "$T/state"; mkdir -p "$T/state"
+  : > "$T/current"; : > "$T/writes"; : > "$T/count"; : > "$T/timeouts"; : > "$T/rstate"
+  {
+    echo 'ltpo_force=1'; echo 'ltpo_idle_rate=60'
+    if [ "$legacy" = yes ]; then
+      echo 'ltpo_idle_s=7'; echo 'ltpo_idle_step_s=4'
+    else
+      echo 'ltpo_idle_s=9'; echo 'ltpo_idle_step_s=4'; echo "ltpo_idle_speed=$preset"
+    fi
+  } > "$T/mod/config/governor.conf"
+  if [ "$kind" = steps ]; then
+    cat > "$T/display" <<'MODES'
+DisplayMode{id=1, width=1440, peakRefreshRate=165.0}
+DisplayMode{id=2, width=1440, peakRefreshRate=120.0}
+DisplayMode{id=3, width=1440, peakRefreshRate=90.0}
+DisplayMode{id=4, width=1440, peakRefreshRate=60.0}
+MODES
+  elif [ "$kind" = panel90 ]; then
+    printf 'DisplayMode{id=1, peakRefreshRate=90.0}\nDisplayMode{id=2, peakRefreshRate=60.0}\n' > "$T/display"
+    kind=flat
+  else
+    printf 'DisplayMode{id=1, peakRefreshRate=165.0}\nDisplayMode{id=2, peakRefreshRate=60.0}\n' > "$T/display"
+  fi
+  ASB_TEST_KIND="$kind" ASB_TEST_COUNT="$T/count" ASB_TEST_CURRENT="$T/current" \
+    ASB_TEST_WRITES="$T/writes" ASB_TEST_TIMEOUTS="$T/timeouts" \
+    ASB_LTPO_TOUCH_DEVICE="$T/event0" ASB_LTPO_STATE_DIR="$T/state" \
+    ASB_LTPO_RSTATE="$T/rstate" ASB_LTPO_DISPLAY_DUMP="$T/display" \
+    MODDIR="$T/mod" PATH="$T/bin:$PATH" sh "$W"
+}
+for spec in 'fast 1' 'balanced 2' 'gentle 5' 'invalid 2'; do
+  set -- $spec
+  run_case flat "$1" no || fail "flat/$1 exited unsuccessfully"
+  [ "$(cat "$T/timeouts")" = "$2" ] || fail "$1 initial delay: $(cat "$T/timeouts")"
+  printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\n' > "$T/expect"
+  cmp -s "$T/writes" "$T/expect" || fail "$1 changed the advertised flat-panel sequence"
+  ! grep -q '=1\.0$' "$T/writes" || fail "$1 wrote a synthetic 1 Hz Android mode"
+done
+run_case flat '' yes || fail 'legacy config failed'
+[ "$(cat "$T/timeouts")" = 7 ] || fail "legacy delay was overridden: $(cat "$T/timeouts")"
+run_case steps gentle no || fail 'stepped gentle failed'
+printf '5\n3\n3\n' > "$T/expect"
+cmp -s "$T/timeouts" "$T/expect" || { cat "$T/timeouts"; fail 'gentle step delays are wrong'; }
+printf 'peak_refresh_rate=165.0\npeak_refresh_rate=120.0\npeak_refresh_rate=90.0\npeak_refresh_rate=60.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || fail 'gentle used an unadvertised step'
+run_case touch fast no || fail 'touch restore failed'
+printf '1\n1\n' > "$T/expect"
+cmp -s "$T/timeouts" "$T/expect" || fail 'fast active delays are wrong'
+printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\npeak_refresh_rate=165.0\npeak_refresh_rate=60.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || fail 'touch did not restore maximum immediately'
+run_case panel90 fast no || fail '90 Hz panel failed'
+printf 'peak_refresh_rate=90.0\npeak_refresh_rate=60.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || fail '90 Hz panel received an unsupported mode'
+# Strict writer schema and update/snapshot ownership.
+mkdir -p "$T/cmod/runtime" "$T/cmod/config"
+cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
+cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
+for v in fast balanced gentle balanced; do
+  MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set ltpo_idle_speed "$v" >/dev/null || fail "safe writer refused $v"
+done
+for v in stock auto 1 aggressive ''; do
+  set +e; MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set ltpo_idle_speed "$v" >/dev/null 2>&1; rc=$?; set -e
+  [ "$rc" -ne 0 ] || fail "safe writer accepted '$v'"
+done
+for f in governor.conf governor.conf.shipped; do grep -qx 'ltpo_idle_speed=balanced' "$ROOT/config/$f" || fail "$f default"; done
+grep -qx 'ltpo_idle_speed|user|webui_standard|shell' "$ROOT/config/key_ownership.tsv" || fail 'ownership row'
+[ "$(grep -c 'ltpo_force ltpo_idle_speed mmfeed_off' "$ROOT/common/install.sh")" = 2 ] || fail 'install carry-over/snapshot lists'
+echo 'PASS LTPO idle speed dev63: fast/balanced/gentle timing, legacy fallback, advertised 165/90 ladders, instant touch restore, no synthetic 1 Hz write, safe writer and update ownership'
 )
 
 
@@ -10359,7 +10495,7 @@ ledger 13; age_prev 300; run tick
 [ -s "$T/d/zygisk_guard_active" ] && fail "3 starts in 5 minutes were treated as a loop"
 ledger 23; age_prev 300; run tick
 [ "$(mode com.loop.app)" = ignore ] && fail "one session restricted an app without confirmation"
-run status | grep -qx 'pending|com.loop.app|1|10|loop|0' || fail "dry-run proposal missing: $(run status | grep '^pending')"
+run status | grep -x 'pending|com.loop.app|1|10|loop|0' >/dev/null || fail "dry-run proposal missing: $(run status | grep '^pending')"
 [ "$(run approve com.loop.app)" = result=approved ] || fail 'per-package confirmation failed'
 for p in com.exact.app com.fgs.app com.nl.app; do
   run approve "$p" >/dev/null || fail "safety fixture approval failed: $p"
@@ -10388,7 +10524,7 @@ grep -q 'com.sys.app' "$T/d/zygisk_guard_log" && fail "a system app was consider
 [ "$(mode com.already.app)" = ignore ] || fail "the owner's restriction was changed before guard admission"
 grep -q '^com.already.app|' "$T/d/zygisk_guard_active" && fail "an external restriction was recorded as the guard's"
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^active|com.loop.app|[0-9]*|7|loop|0|0$' && printf '%s\n' "$out" | grep -qx 'ledger=1' || fail "status: $out"
+printf '%s\n' "$out" | grep '^active|com.loop.app|[0-9]*|7|loop|0|0$' >/dev/null && printf '%s\n' "$out" | grep -x 'ledger=1' >/dev/null || fail "status: $out"
 ledger 40; age_prev 4000; run tick
 [ "$(grep -c '|limited|loop$' "$T/d/zygisk_guard_log")" = 1 ] || fail "a stale sample acted or an app was limited twice"
 echo screen=1 > "$T/state"; run tick
@@ -10456,12 +10592,12 @@ run() { PATH="$T/bin:$PATH" ZG_T="$T" MODDIR="$T/mod" ASB_ZG_DIR="$T/d" ASB_ZYGI
 mode() { awk -F'|' -v p="$1" '$1 == p && $2 == "RUN_ANY_IN_BACKGROUND" { print $3 }' "$T/ops"; }
 age() { sed -i "1s/^t .*/t $(( $(date +%s) - $2 ))/" "$T/tmp/zygisk_guard.$1"; }
 [ "$(run enable sometimes)" = result=bad_request ] || fail "an unknown level was accepted"
-[ "$(run enable loops)" = result=enabled ] && run status | grep -qx 'level=loops' || fail "loops level"
+[ "$(run enable loops)" = result=enabled ] && run status | grep -x 'level=loops' >/dev/null || fail "loops level"
 echo screen=0 > "$T/state"; led 10 3 10 50; run tick
 led 14 4 14 52; age prev 900; run tick; led 19 5 19 54; age prev 900; run tick
 [ "$(mode com.feed.app)" = ignore ] && fail "the loops level restricted a slow waker"
 echo screen=1 > "$T/state"; run tick; [ -e "$T/tmp/zygisk_guard.base" ] && fail "the screen-off baseline survived screen-on"
-[ "$(run enable wakers)" = result=enabled ] && run status | grep -qx 'level=wakers' && run status | grep -qx 'waker_min=8' || fail "wakers level"
+[ "$(run enable wakers)" = result=enabled ] && run status | grep -x 'level=wakers' >/dev/null && run status | grep -x 'waker_min=8' >/dev/null || fail "wakers level"
 echo screen=0 > "$T/state"; led 20 5 20 60; run tick
 [ -s "$T/tmp/zygisk_guard.base" ] || fail "no baseline at the first screen-off sample"
 printf 'com.feed.app|1|0|0|waker|0|0\n' > "$T/tmp/zygisk_guard.pending"; run approve com.feed.app >/dev/null
@@ -10477,7 +10613,7 @@ grep -q '|com.feed.app|8|limited|waker$' "$T/d/zygisk_guard_log" || fail "waker 
 led 30 7 33 95; age prev 1200; run tick
 [ "$(grep -c 'com.whatsapp' "$T/d/zygisk_guard_log")" = 1 ] || fail "a protected app was logged on every tick"
 [ "$(grep -c '|limited|' "$T/d/zygisk_guard_log")" = 1 ] || fail "an app was restricted twice"
-run status | grep -qx 'active|com.feed.app|[0-9]*|8|waker|2|0' || fail "starts while restricted: $(run status | grep '^active')"
+run status | grep -x 'active|com.feed.app|[0-9]*|8|waker|2|0' >/dev/null || fail "starts while restricted: $(run status | grep '^active')"
 age base 5400
 echo screen=1 > "$T/state"; led 31 7 34 99; run screen_on
 [ "$(mode com.feed.app)" = default ] || fail "screen-on did not give the background back"
@@ -10592,7 +10728,7 @@ until_s="$(grep '^com.spin.app|' "$T/d/zygisk_guard_active" | cut -d'|' -f8)"; [
 [ "$(mode com.open.app)" = ignore ] && fail "an app the user keeps opening was restricted (top starts are not background)"
 grep -q '|com.whatsapp|7|protected|$' "$T/d/zygisk_guard_log" || fail "protected app not logged: $(cat "$T/d/zygisk_guard_log")"
 [ "$(mode com.own.app)" = ignore ] || fail "a looping unprotected app was skipped"
-run status | grep -Eqx 'active\|com.spin.app\|[0-9]+\|8\|loop_on\|0\|[0-9]+' || fail "status row: $(run status | grep '^active')"
+run status | grep -Ex 'active\|com.spin.app\|[0-9]+\|8\|loop_on\|0\|[0-9]+' >/dev/null || fail "status row: $(run status | grep '^active')"
 led 13 10 12 12 12 1 1 1 1 9; age prev_on 4000; run tick
 [ "$(grep -c '|limited|loop_on$' "$T/d/zygisk_guard_log")" = 2 ] || fail "a stale screen-on sample acted"
 echo screen=0 > "$T/state"; run tick
@@ -10610,25 +10746,25 @@ grep -q '^com.ghost.app 1 1 0 1 1 0$' "$h" || fail "history row: $(grep ghost "$
 echo boot-2 > "$T/bootid"; led 1 1 1 1 1 20 25 20 25 1; run tick
 grep -q '^com.ghost.app 21 26 0 20 25 0$' "$h" && grep -q '^com.busy.app 21 26 0 20 25 0$' "$h" || fail "history across boots: $(grep -E 'ghost|busy' "$h")"
 run tick; grep -q '^com.ghost.app 21 26 0 20 25 0$' "$h" || fail "the same boot counted twice"
-run status | grep -q '^suggest|' && fail "suggested before 3 days of history"
+run status | grep '^suggest|' >/dev/null && fail "suggested before 3 days of history"
 sed -i "1s/ [0-9]*\$/ $(( $(date +%s) - 4 * 86400 ))/" "$h"; run tick
 out="$(run status)"
-printf '%s\n' "$out" | grep -qx 'suggest|com.ghost.app|47|40' || fail "ghost not suggested: $out"
-printf '%s\n' "$out" | grep -q 'suggest|com.busy.app' && fail "an app Android calls in use was suggested"
-printf '%s\n' "$out" | grep -q 'suggest|com.whatsapp' && fail "a protected app was suggested"
-printf '%s\n' "$out" | grep -q 'suggest|com.open.app' && fail "an app with top-app starts was suggested"
-printf '%s\n' "$out" | grep -qx 'bg|com.ghost.app|47|21|26|0' || fail "background history line: $out"
+printf '%s\n' "$out" | grep -x 'suggest|com.ghost.app|47|40' >/dev/null || fail "ghost not suggested: $out"
+printf '%s\n' "$out" | grep 'suggest|com.busy.app' >/dev/null && fail "an app Android calls in use was suggested"
+printf '%s\n' "$out" | grep 'suggest|com.whatsapp' >/dev/null && fail "a protected app was suggested"
+printf '%s\n' "$out" | grep 'suggest|com.open.app' >/dev/null && fail "an app with top-app starts was suggested"
+printf '%s\n' "$out" | grep -x 'bg|com.ghost.app|47|21|26|0' >/dev/null || fail "background history line: $out"
 ZG_T="$T" "$T/bin/appops" set com.own.app RUN_ANY_IN_BACKGROUND ignore
 [ "$(run ghost-restrict com.own.app)" = result=already_restricted ] && [ "$(mode com.own.app)" = ignore ] || fail "the owner's restriction was taken over"
 awk -F'|' -v OFS='|' '$1 == "com.own.app" { $3 = "default" } { print }' "$T/ops" > "$T/o" && mv "$T/o" "$T/ops"
 [ "$(run ghost-restrict com.whatsapp)" = result=protected ] && [ "$(run ghost-restrict com.oem.sys)" = result=not_user_app ] && [ "$(run ghost-restrict 'a;b')" = result=bad_request ] || fail "unsafe ghost requests"
 [ "$(run ghost-restrict com.ghost.app)" = result=restricted ] && [ "$(mode com.ghost.app)" = ignore ] || fail "ghost restrict"
 grep -Eq '^com.ghost.app\|default\|default\|[0-9]+\|47\|4[0-9]\|0$' "$T/d/zygisk_guard_ghost" || fail "ghost record: $(cat "$T/d/zygisk_guard_ghost")"
-run status | grep -q '^suggest|com.ghost.app' && fail "a restricted ghost is still suggested"
-run status | grep -Eqx 'held\|com.ghost.app\|[0-9]+\|11[0-9]\|-1\|0' || fail "held line: $(run status | grep '^held')"
+run status | grep '^suggest|com.ghost.app' >/dev/null && fail "a restricted ghost is still suggested"
+run status | grep -Ex 'held\|com.ghost.app\|[0-9]+\|11[0-9]\|-1\|0' >/dev/null || fail "held line: $(run status | grep '^held')"
 awk -F'|' -v OFS='|' '$1 == "com.ghost.app" { $4 = $4 - 86400 } { print }' "$T/d/zygisk_guard_ghost" > "$T/g" && mv "$T/g" "$T/d/zygisk_guard_ghost"
 led 1 1 1 1 1 23 28 20 25 1; run tick
-run status | grep -Eqx 'held\|com.ghost.app\|[0-9]+\|11[0-9]\|60\|10' || fail "after-rate: $(run status | grep '^held')"
+run status | grep -Ex 'held\|com.ghost.app\|[0-9]+\|11[0-9]\|60\|10' >/dev/null || fail "after-rate: $(run status | grep '^held')"
 echo screen=0 > "$T/state"; run tick; echo screen=1 > "$T/state"; run screen_on; run tick
 [ "$(mode com.ghost.app)" = ignore ] || fail "a screen edge released a ghost"
 led 1 1 1 1 1 23 28 20 25 1; sed -i 's/^\(L\tcom.ghost.app\t23\t28\t\)0/\11/' "$T/run/state.arm64-v8a.tsv"; run tick
@@ -10640,7 +10776,7 @@ run ghost-restrict com.busy.app >/dev/null; out="$(run disable)"
 [ "$out" = result=disabled ] && [ "$(mode com.busy.app)" = default ] && [ ! -e "$T/d/zygisk_guard_ghost" ] || fail "disable kept a ghost restriction"
 run enable wakers >/dev/null; run ghost-restrict com.busy.app >/dev/null; run restore-all
 [ "$(mode com.busy.app)" = default ] || fail "uninstall left a ghost restriction"
-ls "$T/d" | grep -q zygisk_guard && fail "uninstall left files: $(ls "$T/d")"
+ls "$T/d" | grep zygisk_guard >/dev/null && fail "uninstall left files: $(ls "$T/d")"
 grep -q 'zygisk_guard_hist' "$ROOT/uninstall.sh" && grep -q 'zygisk_guard_ghost' "$ROOT/uninstall.sh" || fail "uninstall.sh does not remove the history and ghost files"
 H="$ROOT/webroot/index.html"
 {
@@ -10742,11 +10878,11 @@ grep -qx "$((now-899))|com.ig.app|820|1" "$T/d/zygisk_aot_launch" && grep -qx "$
 grep -q 'com.svc.app' "$T/d/zygisk_aot_launch" && fail "a service start or an absurd time was taken as a launch"
 [ "$(sed -n 1p "$T/d/zygisk_aot_apps" | cut -d'|' -f1)" = com.yt.app ] || [ "$(sed -n 1p "$T/d/zygisk_aot_apps" | cut -d'|' -f1)" = com.ig.app ] || fail "ranking: $(cat "$T/d/zygisk_aot_apps")"
 row com.once.app >/dev/null && fail "an app opened once was listed"
-row com.ig.app | grep -q '^com.ig.app|3|verify|install|' || fail "ART state of a listed app (2 cold starts, 3 launches in Android's log): $(row com.ig.app)"
-row com.yt.app | grep -q '^com.yt.app|3|speed-profile|bg-dexopt|' || fail "primary-ABI state not preferred: $(row com.yt.app)"
+row com.ig.app | grep '^com.ig.app|3|verify|install|' >/dev/null || fail "ART state of a listed app (2 cold starts, 3 launches in Android's log): $(row com.ig.app)"
+row com.yt.app | grep '^com.yt.app|3|speed-profile|bg-dexopt|' >/dev/null || fail "primary-ABI state not preferred: $(row com.yt.app)"
 out="$(run status)"
-printf '%s\n' "$out" | grep -qx 'enabled=1' && printf '%s\n' "$out" | grep -qx 'ledger=1' && printf '%s\n' "$out" | grep -qx 'launches=4' || fail "status head: $out"
-printf '%s\n' "$out" | grep -qx 'app|com.ig.app|3|verify|install|0|-|0|-|2|800|0|0|0|0' || fail "status app row: $out"
+printf '%s\n' "$out" | grep -x 'enabled=1' >/dev/null && printf '%s\n' "$out" | grep -x 'ledger=1' >/dev/null && printf '%s\n' "$out" | grep -x 'launches=4' >/dev/null || fail "status head: $out"
+printf '%s\n' "$out" | grep -x 'app|com.ig.app|3|verify|install|0|-|0|-|2|800|0|0|0|0' >/dev/null || fail "status app row: $out"
 run tick; [ "$(pmn)" = 0 ] || fail "compiled with the screen on and no charger"
 echo screen=0 > "$T/state"; run tick; [ "$(pmn)" = 0 ] || fail "compiled without a charger"
 echo Charging > "$T/pw/status"; rm -f "$T/pw/temp"; run tick; [ "$(pmn)" = 0 ] || fail "compiled with unknown battery temperature"
@@ -10759,8 +10895,8 @@ grep -qx 'pm compile -r bg-dexopt com.ig.app' "$T/pm.log" && grep -qx 'pm compil
   && grep -qx 'pm compile -r bg-dexopt com.mail.app' "$T/pm.log" || fail "weak apps not compiled at background priority: $(cat "$T/pm.log")"
 grep -q 'com.yt.app' "$T/pm.log" && fail "an app with AOT code was recompiled"
 [ -d "$T/d/zygisk_aot.lock" ] && fail "the lock was left behind"
-row com.ig.app | grep -q '^com.ig.app|3|speed-profile|cmdline|[0-9]*|[0-9]*|compiled|[1-9][0-9]*|verify$' || fail "compiled row: $(row com.ig.app)"
-row com.np.app | grep -q '|no_profile|0|verify$' || fail "no-profile row: $(row com.np.app)"
+row com.ig.app | grep '^com.ig.app|3|speed-profile|cmdline|[0-9]*|[0-9]*|compiled|[1-9][0-9]*|verify$' >/dev/null || fail "compiled row: $(row com.ig.app)"
+row com.np.app | grep '|no_profile|0|verify$' >/dev/null || fail "no-profile row: $(row com.np.app)"
 grep -q '|com.ig.app|compiled|verify>speed-profile$' "$T/d/zygisk_aot_log" && grep -q '|com.np.app|no_profile|verify$' "$T/d/zygisk_aot_log" || fail "events: $(cat "$T/d/zygisk_aot_log")"
 n1="$(pmn)"; run tick; [ "$(pmn)" = "$n1" ] || fail "a no-profile app was retried before 7 days"
 ASB_ZA_RETRY_S=0 run tick >/dev/null; [ "$(pmn)" = "$n1" ] || fail "a second package batch ran in the same charging session"
@@ -10770,7 +10906,7 @@ ca="$(row com.ig.app | cut -d'|' -f8)"
 printf '%s\n' "$((ca+5)).100  1000  1500 I am_proc_start: [0,4009,10201,com.ig.app,next-top-activity,{com.ig.app/com.ig.app.Main}]" \
   "$((ca+6)).100  1000  1500 I wm_activity_launch_time: [0,119,com.ig.app/.Main,600]" >> "$T/events"
 echo screen=1 > "$T/state"; run tick
-run status | grep -qx "app|com.ig.app|3|speed-profile|cmdline|[0-9]*|compiled|$ca|verify|3|780|2|800|1|600" || fail "before/after medians: $(run status | grep '^app|com.ig')"
+run status | grep -x "app|com.ig.app|3|speed-profile|cmdline|[0-9]*|compiled|$ca|verify|3|780|2|800|1|600" >/dev/null || fail "before/after medians: $(run status | grep '^app|com.ig')"
 echo boot-1 > "$T/bootid"; run tick; grep -qx 'com.ig.app 2 2' "$T/d/zygisk_aot_count" || fail "the same boot was counted twice: $(cat "$T/d/zygisk_aot_count")"
 echo boot-2 > "$T/bootid"; led 1 0 0 0; run tick
 grep -qx 'com.ig.app 3 1' "$T/d/zygisk_aot_count" && grep -qx 'b boot-2' "$T/d/zygisk_aot_count" || fail "launches across boots: $(cat "$T/d/zygisk_aot_count")"
@@ -10783,21 +10919,21 @@ grep -qx "$((now+51))|com.main.app|1020|1" "$T/d/zygisk_aot_launch" && grep -qx 
 printf 'com.warm.app 1 1\n' >> "$T/d/zygisk_aot_count"
 printf '%s|com.warm.app|300|0\n%s|com.warm.app|280|0\n' "$((now+60))" "$((now+70))" >> "$T/d/zygisk_aot_launch"
 ASB_ZA_REFRESH_S=0 run tick
-row com.warm.app | grep -q '^com.warm.app|2|unknown|-|' || fail "an app opened warm twice with one cold start was not ranked by its launches: $(cat "$T/d/zygisk_aot_apps")"
+row com.warm.app | grep '^com.warm.app|2|unknown|-|' >/dev/null || fail "an app opened warm twice with one cold start was not ranked by its launches: $(cat "$T/d/zygisk_aot_apps")"
 mkdir -p "$T/mod/zygisk"; printf 'v=1\nslow=com.np.app\n' > "$T/mod/zygisk/classes"
 ASB_ZA_REFRESH_S=0 run tick
 [ "$(sed -n 1p "$T/d/zygisk_aot_apps" | cut -d'|' -f1)" = com.np.app ] || fail "fix286: a slow-starting app is not compiled first: $(cat "$T/d/zygisk_aot_apps")"
-row com.np.app | grep -q '^com.np.app|2|' || fail "fix286: the slow class changed the launch count shown: $(row com.np.app)"
+row com.np.app | grep '^com.np.app|2|' >/dev/null || fail "fix286: the slow class changed the launch count shown: $(row com.np.app)"
 rm -f "$T/mod/zygisk/classes"
 echo 999999 > "$T/govpid"; echo screen=1 > "$T/state"; echo Asleep > "$T/wake"
-run status | grep -qx 'screen=0' || fail "with the governor stopped the screen state did not come from the power service"
+run status | grep -x 'screen=0' >/dev/null || fail "with the governor stopped the screen state did not come from the power service"
 out="$(run disable)"; [ "$out" = result=disabled ] && [ ! -e "$T/d/zygisk_aot" ] || fail "disable: $out"
 n2="$(pmn)"; ASB_ZA_RETRY_S=0 run tick; [ "$(pmn)" = "$n2" ] || fail "a disabled feature compiled"
 printf '%s\n' "$((now+200)).000  1000  1500 I ActivityManager: Start proc 5002:com.scan.app/u0a302 for next-top-activity {com.scan.app/com.scan.app.Home}" \
   "$((now+201)).000  1000  1500 I ActivityTaskManager: Displayed com.scan.app/.Home for user 0: +450ms" > "$T/main"
 run scan; grep -qx "$((now+201))|com.scan.app|450|1" "$T/d/zygisk_aot_launch" || fail "fix286: the launch log scan does not run on its own: $(tail -2 "$T/d/zygisk_aot_launch")"
 [ "$(pmn)" = "$n2" ] || fail "fix286: the scan compiled"
-run restore-all; ls "$T/d" | grep -q zygisk_aot && fail "uninstall left files: $(ls "$T/d")"
+run restore-all; ls "$T/d" | grep zygisk_aot >/dev/null && fail "uninstall left files: $(ls "$T/d")"
 grep -q 'asb_zygisk_aot.sh" tick' "$ROOT/service.sh" || fail "no service tick"
 grep -q 'asb_zygisk_aot.sh" restore-all' "$ROOT/uninstall.sh" || fail "uninstall does not clean up"
 grep -q 'runtime/asb_zygisk_aot.sh' "$ROOT/.github/workflows/build-test.yml" && grep -q 'runtime/asb_zygisk_aot.sh' "$ROOT/.github/workflows/build-release.yml" || fail "not in the workflow file lists"
@@ -11198,6 +11334,7 @@ grep -q '^soter|result|state=auto_off|cleared=0|passes=0|' <<<"$OUT" || fail "bo
 [ "$(grep -c '^pm clear' "$LOG")" = 1 ] || fail 'boot without the opt-in cleared data'
 [ "$(sh "$S" auto on)" = 'soter|auto|state=1' ] && [ -f "$T/state/auto" ] || fail 'auto on'
 grep -q '|auto=1|boot_state=none|' <<<"$(sh "$S" status)" || fail 'status does not show the opt-in'
+rm -f "$T/state/last"
 : > "$LOG"; OUT="$(sh "$S" boot)"
 [ "$OUT" = 'soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running' ] || fail "boot run: $OUT"
 grep -qx 'trigger=boot' "$T/state/last" || fail 'boot trigger not recorded'
@@ -11510,7 +11647,7 @@ grep -q 'logcat: 11-15 10:00:01.000  1234  1240 E Soter   : ask generation faile
 ! grep -q 'unrelated' "$T/state/log" || fail 'unrelated logcat lines kept'
 grep -qx 'boot_id=boot-1' "$T/state/boot" && grep -qx 'state=done' "$T/state/boot" && grep -qx 'result=done' "$T/state/boot" || fail "boot record: $(cat "$T/state/boot")"
 grep -q '|boot_state=done|boot_result=done|boot_unlock=15|boot_via=ce_available|boot_time=[0-9]*|boot_first=none|' <<<"$(sh "$S" status)" || fail "status boot fields: $(sh "$S" status)"
-grep -q '^notification post -S bigtext -t SOTER asb_soter SOTER was repaired after the reboot' "$T/notify" || fail "default notification: $(cat "$T/notify" 2>/dev/null)"
+grep -q '^notification post -S bigtext -t SOTER asb_soter SOTER server data were cleared after the reboot; app functionality was not tested' "$T/notify" || fail "default notification: $(cat "$T/notify" 2>/dev/null)"
 grep -q 'trigger=boot' "$T/state/last" || fail 'trigger not recorded'
 reset_case; mkdir -p "$T/ce"; printf '3\n' > "$T/dir_at"
 OUT="$(sh "$S" texts ru 'Ремонт SOTER' 'SOTER восстановлен|снова' 'Не удалось')"
@@ -11566,7 +11703,15 @@ reset_case; printf '1\n' > "$T/unlock_at"
 grep -qx 'sleep 600' "$T/log" || fail "default settle after the unlock is not 600 s: $(grep '^sleep' "$T/log" | tr '\n' ' ')"
 grep -q 'repair in 600s' "$T/state/log" || fail 'the boot log does not say when the repair runs'
 grep -q '^SETTLE="${ASB_SOTER_SETTLE:-600}"$' "$S" || fail 'settle default'
-echo 'PASS soter boot sequence: boot_completed then the first unlock (ce_available, CE data directory, RUNNING_UNLOCKED once a minute), settle (600 s by default since dev60), one bounded retry, per-boot record in status, phase log, verify pass with service restart and SOTER logcat lines, localized notification, opt-in only'
+reset_case; printf '1\n' > "$T/unlock_at"
+sh "$S" run >/dev/null
+: > "$T/log"
+OUT="$(sh "$S" boot)"
+grep -q '^soter|result|state=skipped_recent_manual|' <<<"$OUT" || fail "manual repair did not supersede the pending boot repair: $OUT"
+! grep -q '^pm clear' "$T/log" || fail 'boot repair cleared SOTER again after a manual repair in the same boot'
+grep -q '|boot_state=skipped|boot_result=recent_manual|' <<<"$(sh "$S" status)" || fail 'manual-skip boot state is not visible'
+grep -q '^boot_id=boot-1$' "$T/state/last" && grep -q '^up=' "$T/state/last" || fail 'manual repair lacks same-boot evidence'
+echo 'PASS soter boot sequence: boot_completed then the first unlock (ce_available, CE data directory, RUNNING_UNLOCKED once a minute), settle (600 s by default since dev60), one bounded retry, per-boot record in status, phase log, verify pass with service restart and SOTER logcat lines, localized notification, opt-in only, no duplicate clear after a same-boot manual repair'
 )
 
 t_camera_tools_flags_dev60() (
@@ -11687,7 +11832,7 @@ OUT="$(sh "$S" webcam stop)"
 [ "$OUT" = 'camtools|webcam_stop|state=done|usb=mtp' ] || fail "stop did not restore the previous USB mode: $OUT"
 : > "$T/hal_refuses"
 OUT="$(sh "$S" webcam start)"; rm -f "$T/hal_refuses"
-[ "$OUT" = 'camtools|webcam_start|state=refused|usb=mtp' ] && grep -q '|last=refused$' <<<"$(sh "$S" status | head -n 1)" || fail "refusal: $OUT"
+[ "$OUT" = 'camtools|webcam_start|state=refused|usb=mtp' ] && grep -q '|last=refused$' <<<"$(sh "$S" status | sed -n '1p')" || fail "refusal: $OUT"
 rm -f "$T/props/ro.usb.uvc.enabled"
 [ "$(sh "$S" webcam start)" = 'camtools|webcam_start|state=needs_reboot' ] || fail 'started before the switch was live'
 sh "$S" webcam prop; [ "$(cat "$T/props/ro.usb.uvc.enabled")" = true ] || fail 'post-fs-data prop'
@@ -11830,7 +11975,7 @@ for f in governor.conf governor.conf.shipped; do
 done
 grep -qx 'kernel_rt_boost|advanced|webui_sensitive|shell' "$ROOT/config/key_ownership.tsv" || fail 'ownership row'
 [ "$(grep -c 'kernel_usb_autosuspend kernel_rt_boost' "$ROOT/common/install.sh")" = 2 ] || fail 'install carry-over/snapshot lists'
-grep -Fq 'kernel_usb_autosuspend kernel_rt_boost" ;;' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'post-boot owner list'
+grep -Fq 'kernel_usb_autosuspend kernel_rt_boost kernel_bore" ;;' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'post-boot owner list'
 [ "$(grep -c 'apply kernel_rt_boost "" "$ASB_PROFILE"' "$ROOT/service.sh")" = 3 ] || fail 'service.sh reinforce passes'
 [ "$(grep -c 'sys.boot_completed 2>/dev/null)" = "1" ] && sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_rt_boost' "$ROOT/service.sh")" = 3 ] || fail 'RT apply is not gated on boot completion'
 python3 - "$ROOT/apply_profile.sh" <<'PY' || fail 'profile worker does not re-apply the kernel controls'
@@ -11848,6 +11993,136 @@ sed -n '/^asb_preserve_user_config() {/,/^}/p' "$ROOT/common/install.sh" | sed "
 grep -q 'kernel_timer_migration:off|kernel_sched_nr_migrate:4)' "$T/fn.sh" || fail 'migration case missing'
 grep -q 'echo 4 > ' "$T/fn.sh" || fail 'schema not bumped to 4'
 echo 'PASS kernel profile follow: Auto values per profile, exact release elsewhere and under Stock, one-process follow on profile switches, Smart MGLRU left to the governor, RT baseline deferred until post-boot, bounded RT values, safe writer, defaults, lists and schema-4 migration'
+)
+
+
+t_bore_controls_dev63() (
+# dev63: BORE is an opt-in, fixed-node control. Build evidence alone never authorizes a write.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_kernel_controls.sh"
+fail() { echo "FAIL BORE controls dev63: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/mod/config" "$T/state" "$T/proc/sys/kernel" "$T/bin" "$T/cmod/config" "$T/cmod/runtime"
+printf '1\n' > "$T/proc/sys/kernel/sched_bore"
+printf 'kernel_bore=off\n' > "$T/mod/config/governor.conf"
+run() {
+  MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_KERNEL_STATE_DIR="$T/state" \
+  ASB_BORE_NODE="$T/proc/sys/kernel/sched_bore" ASB_KC_KERNEL_ID="${KID:-k1}" sh "$S" "$@"
+}
+mode() { printf 'kernel_bore=%s\n' "$1" > "$T/mod/config/governor.conf"; }
+out="$(run status kernel_bore)"
+[ "$out" = 'kernel_bore|writable|off|1|none' ] || fail "initial status: $out"
+out="$(run apply kernel_bore)"
+[ "$out" = 'kernel_bore|applied|off|0|1' ] && [ "$(cat "$T/proc/sys/kernel/sched_bore")" = 0 ] || fail "off/readback: $out"
+[ "$(cat "$T/state/kernel_bore.prev")" = 1 ] || fail 'initial baseline was not captured'
+mode on; out="$(run apply kernel_bore)"
+[ "$out" = 'kernel_bore|applied|on|1|1' ] && [ "$(cat "$T/state/kernel_bore.prev")" = 1 ] || fail "repeat apply replaced baseline: $out"
+mode stock; out="$(run apply kernel_bore)"
+[ "$out" = 'kernel_bore|restored|stock|1|none' ] && [ "$(cat "$T/proc/sys/kernel/sched_bore")" = 1 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "exact Stock restore: $out"
+# A baseline belongs to one kernel identity. A new kernel must not receive the old one's value.
+mode off; run apply kernel_bore >/dev/null
+KID=k2; export KID
+out="$(run restore kernel_bore)"
+[ "$out" = 'kernel_bore|stock_unowned|stock|unknown|none' ] && [ "$(cat "$T/proc/sys/kernel/sched_bore")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "stale kernel baseline used: $out"
+unset KID
+mode on; out="$(run apply kernel_bore)"
+[ "$out" = 'kernel_bore|applied|on|1|0' ] || fail "new-kernel baseline: $out"
+mode stock; run apply kernel_bore >/dev/null
+[ "$(cat "$T/proc/sys/kernel/sched_bore")" = 0 ] || fail 'new-kernel Stock did not restore its own zero'
+# Missing, read-only and malformed nodes are honest failures, never applied success.
+rm -f "$T/proc/sys/kernel/sched_bore"; mode on
+set +e; out="$(run apply kernel_bore 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|not_exposed|on|unknown|none' ] || fail "missing node: rc=$rc out=$out"
+printf '1\n' > "$T/proc/sys/kernel/sched_bore"; chmod 0444 "$T/proc/sys/kernel/sched_bore"
+set +e; out="$(run apply kernel_bore 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|not_writable|on|unknown|none' ] || fail "read-only node: rc=$rc out=$out"
+chmod 0644 "$T/proc/sys/kernel/sched_bore"; printf '2\n' > "$T/proc/sys/kernel/sched_bore"
+set +e; out="$(run apply kernel_bore 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|baseline_failed|on|unknown|none' ] && [ "$(cat "$T/proc/sys/kernel/sched_bore")" = 2 ] || fail "invalid live value: $out"
+# A clamped readback retains the baseline and cannot be reported as applied.
+printf '0\n' > "$T/proc/sys/kernel/sched_bore"; REAL_CAT="$(command -v cat)"
+cat > "$T/bin/cat" <<'SH'
+#!/bin/sh
+if [ "$1" = "$BORE_NODE" ] && [ -f "$CLAMP_FLAG" ]; then printf '0\n'; else exec "$REAL_CAT" "$@"; fi
+SH
+chmod 0755 "$T/bin/cat"; : > "$T/clamp"
+set +e
+out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" BORE_NODE="$T/proc/sys/kernel/sched_bore" CLAMP_FLAG="$T/clamp" run apply kernel_bore 2>/dev/null)"; rc=$?
+set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|readback_mismatch|on|0|0' ] || fail "readback mismatch: rc=$rc out=$out"
+[ -f "$T/state/kernel_bore.prev" ] || fail 'mismatch consumed baseline'
+rm -f "$T/clamp"; mode stock; run apply kernel_bore >/dev/null
+[ "$(cat "$T/proc/sys/kernel/sched_bore")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail 'restore after mismatch failed'
+# Strict safe-writer validation and zero-change shipped default.
+cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
+cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
+for v in stock off on stock; do
+  MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_bore "$v" >/dev/null || fail "safe writer refused $v"
+done
+for v in auto 2 yes; do
+  set +e; MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_bore "$v" >/dev/null 2>&1; rc=$?; set -e
+  [ "$rc" -ne 0 ] || fail "safe writer accepted $v"
+done
+for f in governor.conf governor.conf.shipped; do grep -qx 'kernel_bore=stock' "$ROOT/config/$f" || fail "$f default"; done
+grep -qx 'kernel_bore|advanced|webui_sensitive|shell' "$ROOT/config/key_ownership.tsv" || fail 'ownership row'
+[ "$(grep -c 'kernel_rt_boost kernel_bore' "$ROOT/common/install.sh")" = 2 ] || fail 'install carry-over/snapshot lists'
+[ "$(grep -c 'apply kernel_bore' "$ROOT/service.sh")" = 3 ] || fail 'boot/reinforce passes'
+grep -Fq 'kernel_usb_autosuspend kernel_bore"' "$ROOT/runtime/asb_kernel_controls.sh" || fail 'profile follow list'
+echo 'PASS BORE controls dev63: fixed node, Stock/off/on, exact baseline, kernel-change guard, access failures, readback, safe writer and boot/profile ownership'
+)
+
+
+t_zygisk_provider_dev63() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/runtime/asb_zygisk_info.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL Zygisk provider dev63: $*" >&2; exit 1; }
+sh -n "$H" || fail 'syntax'
+DATA="$T/data"; MODDIR="$T/mod"; PROC="$T/proc"
+export DATA MODDIR PROC
+_emit() { printf 'D\t%s\t%s\t%s\n' "$1" "$2" "$3"; }
+_read() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
+. "$H"
+mkdir -p "$DATA/modules" "$MODDIR" "$PROC"
+probe() { _asb_zygisk_provider_info; }
+val() { printf '%s\n' "$1" | awk -F '\t' -v k="$2" '$3==k {print $4; exit}'; }
+mod() { mkdir -p "$DATA/modules/$2"; printf 'id=%s\nname=%s\nversion=%s\n' "$3" "$1" "$4" > "$DATA/modules/$2/module.prop"; }
+for spec in 'NyaZygisk:nyazygisk:zygisksu:v2.5' 'NeoZygisk:neozygisk:zygisksu:v2.3' 'BreZygisk:bre:rezygisk:v1.0.0' 'ReZygisk:re:rezygisk:v1.0.0' 'Zygisk Next:next:zygisksu:1.5.3'; do
+ rm -rf "$DATA/modules"; mkdir -p "$DATA/modules"
+ IFS=: read -r name dir id ver <<EOF
+$spec
+EOF
+ mod "$name" "$dir" "$id" "$ver"
+ out="$(probe)"
+ [ "$(val "$out" provider)" = "$name" ] || fail "$name identity: $out"
+ [ "$(val "$out" version)" = "$ver" ] || fail "$name version"
+ [ "$(val "$out" install_state)" = enabled ] || fail "$name state"
+ [ "$(val "$out" runtime_state)" = 'not runtime-discoverable from module metadata alone' ] || fail "$name runtime overclaim"
+done
+# Disabled and remove markers remain installation evidence, never active-injection evidence.
+: > "$DATA/modules/next/disable"; out="$(probe)"
+[ "$(val "$out" install_state)" = disabled ] && [ "$(val "$out" provider)" = 'Zygisk Next' ] || fail "disabled: $out"
+rm "$DATA/modules/next/disable"; : > "$DATA/modules/next/remove"; out="$(probe)"
+[ "$(val "$out" install_state)" = pending_removal ] || fail "pending removal: $out"
+# No metadata means unknown, not an unsupported/absent-runtime verdict.
+rm -rf "$DATA/modules"; mkdir -p "$DATA/modules"; out="$(probe)"
+[ "$(val "$out" provider)" = unknown ] && [ "$(val "$out" install_state)" = not_detected ] || fail "missing: $out"
+# Shared IDs and duplicate enabled installations must not be resolved arbitrarily.
+mod NyaZygisk zygisksu zygisksu v2.5; mod NeoZygisk other zygisksu v2.3; out="$(probe)"
+[ "$(val "$out" provider)" = conflict ] && [ "$(val "$out" install_state)" = multiple_enabled ] || fail "ambiguous: $out"
+[ "$(val "$out" enabled_count)" = 2 ] || fail 'enabled count'
+# One enabled provider plus an old disabled one is unambiguous, with both installations shown.
+: > "$DATA/modules/other/disable"; out="$(probe)"
+[ "$(val "$out" provider)" = NyaZygisk ] && [ "$(val "$out" enabled_count)" = 1 ] || fail "enabled plus disabled: $out"
+printf '%s\n' "$out" | grep -q 'NeoZygisk (disabled)' || fail 'disabled installation hidden'
+# An unrelated/malformed module name is neither executed nor mistaken for a provider.
+mod 'Other `x`;$(id)' other unknown test; out="$(probe)"
+[ "$(val "$out" provider)" = NyaZygisk ] || fail 'unrelated metadata changed provider'
+! grep -Fq 'innerHTML' "$H" || fail 'markup rendering in shell collector'
+! grep -Eq 'cat .*(serial|imei)|getprop .*(serial|imei)|/data/(user|system)/.*(account|network)' "$H" || fail 'sensitive probe added'
+echo 'PASS Zygisk provider dev63: Nya/Neo/Bre/Re/Zygisk Next by name, shared IDs, enabled/disabled/remove, missing and conflicts; no runtime overclaim'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

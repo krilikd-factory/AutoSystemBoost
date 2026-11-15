@@ -3825,7 +3825,7 @@ assert 'asbFirstFrameMark();' in reveal and 'run(' not in reveal
 for token in ('asbStartupLater(zygiskHeaderRefresh, 150, 1);', 'if (!shown) asbStartupLater(asbStartupLive, 0, 0);',
               'function asbStartupLive() { if (!_liveOpen) return pollLive(false); }', 'if (job.prio > 0 && asbPageBusy())',
               'function uiOtherAudioLater() { asbStartupLater(uiOtherAudioLook, 150, 2); }', 'if (_uiSoundOn) uiOtherAudioLater();',
-              "else asbStartupLater(asbStartupLive, 300, 0);"):
+              "asbStartupLater(asbStartupLive, 300, 0);"):
     assert token in s, token
 assert "setTimeout(function () { try { uiOtherAudioRefresh(); } catch (e) {} }, 1200);" not in s
 snd = s[s.index('function uiSound(kind) {'):s.index('function uiSound(kind) {') + 600]
@@ -4063,7 +4063,7 @@ fail() { echo "FAIL webui live info insight: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "SKIP webui live info insight: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -q "id=\"liveInfoScale\"" "$H" && grep -q "id=\"liveInfoHist\"" "$H" || fail 'the sheet has no scale or history block'
-grep -qF "_liveTimer = setInterval(() => { pollLive(true).then(lviSample, lviSample); }, 3000);" "$H" || fail 'the readings are not sampled after each poll'
+[ "$(grep -Fc 'lviSample(); liveMonitorSchedule();' "$H")" -eq 2 ] || fail 'the readings are not sampled after each successful and failed poll'
 grep -qF "lviScaleRender(_el('liveInfoScale'), key, lviScaleValue(key, iv.textContent));" "$H" || fail 'the sheet does not draw the scale from the tile-normalized value'
 grep -qF "lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));" "$H" || fail 'the sheet does not draw the history'
 {
@@ -4366,7 +4366,7 @@ fail() { echo "FAIL webui stock monitor: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "SKIP webui stock monitor: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -Fq "if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);" "$H" || fail "a throttled read still leaves the cells empty"
-grep -Fq "    if (_selectedProfile === 'stock') pollStockTelemetry(true);" "$H" || fail "opening Monitor on Stock bypasses the existing freshness window"
+grep -Fq "  liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);" "$H" || fail "opening Monitor no longer uses the scheduled freshness-aware read"
 grep -Fq "    } else paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
 # fix287: a new WebView paints the last visit's ROM snapshot at once, dimmed until fresh.
 grep -Fq "      paintStockLive(_lvMonCache.rom);" "$H" && grep -Fq "      lvStale(true);" "$H" || fail "a fresh page opens Monitor without the cached card"
@@ -4375,7 +4375,9 @@ python3 - "$H" <<'P' || fail "Monitor open order / ROM read"
 import sys
 s = open(sys.argv[1], encoding='utf-8').read()
 o = s[s.index('function openLivePage() {'):s.index('function closeLivePage() {')]
-assert o.index("paintStockLive(_stockTelemetryKv)") < o.index('setTimeout(function () {') < o.index("pollStockTelemetry(true)"), 'the freshness-aware read runs before the page has slid in'
+assert o.index("paintStockLive(_stockTelemetryKv)") < o.index('liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);'), 'the freshness-aware read is scheduled before the cached ROM sample is painted'
+m = s[s.index('function liveMonitorSchedule(delay) {'):s.index('function liveBackgroundSchedule() {')]
+assert m.index('setTimeout(function () {') < m.index('pollStockTelemetry(true)'), 'the Stock freshness-aware read runs before the page has slid in'
 assert 'pollStockTelemetry(true, true)' not in o, 'a recent Stock sample is forced again on every opening'
 p = s[s.index('async function pollStockTelemetry('):s.index('async function pollLive(')]
 assert "'/runtime/asb_rom_telemetry.sh'" in p and 'thermal_zone' not in p and 'settings get' not in p, 'Stock still reads the ROM with an inline fork-per-value command'
@@ -4847,7 +4849,7 @@ assert 'getComputedStyle(el).paddingBottom' in s, "the bar's reserved padding is
 for fn in ('openLivePage', 'closeLivePage', 'closeConfigPage', 'cfgBack', 'openReportPage', 'closeReportPage', 'asbLogReportLoad'):
     m = re.search(r'(?:async )?function %s\s*\([^)]*\)\s*\{(.*?)\n\}' % fn, s, re.S)
     assert m, fn + ' is missing'
-    assert 'requestAnimationFrame(asbFitPages)' in m.group(1), fn + ' never re-measures the fit'
+    assert 'asbUiFrame.request(asbFitPages)' in m.group(1), fn + ' never re-measures the fit'
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 for p in files:
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -4990,8 +4992,8 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-grep -Fq "window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });" "$H" || fail "the fit is not redone on resize"
-grep -Fq "window.addEventListener('orientationchange', function () { requestAnimationFrame(asbFitPages); });" "$H" || fail "the fit is not redone when the panel rotates"
+grep -Fq "window.addEventListener('resize', function () { asbUiFrame.request(asbFitPages); });" "$H" || fail "the fit is not redone on resize"
+grep -Fq "window.addEventListener('orientationchange', function () { asbUiFrame.request(asbFitPages); });" "$H" || fail "the fit is not redone when the panel rotates"
 echo "PASS webui fill pages: profile cards and category tiles take the free height within limits on any screen, Home compacts only past its allowance; the symmetric Settings hub and long lists keep the header intact and scroll, with tiers decided from natural height"
 )
 
@@ -5888,9 +5890,9 @@ printf 'Cmdline: com.maps.only\nmemory map:\n7a00000000-7a00010000 r-xp /vendor/
 
 out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit"
 printf '%s\n' "$out" | grep -Eq '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' || fail "meta line: $(printf '%s' "$out" | head -1)"
-printf '%s\n' "$out" | grep -qF "capture	dir=$CAP" || fail "capture path for report.json export"
-printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99	segments=2	latest_drop=8	latest_hours=2.0	latest_pctph=4.0$' || fail "drain line with off-charger segments: $(printf '%s\n' "$out" | grep '^drain')"
-printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' || fail "night chain"
+printf '%s\n' "$out" | grep -F "capture	dir=$CAP"  >/dev/null || fail "capture path for report.json export"
+printf '%s\n' "$out" | grep '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99	segments=2	latest_drop=8	latest_hours=2.0	latest_pctph=4.0$'  >/dev/null || fail "drain line with off-charger segments: $(printf '%s\n' "$out" | grep '^drain')"
+printf '%s\n' "$out" | grep '^night	dur_min=469	drop=8	pctph=1.0	awake=8$'  >/dev/null || fail "night chain"
 # fix338: 181% can be a valid SUM over separate off-charger windows, never one battery
 # cycle. The latest window is projected separately; charging gains are not netted against it.
 CYC="$T/multi-cycle"; mkdir -p "$CYC"
@@ -5903,7 +5905,7 @@ charging	13600	15400	30	100
 idle	15400	19000	100	69
 EOF
 cycout="$(ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" ASB_CFG_FILE="$T/no-config" sh "$D" "$CYC")"
-printf '%s\n' "$cycout" | grep -q '^drain	pctph=51.7	total_drop=181	hours=3.5	ma=0	segments=3	latest_drop=31	latest_hours=1.0	latest_pctph=31.0$' \
+printf '%s\n' "$cycout" | grep '^drain	pctph=51.7	total_drop=181	hours=3.5	ma=0	segments=3	latest_drop=31	latest_hours=1.0	latest_pctph=31.0$' >/dev/null \
   || fail "multi-cycle drain must retain the honest sum and name the latest window: $(printf '%s\n' "$cycout" | grep '^drain')"
 # A non-charging phase can still contain a charger connection (the raw report marks such
 # rows explicitly). Its positive gain is neither consumption nor off-charger elapsed time.
@@ -5914,85 +5916,85 @@ post_wake	4600	8200	99	100
 active	8200	11800	100	95
 EOF
 negout="$(ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" ASB_CFG_FILE="$T/no-config" sh "$D" "$NEG")"
-printf '%s\n' "$negout" | grep -q '^drain	pctph=3.0	total_drop=6	hours=2.0	ma=0	segments=2	latest_drop=5	latest_hours=1.0	latest_pctph=5.0$' \
+printf '%s\n' "$negout" | grep '^drain	pctph=3.0	total_drop=6	hours=2.0	ma=0	segments=2	latest_drop=5	latest_hours=1.0	latest_pctph=5.0$' >/dev/null \
   || fail "a charge gain inside a non-charging phase must not be netted: $(printf '%s\n' "$negout" | grep '^drain')"
 # fix207: the night chain's detail rides along - weighted average current, mobile
 # traffic, peak temperatures and the wakeup-source peak of the SAME best chain.
-printf '%s\n' "$out" | grep -q '^nightd	ma=36	radio_mib=1.1	cpu_t=31	skin_t=29	wake_pk=5$' || fail "night detail: $(printf '%s\n' "$out" | grep '^nightd')"
-printf '%s\n' "$out" | grep -q '^idlemax	awake=25	phase=sleep	dur_min=60$' || fail "idlemax"
-printf '%s\n' "$out" | grep -q '^wl	pkg=com.instagram.android	sec=3661$' || fail "top wakelock app"
+printf '%s\n' "$out" | grep '^nightd	ma=36	radio_mib=1.1	cpu_t=31	skin_t=29	wake_pk=5$'  >/dev/null || fail "night detail: $(printf '%s\n' "$out" | grep '^nightd')"
+printf '%s\n' "$out" | grep '^idlemax	awake=25	phase=sleep	dur_min=60$'  >/dev/null || fail "idlemax"
+printf '%s\n' "$out" | grep '^wl	pkg=com.instagram.android	sec=3661$'  >/dev/null || fail "top wakelock app"
 printf '%s\n' "$out" | grep -Eq '^crash	count=3	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' || fail "crash window, backtrace-only ASB attribution or the crash time"
-printf '%s\n' "$out" | grep -q '^sysui	count=2$' || fail "sysui restarts"
-printf '%s\n' "$out" | grep -q '^sysuiinj' && fail "restarts without injected code named a module"
-printf '%s\n' "$out" | grep -q '^thermal	cpu=41	surf=35$' || fail "thermal peaks"
+printf '%s\n' "$out" | grep '^sysui	count=2$'  >/dev/null || fail "sysui restarts"
+printf '%s\n' "$out" | grep '^sysuiinj'  >/dev/null && fail "restarts without injected code named a module"
+printf '%s\n' "$out" | grep '^thermal	cpu=41	surf=35$'  >/dev/null || fail "thermal peaks"
 # fix213: device context, heat durations and night habits ride the same digest.
-printf '%s\n' "$out" | grep -q '^meta2	model=CPH2745	device=OP611FL1	soc=SM8850	rom=CPH2745_16.0.10.601(EX01)	mod=V65-test$' || fail "meta2 device context: $(printf '%s\n' "$out" | grep '^meta2')"
-printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=41	warm_min=0	skin_min=0	warm_episodes=0	warm_run_min=0$' || fail "heat detail: $(printf '%s\n' "$out" | grep '^heat')"
-printf '%s\n' "$out" | grep -q '^mwake	n=14	nights=9	per_night=2.6	typical_s=38$' || fail "night habits: $(printf '%s\n' "$out" | grep '^mwake')"
+printf '%s\n' "$out" | grep '^meta2	model=CPH2745	device=OP611FL1	soc=SM8850	rom=CPH2745_16.0.10.601(EX01)	mod=V65-test$'  >/dev/null || fail "meta2 device context: $(printf '%s\n' "$out" | grep '^meta2')"
+printf '%s\n' "$out" | grep '^heat	peak_phase=active	peak_c=41	warm_min=0	skin_min=0	warm_episodes=0	warm_run_min=0$'  >/dev/null || fail "heat detail: $(printf '%s\n' "$out" | grep '^heat')"
+printf '%s\n' "$out" | grep '^mwake	n=14	nights=9	per_night=2.6	typical_s=38$'  >/dev/null || fail "night habits: $(printf '%s\n' "$out" | grep '^mwake')"
 MW0="$T/mw-no-completed-night"; mkdir -p "$MW0"
 printf 'current_profile: smart\n' > "$MW0/env.txt"
 printf 'microwake|learned=53|nights=0|per_night=0.0|typical_s=23|usual=19:30-20:00\n' > "$MW0/smart_records.txt"
 mw0out="$(ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" ASB_CFG_FILE="$T/no-config" sh "$D" "$MW0")"
-printf '%s\n' "$mw0out" | grep -q '^mwake	n=53	nights=0	per_night=0.0	typical_s=23$' || fail "an unconfirmed-night record must retain nights=0: $(printf '%s\n' "$mw0out" | grep '^mwake')"
-printf '%s\n' "$out" | grep -q '^cfg	key=sustained_temp_mode	value=' || fail "the thermal setting is not in the advice snapshot"
-printf '%s\n' "$out" | grep -q '^throttle	clamps=2	owner=asb_governor	by=asb_governor:1,thermal:1$' || fail "throttle clamp periods: $(printf '%s\n' "$out" | grep '^throttle')"
-printf '%s\n' "$out" | grep -q '^radio	mib=17.5	on=16.4$' || fail "radio MiB with the screen-on share: $(printf '%s\n' "$out" | grep '^radio')"
+printf '%s\n' "$mw0out" | grep '^mwake	n=53	nights=0	per_night=0.0	typical_s=23$'  >/dev/null || fail "an unconfirmed-night record must retain nights=0: $(printf '%s\n' "$mw0out" | grep '^mwake')"
+printf '%s\n' "$out" | grep '^cfg	key=sustained_temp_mode	value='  >/dev/null || fail "the thermal setting is not in the advice snapshot"
+printf '%s\n' "$out" | grep '^throttle	clamps=2	owner=asb_governor	by=asb_governor:1,thermal:1$'  >/dev/null || fail "throttle clamp periods: $(printf '%s\n' "$out" | grep '^throttle')"
+printf '%s\n' "$out" | grep '^radio	mib=17.5	on=16.4$'  >/dev/null || fail "radio MiB with the screen-on share: $(printf '%s\n' "$out" | grep '^radio')"
 # fix200: the richer sections, mined from the interim report + smart_records + config.
-printf '%s\n' "$out" | grep -q '^jank	pct=5.1	jps=2.50	frames=366481$' || fail "jank headline"
+printf '%s\n' "$out" | grep '^jank	pct=5.1	jps=2.50	frames=366481$'  >/dev/null || fail "jank headline"
 # fix220: wake smoothness, the per-phase and per-state jank tables and the gauge check.
-printf '%s\n' "$out" | grep -q '^jwake	wakes=23	pct=7.3	ord=5.1	frames=61234	top=com.android.systemui	top_pct=14.5$' || fail "wake jank line: $(printf '%s\n' "$out" | grep '^jwake')"
-printf '%s\n' "$out" | grep -q '^jphase	phase=post_wake	intv=23	frames=61234	pct=7.3	jps=4.11$' || fail "phase jank row: $(printf '%s\n' "$out" | grep '^jphase' | head -1)"
-printf '%s\n' "$out" | grep -q '^jphase	phase=active	intv=144	frames=305247	pct=4.6	jps=2.01$' || fail "phase jank row 2"
-printf '%s\n' "$out" | grep -q '^jstate	state=LIGHT_IDLE	intv=100	frames=200000	pct=5.6	jps=2.60$' || fail "state jank row: $(printf '%s\n' "$out" | grep '^jstate' | head -2 | tail -1)"
-printf '%s\n' "$out" | grep -q '^jstate	state=mixed	intv=27	frames=66481	pct=5.2	jps=2.40$' || fail "the lowercase mixed state row"
-printf '%s\n' "$out" | grep -q '^gauge	factor=0.34	windows=40	mult=2.9$' || fail "gauge line: $(printf '%s\n' "$out" | grep '^gauge')"
-printf '%s\n' "$out" | grep -q '^japp	pkg=com.ttt.nagram	frames=122186	pct=7.0$' || fail "top jank app"
-printf '%s\n' "$out" | grep -q '^japp	pkg=multi' && fail "the split-screen pseudo-app must not become a row"
-printf '%s\n' "$out" | grep -q '^hz	mode=60	share=64	ma=264$' || fail "60 Hz row"
-printf '%s\n' "$out" | grep -q '^hz	mode=120	share=13	ma=380$' || fail "120 Hz row"
-printf '%s\n' "$out" | grep -q '^asbcost	cpu_msh=1851	writes_h=176	wakes_h=491	wakes_on=	wakes_off=	noalarm=0$' || fail "ASB own cost: $(printf '%s\n' "$out" | grep '^asbcost')"
-printf '%s\n' "$out" | grep -q '^audio	spk_min=72	pctph=8.31	ma=362$' || fail "speaker audio cost"
-printf '%s\n' "$out" | grep -q '^charge	types=Fast(17) N/A(197)$' || fail "charge types"
-printf '%s\n' "$out" | grep -q '^smart	watching=15	testing=1	helped=0	nothelped=3	ctxlearn=2$' || fail "smart learner line must not confuse helped with not_helped: $(printf '%s\n' "$out" | grep '^smart')"
-printf '%s\n' "$out" | grep -q '^cfg	key=wakelock_action	value=0$' || fail "cfg snapshot for wakelock_action"
-printf '%s\n' "$out" | grep -q '^cfg	key=night_modem_idle	value=0$' || fail "cfg snapshot for night_modem_idle"
+printf '%s\n' "$out" | grep '^jwake	wakes=23	pct=7.3	ord=5.1	frames=61234	top=com.android.systemui	top_pct=14.5$'  >/dev/null || fail "wake jank line: $(printf '%s\n' "$out" | grep '^jwake')"
+printf '%s\n' "$out" | grep '^jphase	phase=post_wake	intv=23	frames=61234	pct=7.3	jps=4.11$'  >/dev/null || fail "phase jank row: $(printf '%s\n' "$out" | grep '^jphase' | head -1)"
+printf '%s\n' "$out" | grep '^jphase	phase=active	intv=144	frames=305247	pct=4.6	jps=2.01$'  >/dev/null || fail "phase jank row 2"
+printf '%s\n' "$out" | grep '^jstate	state=LIGHT_IDLE	intv=100	frames=200000	pct=5.6	jps=2.60$'  >/dev/null || fail "state jank row: $(printf '%s\n' "$out" | grep '^jstate' | head -2 | tail -1)"
+printf '%s\n' "$out" | grep '^jstate	state=mixed	intv=27	frames=66481	pct=5.2	jps=2.40$'  >/dev/null || fail "the lowercase mixed state row"
+printf '%s\n' "$out" | grep '^gauge	factor=0.34	windows=40	mult=2.9$'  >/dev/null || fail "gauge line: $(printf '%s\n' "$out" | grep '^gauge')"
+printf '%s\n' "$out" | grep '^japp	pkg=com.ttt.nagram	frames=122186	pct=7.0$'  >/dev/null || fail "top jank app"
+printf '%s\n' "$out" | grep '^japp	pkg=multi'  >/dev/null && fail "the split-screen pseudo-app must not become a row"
+printf '%s\n' "$out" | grep '^hz	mode=60	share=64	ma=264$'  >/dev/null || fail "60 Hz row"
+printf '%s\n' "$out" | grep '^hz	mode=120	share=13	ma=380$'  >/dev/null || fail "120 Hz row"
+printf '%s\n' "$out" | grep '^asbcost	cpu_msh=1851	writes_h=176	wakes_h=491	wakes_on=	wakes_off=	noalarm=0$'  >/dev/null || fail "ASB own cost: $(printf '%s\n' "$out" | grep '^asbcost')"
+printf '%s\n' "$out" | grep '^audio	spk_min=72	pctph=8.31	ma=362$'  >/dev/null || fail "speaker audio cost"
+printf '%s\n' "$out" | grep '^charge	types=Fast(17) N/A(197)$'  >/dev/null || fail "charge types"
+printf '%s\n' "$out" | grep '^smart	watching=15	testing=1	helped=0	nothelped=3	ctxlearn=2$'  >/dev/null || fail "smart learner line must not confuse helped with not_helped: $(printf '%s\n' "$out" | grep '^smart')"
+printf '%s\n' "$out" | grep '^cfg	key=wakelock_action	value=0$'  >/dev/null || fail "cfg snapshot for wakelock_action"
+printf '%s\n' "$out" | grep '^cfg	key=night_modem_idle	value=0$'  >/dev/null || fail "cfg snapshot for night_modem_idle"
 # fix206: live wakelock holders from the power-manager samples, per-profile drain from
 # the trace's profile field, charging sessions from the ledger, LTPO and AOD from the
 # report - the facts the old sheet hid (a holder behind a flat batterystats delta, a day
 # on 5W wireless, a profile comparison).
-printf '%s\n' "$out" | grep -q '^wlive	tag=job.Sync	pct=40	min=12	pkg=com.instagram.android	kind=job$' || fail "live holder row: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
-printf '%s\n' "$out" | grep -q '^wlive	tag=AudioMix	pct=9	min=3	pkg=com.google.android.youtube	kind=lock$' || fail "live holder row 2"
-printf '%s\n' "$out" | grep -q '^prof	name=p	on_min=3	off_min=3	on_pctph=36.0	off_pctph=18.0$' || fail "per-profile row p: $(printf '%s\n' "$out" | grep '^prof' | head -1)"
-printf '%s\n' "$out" | grep -q '^prof	name=b	on_min=3	off_min=0	on_pctph=36.0	off_pctph=0.0$' || fail "per-profile row b"
-printf '%s\n' "$out" | grep -q '^chg	min=60	gain=14	sess=1$' || fail "charging sessions: $(printf '%s\n' "$out" | grep '^chg')"
-printf '%s\n' "$out" | grep -q '^ltpo	n=79	min=11	basis=lifetime$' || fail "ltpo line"
+printf '%s\n' "$out" | grep '^wlive	tag=job.Sync	pct=40	min=12	pkg=com.instagram.android	kind=job$'  >/dev/null || fail "live holder row: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
+printf '%s\n' "$out" | grep '^wlive	tag=AudioMix	pct=9	min=3	pkg=com.google.android.youtube	kind=lock$'  >/dev/null || fail "live holder row 2"
+printf '%s\n' "$out" | grep '^prof	name=p	on_min=3	off_min=3	on_pctph=36.0	off_pctph=18.0$'  >/dev/null || fail "per-profile row p: $(printf '%s\n' "$out" | grep '^prof' | head -1)"
+printf '%s\n' "$out" | grep '^prof	name=b	on_min=3	off_min=0	on_pctph=36.0	off_pctph=0.0$'  >/dev/null || fail "per-profile row b"
+printf '%s\n' "$out" | grep '^chg	min=60	gain=14	sess=1$'  >/dev/null || fail "charging sessions: $(printf '%s\n' "$out" | grep '^chg')"
+printf '%s\n' "$out" | grep '^ltpo	n=79	min=11	basis=lifetime$'  >/dev/null || fail "ltpo line"
 # dev20: a capture-start snapshot gives this capture's own counts; the lifetime line is then
 # only the fallback for captures that have none.
 cp "$CAP/_full_day_report.txt" "$T/report.saved"
 printf 'ltpo_video (capture): lowered 4 times, 2 min at the lower rate, 4 restored by touch\n' >> "$CAP/_full_day_report.txt"
 ltout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit (capture ltpo)"
-printf '%s\n' "$ltout" | grep -q '^ltpo	n=4	min=2	basis=capture$' || fail "capture ltpo line: $(printf '%s\n' "$ltout" | grep '^ltpo')"
+printf '%s\n' "$ltout" | grep '^ltpo	n=4	min=2	basis=capture$'  >/dev/null || fail "capture ltpo line: $(printf '%s\n' "$ltout" | grep '^ltpo')"
 cp "$T/report.saved" "$CAP/_full_day_report.txt"
-printf '%s\n' "$out" | grep -q '^capcheck	total=9	ok=4	vendor=4	other=1$' || fail "cap readback observations: $(printf '%s\n' "$out" | grep '^capcheck')"
-printf '%s\n' "$out" | grep -q '^wifileave	releases=2	out_of_range=1	no_internet=1	returned=2	failed=0	recovered=3$' || fail "Wi-Fi Leave action counters"
-printf '%s\n' "$out" | grep -q '^aod	lit=11	of=520$' || fail "aod line"
+printf '%s\n' "$out" | grep '^capcheck	total=9	ok=4	vendor=4	other=1$'  >/dev/null || fail "cap readback observations: $(printf '%s\n' "$out" | grep '^capcheck')"
+printf '%s\n' "$out" | grep '^wifileave	releases=2	out_of_range=1	no_internet=1	returned=2	failed=0	recovered=3$'  >/dev/null || fail "Wi-Fi Leave action counters"
+printf '%s\n' "$out" | grep '^aod	lit=11	of=520$'  >/dev/null || fail "aod line"
 # fix207: the screen on/off split over the whole ledger (the figure that reconciles with
 # Monitor's tile), the per-phase breakdown and the kernel holders on the charger.
-printf '%s\n' "$out" | grep -q '^scr	on_pctph=6.5	off_pctph=1.0	on_min=120	off_min=530	idle_pctph=1.0	idle_min=530	music_min=0$' || fail "screen split: $(printf '%s\n' "$out" | grep '^scr')"
-printf '%s\n' "$out" | grep -q '^phase	name=sleep	min=420	drop=7	pctph=1.0$' || fail "phase sleep: $(printf '%s\n' "$out" | grep '^phase' | head -1)"
-printf '%s\n' "$out" | grep -q '^phase	name=active	min=120	drop=13	pctph=6.5$' || fail "phase active"
-printf '%s\n' "$out" | grep -q '^phase	name=charging	min=60	drop=-14	pctph=0.0$' || fail "phase charging keeps its signed drop"
-printf '%s\n' "$out" | grep -q '^kwk	tag=rx_wake_lock	min=343$' || fail "kernel holder on the charger"
-printf '%s\n' "$out" | grep -q '^kwk	tag=qcom_rx_wakelock	min=13$' || fail "kernel holder 2"
+printf '%s\n' "$out" | grep '^scr	on_pctph=6.5	off_pctph=1.0	on_min=120	off_min=530	idle_pctph=1.0	idle_min=530	music_min=0$'  >/dev/null || fail "screen split: $(printf '%s\n' "$out" | grep '^scr')"
+printf '%s\n' "$out" | grep '^phase	name=sleep	min=420	drop=7	pctph=1.0$'  >/dev/null || fail "phase sleep: $(printf '%s\n' "$out" | grep '^phase' | head -1)"
+printf '%s\n' "$out" | grep '^phase	name=active	min=120	drop=13	pctph=6.5$'  >/dev/null || fail "phase active"
+printf '%s\n' "$out" | grep '^phase	name=charging	min=60	drop=-14	pctph=0.0$'  >/dev/null || fail "phase charging keeps its signed drop"
+printf '%s\n' "$out" | grep '^kwk	tag=rx_wake_lock	min=343$'  >/dev/null || fail "kernel holder on the charger"
+printf '%s\n' "$out" | grep '^kwk	tag=qcom_rx_wakelock	min=13$'  >/dev/null || fail "kernel holder 2"
 # fix210: causes by occurrence - the holders and alarms the capture counted, and the
 # idle/sleep radio split off the day-wide total. Rows under the count floor stay out.
-printf '%s\n' "$out" | grep -q '^wlt	tag=\*alarm\*	n=54$' || fail "holder row: $(printf '%s\n' "$out" | grep '^wlt' | head -1)"
-printf '%s\n' "$out" | grep -q '^wlt	tag=\*launch\*	n=28$' || fail "holder row 2"
-printf '%s\n' "$out" | grep -q 'tinyrare' && fail "a holder under the count floor leaked"
-printf '%s\n' "$out" | grep -q '^wla	tag=com.android.systemui.aod.HIDE_TIME	n=18$' || fail "alarm row: $(printf '%s\n' "$out" | grep '^wla' | head -1)"
-printf '%s\n' "$out" | grep -q '^wla	tag=android.app.backup.FullBackupJob	n=6$' || fail "alarm row 2"
-printf '%s\n' "$out" | grep -q 'once.is.not.enough' && fail "an alarm under the count floor leaked"
-printf '%s\n' "$out" | grep -q '^sradio	mib=1.1$' || fail "idle radio split: $(printf '%s\n' "$out" | grep '^sradio')"
+printf '%s\n' "$out" | grep '^wlt	tag=\*alarm\*	n=54$'  >/dev/null || fail "holder row: $(printf '%s\n' "$out" | grep '^wlt' | head -1)"
+printf '%s\n' "$out" | grep '^wlt	tag=\*launch\*	n=28$'  >/dev/null || fail "holder row 2"
+printf '%s\n' "$out" | grep 'tinyrare'  >/dev/null && fail "a holder under the count floor leaked"
+printf '%s\n' "$out" | grep '^wla	tag=com.android.systemui.aod.HIDE_TIME	n=18$'  >/dev/null || fail "alarm row: $(printf '%s\n' "$out" | grep '^wla' | head -1)"
+printf '%s\n' "$out" | grep '^wla	tag=android.app.backup.FullBackupJob	n=6$'  >/dev/null || fail "alarm row 2"
+printf '%s\n' "$out" | grep 'once.is.not.enough'  >/dev/null && fail "an alarm under the count floor leaked"
+printf '%s\n' "$out" | grep '^sradio	mib=1.1$'  >/dev/null || fail "idle radio split: $(printf '%s\n' "$out" | grep '^sradio')"
 # fix218: a sub-two-minute screen-off pause ("gap") can carry the day's peak reading -
 # the pause inherits the heat of whatever surrounded it, so it must not be NAMED the
 # hottest phase (a field capture read "Hottest phase: Recording gap" over a 3-minute
@@ -6004,8 +6006,8 @@ active	$((NOW-6000))	$((NOW-4800))	90	88	41	35	1800	20	0	0	-1	300	0	0	0
 gap	$((NOW-4800))	$((NOW-4680))	88	88	52	33	1700	0	0	0	100	450	0	0	0
 EOF
 gout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state4" sh "$D" "$GAPP")" || fail "gap fixture digest exit"
-printf '%s\n' "$gout" | grep -q '^thermal	cpu=52	surf=35$' || fail "the true peak still reports: $(printf '%s\n' "$gout" | grep '^thermal')"
-printf '%s\n' "$gout" | grep -q '^heat	peak_phase=active	peak_c=41	warm_min=2	skin_min=0	warm_episodes=0	warm_run_min=0$' || fail "a gap must not be named the hottest phase: $(printf '%s\n' "$gout" | grep '^heat')"
+printf '%s\n' "$gout" | grep '^thermal	cpu=52	surf=35$'  >/dev/null || fail "the true peak still reports: $(printf '%s\n' "$gout" | grep '^thermal')"
+printf '%s\n' "$gout" | grep '^heat	peak_phase=active	peak_c=41	warm_min=2	skin_min=0	warm_episodes=0	warm_run_min=0$'  >/dev/null || fail "a gap must not be named the hottest phase: $(printf '%s\n' "$gout" | grep '^heat')"
 grep -qF "((+heat.peak_c || 0) > 0 ? ' · ' + String(+heat.peak_c) + '°' : '')" "$H" || fail "the hottest-phase row lost its peak temperature"
 grep -qF ".replace(/\//g, '/\u2060');" "$H" || fail "the phase drain cell can orphan its unit again"
 # fix219: the throttle owner was the LAST period's owner - a capture with 3 ASB, 6
@@ -6044,11 +6046,11 @@ sysui_hook: com.mod.beta
 sysui_hook: bad;name
 EOF
 mout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state6" sh "$D" "$MIX")" || fail "mixed fixture digest exit"
-printf '%s\n' "$mout" | grep -q '^drain	pctph=4.5	total_drop=9	hours=2.0	ma=' || fail "zero-step phases must count and charging stay out: $(printf '%s\n' "$mout" | grep '^drain')"
-printf '%s\n' "$mout" | grep -q '^thermal	cpu=43	surf=39$' || fail "a zero-length row set the temperature peak: $(printf '%s\n' "$mout" | grep '^thermal')"
-printf '%s\n' "$mout" | grep -q '^heat	peak_phase=active	peak_c=43	' || fail "a zero-length row named the hottest phase: $(printf '%s\n' "$mout" | grep '^heat')"
-printf '%s\n' "$mout" | grep -q '^scr	on_pctph=6.0	off_pctph=1.5	on_min=80	off_min=40	idle_pctph=0.0	idle_min=10	music_min=30$' || fail "idle and screen-off music split: $(printf '%s\n' "$mout" | grep '^scr')"
-printf '%s\n' "$mout" | grep -q '^sysuidraw	intv=81	of=81	pct=13.8	netspeed=1	clocksec=0	livewp=0	hooks=com.mod.alpha, com.mod.beta$' || fail "SystemUI steady redraw line: $(printf '%s\n' "$mout" | grep '^sysuidraw')"
+printf '%s\n' "$mout" | grep '^drain	pctph=4.5	total_drop=9	hours=2.0	ma='  >/dev/null || fail "zero-step phases must count and charging stay out: $(printf '%s\n' "$mout" | grep '^drain')"
+printf '%s\n' "$mout" | grep '^thermal	cpu=43	surf=39$'  >/dev/null || fail "a zero-length row set the temperature peak: $(printf '%s\n' "$mout" | grep '^thermal')"
+printf '%s\n' "$mout" | grep '^heat	peak_phase=active	peak_c=43	'  >/dev/null || fail "a zero-length row named the hottest phase: $(printf '%s\n' "$mout" | grep '^heat')"
+printf '%s\n' "$mout" | grep '^scr	on_pctph=6.0	off_pctph=1.5	on_min=80	off_min=40	idle_pctph=0.0	idle_min=10	music_min=30$'  >/dev/null || fail "idle and screen-off music split: $(printf '%s\n' "$mout" | grep '^scr')"
+printf '%s\n' "$mout" | grep '^sysuidraw	intv=81	of=81	pct=13.8	netspeed=1	clocksec=0	livewp=0	hooks=com.mod.alpha, com.mod.beta$'  >/dev/null || fail "SystemUI steady redraw line: $(printf '%s\n' "$mout" | grep '^sysuidraw')"
 # fix243: a restart whose crash sits in a library loaded from an installed app's APK names
 # that app - from the verdict, or from the dropbox record when it is SystemUI's own or the
 # system reported a SystemUI crash. A record of another process names nobody.
@@ -6083,12 +6085,12 @@ verdict: crash reported by the system, no crash record kept
 10-28 20:15:08.344  8608 15441 I BootMonitorClient: report target=2 pkg=com.android.systemui pid=16619 type=crash
 EOF
 sout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state7" sh "$D" "$SUI")" || fail "sysui fixture digest exit"
-printf '%s\n' "$sout" | grep -q '^sysui	count=4$' || fail "sysui fixture count: $(printf '%s\n' "$sout" | grep '^sysui')"
-printf '%s\n' "$sout" | grep -q '^sysuiinj	pkg=com.example.hooker	n=2	hooks=HookOne, Hook Two$' || fail "injected-code line: $(printf '%s\n' "$sout" | grep '^sysuiinj')"
-printf '%s\n' "$sout" | grep -q '^sysuiset' && fail "restarts without settings writes were attributed to them"
+printf '%s\n' "$sout" | grep '^sysui	count=4$'  >/dev/null || fail "sysui fixture count: $(printf '%s\n' "$sout" | grep '^sysui')"
+printf '%s\n' "$sout" | grep '^sysuiinj	pkg=com.example.hooker	n=2	hooks=HookOne, Hook Two$'  >/dev/null || fail "injected-code line: $(printf '%s\n' "$sout" | grep '^sysuiinj')"
+printf '%s\n' "$sout" | grep '^sysuiset'  >/dev/null && fail "restarts without settings writes were attributed to them"
 printf '===== SYSTEMUI RESTART 2026-10-28 22:00:00 pid 5000 -> 6000 phase=active fsm=ACTIVE =====\nverdict: no SystemUI crash - restarted after 20 SystemUI setting(s) were written from a shell just before (first: oost_systemui_x), the way a customization tool applies its options\n' >> "$SUI/sysui_restarts.txt"
 sout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state7" sh "$D" "$SUI")" || fail "sysui fixture digest exit"
-printf '%s\n' "$sout" | grep -q '^sysui	count=5$' && printf '%s\n' "$sout" | grep -q '^sysuiset	n=1$' || fail "settings-write restarts: $(printf '%s\n' "$sout" | grep '^sysui')"
+printf '%s\n' "$sout" | grep '^sysui	count=5$'  >/dev/null && printf '%s\n' "$sout" | grep '^sysuiset	n=1$'  >/dev/null || fail "settings-write restarts: $(printf '%s\n' "$sout" | grep '^sysui')"
 THR="$T/asb_log_full_day_thr"; mkdir -p "$THR"
 cat > "$THR/throttle_trace.txt" <<EOF
 $((NOW-10000))|active|cap_owner=vendor|x
@@ -6096,14 +6098,14 @@ $((NOW-9900))|active|cap_owner=asb|x
 $((NOW-9800))|active|cap_owner=vendor|x
 EOF
 tout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state5" sh "$D" "$THR")" || fail "throttle fixture digest exit"
-printf '%s\n' "$tout" | grep -q '^throttle	clamps=3	owner=vendor	by=vendor:2,asb:1$' || fail "the owner must be the majority, not the last: $(printf '%s\n' "$tout" | grep '^throttle')"
+printf '%s\n' "$tout" | grep '^throttle	clamps=3	owner=vendor	by=vendor:2,asb:1$'  >/dev/null || fail "the owner must be the majority, not the last: $(printf '%s\n' "$tout" | grep '^throttle')"
 grep -qF "const names = { asb: 'ASB', asb_governor: 'ASB', vendor: 'ROM', shell: 'profile', thermal: 'ROM thermal', unknown: '?' };" "$H" || fail "the sheet no longer names every throttle owner"
 [ "$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_STATE_DIR="$T/state1" sh "$D" "$T/no-such-dir")" = "error	no_capture" ] || fail "missing capture must say error no_capture"
 EMPTY="$T/empty"; mkdir -p "$EMPTY"
 eout="$(ASB_TOMBSTONE_DIR="$T/empty-tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state2" sh "$D" "$EMPTY")"
-printf '%s\n' "$eout" | grep -q '^meta	' || fail "an empty capture still reports meta"
-printf '%s\n' "$eout" | grep -q '^wl	none=1$' || fail "an empty capture reports no wakelocks"
-printf '%s\n' "$eout" | grep -q '^drain	' && fail "an empty capture must not invent drain numbers"
+printf '%s\n' "$eout" | grep '^meta	'  >/dev/null || fail "an empty capture still reports meta"
+printf '%s\n' "$eout" | grep '^wl	none=1$'  >/dev/null || fail "an empty capture reports no wakelocks"
+printf '%s\n' "$eout" | grep '^drain	'  >/dev/null && fail "an empty capture must not invent drain numbers"
 
 # fix204: a capture that JUST started has neither the ledger nor the interim report (the
 # first snapshot lands after fifteen minutes). Its crash window must open at the
@@ -6138,13 +6140,13 @@ fout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/
 # fix244: a lock from an earlier boot, or a pid that is not the recorder (reused after a
 # reboot), is not a running capture - capture 549 read "recording" long after it ended.
 printf 'boot-old\n' > "$T/lock2/boot_id"; printf 'boot-new\n' > "$T/bootid"
-rout="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3b" sh "$D" "$FRESH" | head -n 1)"
-printf '%s\n' "$rout" | grep -q '	running=0	' || fail "a lock from an earlier boot reads as running: $rout"
+rout="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3b" sh "$D" "$FRESH" | sed -n '1p')"
+printf '%s\n' "$rout" | grep '	running=0	'  >/dev/null || fail "a lock from an earlier boot reads as running: $rout"
 rm -f "$T/lock2/boot_id"
 sleep 30 & _lq=$!
 printf '%s\n' "$_lq" > "$T/lock2/pid.other"
-rout="$(cp "$T/lock2/pid" "$T/lock2/pid.rec"; cp "$T/lock2/pid.other" "$T/lock2/pid"; ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3c" sh "$D" "$FRESH" | head -n 1; cp "$T/lock2/pid.rec" "$T/lock2/pid")"
-printf '%s\n' "$rout" | grep -q '	running=0	' || fail "a pid that is not the recorder reads as running: $rout"
+rout="$(cp "$T/lock2/pid" "$T/lock2/pid.rec"; cp "$T/lock2/pid.other" "$T/lock2/pid"; ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3c" sh "$D" "$FRESH" | sed -n '1p'; cp "$T/lock2/pid.rec" "$T/lock2/pid")"
+printf '%s\n' "$rout" | grep '	running=0	'  >/dev/null || fail "a pid that is not the recorder reads as running: $rout"
 touch -d "@$((NOW-600))" "$T/lock2/pid"   # the PID-reuse fixture's cp must not move capture start
 # fix339: a live recorder PID with no monotonic progress is stale, not running. Keep the
 # historical traces and the independently fresh crash row, but never write this live capture
@@ -6161,15 +6163,15 @@ boot_id=
 EOF
 printf '%s|%s|dumpsys:batterystats|124\n' "$((NOW-600))" "$((UP-600))" > "$FRESH/collector_events.tsv"
 stallout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-stale" sh "$D" "$FRESH")"
-printf '%s\n' "$stallout" | grep -q '^meta	elapsed_min=0	target_h=0	running=0' || fail "a live PID without progress still reads as running: $(printf '%s' "$stallout" | head -1)"
+printf '%s\n' "$stallout" | grep '^meta	elapsed_min=0	target_h=0	running=0'  >/dev/null || fail "a live PID without progress still reads as running: $(printf '%s' "$stallout" | head -1)"
 printf '%s\n' "$stallout" | grep -Eq '^recorder	state=stale	process_alive=1	heartbeat_age_s=59[5-9]|^recorder	state=stale	process_alive=1	heartbeat_age_s=60[0-9]' || fail "stale recorder age/state missing: $(printf '%s' "$stallout" | grep '^recorder')"
-printf '%s\n' "$stallout" | grep -q '	stage=dumpsys:batterystats	tick=7	collector_timeouts=1	last_collector=dumpsys:batterystats$' || fail "stale stage/timeout evidence missing"
+printf '%s\n' "$stallout" | grep '	stage=dumpsys:batterystats	tick=7	collector_timeouts=1	last_collector=dumpsys:batterystats$'  >/dev/null || fail "stale stage/timeout evidence missing"
 printf '%s\n' "$stallout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash' || fail "a fresh crash was discarded with stale measurements: $(printf '%s' "$stallout" | grep '^crash')"
 [ ! -e "$T/state3-stale/report_history.tsv" ] || fail "a live but stalled capture entered finished history"
 rm -f "$FRESH/recorder_heartbeat.env"
 unknownout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-unknown" sh "$D" "$FRESH")"
-printf '%s\n' "$unknownout" | grep -q '^meta	elapsed_min=0	target_h=0	running=0' || fail "a legacy live PID without heartbeat reads as running"
-printf '%s\n' "$unknownout" | grep -q '^recorder	state=unknown	process_alive=1	heartbeat_age_s=-1' || fail "a legacy live PID is not explicit unknown"
+printf '%s\n' "$unknownout" | grep '^meta	elapsed_min=0	target_h=0	running=0'  >/dev/null || fail "a legacy live PID without heartbeat reads as running"
+printf '%s\n' "$unknownout" | grep '^recorder	state=unknown	process_alive=1	heartbeat_age_s=-1'  >/dev/null || fail "a legacy live PID is not explicit unknown"
 cat > "$FRESH/recorder_heartbeat.env" <<EOF
 schema=1
 pid=$_lp
@@ -6181,7 +6183,7 @@ stage=sampling
 boot_id=
 EOF
 malformedout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-malformed" sh "$D" "$FRESH")"
-printf '%s\n' "$malformedout" | grep -q '^recorder	state=unknown	process_alive=1	heartbeat_age_s=-1' || fail "malformed monotonic evidence was repaired into a timestamp"
+printf '%s\n' "$malformedout" | grep '^recorder	state=unknown	process_alive=1	heartbeat_age_s=-1'  >/dev/null || fail "malformed monotonic evidence was repaired into a timestamp"
 rm -f "$FRESH/recorder_heartbeat.env"
 # Reboot/resume: only a heartbeat from the new boot and the new recorder PID can revive the
 # live state. If that resumed recorder then stalls, the same capture becomes stale again.
@@ -6197,16 +6199,16 @@ stage=sleep
 boot_id=boot-new
 EOF
 resumeout="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-resume" sh "$D" "$FRESH")"
-printf '%s\n' "$resumeout" | grep -q '^recorder	state=running	process_alive=1' || fail "same-boot resumed heartbeat did not restore live state"
+printf '%s\n' "$resumeout" | grep '^recorder	state=running	process_alive=1'  >/dev/null || fail "same-boot resumed heartbeat did not restore live state"
 sed -i "s/^mono=.*/mono=$((UP-600))/;s/^stage=.*/stage=sampling/" "$FRESH/recorder_heartbeat.env"
 resumestale="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-resume-stale" sh "$D" "$FRESH")"
-printf '%s\n' "$resumestale" | grep -q '^recorder	state=stale	process_alive=1' || fail "resumed recorder stall was not detected"
+printf '%s\n' "$resumestale" | grep '^recorder	state=stale	process_alive=1'  >/dev/null || fail "resumed recorder stall was not detected"
 rm -f "$T/lock2/boot_id"
 unset ASB_LK_UPTIME_FILE
 kill "$_lq" 2>/dev/null || true; wait "$_lq" 2>/dev/null || true
 kill "$_lp" 2>/dev/null || true; wait "$_lp" 2>/dev/null || true
-printf '%s\n' "$fout" | grep -q '^meta	elapsed_min=0	target_h=0	running=1' || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
-printf '%s\n' "$fout" | grep -q '^recorder	state=running	process_alive=1	heartbeat_age_s=0	stage=sleep	tick=1' || fail "fresh monotonic heartbeat was not projected"
+printf '%s\n' "$fout" | grep '^meta	elapsed_min=0	target_h=0	running=1'  >/dev/null || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
+printf '%s\n' "$fout" | grep '^recorder	state=running	process_alive=1	heartbeat_age_s=0	stage=sleep	tick=1'  >/dev/null || fail "fresh monotonic heartbeat was not projected"
 printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=[0-9]{2}:[0-9]{2}$' || fail "a fresh capture's crash window must start at its launch, not 24h ago: $(printf '%s' "$fout" | grep '^crash')"
 # The ledger may lead with a "# phase ..." comment: the window must read the first DATA
 # row, not the comment. The main fixture's ledger has no comment, so pin it here.
@@ -6223,7 +6225,7 @@ HST="$T/hist_state"
 CB="$T/asb_log_full_day_b"; mkdir -p "$CB"
 awk -F'\t' 'BEGIN{OFS="\t"} {$2=$2-100000; $3=$3-100000; print}' "$CAP/phase_ledger.tsv" > "$CB/phase_ledger.tsv"
 ra="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP")"
-printf '%s\n' "$ra" | grep -q '^hist	' && fail "the first finished capture must not invent a trend"
+printf '%s\n' "$ra" | grep '^hist	'  >/dev/null && fail "the first finished capture must not invent a trend"
 [ -s "$HST/report_history.tsv" ] || fail "a finished capture left no history line"
 rb="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CB")"
 printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2	device=OP611FL1	rom=CPH2745_16.0.10.601\(EX01\)	mod=V65-test	elapsed=720	on_pct=0	off_min=1036	dm=3$' || fail "the second capture must name the first with comparison context: $(printf '%s\n' "$rb" | grep '^hist')"
@@ -6264,14 +6266,14 @@ D	zygisk_observer	hints_screen_off	4
 EOF_ZY_LATEST
 zyout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$ZC")"
 for field in launch_events_start=2 launch_events_latest=8 launch_events_delta=6 launch_accepted_start=1 launch_accepted_latest=7 launch_accepted_delta=6 launch_throttled_delta=6 launch_screen_off_delta=3 launch_long_delta=1 launch_short_delta=41 launch_class_fallback_delta=0 denylist_spawns_delta=966 hints_screen_off_delta=4 deltas=available; do
-  printf '%s\n' "$zyout" | grep '^zygisk' | grep -q "	$field" || fail "observer counter projection: $field"
+  printf '%s\n' "$zyout" | grep '^zygisk' | grep "	$field"  >/dev/null || fail "observer counter projection: $field"
 done
 sed -i 's/launch_short	43/launch_short	1/' "$ZC/zygisk_observer_latest.tsv"
 zyreset="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$ZC")"
-printf '%s\n' "$zyreset" | grep '^zygisk' | grep -q '	launch_short_delta=unknown' || fail 'a decreasing launch-class counter must have an unknown delta'
-printf '%s\n' "$zyreset" | grep '^zygisk' | grep -q '	deltas=counter_reset_or_restart' || fail 'a decreasing launch-class counter must name reset/restart'
+printf '%s\n' "$zyreset" | grep '^zygisk' | grep '	launch_short_delta=unknown'  >/dev/null || fail 'a decreasing launch-class counter must have an unknown delta'
+printf '%s\n' "$zyreset" | grep '^zygisk' | grep '	deltas=counter_reset_or_restart'  >/dev/null || fail 'a decreasing launch-class counter must name reset/restart'
 for field in launch_events_start=2 launch_events_latest=8 launch_events_delta=unknown launch_accepted_start=1 launch_accepted_latest=7 launch_accepted_delta=unknown; do
-  printf '%s\n' "$zyreset" | grep '^zygisk' | grep -q "	$field" || fail "reset must preserve latest absolute evidence, not invent a delta: $field"
+  printf '%s\n' "$zyreset" | grep '^zygisk' | grep "	$field"  >/dev/null || fail "reset must preserve latest absolute evidence, not invent a delta: $field"
 done
 
 # --- the REAL parser/tips in node, fed the fixture digest and the shipped locales ---
@@ -7945,6 +7947,7 @@ let document = { hidden: false };
 let rafs = [];
 function requestAnimationFrame(f) { rafs.push(f); }
 function asbFitPages() {}
+const asbUiFrame = { request: f => f() };
 function parseDeviceInfo(t) { const n = String(t || '').split('\n').filter(x => x.startsWith('D\t')).length; return { count: n, raw: t }; }
 function deviceInfoRender(d) { log.push('render:' + d.count + ':' + _el('deviceStatus').textContent); return d.count; }
 function deviceInfoLoading() { log.push('loading'); }
@@ -8118,7 +8121,7 @@ const ids={};['liveCpu','liveSkin','liveSurface','liveState','liveGpu','liveHead
 const reportBody=mk(),reportStatus=mk(),rpRefresh=mk();const liveMetrics=mk();
 function _el(id){if(id==='reportBody')return reportBody;if(id==='reportStatus')return reportStatus;if(id==='rpRefresh')return rpRefresh;if(id==='liveMetrics')return liveMetrics;return ids[id]||null;}
 const document={createElement:mk,hidden:false};let renders=0,yields=0,runs=0,rawFixture='good1',runGate=null;
-function T(k,d){return d;}function deviceInfoStamp(){return 'time';}function requestAnimationFrame(f){f();}function asbFitPages(){}
+function T(k,d){return d;}function deviceInfoStamp(){return 'time';}function requestAnimationFrame(f){f();}function asbFitPages(){}const asbUiFrame={request:f=>f()};
 let topCalls=0,drainHomes=0;function lvTopSec(smart){chk(smart===true,'wrong Monitor section restored');topCalls++;}function lvDrainHome(b){chk(b===ids.liveSmartBanner,'drain strip not homed to Smart');drainHomes++;}
 function asbPaintYield(){yields++;return Promise.resolve();}
 function run(){runs++;return runGate?new Promise(r=>runGate(r)):Promise.resolve({errno:0,stdout:rawFixture});}function runText(r){return r.stdout||'';}
@@ -8231,9 +8234,9 @@ assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','rekern
 # fix252: five groups in reading order - hardware, firmware and system, kernel, root, ASB.
 order = re.search(r'const DEVICE_SECTION_ORDER = \[(.*?)\n\];', h, re.S).group(1)
 specs = re.findall(r"\['([a-z_]+)', '(dev_sec_[a-z_]+)', '[^']*', '([a-z]+)'", order)
-assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','system_load','kernel','kernel_origin',
+assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','system_load','kernel','kernel_origin','kernel_bore',
                                  'kernel_btf','kernel_ebpf','kernel_fuse_bpf','kernel_features','kernel_runtime','kernel_external','kernel_config',
-                                 'root','susfs','metamodule','companion_modules','zygisk_observer','lsposed_hooks','asb','asb_caps','meta'], specs
+                                 'root','susfs','metamodule','companion_modules','zygisk_provider','zygisk_observer','lsposed_hooks','asb','asb_caps','meta'], specs
 groups = [x[2] for x in specs]
 assert groups == sorted(groups, key=['hw','sw','kernel','root','asb'].index), 'a group is split: ' + str(groups)
 assert specs[0][1] == 'dev_sec_device' and specs[6][1] == 'dev_sec_firmware', 'the phone identity opens the hardware group'
@@ -8292,7 +8295,7 @@ const ASB_LANG = 'en';
 const window = globalThis;
 function T(k, d) { return d; }
 function techIcon(kind) { return "svg:" + kind; }
-function requestAnimationFrame() {} function asbFitPages() {}
+function requestAnimationFrame() {} function asbFitPages() {} const asbUiFrame={request:f=>f()};
 function mk(tag) {
   const e = { tagName: tag, className: '', children: [], _text: '',
     classList: { add(c) { const a = new Set(e.className.split(/\s+/).filter(Boolean)); a.add(c); e.className = Array.from(a).join(' '); } },
@@ -8897,6 +8900,7 @@ let now = 0; const timers = [], rafs = [], dcl = [];
 global.performance = { now: () => now };
 global.setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn }); };
 global.requestAnimationFrame = fn => { rafs.push(fn); };
+global.asbUiFrame = { request: fn => requestAnimationFrame(fn) };
 const rootCls = new Set(['asb-home-pending']), props = {};
 const home = { style: { transition: '' }, offsetWidth: 424, animate: () => { events.push('animate'); return { cancel() {}, set onfinish(f) {} }; } };
 let barParsed = false; const events = [];
@@ -9102,6 +9106,7 @@ cp "$ROOT/tools/asb_kernel_uv_coexist.sh" "$T/mod/tools/"
 cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_zygisk.sh" "$ROOT/runtime/asb_zygisk_info.sh" "$ROOT/runtime/asb_lsposed_info.sh" "$T/mod/runtime/"
 printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\n' > "$T/mod/config/governor.conf"
 printf '0\n' > "$T/proc/sys/kernel/hrtimer_migration"
+printf '1\n' > "$T/proc/sys/kernel/sched_bore"
 printf '1\n' > "$T/sys/module/lpm_levels/parameters/lpm_prediction"
 printf '%s\n' -1 > "$T/sys/module/usbcore/parameters/autosuspend"
 printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"
@@ -9153,6 +9158,7 @@ printf 'SUMMARY\n  camera_tunable=1\n  audio_tunable=1\n  wifi_tunable=0\n  medi
 printf '370\n' > "$T/sys/class/power_supply/battery/cycle_count"
 cat > "$T/config" <<'EOF'
 CONFIG_LOCALVERSION="-custom"
+CONFIG_SCHED_BORE=y
 CONFIG_PREEMPT=y
 CONFIG_HZ=300
 CONFIG_NOMOUNT=y
@@ -9251,6 +9257,8 @@ printf '%s\n' "$out" | awk -F '\t' 'NF < 4 || $1 != "D" || $2 == "" || $3 == "" 
 want meta schema 5; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
 want lsposed_hooks present 0
 want kernel_origin assessment custom-like; want kernel_origin confidence 'indicative; not a provenance proof'
+want kernel_bore config y; want kernel_bore runtime_interface readable; want kernel_bore state on
+want kernel_bore write_access writable; want kernel_bore toggle available
 want kernel_btf summary 'built-in config; vmlinux exposed'; want kernel_btf vmlinux 'vmlinux readable and non-empty'
 want kernel_btf module_entries '1 entries exposed'; want kernel_ebpf summary 'configured; runtime interfaces exposed'
 want kernel_ebpf bpfs 'directory exposed'; want kernel_ebpf pinned_objects '1 top-level entries exposed'
@@ -9291,7 +9299,11 @@ grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a s
 # scheduler node/config verdicts and stop before package, display, battery and thermal work.
 mkdir -p "$T/proc/sys/kernel"; printf '1\n' > "$T/proc/sys/kernel/sched_schedstats"
 printf '\nCONFIG_SCHEDSTATS=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+mv "$T/proc/sys/kernel/sched_bore" "$T/proc/sys/kernel/sched_bore.saved"
 out="$(run --kernel)"
+want kernel_bore config y; want kernel_bore runtime_interface not_exposed; want kernel_bore state unknown
+want kernel_bore write_access not_exposed; want kernel_bore toggle unavailable
+mv "$T/proc/sys/kernel/sched_bore.saved" "$T/proc/sys/kernel/sched_bore"
 want kernel_features sched_stats 'writable; live=1'
 want kernel_features sched_stats_config y
 want kernel_features sched_stats_node "$T/proc/sys/kernel/sched_schedstats"
@@ -9327,7 +9339,7 @@ want kernel_features oplus_sdp_900ma 'node present but unreadable'
 rmdir "$T/proc/sdp900ma"
 sed -i 's/^CONFIG_OPLUS_SDP_900MA=y$/# CONFIG_OPLUS_SDP_900MA is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run --kernel)"; want kernel_features oplus_sdp_900ma 'not observed; exposed config says not set'
-printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule|companion_modules)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
+printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_bore|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule|companion_modules)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "--kernel collected a sensitive identifier"
 rm -f "$T/proc/sys/kernel/sched_schedstats"
 sed -i 's/^CONFIG_SCHEDSTATS=y$/# CONFIG_SCHEDSTATS is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
@@ -9438,7 +9450,8 @@ out="$(run)"; want kernel_features unicode_bypass_fix 'built-in config; runtime 
 # Remove the still-running NoMount driver too: runtime custom evidence is intentionally
 # stronger than the boot/build indicators and must not be hidden to preserve an old verdict.
 printf 'Linux version 6.12.30-oplus (builder@host) #1 SMP PREEMPT\n' > "$T/proc/version"
-sed -i -e '/^CONFIG_LOCALVERSION=/d' -e '/^CONFIG_KSU/d' -e '/^CONFIG_NOMOUNT/d' -e '/^CONFIG_SECURITY_BASEBAND_GUARD/d' -e '/^CONFIG_UNICODE_BYPASS/d' "$T/config"
+sed -i -e '/^CONFIG_LOCALVERSION=/d' -e '/^CONFIG_KSU/d' -e '/^CONFIG_NOMOUNT/d' -e '/^CONFIG_SECURITY_BASEBAND_GUARD/d' -e '/^CONFIG_UNICODE_BYPASS/d' -e '/^CONFIG_SCHED_BORE/d' "$T/config"
+rm -f "$T/proc/sys/kernel/sched_bore"
 rmdir "$T/sys/module/nomount"
 gzip -c "$T/config" > "$T/proc/config.gz"; out="$(run)"
 want kernel_origin assessment stock-like; want kernel_origin basis 'boot/build indicators only; provenance not proven'
@@ -10409,9 +10422,11 @@ for token in ('let _deviceHeaderLoad = null;', 'if (cached) { deviceHeaderPaint(
     assert token in header, token
 assert header.index('if (cached)') < header.index("await fetch(")
 open_live=body('function openLivePage() {')
-assert 'pollStockTelemetry(true);' in open_live and 'pollStockTelemetry(true, true)' not in open_live
+assert 'liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);' in open_live
+monitor_schedule=body('function liveMonitorSchedule(delay) {')
+assert 'pollStockTelemetry(true);' in monitor_schedule and 'pollStockTelemetry(true, true)' not in monitor_schedule
 poll=body('async function pollLive(visible) {')
-for token in ('if (_livePollRun) {','if (!visible || _livePollVisible) return _livePollRun;',
+for token in ('if (_livePollRun) {','if (!visible || (_livePollVisible && _livePollSeq === _livePageSeq)) return _livePollRun;',
               'if (!_livePollFollow) {','return pollLive(true);','} finally {',
               '_livePollRun = null;','if (releasePoll) releasePoll();',
               'else await pollStockTelemetry(false);'):
@@ -10476,7 +10491,8 @@ const flush=()=>new Promise(r=>setImmediate(r));
   global._selectedProfile='stock';
   const starts=[],gates=[];
   global.pollStockTelemetry=v=>{starts.push(v);let resolve;const promise=new Promise(r=>resolve=r);gates.push({resolve});return promise;};
-  const decl=h.slice(h.indexOf('let _livePollRun = null,'),h.indexOf('\n',h.indexOf('let _livePollRun = null,')));
+  global._liveOpen=true;global._stockTelemetryKv={};
+  const decl=h.slice(h.indexOf('let _livePollRun = null,'),h.indexOf('/* Declared up here with the other page flags'));
   eval(decl+'\n'+grab('async function pollLive(visible) {')+';globalThis.poll=pollLive;');
   const bg=poll(false),bgJoin=poll(false),vis=poll(true),visJoin=poll(true);
   chk(starts.length===1&&starts[0]===false,'background pass was duplicated');
@@ -10508,7 +10524,7 @@ python3 - "$H" <<'PY' || fail 'source/load-order contract'
 import sys
 s=open(sys.argv[1],encoding='utf-8').read()
 load=s[s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches')):s.index('function asbNavCurrent')]
-assert load.index('asbApplyUiScale();') < load.index('requestAnimationFrame(asbFitPages);')
+assert load.index('asbApplyUiScale();') < load.index('asbUiFrame.request(asbFitPages);')
 assert load.index('asbApplyUiScale();') < load.index('asbDeviceFont();')
 assert '@import "https://mui.kernelsu.org/internal/insets.css"' not in s
 assert "window.addEventListener('resize', asbApplyUiScale);" in s
@@ -10532,6 +10548,7 @@ chk(window._asbUiScale===1&&root.dataset.asbUi==='980px@1','early provisional wi
 const start=h.indexOf("window.addEventListener('load', function () {",h.indexOf('function asbStartupWarmCaches'));
 const end=h.indexOf('\n});',start)+4;
 global.requestAnimationFrame=fn=>fn();
+global.asbUiFrame={request:fn=>fn()};
 global.asbFitPages=()=>{fitWidth=root.dataset.asbUi};
 global.asbDeviceFont=()=>{fonts++};
 global.asbStartupWarmCaches=()=>{warm++};
@@ -10634,7 +10651,7 @@ load=warm[warm.index("window.addEventListener('load'"):]
 assert 'asbStartupWarmCaches' not in load
 assert 'html .page:not(.live-page) > *,\nhtml .profiles > * { animation:none; }' in s
 scale=s[s.index('asbApplyUiScale();',s.index('const ASB_UI_REFERENCE_W')):s.index("window.addEventListener('resize', asbApplyUiScale);")]
-assert 'requestAnimationFrame(asbFitPages);' in scale
+assert 'asbUiFrame.request(asbFitPages);' in scale
 for token in ('html .cfg-tile-ico {','place-items:center;','align-self:center;',
               'html .cfg-tile-name {','overflow-wrap:anywhere;',
               'html .cfg-tile-desc {','min-height:2.2em;','-webkit-line-clamp:2;',
@@ -10802,7 +10819,7 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   global.cfgGroupOf=k=>k;global._cfgVals={iface:'1'};global.cfgIsActive=(it,cur)=>String(cur)==='1';
   global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',kernel:'Scheduler, MGLRU, wakeups',feel:'LTPO, vibration, touch',zygisk:'Master switch and status',ui:'Services, processes, diagnostics'};
   global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
-  global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};
+  global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};global.asbUiFrame={request:()=>{}};
   global.setTimeout=()=>0;
   eval(grab('function cfgGroupHiddenKeys(groupId) {','// Settings whose effect lands in a file').replace(/^let /gm,'var ')+';globalThis.renderHub=cfgRenderHub;');
   const list=new E('div');renderHub(list);const hub=list.children[0];
@@ -10879,7 +10896,7 @@ const root={classList:{remove:c=>rootClasses.delete(c)}};
 const home={style:{transition:''},offsetWidth:412,animate:(frames,options)=>{events.push('animate');chk(options.duration===260&&options.delay===60,'Monitor timing was not reused');chk(frames[0].transform==='scale(.985)'&&frames[1].transform==='scale(1)','fade/scale keyframes differ');return {cancel:()=>events.push('cancel'),set onfinish(fn){this.done=fn}}}};
 global.document={documentElement:root,querySelector:s=>s==='.page:not(.live-page)'?home:null};
 global.window={matchMedia:()=>({matches:false}),addEventListener:()=>{}};
-global.setTimeout=()=>{};global.requestAnimationFrame=fn=>{events.push('raf');fn()};
+global.setTimeout=()=>{};global.requestAnimationFrame=fn=>{events.push('raf');fn()};global.asbUiFrame={request:fn=>requestAnimationFrame(fn)};
 global.asbNavAnimMark=()=>events.push('mark');global.asbFirstFrameMark=()=>{};
 global.asbFitPagesNow=()=>{events.push('fit');chk(!rootClasses.has('asb-home-pending'),'fit ran before final layout state');chk(home.style.transition==='none','CSS transition conflicts with WAAPI fit')};
 global.asbFitPages=()=>events.push('fit-queued');
@@ -11069,7 +11086,7 @@ open_src = '\n'.join([
     "const els={}; ['devicePage','devDeviceLine','deviceLine','devSocBadge','socBadge','devVerBadge','verBadge','devCurProfile','curProfile'].forEach(x=>els[x]=new El(x));",
     "const document={body:new El('body')}; let _deviceOpen=false; function asbNavAnimMark(){}",
     "function _el(id){return els[id]||null} function uiSound(){sound++} function asbTabbarVisibility(){}",
-    "function asbNavSync(){} function asbFitPages(){} function requestAnimationFrame(){}",
+    "function asbNavSync(){} function asbFitPages(){} function requestAnimationFrame(){} const asbUiFrame={request:f=>f()};",
     "function setTimeout(f){timers.push(f)} function asbDeviceInfoLoad(){loads++}",
     fn('openDevicePage'),
     "openDevicePage();",
@@ -11168,7 +11185,7 @@ async function run(cmd) {
   return { errno: code, stdout: out.replace(/\n$/, ''), stderr: '' };
 }
 JS
-  sed -n '/^const _ASB_PART = /p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p' "$H"
+  sed -n '/^const _ASB_PART = /p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^const _asbBatchCache = /p; /^const _asbBatchPerf = /p; /^async function runBatch(/,/^}/p' "$H"
   cat <<'JS'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 (async () => {
@@ -11203,6 +11220,7 @@ function requestAnimationFrame(f) { frames.push(f); }
 function setTimeout(f, ms) { timers.push({ f, at: now + ms }); }
 function _pageAnimMs() { return 320; }
 function asbFitPagesNow() { fits++; }
+const asbUiFrame = { request(f) { if (!frames.includes(f)) frames.push(f); } };
 JS
   sed -n '/^var _asbNavAnimUntil = 0;/p; /^function asbNavAnimMark(/p; /^function asbAfterNavAnim(/,/^}/p; /^function asbFitPages(/,/^}/p' "$H"
   cat <<'JS'
@@ -11232,7 +11250,9 @@ nav = body('function asbNavGo(target) {')
 assert 'zygiskHeaderRefresh()' not in nav and 'zygiskHeaderRefreshLazy();' in nav, 'every tab tap still probes the Zygisk header'
 live = body('function openLivePage() {')
 assert 'run(' not in live and 'zygiskHeaderRefresh' not in live, 'opening Monitor starts a root shell on the tap'
-assert 'setTimeout(function () {' in live and 'pollLive(true);' in live, 'Monitor no longer reads after its slide'
+assert 'liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);' in live, 'Monitor no longer schedules its read after the slide'
+monitor_schedule = body('function liveMonitorSchedule(delay) {')
+assert 'setTimeout(function () {' in monitor_schedule and 'pollLive(true)' in monitor_schedule, 'Monitor scheduler lost its deferred read'
 cfg = body('function openConfigPage() {')
 assert 'run(' not in cfg and 'zygiskHeaderRefresh' not in cfg and 'loadDeviceClass' not in cfg, 'opening Settings starts a root shell on the tap'
 assert 'asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 30);' in cfg, 'Settings no longer refreshes after its slide'
@@ -12040,8 +12060,8 @@ assert "_cfgGroup = groupId || null;" in show
 assert "if (page) page.scrollTop = 0;" in show
 assert 'cfgRender();' in show
 assert "tile.onclick = () => { uiSound('nav'); cfgShowGroup(g.id); };" in h
-assert "if (_cfgGroup) { cfgShowGroup(null); requestAnimationFrame(asbFitPages); return; }" in h
-assert "_cfgSearch = ''; cfgShowGroup('zygisk'); requestAnimationFrame(asbFitPages);" in h
+assert "if (_cfgGroup) { cfgShowGroup(null); asbUiFrame.request(asbFitPages); return; }" in h
+assert "_cfgSearch = ''; cfgShowGroup('zygisk'); asbUiFrame.request(asbFitPages);" in h
 # The screenshot's DSP spelling was verified against the source: keep the correct Russian ж.
 ru=json.loads((r/'webroot/i18n/ru.json').read_text())
 assert ru['cfg_audio_section_dsp']=='DSP-движок ASB'
@@ -12056,6 +12076,7 @@ const page={scrollTop:0};
 function _el(id){return id==='configPage'?page:null}
 function cfgRender(){renders++} function uiSound(){sounds++}
 function requestAnimationFrame(f){f()} function asbFitPages(){fits++}
+const asbUiFrame={request:f=>f()};
 function closeConfigPage(){throw Error('category back must not close Config')}
 function grab(name){const a=h.indexOf('function '+name+'(');if(a<0)throw Error('missing '+name);const b=h.indexOf('\n}\n',a);return h.slice(a,b+3)}
 eval(grab('cfgShowGroup'));eval(grab('cfgBack'));
@@ -12997,7 +13018,8 @@ fbm = dict(re.findall(r"\n    ([a-z_]+): '([^']*)'", b[b.index('const fb = {'):b
 assert set(fbm) == {'done','done_no_service','service_down','clear_failed','not_installed','busy','lock_error','unknown'}
 for k, v in fbm.items(): assert en['soter_res_' + k] == v, k
 keys = sorted(k for k in en if k.startswith('soter_'))
-assert len(keys) == 44, len(keys)
+assert len(keys) == 46, len(keys)
+assert {'soter_boot_recent_manual','soter_boot_auto_off'} <= set(keys)
 assert 'soter_confirm' not in en
 for p in sorted((root / 'webroot/i18n').glob('*.json')):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -13035,7 +13057,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
  replies.run='soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running';
  await soterFixRun(); await settle();
  if(cmds.filter(c=>/ run$/.test(c)).length!==1)throw Error('the first tap did not run the repair once');
- if(!/service is running again/.test(_el('soterNote').textContent))throw Error('done note');
+ if(!/init service is running/.test(_el('soterNote').textContent)||!/App and payment functionality was not tested/.test(_el('soterNote').textContent))throw Error('done note overclaims or omits service state: '+_el('soterNote').textContent);
  for(const [st,re] of [['service_down',/did not start again/],['clear_failed',/refused/],['busy',/already running/]]){
   replies.run='soter|result|state='+st+'|cleared=0|passes=1|services=none';
   _el('soterRun').disabled=false; await soterFixRun(); await settle();
@@ -13044,7 +13066,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
  replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=1700000000|last_result=done|last_trigger=boot|auto=0';
  await soterFixLoad(true);
  if(_el('soterAuto').getAttribute('aria-checked')!=='false'||_el('soterAuto').getAttribute('aria-disabled')!=='false')throw Error('auto off not offered');
- if(!/after reboot · SOTER data reset/.test(_el('soterRows').textContent))throw Error('boot trigger not shown: '+_el('soterRows').textContent);
+ if(!/after reboot · SOTER server data cleared; the init service is running/.test(_el('soterRows').textContent))throw Error('boot trigger or honest service result not shown: '+_el('soterRows').textContent);
  replies.on='soter|auto|state=1';
  replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1';
  _el('soterAuto').onclick({stopPropagation(){}}); await settle(); await settle();
@@ -13166,12 +13188,16 @@ const settle=()=>new Promise(r=>setImmediate(r));
  soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=done|boot_result=done|boot_unlock=35|boot_via=ce_available|boot_time=1700000000|boot_first=service_down|notify_lang=en'));
  const sr=host.textContent;
  if(!/Automatic repair, this boot/.test(sr)||!/unlocked 35 s after boot/.test(sr)||!/second try/.test(sr))throw Error('boot row: '+sr);
- if(!cmds.some(c=>/ texts 'ru' 'SOTER Repair' 'SOTER was repaired/.test(c)))throw Error('notification texts not stored for the UI language: '+cmds.join(' | '));
+ if(!cmds.some(c=>/ texts 'ru' 'SOTER Repair' 'SOTER server data were cleared after the reboot; app functionality was not tested\./.test(c)))throw Error('honest notification texts not stored for the UI language: '+cmds.join(' | '));
  cmds=[];
  soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=none|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=ru'));
  if(!/has not started in this boot/.test(host.textContent)||cmds.length)throw Error('none row / texts re-stored');
  soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=waiting|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=ru'));
  if(!/waiting for the first unlock/.test(host.textContent))throw Error('waiting row');
+ soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=skipped|boot_result=recent_manual|boot_unlock=35|boot_via=ce_available|boot_time=1700000000|boot_first=none|notify_lang=ru'));
+ if(!/not needed - a manual repair already completed in this boot/.test(host.textContent))throw Error('same-boot manual skip not shown');
+ soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=skipped|boot_result=auto_off|boot_unlock=35|boot_via=ce_available|boot_time=1700000000|boot_first=none|notify_lang=ru'));
+ if(!/cancelled - automatic repair was switched off/.test(host.textContent))throw Error('auto-off cancellation not shown');
  soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=0|boot_state=off|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=none'));
  if(/this boot/.test(host.textContent))throw Error('boot row shown with the switch off');
  console.log('ok');
@@ -13321,7 +13347,7 @@ import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
 b = h[h.index('function kernelUnavailableWhy('):h.index('function kernelDecorateControlRow(')]
 fb = dict(re.findall(r"\n    (kernel_[a-z_]+): '([^']*)'", b))
-assert set(fb) == {'kernel_sched_nr_migrate', 'kernel_sched_autogroup', 'kernel_lpm_prediction', 'kernel_rt_boost'}, fb
+assert set(fb) == {'kernel_sched_nr_migrate', 'kernel_sched_autogroup', 'kernel_lpm_prediction', 'kernel_rt_boost', 'kernel_bore'}, fb
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 for k, v in fb.items(): assert en['kc_why_' + k] == v, k
 for p in sorted((root / 'webroot/i18n').glob('*.json')):
@@ -13640,11 +13666,11 @@ for l in LOC:
 for k in K:
     assert jsdesc(k) == en['cfg'][k]['desc'], (k, 'JS fallback differs from en.json')
 assert "name:'%s'" % en['cfg']['kernel_rt_boost']['name'] in h
-for token in ("  'kernel_rt_boost',\n  'cool_gaming',", "kernel_rt_boost:'system',", "kernel_rt_boost:'kernel',",
-              "'kernel_usb_autosuspend','kernel_rt_boost'], card:'wakeup' }", "kernel_rt_boost:'rt_boost',",
+for token in ("  'kernel_rt_boost',\n  'kernel_bore',\n  'cool_gaming',", "kernel_rt_boost:'system',", "kernel_rt_boost:'kernel',",
+              "'kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'], card:'wakeup' }", "kernel_rt_boost:'rt_boost',",
               "kernel_rt_boost: APPLY_LIVE,", "  rt_boost: '<path"):
     assert token in h, token
-assert re.search(r"const ASB_KERNEL_STATUS_KEYS = \[[^\]]*'kernel_rt_boost'\]", h)
+assert re.search(r"const ASB_KERNEL_STATUS_KEYS = \[[^\]]*'kernel_rt_boost','kernel_bore'\]", h)
 assert "kernel_rt_boost: '%s'" % en['kc_why_kernel_rt_boost'] in h
 assert "deferred: '%s'" % en['kc_verdict_deferred'].replace("'", "\\'") in h and "auto_kernel: '%s'" % en['kc_verdict_auto_kernel'].replace("'", "\\'") in h
 assert "asbKernelControlVerdict(kp[1], kp[3], kp[2])" in h and "kp[1] === 'deferred'" in h
@@ -14183,6 +14209,274 @@ JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS webui dev61: calm header loops paused in CSS and stepped at 10 fps only on screen (stops hidden, on touch, with nothing to step), GPU tile shows the clock and colours busy x clock (snapshot keeps the clock apart), pressure sheet on PSI with a basis note, Vendor ↑ is a boost not a clamp (neutral, not a chip issue, outranked by a clamp on the other cluster), 13 locales'
+)
+
+
+t_webui_ltpo_idle_speed_dev63() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL WebUI LTPO idle speed dev63: $*" >&2; exit 1; }
+python3 - "$ROOT/webroot" <<'PYTEST' || fail 'contract'
+import json,re,sys,pathlib
+W=pathlib.Path(sys.argv[1]); h=(W/'index.html').read_text()
+LOC=['en','ru','uk','de','fr','es','it','pt','tr','id','zh','ar','hy']
+card=re.search(r"\{ key:'ltpo_idle_speed', type:'seg', def:'balanced', stock:'balanced',\s*opts:\['fast','balanced','gentle'\]",h)
+assert card
+for loc in LOC:
+ d=json.loads((W/f'i18n/{loc}.json').read_text())
+ c=d['cfg']['ltpo_idle_speed']
+ assert c['name'] and c['desc']
+ assert set(c['descOpt'])=={'fast','balanced','gentle'}
+ assert all(v.strip() for v in c['descOpt'].values())
+ assert set(d['optFor']['ltpo_idle_speed'])=={'fast','balanced','gentle'}
+ assert d.get('st_ltpo_idle_active')
+en=json.loads((W/'i18n/en.json').read_text()); ru=json.loads((W/'i18n/ru.json').read_text())
+assert ru['cfg']['ltpo_idle_speed']['desc']!=en['cfg']['ltpo_idle_speed']['desc']
+i=card.start(); j=h.index("desc:'",i)+6; e=j
+while h[e]!="'": e+=2 if h[e]=='\\' else 1
+js=h[j:e].encode().decode('unicode_escape').encode('latin-1').decode('utf-8')
+assert js==en['cfg']['ltpo_idle_speed']['desc']
+for token in ["  'ltpo_force',\n  'ltpo_idle_speed',\n  'mmfeed_off',", "ltpo_idle_speed:'system'", "ltpo_idle_speed:'feel'", "keys:['ltpo_force','ltpo_idle_speed','ltpo_peak_force'", "ltpo_idle_speed:'ltpo_idle_speed'", "ltpo_idle_speed:APPLY_LIVE", "if (it.key === 'ltpo_idle_speed')", "if (key === 'ltpo_idle_speed')", "asb_ltpo_apply.sh touch-restart"]:
+ assert token in h,token
+runtime=(W.parent/'runtime/asb_ltpo_touch.sh').read_text()
+assert not re.search(r'peak_refresh_rate[^\n]*[" ]1\.0[" ]',runtime)
+PYTEST
+echo 'PASS WebUI LTPO idle speed dev63: three presets, 13-locale schema, dependency/external-owner badges, live watcher restart and no synthetic 1 Hz request'
+)
+
+
+t_webui_monitor_load_semantics_dev63() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL WebUI Monitor load semantics dev63: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PYTEST' || fail 'contract'
+import json,pathlib,sys
+R=pathlib.Path(sys.argv[1]); h=(R/'webroot/index.html').read_text()
+assert "key === 'apphint' ? T('lvi_app_class_now', 'Foreground app class · now')" in h
+assert "? T('lvp_app_pressure_title', 'Whole-system load · PSI and CPU/GPU')" in h
+assert "+ (key === 'apphint' ? ' ' + T('lvp_vs_class'" in h
+for p in sorted((R/'webroot/i18n').glob('*.json')):
+ d=json.loads(p.read_text())
+ assert d.get('lvi_app_class_now') and d.get('lvp_app_pressure_title'),p.name
+en=json.loads((R/'webroot/i18n/en.json').read_text())
+assert en['lvi_app_class_now']=='Foreground app class · now'
+assert en['lvp_app_pressure_title']=='Whole-system load · PSI and CPU/GPU'
+ru=json.loads((R/'webroot/i18n/ru.json').read_text())
+assert ru['lvi_app_class_now']!=en['lvi_app_class_now']
+assert ru['lvp_app_pressure_title']!=en['lvp_app_pressure_title']
+PYTEST
+command -v node >/dev/null 2>&1 || { echo 'SKIP Monitor load semantics: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const b=h.slice(h.indexOf('function lviPressureRender('),h.indexOf('async function lviPressureLoad('));
+function el(tag){return {tag,children:[],className:'',hidden:false,style:{},_t:'',set textContent(v){this._t=String(v);this.children=[];},get textContent(){return this._t+this.children.map(c=>c.textContent).join(' ');},appendChild(c){this.children.push(c);return c;}};}
+const document={createElement:el},T=(k,f)=>f;
+const devicePressureScale=d=>{const e=el('scale');e.textContent='Light 13/100';return e;};
+const deviceVal=(d,s,k)=>d[s][k]||'',deviceLabel=(s,k)=>k;
+const LVI_PRESSURE_PARTS=[],LVI_PRESSURE_PARTS_PSI=[];
+eval(b);
+for(const key of ['apphint','sload']){
+ const box=el('div'),d={system_load:{}};
+ lviPressureRender(box,d,key);
+ if(key==='apphint'){
+  if(box.children[0].textContent!=='Whole-system load · PSI and CPU/GPU')throw Error('system bar still uses the app-load title');
+  if(!box.children[box.children.length-1].textContent.includes('the load class above'))throw Error('basis distinction lost');
+ }else if(box.children[0].textContent!=='Current system pressure')throw Error('Stock pressure title changed unexpectedly');
+}
+console.log('ok');
+JS
+out="$(node "$T/t.js" "$ROOT/webroot/index.html")" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI Monitor load semantics dev63: foreground app class and whole-system PSI/CPU/GPU load are labelled as different metrics before the detailed note; 13 locales'
+)
+
+
+t_webui_bore_dev63() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL WebUI BORE dev63: $*" >&2; exit 1; }
+python3 - "$ROOT/webroot" <<'PY' || fail 'contract'
+import json,re,sys,pathlib
+W=pathlib.Path(sys.argv[1]); h=(W/'index.html').read_text()
+LOC=['en','ru','uk','de','fr','es','it','pt','tr','id','zh','ar','hy']
+m=re.search(r"\{ key:'kernel_bore', type:'seg', def:'stock', stock:'stock',\s*opts:\['stock','off','on'\]",h)
+assert m
+for loc in LOC:
+ d=json.loads((W/f'i18n/{loc}.json').read_text())
+ c=d['cfg']['kernel_bore']
+ assert set(c['descOpt'])=={'stock','off','on'}
+ assert all(v.strip() for v in c['descOpt'].values())
+ assert c['desc'].count('\n🔋 ')==1 and c['desc'].count('⚡ ')==1 and c['desc'].count('\n✋ ')==1
+ assert set(c['descOpt']) <= set(d['optFor']['kernel_bore'])
+ for k in ['kc_why_kernel_bore','dev_sec_kernel_bore','dev_guide_kernel_bore','dev_kernel_bore_config','dev_kernel_bore_runtime_interface','dev_kernel_bore_state','dev_kernel_bore_write_access','dev_kernel_bore_toggle']:
+  assert d.get(k),(loc,k)
+en=json.loads((W/'i18n/en.json').read_text()); ru=json.loads((W/'i18n/ru.json').read_text())
+assert ru['cfg']['kernel_bore']['desc']!=en['cfg']['kernel_bore']['desc']
+i=h.index("{ key:'kernel_bore', type:'seg'"); j=h.index("desc:'",i)+6; e=j
+while h[e]!="'": e+=2 if h[e]=='\\' else 1
+js=h[j:e].encode().decode('unicode_escape').encode('latin-1').decode('utf-8')
+assert js==en['cfg']['kernel_bore']['desc'], (len(js),len(en['cfg']['kernel_bore']['desc']),repr(js[-120:]),repr(en['cfg']['kernel_bore']['desc'][-120:]))
+for token in ["  'kernel_rt_boost',\n  'kernel_bore',\n  'cool_gaming',", "kernel_bore:'system'", "kernel_bore:'kernel'", "'kernel_rt_boost','kernel_bore'], card:'wakeup' }", "kernel_bore:'bore_scheduler'", "kernel_bore: APPLY_LIVE", "kernel_bore: { off:'0', on:'1' }", "['kernel_bore', 'dev_sec_kernel_bore'"]:
+ assert token in h,token
+assert re.search(r"const ASB_KERNEL_STATUS_KEYS = \[[^\]]*'kernel_bore'\]",h)
+assert "kernel_bore: '%s'"%en['kc_why_kernel_bore'] in h
+assert "kernel_bore: ['dev_guide_kernel_bore', '%s']"%en['dev_guide_kernel_bore'] in h
+assert 'textContent' in h[h.index('/* Device diagnostics'):h.index('function parseDeviceInfo')]
+PY
+echo 'PASS WebUI BORE dev63: Stock/off/on card, status allowlist, fixed-value map, live apply path, diagnostics and 13-locale schema'
+)
+
+
+t_webui_zygisk_provider_dev63() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI Zygisk provider dev63: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PYTEST' || fail 'contract'
+import json,pathlib,re,sys
+R=pathlib.Path(sys.argv[1]); h=(R/'webroot/index.html').read_text()
+assert "['zygisk_provider', 'dev_sec_zygisk_provider', 'Zygisk provider', 'root']" in h
+assert "zygisk_provider: ['dev_guide_zygisk_provider'," in h
+keys=['dev_sec_zygisk_provider','dev_guide_zygisk_provider','dev_zygisk_provider_provider','dev_zygisk_provider_version','dev_zygisk_provider_install_state','dev_zygisk_provider_installed_providers','dev_zygisk_provider_enabled_count','dev_zygisk_provider_runtime_state','dev_zygisk_provider_active_evidence','dev_zygisk_provider_conflict','dev_zygisk_provider_evidence','dev_zygisk_provider_unknown','dev_zygisk_provider_conflict_value','dev_zygisk_provider_install_enabled','dev_zygisk_provider_install_disabled','dev_zygisk_provider_install_pending_removal','dev_zygisk_provider_install_not_detected','dev_zygisk_provider_install_multiple_enabled','dev_zygisk_provider_install_multiple_inactive']
+en=json.loads((R/'webroot/i18n/en.json').read_text())
+assert en['dev_sec_zygisk_provider']=='Zygisk provider'
+assert en['dev_guide_zygisk_provider'] in h
+for p in sorted((R/'webroot/i18n').glob('*.json')):
+ d=json.loads(p.read_text())
+ assert set(d)==set(en),p.name
+ for k in keys: assert d.get(k),(p.name,k)
+ru=json.loads((R/'webroot/i18n/ru.json').read_text())
+assert ru['dev_sec_zygisk_provider']=='Zygisk-провайдер'
+assert ru['dev_guide_zygisk_provider']!=en['dev_guide_zygisk_provider']
+assert "key === 'provider' && value === 'conflict'" in h
+assert "key === 'install_state'" in h
+assert 'dev_zygisk_provider_install_' in h
+assert 'not runtime-discoverable from module metadata alone' in (R/'runtime/asb_zygisk_info.sh').read_text()
+segment=h[h.index('function parseDeviceInfo('):h.index('function openDevicePage()')]
+# Fixed SVG icons are exempt elsewhere; the new provider path adds no markup sink at all.
+for token in ['zygisk_provider','dev_zygisk_provider_']:
+ assert token in segment
+assert not re.search(r"zygisk_provider[^\n]{0,200}innerHTML",segment)
+PYTEST
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI Zygisk provider node: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+{
+ echo "const T=(k,f)=>({dev_zygisk_provider_install_multiple_enabled:'Multiple enabled providers',dev_zygisk_provider_conflict_value:'Conflict'})[k]||f; const deviceFallbackLabel=k=>k;"
+ sed -n '/^function deviceIsLimitedValue(/,/^}/p' "$H"
+ sed -n '/^function deviceValueClass(/,/^}/p' "$H"
+ sed -n '/^function deviceDisplayValue(/,/^}/p' "$H"
+ cat <<'JS'
+const d={};
+if(deviceDisplayValue('zygisk_provider','provider','NyaZygisk',d)!=='NyaZygisk')throw Error('provider hidden');
+if(deviceDisplayValue('zygisk_provider','provider','conflict',d)!=='Conflict')throw Error('conflict not explicit');
+if(deviceDisplayValue('zygisk_provider','install_state','multiple_enabled',d)!=='Multiple enabled providers')throw Error('state not translated');
+if(!deviceValueClass('zygisk_provider','provider','conflict').includes('dev-bad'))throw Error('conflict not warned');
+if(!deviceValueClass('zygisk_provider','runtime_state','not runtime-discoverable from module metadata alone').includes('dev-unknown'))throw Error('unknown runtime evidence presented as active');
+console.log('ok');
+JS
+} > "$T/t.js"
+out="$(node "$T/t.js")" || fail "$out"; [ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI Zygisk provider dev63: separate diagnostics card, textContent-only values, conflict/unknown states and 13 locales'
+)
+
+t_webui_performance_lifecycle_dev63() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI performance lifecycle dev63: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source contract'
+import re,sys
+h=open(sys.argv[1],encoding='utf-8').read()
+assert 'const asbUiFrame = {' in h and 'this.jobs.add(job);' in h
+for name in ('asbFitPages','lvFitValues','asbNavIndicator'):
+    assert 'requestAnimationFrame('+name+')' not in h, name
+assert 'runBatchCmd(missing)' in h and "cache: 'hit'" in h and "cache: 'miss'" in h
+assert '_liveTimer = setInterval' not in h and '_liveBgTimer = setInterval' not in h
+assert "_livePollMeta.nextDelay < 5000 ? 5000" in h and ': 12000);' in h and 'livePollTrack(snapshot, visible, prime, success)' in h
+assert 'pollSeq !== _livePageSeq || !_liveOpen || document.hidden' in h
+assert 'data-asb-effects="reduced"' in h and "asbEffectsSet('reduced', 'ui-jank')" in h
+reduced=h[h.index('/* dev63: reduced effects'):h.index('</style>',h.index('/* dev63: reduced effects'))]
+assert not re.search(r'content-visibility\s*:',reduced), 'reduced effects changed layout measurement'
+for token in ("['cfull', 'cat /sys/class/power_supply/battery/charge_full', 604800000]",
+              "['gpufreqs', 'cat ' + LV_GPU_KGSL + '/devfreq/available_frequencies', 604800000]"):
+    assert token in h, token
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI performance lifecycle dev63: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),cp=require('child_process'),h=fs.readFileSync(process.argv[2],'utf8');
+const chk=(c,m)=>{if(!c)throw Error(m)};
+const slice=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i);if(i<0||j<0)throw Error('markers '+a);return h.slice(i,j)};
+const grab=a=>{const i=h.indexOf(a),j=h.indexOf('\n}\n',i);if(i<0||j<0)throw Error('marker '+a);return h.slice(i,j+3)};
+const flush=()=>new Promise(r=>setImmediate(r));
+(async()=>{
+  /* Real frame queue: deduplication, one RAF, reduced effects after three slow frames. */
+  let frames=[],now=0,attrs={},listeners={};
+  global.document={hidden:false,documentElement:{setAttribute:(k,v)=>attrs[k]=v},addEventListener:(k,f)=>listeners[k]=f};
+  global.window={matchMedia:()=>({matches:false,addEventListener:()=>{}})};
+  global.performance={now:()=>now};global.requestAnimationFrame=f=>frames.push(f);
+  eval(slice('let _asbEffectsMode','let _liveTimer = null;')+';globalThis.frame=asbUiFrame;');
+  let a=0,b=0;const ja=()=>a++,jb=()=>b++;
+  frame.request(ja);frame.request(ja);frame.request(jb);
+  chk(frames.length===1,'jobs created multiple RAFs');now=10;frames.shift()();
+  chk(a===1&&b===1,'jobs were not deduplicated');
+  for(let i=0;i<3;i++){now+=100;frame.request(ja);frames.shift()();}
+  chk(attrs['data-asb-effects']==='reduced','slow UI frames did not reduce effects');
+  document.hidden=true;listeners.visibilitychange();chk(frame.lastFrame===0&&frame.slowFrames===0,'hidden gap remained in jank detector');
+
+  /* Real batch wrapper against a POSIX shell: explicit TTL hits, no implicit write caching. */
+  let shells=0;
+  global.shQuote=v=>"'"+String(v).replace(/'/g,"'\\''")+"'";
+  global.run=async cmd=>{shells++;let out='',code=0;try{out=cp.execFileSync('sh',['-c',cmd],{encoding:'utf8'})}catch(e){out=e.stdout||'';code=e.status||1}return{errno:code,stdout:out.replace(/\n$/,''),stderr:''}};
+  eval(slice('const _ASB_PART','/* fix325:')+';globalThis.batch=runBatch;globalThis.batchPerf=_asbBatchPerf;');
+  let x=await batch([['static',"printf 'fixed'",60000],['dynamic',"printf 'one'"]]);
+  chk(x.static.cache==='miss'&&x.dynamic.stdout==='one'&&shells===1,'initial batch failed');
+  x=await batch([['static',"printf 'fixed'",60000],['dynamic',"printf 'two'"]]);
+  chk(x.static.stdout==='fixed'&&x.static.cache==='hit'&&x.dynamic.stdout==='two'&&shells===2,'TTL reused or refreshed the wrong part: '+JSON.stringify(x)+' shells='+shells);
+  x=await batch([['static',"printf 'fixed'",60000]]);
+  chk(x.static.stdout==='fixed'&&shells===2,'all-cache batch opened a shell');
+  await batch([['write',"printf 'write-1'"]]);await batch([['write',"printf 'write-2'"]]);
+  chk(shells===4,'two-element part was implicitly cached');
+  chk(batchPerf.hits===2&&batchPerf.misses===5&&batchPerf.shells===4,'cache diagnostics are wrong: '+JSON.stringify(batchPerf));
+
+  /* Real adaptive metadata and timer lifecycle. */
+  let timers=[],timerId=0;
+  global.setTimeout=(f,ms)=>{timers.push({id:++timerId,f,ms,live:true});return timerId};
+  global.clearTimeout=id=>{const t=timers.find(x=>x.id===id);if(t)t.live=false};
+  document.hidden=false;
+  const decl=slice('let _livePollRun = null,','/* Declared up here with the other page flags');
+  eval('var _liveTimer=null,_liveBgTimer=null,_liveOpen=true;'+decl+';globalThis.track=livePollTrack;globalThis.meta=_livePollMeta;globalThis.monitorSchedule=liveMonitorSchedule;globalThis.backgroundSchedule=liveBackgroundSchedule;');
+  chk(track('a',true,false,true)===false&&meta.nextDelay===3000,'first snapshot was suppressed');
+  chk(track('a',true,false,true)===true&&meta.nextDelay===5000,'first unchanged backoff missing');
+  chk(track('a',true,false,true)===true&&meta.nextDelay===8000,'second unchanged backoff missing');
+  chk(track('b',true,false,true)===false&&meta.nextDelay===3000,'changed snapshot did not reset backoff');
+  meta.nextDelay=8000;monitorSchedule();chk(timers.some(t=>t.live&&t.ms===8000),'adaptive delay was not scheduled');
+  document.hidden=true;monitorSchedule();backgroundSchedule();
+  chk(!timers.some(t=>t.live),'hidden WebView kept a Monitor/Home timer');
+
+  /* Real pollLive: stale visible result is dropped; reopen queues one fresh follow-up. */
+  document.hidden=false;global._selectedProfile='smart';global._liveOpen=true;
+  global.restoreManagedLiveLabels=()=>{};global.liveBatchParts=()=>[['state','fixture']];
+  global.lvGpuClockRead=()=>{};global._el=()=>null;global.lvStale=()=>{};
+  let resolvers=[],calls=0;
+  global.__deferredBatch=()=>{calls++;return new Promise(r=>resolvers.push(r))};
+  eval('runBatch = globalThis.__deferredBatch;');
+  const resolveNext=value=>{chk(resolvers.length>0,'no deferred batch to resolve at call '+calls);resolvers.shift()(value)};
+  eval(decl+'\n'+grab('async function pollLive(visible) {')+';globalThis.poll=pollLive;globalThis.setPage=(o,s)=>{_liveOpen=o;_livePageSeq=s};globalThis.pollMeta=_livePollMeta;globalThis.pollTrack=livePollTrack;globalThis.pollState=()=>({active:!!_livePollRun,hidden:document.hidden,profile:_selectedProfile,live:_liveOpen,seq:_livePageSeq});');
+  setPage(true,1);pollTrack('sentinel',true,false,true);chk(!pollState().active,'a poll was already active before the stale fixture');
+  const old=poll(true);old.catch(e=>console.error('stale poll rejected',e));await flush();chk(calls===1,'stale pass did not start: '+JSON.stringify(pollState()));setPage(false,2);resolveNext({state:{errno:0,stdout:'stale'}});await old;
+  chk(pollMeta.snapshots.visible==='sentinel','closed Monitor accepted a stale snapshot');
+  setPage(true,3);const previous=poll(true);setPage(true,4);const reopened=poll(true);
+  resolveNext({state:{errno:0,stdout:'old-open'}});await flush();await flush();
+  chk(calls===3,'reopen did not queue exactly one fresh visible pass after the earlier stale fixture: '+calls);
+  resolveNext({state:{errno:0,stdout:''}});await Promise.all([previous,reopened]);
+  console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI performance lifecycle dev63: unified frames, reduced effects, explicit TTL diagnostics, 3/5/8-second backoff, hidden timers stopped, stale page paint dropped with one fresh follow-up'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
