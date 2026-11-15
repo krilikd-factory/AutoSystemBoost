@@ -4,6 +4,37 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev59 - SOTER boot evidence, Camera Tools (USB webcam, fast camera start), CI fixes
+
+Input: the dev58 source, the owner's failed CI run and four requests (fix the module build,
+kernel audio/video/photo work and new capabilities with ASB integration, noticeable camera
+tweaks, SOTER still repaired only by the button). No native source or release binary changed.
+
+- **CI (host regression):** `t_module_desc_zygisk_dev57` no longer pins the template line of
+  `module.prop`, which is the owner's own file (back to its dev57 content);
+  `t_lte_bulk_runtime` waits up to 3 s for the radio mask after the watcher's save, because on
+  a loaded runner the check could land between the save and the write.
+- **SOTER after a reboot:** the dev57 phone still needed the button, and nothing showed whether
+  the boot run had happened. The boot sequence now lives in `asb_soter_fix.sh boot`: unlock
+  detected by `sys.user.0.ce_available`, the SOTER server's credential-encrypted directory or
+  `RUNNING_UNLOCKED` (once a minute), 60 s settle, one retry, a verification pass three minutes
+  later (restarts a stopped SOTER service, keeps SOTER logcat lines), a per-boot record shown in
+  the card (*Automatic repair, this boot*), a notification in the UI language, a persistent
+  log of every run with before/after states, stale-lock recovery, and asbdiag section 8c. The
+  cause is not proven yet: the next export will show which phase fails.
+- **Camera Tools** (new section in Camera): *USB Webcam* uses Android's own webcam service and
+  the kernel's UVC gadget function (`ro.usb.uvc.enabled` from post-fs-data, `uvc.0` with MJPEG
+  1080p/720p/480p, start/stop with restore, readiness rows); *Fast Camera Start* keeps the camera
+  app compiled with ART `speed`, re-checks after updates and measures cold starts
+  (`am start -W -S`) so the effect is a number. asbdiag section 6a; Device page rows
+  `usb_webcam_uvc` and `usb_webcam_service`. 88 strings in 13 languages.
+- **Tests:** `t_soter_boot_sequence_dev59` (replaces the dev57 service.sh block test),
+  `t_camera_tools_dev59`, `t_webui_camera_tools_soter_boot_dev59`; SOTER runtime/UI tests extended.
+- **Kernel repository (paired):** the capability report lists `media.usb_webcam`
+  (`CONFIG_USB_CONFIGFS_F_UVC`, `CONFIG_USB_F_UVC`) with DeviceAsWebcam and the gadget HAL as
+  external owners, the build summary has an *ASB Camera Tools* section, and the docs say why no
+  audio, camera or video driver patch ships: those drivers are vendor modules bound to the KMI.
+
 ## V66 dev58 - module card format, kernel companion modules, LPM and Autogroup cards
 
 Input: the owner's dev57 phone export and asbdiag on the dev57-fix1 kernel, and four requests.
