@@ -3104,7 +3104,7 @@ asb_preserve_user_config() {
   # list, so nothing caught it. There is a check for that below now.
   _user_keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
-bt_absvol_mode mglru_hold mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_sched_stats BG_TRIM_LEVEL cool_gaming \
+bt_absvol_mode mglru_hold mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_sched_stats BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_charge_enable night_charge_start night_charge_end \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
@@ -3178,6 +3178,17 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
       esac
     fi
 
+    # Schema 4 links Timer migration and the scheduler migration batch to the power profile.
+    # The previous shipped defaults (off, 4) become Auto, which gives the same 4 in
+    # Balanced/Smart and adds the Battery/Performance values; any other choice is kept.
+    if [ "${_asb_anim_schema:-1}" -lt 4 ] 2>/dev/null; then
+      case "$_k:$_oldval" in
+        kernel_timer_migration:off|kernel_sched_nr_migrate:4)
+          ui_print "      + ${_k}: former default ${_oldval} -> auto (follows the profile)"
+          _oldval=auto ;;
+      esac
+    fi
+
     if grep -qE "^[[:space:]]*$_k=" "$_new_conf" 2>/dev/null; then
       _esc="$(printf '%s' "$_oldval" | sed 's/[&/\|]/\\&/g')"
       sed -i "s|^\\([[:space:]]*$_k=\\).*|\\1$_esc|" "$_new_conf" 2>/dev/null \
@@ -3209,7 +3220,7 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
   # Stamp the schema regardless of what was migrated. This is the line whose absence made
   # the first attempt defer the bug by one update instead of fixing it.
   mkdir -p /data/adb/asb 2>/dev/null
-  echo 3 > /data/adb/asb/config_schema 2>/dev/null
+  echo 4 > /data/adb/asb/config_schema 2>/dev/null
 }
 
 asb_snapshot_user_config() {
@@ -3218,7 +3229,7 @@ asb_snapshot_user_config() {
   [ -f "$_new_conf" ] || return 0
   mkdir -p "$(dirname "$_snap_conf")" 2>/dev/null || true
   _keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
-smart_battery_bias bt_absvol_mode mglru_hold mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend BG_TRIM_LEVEL cool_gaming \
+smart_battery_bias bt_absvol_mode mglru_hold mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_charge_enable night_charge_start night_charge_end night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
 region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_mtu_probing net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave wifi_powersave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_voice dsp_width dsp_clarity dsp_rumble dsp_compressor dsp_headroom dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first anim_speed dsp_outputs gms_trim audio_remove_volume_limit audio_resampler media_vol_steps purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard smart_lab smart_lab_mem profile_class_auto smart_records_balanced ltpo_force mmfeed_off net_screen_off_lte net_lte_light wakelock_fitness ltpo_video ltpo_peak_force heavy_prime_escape prime_escape_burst_s prime_escape_rest_s bt_link_stability lsposed_verbose heytap_mcs documentsui_fix zygisk_enabled zygisk_hints zygisk_launch zygisk_ledger"
