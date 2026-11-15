@@ -5482,22 +5482,31 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
  * selection/state accent instead of outlining every popup and card. */
 html:root[data-asb-glass="1"] {
   /* Dark Glass keeps the owner's genuinely black canvas. Accent light belongs to
-   * controls and the logo, never to a screen-sized background wash (fix324). */
-  --glass-canvas-image:#000;
-  --glass-surface:rgba(12,18,15,.58);
-  --glass-surface-quiet:rgba(8,13,10,.46);
-  --glass-surface-strong:rgba(10,15,13,.78);
+   * controls and the logo, never to a screen-sized background wash (fix324).
+   * fix351: a faint NEUTRAL ambient (cool greys, no accent hue) now sits under the
+   * black, as on the ColorOS 17 surfaces, so the 22px backdrop blur has real texture
+   * to work with instead of blurring a flat void into flat grey. */
+  --glass-canvas-image:
+    radial-gradient(ellipse 120% 52% at 8% -8%,rgba(118,138,158,.085),transparent 68%),
+    radial-gradient(ellipse 96% 44% at 104% 90%,rgba(96,116,108,.07),transparent 72%),
+    radial-gradient(ellipse 70% 30% at 62% 46%,rgba(64,76,88,.05),transparent 70%),#000;
+  --glass-surface:rgba(12,18,15,.52);
+  --glass-surface-quiet:rgba(8,13,10,.42);
+  --glass-surface-strong:rgba(10,15,13,.74);
   /* Navigation is seen against black and scrolling cards, so the shared floating wash
    * made it look lighter than the header capsules. Keep its geometry and blur intact,
    * but give only the navigation docks a quieter highlight and a darker base. */
-  --glass-nav-surface:rgba(6,10,8,.86);
+  --glass-nav-surface:rgba(6,10,8,.84);
   --glass-nav-wash:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.008) 48%,rgba(255,255,255,.018));
-  --glass-control:rgba(20,27,24,.48);
+  --glass-control:rgba(20,27,24,.44);
   --glass-edge:rgba(255,255,255,.16);
   --glass-highlight:rgba(255,255,255,.20);
-  --glass-wash:linear-gradient(135deg,rgba(255,255,255,.105),rgba(255,255,255,.022) 48%,rgba(255,255,255,.048));
+  /* fix351: the lower inner edge carries its own faint light, the ColorOS "light leak"
+   * that makes a glass pill read as a thick translucent slab rather than a flat card. */
+  --glass-underlight:rgba(255,255,255,.055);
+  --glass-wash:linear-gradient(135deg,rgba(255,255,255,.115),rgba(255,255,255,.024) 46%,rgba(196,214,255,.05));
   --glass-shadow:0 12px 30px rgba(0,0,0,.25);
-  --glass-blur:blur(20px) saturate(1.24);
+  --glass-blur:blur(22px) saturate(1.28);
   --glass-scrim:linear-gradient(180deg,rgba(0,0,0,.96),rgba(0,0,0,.76) 62%,transparent);
   --surface:var(--glass-surface);
   --surface-hover:rgba(255,255,255,.10);
@@ -5513,15 +5522,16 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] {
     radial-gradient(ellipse 110% 46% at 100% 45%,rgba(125,145,180,.09),transparent 74%),
     radial-gradient(ellipse 84% 40% at 100% 78%,rgba(0,124,99,.075),transparent 74%),
     linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%);
-  --glass-surface:rgba(255,255,255,.44);
-  --glass-surface-quiet:rgba(255,255,255,.34);
-  --glass-surface-strong:rgba(250,252,251,.72);
+  --glass-surface:rgba(255,255,255,.42);
+  --glass-surface-quiet:rgba(255,255,255,.32);
+  --glass-surface-strong:rgba(250,252,251,.70);
   --glass-nav-surface:var(--glass-surface-strong);
   --glass-nav-wash:var(--glass-wash);
-  --glass-control:rgba(255,255,255,.38);
+  --glass-control:rgba(255,255,255,.36);
   --glass-edge:rgba(70,85,80,.15);
   --glass-highlight:rgba(255,255,255,.86);
-  --glass-wash:linear-gradient(135deg,rgba(255,255,255,.62),rgba(255,255,255,.18) 50%,rgba(255,255,255,.34));
+  --glass-underlight:rgba(255,255,255,.50);
+  --glass-wash:linear-gradient(135deg,rgba(255,255,255,.64),rgba(255,255,255,.18) 50%,rgba(244,248,255,.36));
   --glass-shadow:0 12px 30px rgba(40,50,65,.11);
   --glass-scrim:linear-gradient(180deg,rgba(237,240,244,.96),rgba(237,240,244,.74) 62%,transparent);
   --text-tertiary:#65717b;
@@ -5536,7 +5546,7 @@ html:root[data-asb-glass="1"] #zygiskPage {
 }
 html:root[data-asb-glass="1"] .status-bar-scrim {
   background:var(--glass-scrim);
-  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
 }
 html:root[data-asb-glass="1"] .hdr-cap,
 html:root[data-asb-glass="1"] .theme-toggle,
@@ -5571,7 +5581,7 @@ html:root[data-asb-glass="1"] .live-drain-cmp,
 html:root[data-asb-glass="1"] .live-info-hist {
   background:var(--glass-wash),var(--glass-surface) !important;
   border-color:var(--glass-edge) !important;
-  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight),inset 0 0 0 1px rgba(255,255,255,.025) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight),inset 0 0 0 1px rgba(255,255,255,.025) !important;
   -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur);
 }
 /* Floating surfaces must remain legible over scrolling content; inline cards need less
@@ -5586,8 +5596,8 @@ html:root[data-asb-glass="1"] .cfg-lang-pop,
 html:root[data-asb-glass="1"] .cfg-sel-pop {
   background:var(--glass-wash),var(--glass-surface-strong) !important;
   border-color:var(--glass-edge) !important;
-  box-shadow:0 16px 38px rgba(0,0,0,.32),inset 0 1px 0 var(--glass-highlight) !important;
-  -webkit-backdrop-filter:blur(26px) saturate(1.28); backdrop-filter:blur(26px) saturate(1.28);
+  box-shadow:0 16px 38px rgba(0,0,0,.32),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
+  -webkit-backdrop-filter:blur(28px) saturate(1.30); backdrop-filter:blur(28px) saturate(1.30);
 }
 html:root[data-asb-glass="1"] .asb-tabbar,
 html:root[data-asb-glass="1"] .report-nav,
@@ -5604,14 +5614,14 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-page-nav,
 html:root[data-asb-glass="1"][data-asb-theme="light"] .log-menu,
 html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-lang-pop,
 html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-sel-pop {
-  box-shadow:0 16px 38px rgba(40,50,65,.16),inset 0 1px 0 var(--glass-highlight) !important;
+  box-shadow:0 16px 38px rgba(40,50,65,.16),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
 }
 html:root[data-asb-glass="1"] .hdr-cap,
 html:root[data-asb-glass="1"] .theme-toggle,
 html:root[data-asb-glass="1"] .status-row {
   background:var(--glass-wash),var(--glass-surface-quiet) !important;
   box-shadow:var(--cap-shadow) !important;
-  -webkit-backdrop-filter:blur(18px) saturate(1.2); backdrop-filter:blur(18px) saturate(1.2);
+  -webkit-backdrop-filter:blur(20px) saturate(1.24); backdrop-filter:blur(20px) saturate(1.24);
 }
 html:root[data-asb-glass="1"] .log-menu { border-radius:20px; }
 /* #zygiskPage .lgr-note used to reset all padding after .dev-evidence had created
@@ -5624,8 +5634,8 @@ html:root[data-asb-glass="1"] .debug-action-wait-sheet,
 html:root[data-asb-glass="1"] .cfg-fm-box {
   background:var(--glass-wash),var(--glass-surface-strong) !important;
   border-color:var(--glass-edge) !important;
-  box-shadow:0 24px 64px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-highlight) !important;
-  -webkit-backdrop-filter:blur(30px) saturate(1.25); backdrop-filter:blur(30px) saturate(1.25);
+  box-shadow:0 24px 64px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
+  -webkit-backdrop-filter:blur(32px) saturate(1.28); backdrop-filter:blur(32px) saturate(1.28);
 }
 html:root[data-asb-glass="1"] .cfg-modal,
 html:root[data-asb-glass="1"] .cfg-profile-modal,
@@ -5680,12 +5690,12 @@ html:root[data-asb-glass="1"] .pchk {
 html:root[data-asb-glass="1"] .pbtn:not(.on) {
   background:var(--glass-wash),var(--glass-surface-quiet) !important;
   border-color:var(--glass-edge) !important;
-  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
 }
 html:root[data-asb-glass="1"] .pbtn.on {
   background:linear-gradient(135deg,color-mix(in srgb,var(--c,var(--accent)) 15%,transparent),rgba(255,255,255,.025)),var(--glass-surface) !important;
   border-color:color-mix(in srgb,var(--c,var(--accent)) 58%,var(--glass-edge)) !important;
-  box-shadow:0 12px 30px rgba(0,0,0,.24),inset 0 1px 0 var(--glass-highlight) !important;
+  box-shadow:0 12px 30px rgba(0,0,0,.24),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
 }
 html:root[data-asb-glass="1"] .pbtn .pico {
   background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.025)),rgba(128,128,128,.08) !important;
@@ -5700,12 +5710,12 @@ html:root[data-asb-glass="1"] .pbtn.on .pico {
 html:root[data-asb-glass="1"] .cfg-row:not(.is-on) {
   background:var(--glass-wash),var(--glass-surface-quiet) !important;
   border-color:var(--glass-edge) !important;
-  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
 }
 html:root[data-asb-glass="1"] .cfg-row.is-on {
   background:linear-gradient(135deg,color-mix(in srgb,var(--cat,var(--accent)) 13%,transparent),rgba(255,255,255,.025)),var(--glass-surface) !important;
   border-color:color-mix(in srgb,var(--cat,var(--accent)) 32%,var(--glass-edge)) !important;
-  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
 }
 html:root[data-asb-glass="1"] .cfg-row:not(.is-on) .cfg-icon,
 html:root[data-asb-glass="1"] .cfg-switch.cfg-switch:not(.on) {
@@ -5716,7 +5726,7 @@ html:root[data-asb-glass="1"] .cfg-switch.cfg-switch:not(.on) {
 html:root[data-asb-glass="1"] .cfg-tile[class*="cat-"] {
   background:linear-gradient(145deg,color-mix(in srgb,var(--cat) 14%,transparent),rgba(255,255,255,.018) 62%),var(--glass-surface) !important;
   border-color:color-mix(in srgb,var(--cat) 28%,var(--glass-edge)) !important;
-  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
 }
 html:root[data-asb-glass="1"] .cfg-tile[class*="cat-"] .cfg-tile-ico {
   background:color-mix(in srgb,var(--cat) 13%,var(--glass-control));
@@ -5748,8 +5758,8 @@ html:root[data-asb-glass="1"] .cfg-profile-primary {
 html:root[data-asb-glass="1"] .toast:not(.stock-restoring) {
   background:var(--glass-wash),color-mix(in srgb,currentColor 10%,var(--glass-surface-strong)) !important;
   border-color:var(--glass-edge) !important;
-  box-shadow:0 16px 38px rgba(0,0,0,.34),inset 0 1px 0 var(--glass-highlight);
-  -webkit-backdrop-filter:blur(24px) saturate(1.25); backdrop-filter:blur(24px) saturate(1.25);
+  box-shadow:0 16px 38px rgba(0,0,0,.34),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight);
+  -webkit-backdrop-filter:blur(26px) saturate(1.28); backdrop-filter:blur(26px) saturate(1.28);
 }
 html:root[data-asb-glass="1"] .pbtn.pbtn:active,
 html:root[data-asb-glass="1"] .cfg-tile.cfg-tile:active,
