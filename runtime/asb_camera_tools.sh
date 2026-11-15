@@ -361,6 +361,11 @@ case "$MODE" in
     case "$SUB" in ''|*[!A-Za-z0-9_.]*) exit 2 ;; esac
     _ct_la_worker "$SUB" "$3"
     ;;
+  flags)
+    _fw=0; [ -f "$STATE/webcam" ] && _fw=1
+    _fl=0; [ -f "$STATE/launch" ] && _fl=1
+    printf 'camtools|flags|webcam=%s|launch=%s\n' "$_fw" "$_fl"
+    ;;
   boot) _ct_boot ;;
   log) [ -s "$STATE/log" ] && tail -n 40 "$STATE/log" 2>/dev/null || printf 'camtools|log|empty\n' ;;
   *) printf 'camtools|error|unknown_command\n'; exit 2 ;;
