@@ -241,12 +241,15 @@ body::before, body::after {
  * asbBootPulse) and durations as the preview. Everything that moves is a transform on its own
  * layer; the halo behind it is still. */
 .logo-c {
-  --k: .5349;
+  --k: .6163;
   --sph-c1: #00f0b4;
   --sph-c2: #00d4ff;
   position: relative;
   width: calc(172px * var(--k));
   height: calc(172px * var(--k));
+  /* dev57: the emblem grew from 92 to 106 px and its saucer from 94 to 106 units; the extra
+     height is taken from the page's top gap, so everything below stays where it was. */
+  margin-top: -14px;
   margin-bottom: 8px;
 }
 .logo-c::before {
@@ -2442,7 +2445,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
     max-width: 560px !important;
   }
   .header { max-width: 560px !important; }
-  .logo-c { --k: .6512; }
+  .logo-c { --k: .75; margin-top: -17px; }
   .app-name { font-size: 32px; }
   .device-line { font-size: 14px; }
   .badge { font-size: 11px; }
@@ -2480,7 +2483,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 
 @media (max-height: 500px) and (orientation: landscape) {
   .header { margin-bottom: 12px; padding-top: 8px; }
-  .logo-c { --k: .3256; margin-bottom: 2px; }
+  .logo-c { --k: .3256; margin-top: 0; margin-bottom: 2px; }
   .app-name { font-size: 20px; }
   /* Landscape overrides the shared value once, instead of each page separately. */
   :root { --page-top: 32px; }
@@ -4933,8 +4936,8 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
 }
 /* Only the glyph leaves the header: the ring, glow and box stay, so nothing reflows and the
  * nest is still there to come back to. */
-.logo-glyph { display:flex; align-items:center; justify-content:center; width:calc(94px * var(--k, .6)); height:calc(71px * var(--k, .6)); transition:opacity .28s ease; }
-.logo-glyph .asb-ufo-art { display:block; width:calc(94px * var(--k, .6)); height:calc(71px * var(--k, .6)); overflow:visible; filter:drop-shadow(0 calc(5px * var(--k, .6)) calc(8px * var(--k, .6)) rgba(0,0,0,.40)); }
+.logo-glyph { display:flex; align-items:center; justify-content:center; width:calc(106px * var(--k, .6)); height:calc(80px * var(--k, .6)); transition:opacity .28s ease; }
+.logo-glyph .asb-ufo-art { display:block; width:calc(106px * var(--k, .6)); height:calc(80px * var(--k, .6)); overflow:visible; filter:drop-shadow(0 calc(5px * var(--k, .6)) calc(8px * var(--k, .6)) rgba(0,0,0,.40)); }
 .asb-ufo-defs { position:absolute; pointer-events:none; overflow:hidden; }
 body.ufo-flying .logo-glyph { opacity: 0; }
 
@@ -5385,7 +5388,7 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
  * a small margin, so the layout cannot flip-flop at a boundary). If even tier 2
  * overflows, the fix201 scroll remains as the fallback: nothing is ever clipped away. */
 html.asb-fit-c1 { --page-top: clamp(30px, 5vh, 48px); }
-html.asb-fit-c1 .logo-c { --k: .4186; margin-bottom: 6px; }
+html.asb-fit-c1 .logo-c { --k: .4186; margin-top: 0; margin-bottom: 6px; }
 html.asb-fit-c1 .app-name { font-size: 23px; margin-bottom: 4px; }
 html.asb-fit-c1 .device-line { margin-bottom: 10px; }
 html.asb-fit-c1 .badges { margin-bottom: 12px; }
@@ -5405,7 +5408,7 @@ html.asb-fit-c1 .smart-drain-half { padding: 11px 10px; }
 html.asb-fit-c1 .tg-link-wrap { padding-top: 14px; gap: 10px; }
 
 html.asb-fit-c2 { --page-top: 22px; }
-html.asb-fit-c2 .logo-c { --k: .3256; margin-bottom: 4px; }
+html.asb-fit-c2 .logo-c { --k: .3256; margin-top: 0; margin-bottom: 4px; }
 body.asb-boot-flying .page:not(.live-page) .logo-c { opacity:0; }
 html.asb-fit-c2 .app-name { font-size: 20px; margin-bottom: 3px; }
 html.asb-fit-c2 .device-line { margin-bottom: 8px; }
@@ -5870,7 +5873,7 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
   box-shadow:0 0 calc(32px * var(--k)) rgba(0,240,180,.14),inset 0 0 calc(22px * var(--k)) rgba(76,201,255,.06);
   animation:asbBootPulse 2.2s ease-in-out infinite;
 }
-.asb-boot-ufo svg { width:calc(94px * var(--k)); height:calc(71px * var(--k)); overflow:visible; filter:drop-shadow(0 calc(5px * var(--k)) calc(8px * var(--k)) rgba(0,0,0,.40)); }
+.asb-boot-ufo svg { width:calc(106px * var(--k)); height:calc(80px * var(--k)); overflow:visible; filter:drop-shadow(0 calc(5px * var(--k)) calc(8px * var(--k)) rgba(0,0,0,.40)); }
 .asb-boot-brand { margin-bottom:0; font-size:25px; line-height:1.1; font-weight:740; letter-spacing:-.8px; }
 .asb-boot-brand b { color:var(--boot-accent); font-weight:inherit; }
 .asb-boot-status { min-height:20px; margin-top:13px; color:var(--boot-muted); font-size:12px; font-weight:550; }
@@ -6982,6 +6985,7 @@ const TECH_ICON_PATHS = {
   hrtimer_migration: '<circle cx="10" cy="12" r="7"/><path d="M10 7v5l4 2M10 2v2M3 12H1M19 12h-2M16 4h5v5M21 4l-5 5"/>',
   lpm_prediction: '<path d="M4 17a8 8 0 1 1 13 2M4 17v-5M4 17h5"/><path d="M8 13l3-3 3 2 4-5"/><path d="M18 7h-3M18 7v3"/>',
   usb_autosuspend: '<path d="M12 3v12M12 5l-3 3M12 8l3-3"/><circle cx="12" cy="18" r="3"/><path d="M7 10v4a3 3 0 0 0 3 3M17 10v4a3 3 0 0 1-3 3"/><circle cx="7" cy="9" r="1.5"/><rect x="15.5" y="6.5" width="3" height="3" rx=".5"/>',
+  rt_boost: '<path d="M3 13h3l2-4 3 8 2.5-6 1.5 2H18"/><path d="M19 4l-2.5 4.5H20L17.5 13"/>',
   sched_migration: '<rect x="3" y="5" width="5" height="5" rx="1"/><rect x="16" y="14" width="5" height="5" rx="1"/><path d="M8 7.5h5a3 3 0 0 1 3 3V14M13 11l3 3 3-3M5.5 10v4a3 3 0 0 0 3 3H16"/>',
   sched_stats: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h4M7 16v-3M11 16V9M15 16v-5M19 16v-2"/>',
   sched_autogroup: '<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><rect x="16" y="16" width="5" height="5" rx="1"/><path d="M12 8v4M5.5 16v-2a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v2M12 12v4"/>',
@@ -9645,6 +9649,7 @@ const SNAP_KEYS = [
   'kernel_hrtimer_migration',
   'kernel_lpm_prediction',
   'kernel_usb_autosuspend',
+  'kernel_rt_boost',
   'cool_gaming',
   'auto_battery_enable',
   'charge_aware_enable',
@@ -9871,34 +9876,37 @@ const CFG_ITEMS = [
     desc:'Controls how strongly ASB restricts background apps. Off leaves Android in charge and restores buckets changed by ASB. Safe adjusts standby buckets for apps that Android reports as unused, with critical apps protected. Aggressive adds stronger background and memory limits; apps may wake less often, lose state or deliver notifications late. Disruptive package or vendor-service actions require a separate explicit opt-in and are not enabled by this level alone.' },
   { key:'mglru_mode', type:'seg', def:'smart', stock:'stock',
     opts:['stock','off','on','smart'], name:'MGLRU Mode', cat:'battery',
-    desc:'For memory pressure: Smart (5/7 by load) is the balanced starting point for responsiveness and app retention; On=7 enables more MGLRU policy, Off=0 uses legacy reclaim. Start with Smart for daily battery use and compare with Stock when diagnosing. Heat and drain effects depend on workload and are not guaranteed.' },
+    desc:'How the kernel picks which memory to free when RAM runs low. MGLRU is the newer method: it is designed to keep the apps you use in memory more reliably and to need less CPU work for reclaiming.\n\n🔋 Battery life: Smart\n⚡ Performance: On\n✋ Not sure: Smart (the default)' },
   { key:'kernel_mglru_min_ttl', type:'seg', def:'stock', stock:'stock',
     opts:['stock','1000','2000'], name:'MGLRU Generation Protection', cat:'system',
-    desc:'Protects the most recently used MGLRU generation for 1000 or 2000 ms (writes /sys/kernel/mm/lru_gen/min_ttl_ms). This is the kernel\'s thrashing guard: if that working set cannot stay in memory, the kernel OOM killer ends a process instead of reclaiming it, so a longer time trades fewer reclaim stalls for the risk of early app kills. The kernel documentation suggests 1000. Stock restores the exact value captured before the first ASB write; a missing, read-only or mismatching interface is reported.' },
-  { key:'kernel_timer_migration', type:'seg', def:'off', stock:'stock',
-    opts:['stock','off','on'], name:'Timer Migration', cat:'system',
-    desc:'To test fewer idle wake-ups choose On: timers may move from idle CPUs to already active ones. Off keeps timers in place and can sometimes help loaded latency. The status shows the value the kernel reports now; test On for idle drain, but revert to Off/Stock if latency or glitches appear. Neither value is universally faster or cooler.' },
+    desc:'Protects the memory of the apps you just used for 1 or 2 seconds, so it is not freed at once. If even that memory cannot be kept, the kernel closes an app instead of slowing the whole phone with endless reloading.\n\n🔋 Battery life: Stock\n⚡ Performance: 1000 ms (fewer freezes when RAM is full)\n✋ Not sure: Stock' },
+  { key:'kernel_timer_migration', type:'seg', def:'auto', stock:'stock',
+    opts:['stock','auto','off','on'], name:'Timer Migration', cat:'system',
+    desc:'Decides who handles the timers of an idle CPU core. On (the kernel\'s default): a busy core takes them over, so idle cores can sleep longer. Off: every core handles its own timers.\n\n🔋 Battery life: On or Auto\n⚡ Performance: Off or Auto\n✋ Not sure: Auto' },
   { key:'kernel_hrtimer_migration', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'High-resolution Timer Migration', cat:'system',
-    desc:'Uses a separate /proc/sys/kernel/hrtimer_migration only when the kernel exposes that non-upstream interface. Standard Linux kernels, including 6.12 GKI, have no such independent switch; this row then only reflects Timer migration and writes nothing, so use the shared control above for power and latency tests.' },
+    desc:'Only for kernels with a separate switch for high-precision timers. Standard kernels, including 6.12 GKI, do not have one: then this card only shows the Timer migration value and writes nothing.\n\n🔋 Battery life / ⚡ Performance: set Timer migration instead\n✋ Not sure: Auto' },
   { key:'kernel_lpm_prediction', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'Idle Prediction (LPM)', cat:'system',
-    desc:'Idle-state prediction of the Snapdragon cpuidle driver: lpm_prediction on older kernels with the lpm_levels driver, prediction_disabled of the qcom-cpu-lpm governor on newer ones (ASB writes the inverted value there and shows it in the card\'s terms, 1 = prediction on). Auto enables prediction only on Battery; On may save idle power at a wake-latency cost, Off tests the opposite trade-off; Stock restores the kernel\'s own value. This is not Android LPM or radio policy.' },
-  { key:'kernel_sched_nr_migrate', type:'seg', def:'4', stock:'stock',
-    opts:['stock','1','2','4','8','16'], name:'Scheduler Migration Batch', cat:'system',
-    desc:'This caps tasks moved per balancing pass. 1–2 reduces migration work/cache disruption but can leave imbalance longer; 4 is a moderate start; 8–16 balances heavy multitasking sooner with more migrations. Start at 2–4 for battery and compare 4–8 under heavy load. This is not a CPU-frequency control; measure rather than assume. Interface: /sys/kernel/debug/sched/nr_migrate.' },
+    desc:'Snapdragon CPU idle driver: tries to predict how long a core will sleep and picks a deeper sleep state sooner. Deeper sleep saves power, but waking up from it takes a little longer. On newer kernels the switch is called prediction_disabled; the card still shows 1 = prediction on.\n\n🔋 Battery life: On or Auto\n⚡ Performance: Off\n✋ Not sure: Auto' },
+  { key:'kernel_sched_nr_migrate', type:'seg', def:'auto', stock:'stock',
+    opts:['stock','auto','1','2','4','8','16'], name:'Scheduler Migration Batch', cat:'system',
+    desc:'How many tasks the scheduler may move between CPU cores in one balancing step. Small numbers: short, light steps, but load evens out more slowly. Large numbers: load spreads faster, with more moving around.\n\n🔋 Battery life: 2 or Auto\n⚡ Performance: 8 or Auto\n✋ Not sure: Auto' },
   { key:'kernel_sched_stats', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off'], name:'Scheduler Debug Accounting', cat:'system',
-    desc:'For daily use choose Off to remove schedstats accounting overhead. It does not change scheduler policy or CPU frequencies. Restore Stock when diagnosing scheduler/latency problems, otherwise those statistics are unavailable. No battery or performance percentage is claimed. Interface: /proc/sys/kernel/sched_schedstats.' },
+    desc:'Extra statistics the scheduler collects for debugging tools. Everyday use does not need them. Most kernels have them off already; then both choices are the same.\n\n🔋 Battery life: Off\n⚡ Performance: Off\n✋ Not sure: Off' },
   { key:'kernel_sched_autogroup', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'Scheduler Autogroup', cat:'system',
-    desc:'Groups tasks by session for CPU fairness. GKI kernels are normally built without it (CONFIG_SCHED_AUTOGROUP changes signal_struct, which vendor modules are built against); then the status shows it as not exposed and nothing is written. Where a kernel does provide it, On improves fairness between sessions under background load and Off removes the grouping; it is not a direct FPS or battery tweak.' },
+    desc:'A desktop Linux feature that groups processes by session for fair CPU sharing. Phone GKI kernels are built without it, so the card usually shows "not exposed" and nothing is written. Android already groups apps itself (foreground, background).\n\n🔋 Battery life: Stock\n⚡ Performance: Stock\n✋ Not sure: Stock' },
   { key:'kernel_sched_child_runs_first', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'Child Task Runs First', cat:'system',
-    desc:'Only changes parent/child order after fork(). Keep Stock for ordinary use and battery. On can improve some process-launch/copy-on-write paths, Off favours the parent; regressions are possible. There is no universal game, Shelf or battery recommendation.' },
+    desc:'Who runs first after a process starts a new one: the new (child) process or the one that created it. A narrow setting that mainly affects how apps and services start. Newer kernels may no longer have this switch; the card then shows "not exposed".\n\n🔋 Battery life: Stock\n⚡ Performance: On can be tried for app starts; switch back if anything gets worse\n✋ Not sure: Stock' },
   { key:'kernel_usb_autosuspend', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'USB Autosuspend', cat:'system',
-    desc:'For USB peripherals, On sets a 2-second default autosuspend for newly detected devices and may reduce their power use; Off=-1 disables that default and is for compatibility problems. It does not set charging current, ADB, tethering or existing device policy. Expect no benefit when no USB peripheral is used.' },
+    desc:'How soon an idle USB device (DAC, headset, gamepad, flash drive) is put to sleep. Only matters while something is plugged into the USB port; charging is not affected.\n\n🔋 Battery life: On\n⚡ Performance: Stock\n✋ Not sure: Stock. Choose Off only if a USB device keeps disconnecting or crackling' },
+  { key:'kernel_rt_boost', type:'seg', def:'auto', stock:'stock',
+    opts:['stock','auto','0','128','256','512'], name:'Real-time Boost (Audio · Camera · Display)', cat:'system',
+    desc:'The minimum CPU speed that real-time threads ask for: sound playback and recording, screen composition, some camera threads and interrupt handlers. A higher floor gives them a faster start, which may help against crackling sound or dropped frames when the CPU runs slow, but costs power whenever these threads run. 1024 means full speed, 0 means only as fast as the load needs. Snapdragon phones usually set 0 at boot; ASB\'s CPU limits per app group still apply on top.\n\n🔋 Battery life: 0 or Auto\n⚡ Performance: 256 or Auto\n✋ Not sure: Auto' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces selected Google Play services background activity without disabling Play services itself. Lite limits location reporting and search-widget background work. Strict also removes Play services from the Doze exemption list, which can delay push notifications, sync and other background jobs. Choose Lite or Stock if timely delivery is essential. Changed permissions and exemptions are recorded and restored when ASB is removed.' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -10024,7 +10032,7 @@ const CFG_CAT = {
   net_wifi_leave:'net',
   mglru_mode:'battery', kernel_mglru_min_ttl:'system',
   kernel_timer_migration:'system', kernel_sched_nr_migrate:'system',
-  kernel_hrtimer_migration:'system', kernel_lpm_prediction:'system', kernel_usb_autosuspend:'system',
+  kernel_hrtimer_migration:'system', kernel_lpm_prediction:'system', kernel_usb_autosuspend:'system', kernel_rt_boost:'system',
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'system',
@@ -10107,7 +10115,7 @@ const CFG_GROUP_OF = {
   net_wifi_leave:'net',
   /* Each advanced owner has one hub destination; diagnostics remains a separate read-only page. */
   mglru_mode:'kernel', kernel_mglru_min_ttl:'kernel', kernel_timer_migration:'kernel', kernel_hrtimer_migration:'kernel', kernel_lpm_prediction:'kernel',
-  kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel', kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel', kernel_usb_autosuspend:'kernel',
+  kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel', kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel', kernel_usb_autosuspend:'kernel', kernel_rt_boost:'kernel',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'feel',
   net_rps:'net', net_txqueue:'net',
@@ -10198,7 +10206,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'controls', icon:'kernel', titleKey:'cfg_kernel_section_controls',
       title:'Kernel management', hintKey:'cfg_kernel_section_controls_hint',
       hint:'Registered kernel controls and the optional exact-name wakeup list live together. Availability and live readback come from the running kernel.',
-      keys:['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'], card:'wakeup' }
+      keys:['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost'], card:'wakeup' }
   ],
   zygisk: [
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
@@ -10688,7 +10696,7 @@ function cfgRenderSoterFixCard(list) {
   const auto = bfxEl('div', 'soter-auto');
   const autoText = bfxEl('div', 'soter-auto-text');
   autoText.appendChild(bfxEl('div', 'soter-auto-title', T('soter_auto', 'Repair automatically after every reboot')));
-  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair about a minute after each boot. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.')));
+  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair after each reboot, about a minute after you first unlock the phone (SOTER keys need the unlocked storage). Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.')));
   auto.appendChild(autoText);
   const sw = bfxEl('div', 'cfg-switch'); sw.id = 'soterAuto';
   sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', 'false'); sw.setAttribute('aria-disabled', 'true');
@@ -10969,10 +10977,13 @@ const ASB_KC_VERDICTS = {
   baseline_failed: 'original value could not be saved; nothing written',
   baseline_invalid: 'saved original value is invalid', state_cleanup_failed: 'restored; state file not removed',
   covered_by_timer_migration: 'covered by the general Timer migration control; no separate write',
-  invalid_request: 'invalid request'
+  invalid_request: 'invalid request',
+  deferred: 'boot scripts are still setting this value; applied on the next pass',
+  auto_kernel: 'Auto: kernel value kept for this profile'
 };
-function asbKernelControlVerdict(status, live) {
-  const s = String(status || '');
+function asbKernelControlVerdict(status, live, mode) {
+  let s = String(status || '');
+  if (mode === 'auto' && (s === 'restored' || s === 'stock_unowned')) s = 'auto_kernel';
   const fb = Object.prototype.hasOwnProperty.call(ASB_KC_VERDICTS, s) ? ASB_KC_VERDICTS[s] : s;
   let txt = T('kc_verdict_' + s, fb);
   const lv = String(live || '').replace(/[^0-9A-Za-zx-]/g, '').slice(0, 12);
@@ -10982,7 +10993,7 @@ function asbKernelControlVerdict(status, live) {
 /* Settings → System → Kernel management. One on-demand batch reads only the registered
  * control owner and wakeup owner. Read-only kernel evidence belongs to Device Diagnostics.
  * No timer, polling worker, duplicate diagnostics probe or direct browser sysfs write. */
-const ASB_KERNEL_STATUS_KEYS = ['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
+const ASB_KERNEL_STATUS_KEYS = ['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost'];
 let _kernelPanel = { loaded:false, loading:false, controls:Object.create(null), wakeup:null };
 let _wbDraft = null, _wbBusy = false;
 let _wbSourceView = { open:false, query:'', filter:'all', sort:'events' };
@@ -11081,7 +11092,8 @@ function kernelUnavailableWhy(key) {
   const fb = {
     kernel_sched_nr_migrate: 'Needs a kernel built with scheduler debugging (CONFIG_SCHED_DEBUG) and debugfs. ASB mounts debugfs privately only for the moment it reads or writes the value, so nothing more is needed when both are built in.',
     kernel_sched_autogroup: 'This kernel has no autogroup switch. GKI kernels are normally built without CONFIG_SCHED_AUTOGROUP because it changes signal_struct, which vendor modules are compiled against; ASB does not work around that. Even when built in, it would regroup only tasks left in the root CPU cgroup, and Android places app tasks in its own CPU groups.',
-    kernel_lpm_prediction: 'This kernel exposes neither lpm_prediction of the older lpm_levels driver nor prediction_disabled of the qcom-cpu-lpm governor. ASB writes nothing; the diagnostic export lists the idle-driver parameters this kernel has.'
+    kernel_lpm_prediction: 'This kernel exposes neither lpm_prediction of the older lpm_levels driver nor prediction_disabled of the qcom-cpu-lpm governor. ASB writes nothing; the diagnostic export lists the idle-driver parameters this kernel has.',
+    kernel_rt_boost: 'This kernel has no sched_util_clamp_min_rt_default: it is built without CONFIG_UCLAMP_TASK. ASB writes nothing.'
   };
   return Object.prototype.hasOwnProperty.call(fb, key) ? T('kc_why_' + key, fb[key]) : '';
 }
@@ -11548,7 +11560,7 @@ const CFG_ICONS = {
   net_wifi_leave:'wifileave',
   mglru_mode:'mglru_mode', kernel_mglru_min_ttl:'mglru_ttl', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
-  kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend',
+  kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend', kernel_rt_boost:'rt_boost',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
@@ -12247,7 +12259,7 @@ const APPLY_MODE = {
      straight back from /sys/kernel/mm/lru_gen/min_ttl_ms - no reboot, verifiable. */
   mglru_hold: APPLY_LIVE, mglru_mode: APPLY_LIVE, kernel_mglru_min_ttl: APPLY_LIVE, kernel_timer_migration: APPLY_LIVE, kernel_sched_nr_migrate: APPLY_LIVE, kernel_sched_stats: APPLY_LIVE,
   kernel_sched_autogroup: APPLY_LIVE, kernel_sched_child_runs_first: APPLY_LIVE,
-  kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE,
+  kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE, kernel_rt_boost: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE, dsp_clarity:APPLY_LIVE, dsp_rumble:APPLY_LIVE,
   dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
@@ -13323,6 +13335,7 @@ async function cfgSet(key, val, ctl) {
       if (/^zygisk_/.test(key)) {
         /* fix272: app processes read only the generated policy file, never governor.conf. */
         try { await run('sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' sync >/dev/null 2>&1'); } catch (e) {}
+        try { run('MODDIR=' + shQuote(MD) + ' sh ' + shQuote(MD + '/runtime/asb_module_desc.sh') + ' refresh >/dev/null 2>&1'); } catch (e) {}
         await zygiskHeaderRefresh();
         toast(cfgToastText(key, val) + (applyModeOf(key) === APPLY_NEXT
           ? T('t_cfg_next', ' \u00b7 restart the app') : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
@@ -13665,9 +13678,11 @@ async function cfgSet(key, val, ctl) {
       }).pop() || '';
       const kp = kv.split('|');
       const kok = kr && kr.errno === 0 && ['applied','restored','stock_unowned'].indexOf(kp[1]) >= 0;
-      const kst = asbKernelControlVerdict(kp[1], kp[3]);
+      const kst = asbKernelControlVerdict(kp[1], kp[3], kp[2]);
       if (kok) {
         toast(cfgToastText(key, val) + ' · ' + kst, 'good');
+      } else if (kr && kr.errno === 0 && kp[1] === 'deferred') {
+        toast(cfgToastText(key, val) + ' · ' + kst, 'perf');
       } else {
         uiSound('error');
         toast(cfgToastText(key, val).replace(/^✓\s*/, '') + ' · ' + (kp[1] ? kst : T('t_cfg_err', 'apply failed')), 'err');
