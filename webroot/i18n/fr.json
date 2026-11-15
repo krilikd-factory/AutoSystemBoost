@@ -670,12 +670,12 @@
     },
     "kernel_lpm_prediction": {
       "name": "Prédiction d’inactivité (LPM)",
-      "desc": "Pilote de repos du processeur Snapdragon : il essaie de prévoir combien de temps un cœur va dormir et choisit plus tôt un sommeil plus profond. Le sommeil profond économise l’énergie, mais le réveil prend un peu plus de temps. Sur les noyaux récents l’interrupteur s’appelle prediction_disabled ; la carte affiche quand même 1 = prédiction active.\n\n🔋 Autonomie : On ou Auto\n⚡ Performances : Off\n✋ Dans le doute : Auto",
+      "desc": "Pilote de repos du processeur Snapdragon : en plus du prochain minuteur, il s’appuie sur l’historique récent des réveils pour estimer combien de temps un cœur va réellement dormir. Si des interruptions réveillent sans cesse un cœur plus tôt, il choisit alors un sommeil plus léger au lieu d’un sommeil profond qu’il faudrait quitter aussitôt ; entrer en sommeil profond et en sortir coûte de l’énergie et du temps. Sur les noyaux récents l’interrupteur s’appelle prediction_disabled ; la carte affiche quand même 1 = prédiction active.\n\n🔋 Autonomie : On ou Auto\n⚡ Performances : On ou Auto\n✋ Dans le doute : Auto",
       "descOpt": {
-        "auto": "On seulement dans le profil « Batterie » ; la valeur propre du noyau dans les autres.",
-        "stock": "Laisse la valeur propre du noyau.",
-        "off": "Pas de prédiction. Réveil un peu plus rapide, consommation au repos peut-être plus élevée.",
-        "on": "Prédiction active. Peut économiser de l’énergie au repos ; le réveil peut être un peu plus lent."
+        "auto": "On dans le profil « Batterie », la valeur propre du noyau dans les autres.",
+        "stock": "Laisse la valeur propre du noyau (sur Snapdragon normalement On).",
+        "off": "Pas de prédiction : un cœur dort aussi profondément que son prochain minuteur le permet. Plus de sommeils profonds interrompus aussitôt et des réveils plus lents sont possibles ; pour le diagnostic.",
+        "on": "Prédiction active, comme Snapdragon la livre. Moins de sommeils profonds quittés aussitôt."
       }
     },
     "kernel_usb_autosuspend": {
@@ -3489,5 +3489,11 @@
   "kc_why_kernel_rt_boost": "Ce noyau n’a pas de sched_util_clamp_min_rt_default : il est compilé sans CONFIG_UCLAMP_TASK. ASB n’écrit rien.",
   "kc_verdict_deferred": "les scripts de démarrage règlent encore cette valeur ; appliqué au prochain passage",
   "kc_verdict_auto_kernel": "Auto : la valeur propre du noyau pour ce profil",
-  "dev_kernel_runtime_sched_clamp_min_rt_default": "Plancher du boost des threads temps réel"
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Plancher du boost des threads temps réel",
+  "dev_sec_companion_modules": "Modules compagnons du noyau",
+  "dev_companion_modules_nomount": "NoMount (métamodule)",
+  "dev_companion_modules_vpnhide": "VPN Hide (intégré au noyau)",
+  "kc_lpm_default_on": "Ce noyau est livré avec la prédiction active : Stock, Auto et On donnent ici le même résultat ; seul Off change quelque chose.",
+  "kc_lpm_default_off": "Ce noyau est livré avec la prédiction désactivée : On, et Auto dans le profil « Batterie », l’activent.",
+  "kernel_absent_autogroup": "« Autogroup de l’ordonnanceur » est masqué : ce noyau n’a pas cet interrupteur (les noyaux GKI sont compilés sans), et sous Android il ne toucherait de toute façon pas les applis, qui tournent dans les propres groupes CPU d’Android."
 }

@@ -560,12 +560,12 @@
     },
     "kernel_lpm_prediction": {
       "name": "Prediksi Idle (LPM)",
-      "desc": "Driver diam CPU Snapdragon: mencoba menebak berapa lama inti akan tidur dan lebih cepat memilih kondisi tidur yang lebih dalam. Tidur dalam menghemat daya, tetapi bangun darinya sedikit lebih lama. Di kernel baru sakelarnya bernama prediction_disabled; kartu tetap menampilkan 1 = prediksi aktif.\n\n🔋 Daya tahan baterai: On atau Otomatis\n⚡ Performa: Off\n✋ Jika ragu: Otomatis",
+      "desc": "Driver diam CPU Snapdragon: selain timer berikutnya, ia memakai riwayat bangun terbaru untuk menebak berapa lama inti benar-benar akan tidur. Jika interupsi terus membangunkan inti lebih awal, ia memilih tidur yang lebih ringan alih-alih tidur dalam yang harus segera ditinggalkan; masuk dan keluar tidur dalam memakan daya dan waktu. Di kernel baru sakelarnya bernama prediction_disabled; kartu tetap menampilkan 1 = prediksi aktif.\n\n🔋 Daya tahan baterai: On atau Otomatis\n⚡ Performa: On atau Otomatis\n✋ Jika ragu: Otomatis",
       "descOpt": {
-        "auto": "On hanya di profil «Baterai»; di profil lain nilai kernel sendiri.",
-        "stock": "Membiarkan nilai kernel sendiri.",
-        "off": "Tanpa prediksi. Bangun sedikit lebih cepat, mungkin konsumsi diam lebih besar.",
-        "on": "Prediksi aktif. Bisa menghemat daya saat diam; bangun bisa sedikit lebih lambat."
+        "auto": "On di profil «Baterai», nilai kernel sendiri di profil lain.",
+        "stock": "Membiarkan nilai kernel sendiri (di Snapdragon biasanya On).",
+        "off": "Tanpa prediksi: inti tidur sedalam yang diizinkan timer berikutnya. Bisa lebih banyak tidur dalam yang langsung berakhir dan bangun lebih lambat; untuk diagnosis.",
+        "on": "Prediksi aktif, seperti bawaan Snapdragon. Lebih sedikit tidur dalam yang langsung ditinggalkan."
       }
     },
     "kernel_usb_autosuspend": {
@@ -3489,5 +3489,11 @@
   "kc_why_kernel_rt_boost": "Kernel ini tidak punya sched_util_clamp_min_rt_default: dibuat tanpa CONFIG_UCLAMP_TASK. ASB tidak menulis apa pun.",
   "kc_verdict_deferred": "skrip boot masih menyetel nilai ini; diterapkan pada putaran berikutnya",
   "kc_verdict_auto_kernel": "Otomatis: nilai kernel sendiri untuk profil ini",
-  "dev_kernel_runtime_sched_clamp_min_rt_default": "Batas bawah dorongan thread real-time"
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Batas bawah dorongan thread real-time",
+  "dev_sec_companion_modules": "Modul pendamping kernel",
+  "dev_companion_modules_nomount": "NoMount (metamodul)",
+  "dev_companion_modules_vpnhide": "VPN Hide (bawaan kernel)",
+  "kc_lpm_default_on": "Kernel ini bawaannya prediksi aktif: Stock, Otomatis, dan On di sini hasilnya sama; hanya Off yang mengubah sesuatu.",
+  "kc_lpm_default_off": "Kernel ini bawaannya prediksi mati: On, dan Otomatis di profil «Baterai», menyalakannya.",
+  "kernel_absent_autogroup": "«Autogroup penjadwal» disembunyikan: kernel ini tidak punya sakelar itu (kernel GKI dibuat tanpanya), dan di Android pun tidak akan menyentuh aplikasi, karena aplikasi berjalan di kelompok CPU milik Android sendiri."
 }

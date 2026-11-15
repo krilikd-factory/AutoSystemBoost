@@ -675,12 +675,12 @@
     },
     "kernel_lpm_prediction": {
       "name": "Idle Prediction (LPM)",
-      "desc": "Snapdragon CPU idle driver: tries to predict how long a core will sleep and picks a deeper sleep state sooner. Deeper sleep saves power, but waking up from it takes a little longer. On newer kernels the switch is called prediction_disabled; the card still shows 1 = prediction on.\n\n🔋 Battery life: On or Auto\n⚡ Performance: Off\n✋ Not sure: Auto",
+      "desc": "Snapdragon CPU idle driver: besides the next timer, it uses the recent history of wake-ups to guess how long a core will really sleep. When interrupts keep waking a core early, it then picks a lighter sleep state instead of a deep one that would be left again at once; entering and leaving deep sleep costs energy and time. On newer kernels the switch is called prediction_disabled; the card still shows 1 = prediction on.\n\n🔋 Battery life: On or Auto\n⚡ Performance: On or Auto\n✋ Not sure: Auto",
       "descOpt": {
-        "auto": "On only in the Battery profile; the kernel's own value in the others.",
-        "stock": "Leaves the kernel's own value.",
-        "off": "No prediction. Slightly quicker wake-up, possibly more idle drain.",
-        "on": "Prediction on. May save idle power; wake-up can be a little slower."
+        "auto": "On in the Battery profile, the kernel's own value in the others.",
+        "stock": "Leaves the kernel's own value (on Snapdragon normally On).",
+        "off": "No prediction: a core sleeps as deep as its next timer allows. More deep sleeps that end at once and slower wake-ups are possible; meant for diagnosis.",
+        "on": "Prediction on, as Snapdragon ships it. Fewer deep sleeps that are left again at once."
       }
     },
     "kernel_usb_autosuspend": {
@@ -3348,5 +3348,11 @@
   "kc_why_kernel_rt_boost": "This kernel has no sched_util_clamp_min_rt_default: it is built without CONFIG_UCLAMP_TASK. ASB writes nothing.",
   "kc_verdict_deferred": "boot scripts are still setting this value; applied on the next pass",
   "kc_verdict_auto_kernel": "Auto: kernel value kept for this profile",
-  "dev_kernel_runtime_sched_clamp_min_rt_default": "Real-time thread boost floor"
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Real-time thread boost floor",
+  "dev_sec_companion_modules": "Kernel companion modules",
+  "dev_companion_modules_nomount": "NoMount (metamodule)",
+  "dev_companion_modules_vpnhide": "VPN Hide (built-in kernel)",
+  "kc_lpm_default_on": "This kernel ships prediction on: Stock, Auto and On give the same result here; only Off changes something.",
+  "kc_lpm_default_off": "This kernel ships prediction off: On, and Auto in the Battery profile, turn it on.",
+  "kernel_absent_autogroup": "Scheduler Autogroup is hidden: this kernel has no such switch (GKI kernels are built without it), and on Android it would not touch apps anyway, because they run in Android's own CPU groups."
 }

@@ -590,12 +590,12 @@
     },
     "kernel_lpm_prediction": {
       "name": "空闲状态预测（LPM）",
-      "desc": "骁龙 CPU 空闲驱动：尝试预测核心会睡多久，并更早选择更深的睡眠状态。深度睡眠更省电，但从中唤醒会稍慢一些。在较新的内核中，这个开关叫 prediction_disabled；卡片仍显示 1 = 预测开启。\n\n🔋 续航：开启或自动\n⚡ 性能：关闭\n✋ 不确定：自动",
+      "desc": "骁龙 CPU 空闲驱动：除了下一个定时器外，它还根据最近的唤醒历史估计核心实际会睡多久。如果中断总是提前唤醒某个核心，它会选择较浅的睡眠状态，而不是一进入就要马上退出的深度睡眠；进入和退出深度睡眠都要耗费能量和时间。在较新的内核中，这个开关叫 prediction_disabled；卡片仍显示 1 = 预测开启。\n\n🔋 续航：开启或自动\n⚡ 性能：开启或自动\n✋ 不确定：自动",
       "descOpt": {
-        "auto": "仅在“省电”配置中开启；其他配置使用内核自己的值。",
-        "stock": "保留内核自己的值。",
-        "off": "不预测。唤醒稍快，空闲耗电可能更高。",
-        "on": "开启预测。空闲时可能更省电；唤醒可能稍慢。"
+        "auto": "在“省电”配置中开启，其他配置使用内核自己的值。",
+        "stock": "保留内核自己的值（骁龙上通常为开启）。",
+        "off": "不预测：核心按下一个定时器允许的程度尽量深睡。可能出现更多刚进入就结束的深度睡眠以及更慢的唤醒；仅用于诊断。",
+        "on": "开启预测，与骁龙出厂设置相同。减少进入后马上就要退出的深度睡眠。"
       }
     },
     "kernel_usb_autosuspend": {
@@ -3489,5 +3489,11 @@
   "kc_why_kernel_rt_boost": "此内核没有 sched_util_clamp_min_rt_default：编译时未启用 CONFIG_UCLAMP_TASK。ASB 不写入任何内容。",
   "kc_verdict_deferred": "开机脚本仍在设置此值；将在下一轮应用",
   "kc_verdict_auto_kernel": "自动：此配置使用内核自己的值",
-  "dev_kernel_runtime_sched_clamp_min_rt_default": "实时线程加速下限"
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "实时线程加速下限",
+  "dev_sec_companion_modules": "内核配套模块",
+  "dev_companion_modules_nomount": "NoMount（元模块）",
+  "dev_companion_modules_vpnhide": "VPN Hide（内置于内核）",
+  "kc_lpm_default_on": "此内核出厂即开启预测：原厂、自动和开启在这里效果相同；只有关闭会改变什么。",
+  "kc_lpm_default_off": "此内核出厂关闭预测：“开启”以及“省电”配置中的“自动”会把它打开。",
+  "kernel_absent_autogroup": "“调度器自动分组”已隐藏：此内核没有这个开关（GKI 内核编译时不包含它），而且在 Android 上它本来也影响不到应用，因为应用运行在 Android 自己的 CPU 分组中。"
 }

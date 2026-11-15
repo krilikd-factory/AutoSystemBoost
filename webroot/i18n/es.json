@@ -560,12 +560,12 @@
     },
     "kernel_lpm_prediction": {
       "name": "Predicción de inactividad (LPM)",
-      "desc": "Controlador de reposo de la CPU Snapdragon: intenta predecir cuánto dormirá un núcleo y elige antes un estado de sueño más profundo. El sueño profundo ahorra energía, pero despertar de él tarda un poco más. En kernels nuevos el interruptor se llama prediction_disabled; la tarjeta igualmente muestra 1 = predicción activada.\n\n🔋 Autonomía: On o Auto\n⚡ Rendimiento: Off\n✋ Si dudas: Auto",
+      "desc": "Controlador de reposo de la CPU Snapdragon: además del próximo temporizador, usa el historial reciente de despertares para estimar cuánto dormirá realmente un núcleo. Si las interrupciones despiertan un núcleo una y otra vez antes de tiempo, elige un sueño más ligero en lugar de uno profundo del que habría que salir enseguida; entrar y salir del sueño profundo cuesta energía y tiempo. En kernels nuevos el interruptor se llama prediction_disabled; la tarjeta igualmente muestra 1 = predicción activada.\n\n🔋 Autonomía: On o Auto\n⚡ Rendimiento: On o Auto\n✋ Si dudas: Auto",
       "descOpt": {
-        "auto": "On solo en el perfil «Batería»; en los demás, el valor propio del kernel.",
-        "stock": "Deja el valor propio del kernel.",
-        "off": "Sin predicción. Despertar algo más rápido, quizá más consumo en reposo.",
-        "on": "Predicción activada. Puede ahorrar energía en reposo; despertar puede ser algo más lento."
+        "auto": "On en el perfil «Batería», el valor propio del kernel en los demás.",
+        "stock": "Deja el valor propio del kernel (en Snapdragon normalmente On).",
+        "off": "Sin predicción: un núcleo duerme tan profundo como permite su próximo temporizador. Son posibles más sueños profundos que acaban enseguida y despertares más lentos; para diagnóstico.",
+        "on": "Predicción activada, como la trae Snapdragon. Menos sueños profundos de los que se sale enseguida."
       }
     },
     "kernel_usb_autosuspend": {
@@ -3489,5 +3489,11 @@
   "kc_why_kernel_rt_boost": "Este kernel no tiene sched_util_clamp_min_rt_default: está compilado sin CONFIG_UCLAMP_TASK. ASB no escribe nada.",
   "kc_verdict_deferred": "los scripts de arranque aún fijan este valor; se aplicará en la siguiente pasada",
   "kc_verdict_auto_kernel": "Auto: el valor propio del kernel para este perfil",
-  "dev_kernel_runtime_sched_clamp_min_rt_default": "Suelo del impulso de hilos en tiempo real"
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Suelo del impulso de hilos en tiempo real",
+  "dev_sec_companion_modules": "Módulos complementarios del kernel",
+  "dev_companion_modules_nomount": "NoMount (metamódulo)",
+  "dev_companion_modules_vpnhide": "VPN Hide (integrado en el kernel)",
+  "kc_lpm_default_on": "Este kernel trae la predicción activada: Stock, Auto y On dan aquí el mismo resultado; solo Off cambia algo.",
+  "kc_lpm_default_off": "Este kernel trae la predicción desactivada: On, y Auto en el perfil «Batería», la activan.",
+  "kernel_absent_autogroup": "«Autogrupo del planificador» está oculto: este kernel no tiene ese interruptor (los kernels GKI se compilan sin él), y en Android de todos modos no afectaría a las apps, porque se ejecutan en los grupos de CPU propios de Android."
 }

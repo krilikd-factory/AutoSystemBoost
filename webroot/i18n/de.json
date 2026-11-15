@@ -560,12 +560,12 @@
     },
     "kernel_lpm_prediction": {
       "name": "Leerlauf-Vorhersage (LPM)",
-      "desc": "Leerlauftreiber der Snapdragon-CPU: versucht vorherzusagen, wie lange ein Kern schläft, und wählt früher einen tieferen Schlafzustand. Tiefer Schlaf spart Energie, das Aufwachen dauert aber etwas länger. In neueren Kerneln heißt der Schalter prediction_disabled; die Karte zeigt trotzdem 1 = Vorhersage an.\n\n🔋 Akkulaufzeit: Ein oder Auto\n⚡ Leistung: Aus\n✋ Unsicher: Auto",
+      "desc": "Leerlauftreiber der Snapdragon-CPU: Neben dem nächsten Timer schätzt er aus dem jüngsten Verlauf der Aufwachvorgänge, wie lange ein Kern wirklich schlafen wird. Wecken Interrupts einen Kern immer wieder früher, wählt er einen leichteren Schlafzustand statt eines tiefen, der sofort wieder verlassen würde; Ein- und Austritt aus tiefem Schlaf kosten Energie und Zeit. In neueren Kerneln heißt der Schalter prediction_disabled; die Karte zeigt trotzdem 1 = Vorhersage an.\n\n🔋 Akkulaufzeit: Ein oder Auto\n⚡ Leistung: Ein oder Auto\n✋ Unsicher: Auto",
       "descOpt": {
-        "auto": "Ein nur im Profil „Akku“; in den anderen der eigene Wert des Kernels.",
-        "stock": "Lässt den eigenen Wert des Kernels.",
-        "off": "Keine Vorhersage. Etwas schnelleres Aufwachen, eventuell mehr Verbrauch im Leerlauf.",
-        "on": "Vorhersage an. Kann im Leerlauf Energie sparen; das Aufwachen kann etwas langsamer sein."
+        "auto": "Ein im Profil „Akku“, in den anderen der eigene Wert des Kernels.",
+        "stock": "Lässt den eigenen Wert des Kernels (bei Snapdragon normalerweise Ein).",
+        "off": "Keine Vorhersage: Ein Kern schläft so tief, wie es der nächste Timer erlaubt. Mehr tiefe Schlafphasen, die sofort enden, und langsameres Aufwachen sind möglich; für die Diagnose gedacht.",
+        "on": "Vorhersage an, wie Snapdragon sie ausliefert. Weniger tiefe Schlafphasen, die gleich wieder verlassen werden."
       }
     },
     "kernel_usb_autosuspend": {
@@ -3489,5 +3489,11 @@
   "kc_why_kernel_rt_boost": "Dieser Kernel hat kein sched_util_clamp_min_rt_default: Er ist ohne CONFIG_UCLAMP_TASK gebaut. ASB schreibt nichts.",
   "kc_verdict_deferred": "Startskripte setzen diesen Wert noch; wird im nächsten Durchlauf angewendet",
   "kc_verdict_auto_kernel": "Auto: der eigene Wert des Kernels für dieses Profil",
-  "dev_kernel_runtime_sched_clamp_min_rt_default": "Untergrenze des Echtzeit-Thread-Boosts"
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Untergrenze des Echtzeit-Thread-Boosts",
+  "dev_sec_companion_modules": "Begleitmodule des Kernels",
+  "dev_companion_modules_nomount": "NoMount (Metamodul)",
+  "dev_companion_modules_vpnhide": "VPN Hide (im Kernel eingebaut)",
+  "kc_lpm_default_on": "Dieser Kernel liefert die Vorhersage eingeschaltet aus: Standard, Auto und Ein ergeben hier dasselbe; nur Aus ändert etwas.",
+  "kc_lpm_default_off": "Dieser Kernel liefert die Vorhersage ausgeschaltet aus: Ein und Auto im Profil „Akku“ schalten sie ein.",
+  "kernel_absent_autogroup": "„Scheduler-Autogroup“ ist ausgeblendet: Dieser Kernel hat keinen solchen Schalter (GKI-Kernel werden ohne ihn gebaut), und unter Android würde er Apps ohnehin nicht betreffen, weil sie in Androids eigenen CPU-Gruppen laufen."
 }

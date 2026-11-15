@@ -560,12 +560,12 @@
     },
     "kernel_lpm_prediction": {
       "name": "Boşta Kalma Tahmini (LPM)",
-      "desc": "Snapdragon işlemci boşta sürücüsü: bir çekirdeğin ne kadar uyuyacağını tahmin etmeye çalışır ve daha erken, daha derin bir uyku durumu seçer. Derin uyku enerji tasarrufu sağlar, ama ondan uyanmak biraz daha uzun sürer. Yeni çekirdeklerde anahtarın adı prediction_disabled'dır; kart yine de 1 = tahmin açık gösterir.\n\n🔋 Pil ömrü: Açık ya da Otomatik\n⚡ Performans: Kapalı\n✋ Emin değilseniz: Otomatik",
+      "desc": "Snapdragon işlemci boşta sürücüsü: bir sonraki zamanlayıcının yanında, son uyanma geçmişinden bir çekirdeğin gerçekte ne kadar uyuyacağını tahmin eder. Kesmeler bir çekirdeği sürekli erken uyandırıyorsa, hemen çıkılacak derin bir uyku yerine daha hafif bir uyku durumu seçer; derin uykuya girip çıkmak enerji ve zaman harcar. Yeni çekirdeklerde anahtarın adı prediction_disabled'dır; kart yine de 1 = tahmin açık gösterir.\n\n🔋 Pil ömrü: Açık ya da Otomatik\n⚡ Performans: Açık ya da Otomatik\n✋ Emin değilseniz: Otomatik",
       "descOpt": {
-        "auto": "Yalnızca «Pil» profilinde Açık; diğerlerinde çekirdeğin kendi değeri.",
-        "stock": "Çekirdeğin kendi değerini bırakır.",
-        "off": "Tahmin yok. Biraz daha hızlı uyanma, belki boştayken daha fazla tüketim.",
-        "on": "Tahmin açık. Boştayken enerji tasarrufu sağlayabilir; uyanma biraz daha yavaş olabilir."
+        "auto": "«Pil» profilinde Açık, diğerlerinde çekirdeğin kendi değeri.",
+        "stock": "Çekirdeğin kendi değerini bırakır (Snapdragon'da normalde Açık).",
+        "off": "Tahmin yok: çekirdek bir sonraki zamanlayıcının izin verdiği kadar derin uyur. Hemen biten daha fazla derin uyku ve daha yavaş uyanma olabilir; tanılama içindir.",
+        "on": "Tahmin açık, Snapdragon'un gönderdiği gibi. Hemen çıkılan derin uykular daha az olur."
       }
     },
     "kernel_usb_autosuspend": {
@@ -3489,5 +3489,11 @@
   "kc_why_kernel_rt_boost": "Bu çekirdekte sched_util_clamp_min_rt_default yok: CONFIG_UCLAMP_TASK olmadan derlenmiş. ASB hiçbir şey yazmaz.",
   "kc_verdict_deferred": "açılış betikleri bu değeri hâlâ ayarlıyor; sonraki geçişte uygulanır",
   "kc_verdict_auto_kernel": "Otomatik: bu profil için çekirdeğin kendi değeri",
-  "dev_kernel_runtime_sched_clamp_min_rt_default": "Gerçek zamanlı iş parçacığı hızlandırma tabanı"
+  "dev_kernel_runtime_sched_clamp_min_rt_default": "Gerçek zamanlı iş parçacığı hızlandırma tabanı",
+  "dev_sec_companion_modules": "Çekirdek yardımcı modülleri",
+  "dev_companion_modules_nomount": "NoMount (metamodül)",
+  "dev_companion_modules_vpnhide": "VPN Hide (çekirdeğe gömülü)",
+  "kc_lpm_default_on": "Bu çekirdekte tahmin fabrikadan açık: Stok, Otomatik ve Açık burada aynı sonucu verir; yalnızca Kapalı bir şeyi değiştirir.",
+  "kc_lpm_default_off": "Bu çekirdekte tahmin fabrikadan kapalı: Açık ve «Pil» profilindeki Otomatik onu açar.",
+  "kernel_absent_autogroup": "«Zamanlayıcı otomatik grubu» gizlendi: bu çekirdekte böyle bir anahtar yok (GKI çekirdekleri onsuz derlenir) ve Android'de zaten uygulamaları etkilemezdi, çünkü uygulamalar Android'in kendi CPU gruplarında çalışır."
 }
