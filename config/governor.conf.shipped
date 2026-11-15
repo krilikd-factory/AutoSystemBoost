@@ -313,22 +313,31 @@ mglru_hold=stock
 
 # Standard kernel controls; all require runtime discovery, baseline capture and readback.
 # mglru_mode: stock|off|on|smart. Smart alone permits the dynamic 5/7 writer.
-# kernel_timer_migration: stock|off|on. Default off preserves the former profile value 0.
-# kernel_sched_nr_migrate: stock|1|2|4|8|16 through /sys/kernel/debug/sched/nr_migrate.
-# Default 4 preserves the former balanced request; Stock performs no unowned write.
+# kernel_timer_migration: stock|auto|off|on. Auto writes 0 (timers stay on their CPU) only in
+# Performance and leaves the kernel's own value in every other profile.
+# kernel_sched_nr_migrate: stock|auto|1|2|4|8|16 through /sys/kernel/debug/sched/nr_migrate.
+# Auto follows the profile: Battery 2, Balanced/Smart 4, Performance 8. Stock performs no unowned write.
 # kernel_mglru_min_ttl: stock|1000|2000 milliseconds; exact baseline restore. A nonzero value lets the
 # kernel OOM killer end a process when the protected working set cannot stay in memory. Legacy 5000 reads as 2000.
 # The legacy mglru_hold key is snapshot-compatible but no longer writes sysfs.
 mglru_mode=smart
 kernel_mglru_min_ttl=stock
-kernel_timer_migration=off
-kernel_sched_nr_migrate=4
+kernel_timer_migration=auto
+kernel_sched_nr_migrate=auto
 
 # Profile-aware timer/idle controls: stock|auto|off|on.
-# Auto preserves the former Battery-only requests (hrtimer=0, LPM prediction=1) and
-# exactly restores ASB-owned values in other profiles. Manual off/on overrides Auto.
+# Auto: the separate hrtimer switch (only on kernels that have one) follows Timer migration,
+# LPM prediction is turned on only in Battery; other profiles get the exact ASB-owned
+# baseline back. Manual off/on overrides Auto.
 kernel_hrtimer_migration=auto
 kernel_lpm_prediction=auto
+
+# Minimum CPU boost for real-time threads (audio mixers, display composition, some camera
+# HAL threads, threaded interrupts): stock|auto|0|128|256|512 written to
+# /proc/sys/kernel/sched_util_clamp_min_rt_default (0..1024). Auto: Battery 0,
+# Performance 256, the kernel's own value in Balanced/Smart. Snapdragon boot scripts
+# usually set 0 already; the mainline default is 1024.
+kernel_rt_boost=auto
 
 # Default autosuspend delay for newly detected USB peripherals: stock|off|on.
 # on requests 2 seconds; off requests -1. This is not a charging, ADB or gadget control.
