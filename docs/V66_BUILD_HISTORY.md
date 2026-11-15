@@ -4,6 +4,45 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev62 - Liquid Glass retuned to the ColorOS 17 references (fix351)
+
+Input: the dev61 source and three ColorOS 17 screenshots (the media platter, the stopwatch
+and the compact media card): matte, strongly blurred dark glass with a soft light along the
+lower inner edge and large radii. The request: bring the WebUI's Liquid Glass theme closer
+to that material. Paint only - no native source, geometry, radius or behaviour changed.
+
+- **Dark canvas:** keeps the genuinely black base (fix324). A faint neutral ambient of cool
+  greys - no accent hue - now sits under it, so the stronger backdrop blur has real texture
+  to work with instead of blurring a flat void into flat grey. Accent light still belongs
+  to controls and the logo, never to a screen-sized wash; the fix324 rejection of a
+  coloured full-screen wash stands, and the contract test still forbids any accent stop in
+  the dark canvas.
+- **Underlight:** new `--glass-underlight` token (dark `rgba(255,255,255,.055)`, light
+  `rgba(255,255,255,.50)`), painted as `inset 0 -1px 0` on every painted surface family:
+  the shared surface rule, floating chrome in both palettes, sheets, the toast, profile
+  buttons (idle and selected), config rows (idle and on) and category tiles. This is the
+  ColorOS "light leak" that makes a pill read as a thick translucent slab rather than a
+  flat card. Header capsules keep `--cap-shadow` unchanged; inset controls, nested evidence
+  regions and pressed states deliberately stay without it.
+- **Clearer surfaces, stronger blur ladder:** dark surfaces .58→.52, quiet .46→.42, strong
+  .78→.74, navigation .86→.84, controls .48→.44; light surfaces .44→.42, quiet .34→.32,
+  strong .72→.70, controls .38→.36. Blur moves to 22 px / saturate 1.28 on content, 28 px /
+  1.30 on floating chrome, 32 px / 1.28 on sheets, 20 px / 1.24 on header capsules, 26 px /
+  1.28 on the toast and 16 px on the status scrim. Washes gain a cool tint
+  (`rgba(196,214,255,.05)` dark, `rgba(244,248,255,.36)` light).
+- **Not changed:** the light canvas gradient, the opaque no-blur / reduced-transparency /
+  forced-colours fallbacks, all geometry and fit logic, and every navigation, profile,
+  Smart and evidence behaviour contract.
+- **Tests:** `t_webui_fix322_liquid_glass_material` asserts the new token values in both
+  palettes and counts the underlight on all ten surface rules, so a silently dropped family
+  fails the contract instead of the device; `t_webui_fix324_boot_intro` and
+  `t_webui_fix323_glass_navigation_actions` follow the layered dark canvas (black base
+  asserted, accent hue still forbidden there).
+- **Verification limit:** source contract tests and a headless-Chromium render of both
+  glass palettes. Whether the stronger blur ladder costs visible frame time in the phone's
+  WebView was not measured; ColorOS draws its material with a different compositor path, so
+  the resemblance is by eye from the references, not a metric.
+
 ## V66 dev61 - a quieter idle WebUI, GPU load with its clock, pressure from PSI, "Vendor ↑"
 
 Input: the dev60 source, the owner's short export (1 h 17 min with the screen on: device page,
