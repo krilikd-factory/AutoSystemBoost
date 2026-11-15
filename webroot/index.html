@@ -6158,6 +6158,47 @@ html:root[data-asb-glass="1"] .cfg-reset-dialog {
     box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
 }
+/* dev63: reduced effects preserve the palette, selected states and interaction feedback, but
+ * avoid full-screen blur layers and decorative perpetual motion. No content-visibility is
+ * applied: asbFitPages still measures the real page height. */
+html[data-asb-effects="reduced"] .hdr-cap,
+html[data-asb-effects="reduced"] .theme-toggle,
+html[data-asb-effects="reduced"] .status-row,
+html[data-asb-effects="reduced"] .live-chip,
+html[data-asb-effects="reduced"] .tg-link,
+html[data-asb-effects="reduced"] .debug-support-btn,
+html[data-asb-effects="reduced"] .cfg-backup,
+html[data-asb-effects="reduced"] .cfg-lang-btn,
+html[data-asb-effects="reduced"] .cfg-lang-pop,
+html[data-asb-effects="reduced"] .cfg-sel-btn,
+html[data-asb-effects="reduced"] .cfg-sel-pop,
+html[data-asb-effects="reduced"] .cfg-tile,
+html[data-asb-effects="reduced"] .cfg-row,
+html[data-asb-effects="reduced"] .cfg-zygisk-card,
+html[data-asb-effects="reduced"] .live-cell,
+html[data-asb-effects="reduced"] .stock-telemetry,
+html[data-asb-effects="reduced"] .smart-banner,
+html[data-asb-effects="reduced"] .cfg-profile-sheet,
+html[data-asb-effects="reduced"] .cfg-reset-dialog,
+html[data-asb-effects="reduced"] .debug-action-wait-sheet,
+html[data-asb-effects="reduced"] .log-menu,
+html[data-asb-effects="reduced"] .cfg-fm-box,
+html[data-asb-effects="reduced"] .asb-tabbar,
+html[data-asb-effects="reduced"] .report-nav,
+html[data-asb-effects="reduced"] .zy-page-nav,
+html[data-asb-effects="reduced"] .dev-page-nav,
+html[data-asb-effects="reduced"] .cfg-page-nav,
+html[data-asb-effects="reduced"] .pbtn,
+html[data-asb-effects="reduced"] .lgr-hero,
+html[data-asb-effects="reduced"] .lgr-sec,
+html[data-asb-effects="reduced"] .live-info-now,
+html[data-asb-effects="reduced"] .live-info-src {
+  -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10) !important;
+}
+html[data-asb-effects="reduced"] :is(.logo-sphere-a,.logo-sphere-b,.logo-inner,.app-name,.dot,.dot::after,.zygisk-header-dot,.zygisk-header-dot::after,.dev-zygisk-link-dot,.dev-zygisk-link-dot::after,.pico-smart .ai-glow) {
+  animation:none !important;
+}
 </style>
 </head>
 <body>
@@ -7037,6 +7078,7 @@ const TECH_ICON_PATHS = {
   usb_autosuspend: '<path d="M12 3v12M12 5l-3 3M12 8l3-3"/><circle cx="12" cy="18" r="3"/><path d="M7 10v4a3 3 0 0 0 3 3M17 10v4a3 3 0 0 1-3 3"/><circle cx="7" cy="9" r="1.5"/><rect x="15.5" y="6.5" width="3" height="3" rx=".5"/>',
   rt_boost: '<path d="M3 13h3l2-4 3 8 2.5-6 1.5 2H18"/><path d="M19 4l-2.5 4.5H20L17.5 13"/>',
   sched_migration: '<rect x="3" y="5" width="5" height="5" rx="1"/><rect x="16" y="14" width="5" height="5" rx="1"/><path d="M8 7.5h5a3 3 0 0 1 3 3V14M13 11l3 3 3-3M5.5 10v4a3 3 0 0 0 3 3H16"/>',
+  bore_scheduler: '<path d="M3.5 16.5h3l2-8 3 11 2.5-7 2 4h4.5"/><path d="M5 5h4M15 5h4M7 2.5v5M17 2.5v5"/>',
   sched_stats: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h4M7 16v-3M11 16V9M15 16v-5M19 16v-2"/>',
   sched_autogroup: '<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><rect x="16" y="16" width="5" height="5" rx="1"/><path d="M12 8v4M5.5 16v-2a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v2M12 12v4"/>',
   sched_child_first: '<rect x="3" y="4" width="7" height="6" rx="1"/><rect x="14" y="14" width="7" height="6" rx="1"/><path d="M10 7h4a3 3 0 0 1 3 3v4M14 11l3 3 3-3M6.5 13v4a3 3 0 0 0 3 3H14"/>',
@@ -7075,6 +7117,7 @@ const TECH_ICON_PATHS = {
   prime_rest: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.8v6.4M14 8.8v6.4"/>',
   fitness_pulse: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M7.5 12h2.5l1.2-2.2 1.6 4 1.2-1.8h2.5"/>',
   ltpo: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M7.3 11.5h2l1.2-3.4 1.8 6.8 1.2-3.4h3.2"/>',
+  ltpo_idle_speed: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M7 8h3v3h3v3h4M15.5 12.5 17 14l1.5-1.5M8 17.5h8"/>',
   /* V66 dev8: a memory module with an arrow capped by a bar - the CPU's bus votes held under a ceiling. */
   membus_cap: '<rect x="3" y="9" width="18" height="9" rx="1.5"/><path d="M6 18v2M10 18v2M14 18v2M18 18v2"/><path d="M12 15.5V5.8M9.6 8.2 12 5.8l2.4 2.4"/><path d="M8.5 3.3h7"/>',
   /* two app cards of different weight, each with its own gauge - the profile follows the kind of app. */
@@ -7908,14 +7951,50 @@ function runBatchSplit(text) {
   });
   return out;
 }
+/* dev63: opt-in, in-memory TTL only for explicit read-only parts (p[2], milliseconds).
+ * Existing two-element parts always execute. Nothing is inferred from shell text, so a write
+ * can never become cached by accident; cache entries never leave this WebView. */
+const _asbBatchCache = new Map();
+const _asbBatchPerf = { calls: 0, shells: 0, hits: 0, misses: 0, expiries: 0 };
+function asbWebUiPerfSnapshot() {
+  return {
+    batch: Object.assign({}, _asbBatchPerf),
+    poll: { lastSuccess: _livePollMeta.lastSuccess, lastChange: _livePollMeta.lastChange,
+      nextDelay: _livePollMeta.nextDelay },
+    frame: { queued: asbUiFrame.jobs.size, slowFrames: asbUiFrame.slowFrames },
+    effects: { mode: _asbEffectsMotion ? 'reduced' : _asbEffectsMode, reason: _asbEffectsReason }
+  };
+}
 async function runBatch(parts) {
-  let r = null;
-  try { r = await run(runBatchCmd(parts)); } catch (e) { r = null; }
-  const got = runBatchSplit(r ? r.stdout : '');
-  const res = Object.create(null);
+  _asbBatchPerf.calls++;
+  const now = Date.now(), res = Object.create(null), missing = [];
   parts.forEach(function (p) {
+    const ttl = Math.min(604800000, Math.max(0, Number(p[2]) || 0));
+    const key = 'asb_ui_v2:' + p[0] + '\n' + p[1];
+    const hit = ttl > 0 && _asbBatchCache.get(key);
+    if (hit && hit.until > now) {
+      res[p[0]] = { errno: hit.value.errno, stdout: hit.value.stdout, stderr: '', cache: 'hit' };
+      _asbBatchPerf.hits++;
+      return;
+    }
+    if (hit) { _asbBatchCache.delete(key); _asbBatchPerf.expiries++; }
+    missing.push(p);
+    _asbBatchPerf.misses++;
+  });
+  let got = Object.create(null);
+  if (missing.length) {
+    _asbBatchPerf.shells++;
+    let r = null;
+    try { r = await run(runBatchCmd(missing)); } catch (e) { r = null; }
+    got = runBatchSplit(r ? r.stdout : '');
+  }
+  missing.forEach(function (p) {
     const has = Object.prototype.hasOwnProperty.call(got, p[0]);
-    res[p[0]] = { errno: has ? 0 : 1, stdout: has ? got[p[0]] : '', stderr: '' };
+    const value = { errno: has ? 0 : 1, stdout: has ? got[p[0]] : '', stderr: '' };
+    res[p[0]] = { errno: value.errno, stdout: value.stdout, stderr: '', cache: 'miss' };
+    const ttl = Math.min(604800000, Math.max(0, Number(p[2]) || 0));
+    if (has && ttl > 0) _asbBatchCache.set('asb_ui_v2:' + p[0] + '\n' + p[1],
+      { until: Date.now() + ttl, value: value });
   });
   return res;
 }
@@ -8300,6 +8379,58 @@ function fmtTempC(deci) {
 }
 function _el(id) { return document.getElementById(id); }
 
+/* dev63: one frame queue for layout reads/writes. The jobs are deduplicated by function
+ * identity, so a tab switch cannot run the page fit, header fit and navigation indicator
+ * several times in the same frame. No animation or polling worker is created here. */
+let _asbEffectsMode = 'full', _asbEffectsReason = 'default', _asbEffectsMotion = false;
+function asbEffectsSet(mode, reason) {
+  const next = mode === 'reduced' ? 'reduced' : 'full';
+  if (_asbEffectsMotion) { mode = 'reduced'; reason = 'reduced-motion'; }
+  else { _asbEffectsMode = next; _asbEffectsReason = reason || 'manual'; }
+  const root = document.documentElement;
+  if (root) root.setAttribute('data-asb-effects', _asbEffectsMotion ? 'reduced' : _asbEffectsMode);
+}
+const asbUiFrame = {
+  queued: false,
+  jobs: new Set(),
+  lastFrame: 0,
+  slowFrames: 0,
+  request: function (job) {
+    if (typeof job !== 'function') return;
+    this.jobs.add(job);
+    if (this.queued) return;
+    this.queued = true;
+    const self = this;
+    requestAnimationFrame(function () {
+      self.queued = false;
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (!document.hidden && self.lastFrame && now > self.lastFrame && now - self.lastFrame < 1000) {
+        self.slowFrames = now - self.lastFrame > 80 ? self.slowFrames + 1 : 0;
+        if (self.slowFrames >= 3) asbEffectsSet('reduced', 'ui-jank');
+      } else self.slowFrames = 0;
+      self.lastFrame = now;
+      const jobs = Array.from(self.jobs);
+      self.jobs.clear();
+      jobs.forEach(function (fn) { try { fn(); } catch (_) {} });
+    });
+  }
+};
+(function asbEffectsLifecycle() {
+  let query = null;
+  try { query = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)'); } catch (_) {}
+  _asbEffectsMotion = !!(query && query.matches);
+  asbEffectsSet(_asbEffectsMotion ? 'reduced' : 'full', _asbEffectsMotion ? 'reduced-motion' : 'default');
+  const changed = function (event) {
+    _asbEffectsMotion = !!(event && event.matches);
+    asbEffectsSet(_asbEffectsMotion ? 'reduced' : 'full', _asbEffectsMotion ? 'reduced-motion' : 'default');
+  };
+  try {
+    if (query && query.addEventListener) query.addEventListener('change', changed);
+    else if (query && query.addListener) query.addListener(changed);
+  } catch (_) {}
+  document.addEventListener('visibilitychange', function () { asbUiFrame.lastFrame = 0; asbUiFrame.slowFrames = 0; });
+})();
+
 let _liveTimer = null;
 let _liveBgTimer = null;
 let _liveOpen = false;
@@ -8307,6 +8438,53 @@ let _liveOpen = false;
  * background Home prime for its own fresh page collection. At most one visible follow-up is
  * queued; background/background and visible/visible overlaps share the active pass. */
 let _livePollRun = null, _livePollVisible = false, _livePollFollow = null;
+let _livePageSeq = 0, _livePollSeq = 0;
+const _livePollMeta = {
+  lastSuccess: 0,
+  lastChange: 0,
+  nextDelay: 3000,
+  snapshots: { visible: '', home: '', prime: '' }
+};
+function liveMonitorSchedule(delay) {
+  if (_liveTimer) { clearTimeout(_liveTimer); _liveTimer = null; }
+  if (!_liveOpen || document.hidden) return;
+  const wait = typeof delay === 'number' ? Math.max(0, delay) : _livePollMeta.nextDelay;
+  _liveTimer = setTimeout(function () {
+    _liveTimer = null;
+    if (!_liveOpen || document.hidden) return;
+    /* Stock keeps its existing ten-second ROM cache; this additional call reuses that sample
+     * instead of forcing another shell. */
+    if (_selectedProfile === 'stock') pollStockTelemetry(true);
+    Promise.resolve(pollLive(true)).then(function () {
+      lviSample(); liveMonitorSchedule();
+    }, function () {
+      lviSample(); liveMonitorSchedule();
+    });
+  }, wait);
+}
+function liveBackgroundSchedule() {
+  if (_liveBgTimer) { clearTimeout(_liveBgTimer); _liveBgTimer = null; }
+  if (document.hidden || _liveOpen) return;
+  _liveBgTimer = setTimeout(function () {
+    _liveBgTimer = null;
+    if (!document.hidden && !_liveOpen) Promise.resolve(pollLive(false)).then(liveBackgroundSchedule, liveBackgroundSchedule);
+  }, 30000);
+}
+function livePollTrack(signature, visible, prime, success) {
+  const now = Date.now();
+  if (success) _livePollMeta.lastSuccess = now;
+  const slot = visible ? 'visible' : (prime ? 'prime' : 'home');
+  const unchanged = success && _livePollMeta.snapshots[slot] === signature;
+  if (unchanged) {
+    _livePollMeta.nextDelay = _livePollMeta.nextDelay < 5000 ? 5000 :
+      (_livePollMeta.nextDelay < 8000 ? 8000 : 12000);
+    return true;
+  }
+  _livePollMeta.snapshots[slot] = signature;
+  _livePollMeta.lastChange = now;
+  _livePollMeta.nextDelay = 3000;
+  return false;
+}
 /* Declared up here with the other page flags, not next to the report page: navUiDepth()
  * reads it and lives earlier in the file, and a let read before its declaration throws. */
 let _rpOpen = false;
@@ -8327,6 +8505,8 @@ function openLivePage() {
   asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'false');
   _liveOpen = true;
+  _livePageSeq++;
+  liveBackgroundSchedule();
   liveHeaderSync();
   if (lvMonTilesRestore()) lvStale(true);
   if (lvMonSmartRestore()) lvStale(true);
@@ -8339,20 +8519,13 @@ function openLivePage() {
   /* Slide in first, read after (fix177). The root call blocks the page while it runs, and on
    * Stock it ran here, before the slide had a frame - "Monitor opens slowly on Stock". The
    * last ROM sample is painted at once; the fresh read starts once the page has moved. */
-  if (_liveTimer) clearInterval(_liveTimer);
-  setTimeout(function () {
-    if (!_liveOpen) return;
-    /* Reuse a fresh Stock sample when returning to Monitor. pollStockTelemetry still reads
-     * immediately after its normal ten-second window; forcing a second root read here only
-     * repeated the same collector after the Home/startup warm-up. */
-    if (_selectedProfile === 'stock') pollStockTelemetry(true);
-    pollLive(true);
-  }, LIVE_OPEN_SETTLE_MS);
-  _liveTimer = setInterval(() => { pollLive(true).then(lviSample, lviSample); }, 3000);
+  /* The first read still waits for the slide. Later reads back off only while the complete
+   * visible snapshot is unchanged; a changed snapshot returns to the original three seconds. */
+  liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);
   /* fix202: Monitor is the tall page - once it is up, measure it and compact the chrome
      if it runs past the screen (the page is full-height from its first frame; the slide
      is a transform and does not change the measurement). */
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 const LIVE_OPEN_SETTLE_MS = 320;
 
@@ -8366,10 +8539,12 @@ function closeLivePage() {
   asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'true');
   _liveOpen = false;
-  if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
+  _livePageSeq++;
+  if (_liveTimer) { clearTimeout(_liveTimer); _liveTimer = null; }
+  liveBackgroundSchedule();
   /* Back on Home: the compaction Monitor may have asked for is re-measured, and comes
      off again if the profile list fits without it (fix202). */
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 
 /* Back gesture inside the WebUI (fix159).
@@ -8467,7 +8642,7 @@ function lvTopSec(smart) {
   const el = _el('liveTopSecLabel');
   if (el) el.textContent = smart ? T('lv_card_smart', 'Battery & Smart') : T('lv_card_rom', 'Battery & system');
   lvTopSecSync();
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(lvFitValues);
+  if (typeof requestAnimationFrame === 'function') asbUiFrame.request(lvFitValues);
 }
 /* fix244: a value longer than its quarter of the card ("↓ остывает", "measuring…" in some
  * languages) was cut to "↓ остыв…". The text shrinks a little before it is ever cut, down to
@@ -9151,7 +9326,9 @@ function lviPressureTone(n) {
 function lviPressureRender(box, d, key) {
   box.textContent = '';
   const cap = document.createElement('div'); cap.className = 'lvp-cap';
-  cap.textContent = T('dev_sec_system_load', 'Current system load');
+  cap.textContent = key === 'apphint'
+    ? T('lvp_app_pressure_title', 'Whole-system load · PSI and CPU/GPU')
+    : T('dev_sec_system_load', 'Current system pressure');
   box.appendChild(cap);
   box.appendChild(devicePressureScale(d));
   const parts = document.createElement('div'); parts.className = 'lvp-parts';
@@ -9631,7 +9808,8 @@ function liveInfoOpen(cell) {
   const lbl = cell.querySelector('.live-cell-label') || cell.querySelector('.smart-banner-label');
   const val = cell.querySelector('.live-cell-value') || cell.querySelector('.smart-banner-value');
   _el('liveInfoTitle').textContent = (lbl && lbl.textContent) || '';
-  _el('liveInfoNowLbl').textContent = key === 'slotheat' ? T('lvi_usual', 'Usually in this slot') : T('lvi_now', 'Now');
+  _el('liveInfoNowLbl').textContent = key === 'slotheat' ? T('lvi_usual', 'Usually in this slot')
+    : key === 'apphint' ? T('lvi_app_class_now', 'Foreground app class · now') : T('lvi_now', 'Now');
   lviSample();
   const iv = _el('liveInfoVal');
   iv.textContent = liveInfoValText(val);
@@ -9736,6 +9914,7 @@ const SNAP_KEYS = [
   'wifi_powersave',
   'net_wifi_leave',
   'ltpo_force',
+  'ltpo_idle_speed',
   'mmfeed_off',
   'audio_profile',
   'audio_dac_hifi',
@@ -9773,6 +9952,7 @@ const SNAP_KEYS = [
   'kernel_lpm_prediction',
   'kernel_usb_autosuspend',
   'kernel_rt_boost',
+  'kernel_bore',
   'cool_gaming',
   'auto_battery_enable',
   'charge_aware_enable',
@@ -10030,6 +10210,9 @@ const CFG_ITEMS = [
   { key:'kernel_rt_boost', type:'seg', def:'auto', stock:'stock',
     opts:['stock','auto','0','128','256','512'], name:'Real-time Boost (Audio · Camera · Display)', cat:'system',
     desc:'The minimum CPU speed that real-time threads ask for: sound playback and recording, screen composition, some camera threads and interrupt handlers. A higher floor gives them a faster start, which may help against crackling sound or dropped frames when the CPU runs slow, but costs power whenever these threads run. 1024 means full speed, 0 means only as fast as the load needs. Snapdragon phones usually set 0 at boot; ASB\'s CPU limits per app group still apply on top.\n\n🔋 Battery life: 0 or Auto\n⚡ Performance: 256 or Auto\n✋ Not sure: Auto' },
+  { key:'kernel_bore', type:'seg', def:'stock', stock:'stock',
+    opts:['stock','off','on'], name:'BORE Scheduler', cat:'system',
+    desc:'BORE (Burst-Oriented Response Enhancer) changes how the kernel scheduler scores interactive and CPU-intensive tasks. On requests the BORE policy; Off disables it. Stock restores the exact value this kernel had before ASB first changed it. This card appears as writable only when /proc/sys/kernel/sched_bore exposes 0 or 1 and permits root writes; every change requires read-back. No responsiveness, smoothness or battery gain is promised.\n\n🔋 Battery life: Stock until measured on this kernel\n⚡ Responsiveness: On can be tried; return to Stock if it is worse\n✋ Not sure: Stock' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces Google Play services background work without turning components off.\n\n🔋 Battery life: Strict\n🔔 Notifications on time: Stock or Light\n✋ Not sure: Light' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -10050,7 +10233,10 @@ const CFG_ITEMS = [
   { key:'documentsui_fix', type:'bool', def:'0', stock:'0', name:'DocumentsUI / DSU Picker Fix',
     desc:'A one-time repair for a missing or broken system file picker on affected ColorOS/DSU setups. It enables and unhides DocumentsUI, returns its picker and files activities to their default state, and disables com.coloros.filemanager for user 0. THE COST: the ColorOS File Manager disappears until you turn this fix off. Only states ASB actually changed are recorded and restored on Off or uninstall. Nothing is re-applied at boot, and this card does not request ART compilation.' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
-    desc:'Lets the panel drop its refresh rate when nothing moves (60 Hz after two quiet seconds) and return to its top rate on touch, using a patched copy of the device\'s own refresh table. Needs a reboot; the stock file is not changed.\n\n🔋 Battery life: On\n⚡ Smoothness: Off\n✋ Not sure: Off' },
+    desc:'Lets the panel drop its refresh rate when nothing moves and return to its top rate on touch, using a patched copy of the device\'s own refresh table and the selected idle-drop speed. Needs a reboot; the stock file is not changed. Rates below Android\'s advertised floor depend on the panel\'s own ADFR support.\n\n🔋 Battery life: On; actual savings are device-dependent\n⚡ Smoothness: Off\n✋ Not sure: Off' },
+  { key:'ltpo_idle_speed', type:'seg', def:'balanced', stock:'balanced',
+    opts:['fast','balanced','gentle'], name:'LTPO Idle Drop Speed', cat:'system',
+    desc:'How quickly the existing event-driven controller steps down after the last touch. Fast: 1 second before the first step and 1 second between modes. Balanced: 2 / 1 seconds. Gentle: 5 / 3 seconds. Touch immediately restores the panel maximum. Only modes advertised by this panel are used; a drop toward 1 Hz below Android\'s advertised floor remains dependent on the device\'s own ADFR table and is not guaranteed. Requires Force LTPO Refresh; no foreign table and no persistent polling worker.\n\n🔋 Battery life: Fast may reduce idle refreshes; measure on this device\n⚡ Smoothness: Gentle keeps higher rates through short pauses\n✋ Not sure: Balanced' },
   { key:'ltpo_peak_force', type:'bool', def:'0', stock:'0', name:'Panel Maximum on Touch',
     desc:'Works with Force LTPO Refresh: while you touch the screen, asks for the highest mode the panel reports (165 Hz on the OnePlus 15) instead of the ROM\'s 120 Hz for ordinary apps.\n\n🔋 Battery life: Off\n⚡ Smoothness: On\n✋ Not sure: Off' },
   { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
@@ -10155,12 +10341,12 @@ const CFG_CAT = {
   net_wifi_leave:'net',
   mglru_mode:'battery', kernel_mglru_min_ttl:'system',
   kernel_timer_migration:'system', kernel_sched_nr_migrate:'system',
-  kernel_hrtimer_migration:'system', kernel_lpm_prediction:'system', kernel_usb_autosuspend:'system', kernel_rt_boost:'system',
+  kernel_hrtimer_migration:'system', kernel_lpm_prediction:'system', kernel_usb_autosuspend:'system', kernel_rt_boost:'system', kernel_bore:'system',
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'system',
   net_rps:'net', net_txqueue:'net',
-  athena_service:'system', heytap_mcs:'system', documentsui_fix:'system', ltpo_force:'system', ltpo_video:'system', mmfeed_off:'system',
+  athena_service:'system', heytap_mcs:'system', documentsui_fix:'system', ltpo_force:'system', ltpo_idle_speed:'system', ltpo_video:'system', mmfeed_off:'system',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
@@ -10238,12 +10424,12 @@ const CFG_GROUP_OF = {
   net_wifi_leave:'net',
   /* Each advanced owner has one hub destination; diagnostics remains a separate read-only page. */
   mglru_mode:'kernel', kernel_mglru_min_ttl:'kernel', kernel_timer_migration:'kernel', kernel_hrtimer_migration:'kernel', kernel_lpm_prediction:'kernel',
-  kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel', kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel', kernel_usb_autosuspend:'kernel', kernel_rt_boost:'kernel',
+  kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel', kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel', kernel_usb_autosuspend:'kernel', kernel_rt_boost:'kernel', kernel_bore:'kernel',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'feel',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui', zygisk_enabled:'zygisk', zygisk_hints:'zygisk', zygisk_launch:'zygisk', zygisk_ledger:'zygisk',
-  ltpo_force:'feel', ltpo_video:'feel', mmfeed_off:'ui',
+  ltpo_force:'feel', ltpo_idle_speed:'feel', ltpo_video:'feel', mmfeed_off:'ui',
   /* dev17: these two are repairs, not everyday tweaks - they now live on the Infirmary screen. */
   heytap_mcs:'infirmary', documentsui_fix:'infirmary',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
@@ -10329,7 +10515,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'controls', icon:'kernel', titleKey:'cfg_kernel_section_controls',
       title:'Kernel management', hintKey:'cfg_kernel_section_controls_hint',
       hint:'Registered kernel controls and the optional exact-name wakeup list live together. Availability and live readback come from the running kernel.',
-      keys:['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost'], card:'wakeup' }
+      keys:['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'], card:'wakeup' }
   ],
   zygisk: [
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
@@ -10341,7 +10527,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
       title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
       hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
-      keys:['ltpo_force','ltpo_peak_force','ltpo_video','haptic_strength','haptic_touch_strength'] }
+      keys:['ltpo_force','ltpo_idle_speed','ltpo_peak_force','ltpo_video','haptic_strength','haptic_touch_strength'] }
   ],
   ui: [
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
@@ -10589,7 +10775,10 @@ function bfxPaintFrom(f) {
     artText = T('bfx_art_failed', 'Could not read the list of apps');
   } else if (cs === 'refused') {
     artState = 'fail';
-    artText = bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: f.err_text || T('bfx_art_refused_none', 'no reason given') });
+    const artErr = f.err_text || T('bfx_art_refused_none', 'no reason given');
+    artText = /Failed transaction/i.test(artErr)
+      ? bfxT('bfx_art_binder', 'Android’s PackageManager Binder call failed ({fail} of {done} attempts); the pm fallback did not succeed either. No app was recompiled. The battery reset is still scheduled. Android said: {err}', { fail: fail, done: done, err: artErr })
+      : bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: artErr });
   }
   bfxSetStep('bfxStepArt', artState, artText);
   if (barWrap) barWrap.hidden = ratio < 0;
@@ -10722,8 +10911,8 @@ function soterServices(raw) {
 }
 function soterResultText(state) {
   const fb = {
-    done: 'SOTER data reset; its service is running again',
-    done_no_service: 'SOTER server data reset; this ROM declares no separate SOTER service',
+    done: 'SOTER server data cleared; the init service is running. App and payment functionality was not tested',
+    done_no_service: 'SOTER server data cleared; this ROM declares no separate SOTER service. App functionality was not tested',
     service_down: 'SOTER data reset, but its service did not start again - restart the phone',
     clear_failed: 'Android refused to clear the SOTER server data; its service was only restarted',
     not_installed: 'The SOTER server is not installed on this ROM - nothing to repair',
@@ -10785,7 +10974,11 @@ function soterBootText(f) {
   const st = f.boot_state || 'none', res = f.boot_result || 'none';
   if (st === 'waiting') return T('soter_boot_waiting', 'waiting for the first unlock');
   if (st === 'unlocked') return T('soter_boot_unlocked', 'phone unlocked - the repair starts about ten minutes later');
-  if (st === 'skipped') return res === 'no_boot' ? T('soter_boot_no_boot', 'skipped - Android did not finish booting') : T('soter_boot_no_unlock', 'skipped - the phone was not unlocked within 6 hours');
+  if (st === 'skipped') {
+    if (res === 'recent_manual') return T('soter_boot_recent_manual', 'not needed - a manual repair already completed in this boot');
+    if (res === 'auto_off') return T('soter_boot_auto_off', 'cancelled - automatic repair was switched off');
+    return res === 'no_boot' ? T('soter_boot_no_boot', 'skipped - Android did not finish booting') : T('soter_boot_no_unlock', 'skipped - the phone was not unlocked within 6 hours');
+  }
   if (st !== 'done') return T('soter_boot_none', 'has not started in this boot - it runs after the next reboot');
   const t = parseInt(f.boot_time, 10), u = parseInt(f.boot_unlock, 10);
   const parts = [];
@@ -10798,13 +10991,14 @@ function soterBootText(f) {
 function soterBootWarn(f) {
   const st = f.boot_state || 'none';
   if (st === 'waiting' || st === 'unlocked') return false;
+  if (st === 'skipped' && (f.boot_result === 'recent_manual' || f.boot_result === 'auto_off')) return false;
   return st !== 'done' || (f.boot_result !== 'done' && f.boot_result !== 'done_no_service');
 }
 function soterLang() { return String((typeof ASB_LANG === 'string' && ASB_LANG) || 'en').replace(/[^A-Za-z_-]/g, '').slice(0, 12) || 'en'; }
 function soterStoreTexts() {
   const cmd = 'sh ' + shQuote(SOTER_FIX_SCRIPT) + ' texts ' + shQuote(soterLang()) + ' '
     + shQuote(T('soter_notify_title', 'SOTER Repair')) + ' '
-    + shQuote(T('soter_notify_done', 'SOTER was repaired after the reboot. Switch fingerprint payment on again in your payment apps.')) + ' '
+    + shQuote(T('soter_notify_done', 'SOTER server data were cleared after the reboot; app functionality was not tested. Switch fingerprint payment on again in your payment apps.')) + ' '
     + shQuote(T('soter_notify_failed', 'The automatic SOTER repair did not finish. Open ASB, Infirmary, SOTER Repair.'));
   return run(cmd).catch(function () { return null; });
 }
@@ -11410,7 +11604,7 @@ function asbKernelControlVerdict(status, live, mode) {
 /* Settings → System → Kernel management. One on-demand batch reads only the registered
  * control owner and wakeup owner. Read-only kernel evidence belongs to Device Diagnostics.
  * No timer, polling worker, duplicate diagnostics probe or direct browser sysfs write. */
-const ASB_KERNEL_STATUS_KEYS = ['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost'];
+const ASB_KERNEL_STATUS_KEYS = ['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'];
 let _kernelPanel = { loaded:false, loading:false, controls:Object.create(null), wakeup:null };
 let _wbDraft = null, _wbBusy = false;
 let _wbSourceView = { open:false, query:'', filter:'all', sort:'events' };
@@ -11511,7 +11705,8 @@ function kernelUnavailableWhy(key) {
     kernel_sched_nr_migrate: 'Needs a kernel built with scheduler debugging (CONFIG_SCHED_DEBUG) and debugfs. ASB mounts debugfs privately only for the moment it reads or writes the value, so nothing more is needed when both are built in.',
     kernel_sched_autogroup: 'This kernel has no autogroup switch. GKI kernels are normally built without CONFIG_SCHED_AUTOGROUP because it changes signal_struct, which vendor modules are compiled against; ASB does not work around that. Even when built in, it would regroup only tasks left in the root CPU cgroup, and Android places app tasks in its own CPU groups.',
     kernel_lpm_prediction: 'This kernel exposes neither lpm_prediction of the older lpm_levels driver nor prediction_disabled of the qcom-cpu-lpm governor. ASB writes nothing; the diagnostic export lists the idle-driver parameters this kernel has.',
-    kernel_rt_boost: 'This kernel has no sched_util_clamp_min_rt_default: it is built without CONFIG_UCLAMP_TASK. ASB writes nothing.'
+    kernel_rt_boost: 'This kernel has no sched_util_clamp_min_rt_default: it is built without CONFIG_UCLAMP_TASK. ASB writes nothing.',
+    kernel_bore: 'This kernel exposes no /proc/sys/kernel/sched_bore control. CONFIG_SCHED_BORE or an install-log line alone does not prove a runtime interface. ASB writes nothing.'
   };
   return Object.prototype.hasOwnProperty.call(fb, key) ? T('kc_why_' + key, fb[key]) : '';
 }
@@ -11543,6 +11738,7 @@ const KERNEL_OPTION_VALUES = {
   kernel_sched_child_runs_first: { off:'0', on:'1' },
   kernel_usb_autosuspend: { off:'-1', on:'2' },
   kernel_rt_boost: { '0':'0', '128':'128', '256':'256', '512':'512' },
+  kernel_bore: { off:'0', on:'1' },
   kernel_mglru_min_ttl: { '1000':'1000', '2000':'2000' }
 };
 function kernelShipped(c) {
@@ -12103,7 +12299,7 @@ const CFG_ICONS = {
   net_wifi_leave:'wifileave',
   mglru_mode:'mglru_mode', kernel_mglru_min_ttl:'mglru_ttl', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
-  kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend', kernel_rt_boost:'rt_boost',
+  kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend', kernel_rt_boost:'rt_boost', kernel_bore:'bore_scheduler',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
@@ -12113,7 +12309,7 @@ const CFG_ICONS = {
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', smart_lab:'smart', smart_lab_mem:'membus_cap', profile_class_auto:'kind_profile', smart_records_balanced:'balance_spark', ltpo_peak_force:'refresh_peak', charge_aware_enable:'charge_aware', night_charge_enable:'night_charge', night_charge_start:'night_charge_start', night_charge_end:'night_charge_end', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
-  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
+  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_idle_speed:'ltpo_idle_speed', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
   heytap_mcs:'push_off', documentsui_fix:'documents_picker', zygisk_enabled:'zygisk_master', zygisk_hints:'zygisk_refresh', zygisk_launch:'zygisk_launch', zygisk_ledger:'zygisk_ledger',
   heavy_prime_escape:'prime_lift', prime_escape_burst_s:'prime_burst', prime_escape_rest_s:'prime_rest', wakelock_fitness:'fitness_pulse',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
@@ -12530,6 +12726,13 @@ function cfgStatus(it, cur) {
     if (_ltpoVideoStatus === 'not_running') return { cls:'warn', text:T('st_not_running', 'not running') };
     return { cls:'warn', text:T('st_pending', 'pending') };
   }
+  if (it.key === 'ltpo_idle_speed') {
+    if (_cfgVals['ltpo_force'] !== '1') return { cls:'warn', text:T('st_ltpo_needs_force', 'needs Force LTPO') };
+    if (_ltpoStatus === 'ltpo_external_owner' || _ltpoStatus === 'ltpo_external_bind')
+      return { cls:'neutral', text:T('st_ltpo_external', 'external module active') };
+    if (_ltpoStatus === 'ltpo_active_touch') return { cls:'good', text:T('st_ltpo_idle_active', 'event timing active') };
+    return { cls:'warn', text:T('st_pending', 'pending') };
+  }
   if (it.key === 'ltpo_peak_force') {
     if (cur !== '1') return { cls:'neutral', text:T('st_off', 'Disabled') };
     if (_cfgVals['ltpo_force'] !== '1') return { cls:'warn', text:T('st_ltpo_needs_force', 'needs Force LTPO') };
@@ -12774,7 +12977,7 @@ function cfgRenderHub(list) {
     hub.appendChild(tile);
   });
   list.appendChild(hub);
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 
 // Settings whose effect lands in a file, and can therefore be checked.
@@ -12840,7 +13043,7 @@ const APPLY_MODE = {
      straight back from /sys/kernel/mm/lru_gen/min_ttl_ms - no reboot, verifiable. */
   mglru_hold: APPLY_LIVE, mglru_mode: APPLY_LIVE, kernel_mglru_min_ttl: APPLY_LIVE, kernel_timer_migration: APPLY_LIVE, kernel_sched_nr_migrate: APPLY_LIVE, kernel_sched_stats: APPLY_LIVE,
   kernel_sched_autogroup: APPLY_LIVE, kernel_sched_child_runs_first: APPLY_LIVE,
-  kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE, kernel_rt_boost: APPLY_LIVE,
+  kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE, kernel_rt_boost: APPLY_LIVE, kernel_bore: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE, dsp_clarity:APPLY_LIVE, dsp_rumble:APPLY_LIVE,
   dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
@@ -12850,7 +13053,7 @@ const APPLY_MODE = {
   net_route_tune:APPLY_LIVE, net_mtu_probing:APPLY_LIVE, wifi_country:APPLY_LIVE, net_wifi_leave:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   heavy_prime_escape:APPLY_LIVE, prime_escape_burst_s:APPLY_LIVE, prime_escape_rest_s:APPLY_LIVE,
-  wakelock_fitness:APPLY_LIVE, ltpo_video:APPLY_LIVE, ltpo_peak_force:APPLY_LIVE,
+  wakelock_fitness:APPLY_LIVE, ltpo_video:APPLY_LIVE, ltpo_peak_force:APPLY_LIVE, ltpo_idle_speed:APPLY_LIVE,
   smart_lab:APPLY_LIVE, smart_lab_mem:APPLY_LIVE, profile_class_auto:APPLY_LIVE, smart_records_balanced:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, night_charge_enable:APPLY_LIVE, night_charge_start:APPLY_LIVE, night_charge_end:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, net_screen_off_lte:APPLY_LIVE, net_lte_light:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
@@ -14099,6 +14302,16 @@ async function cfgSet(key, val, ctl) {
         await loadWlFitStatus(true);
         toast(cfgToastText(key, val) + (String(val) === 'limit' && _wlFitIgnored > 0
           ? T('t_wlf_ignored', ' \u00b7 this ROM ignores the limit')
+          : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      if (key === 'ltpo_idle_speed') {
+        try { await run('sh ' + MD + '/runtime/asb_ltpo_apply.sh touch-restart >/dev/null 2>&1; sleep 1'); } catch (e) {}
+        await loadLtpoStatus();
+        toast(cfgToastText(key, val) + (_cfgVals['ltpo_force'] !== '1'
+          ? T('t_cfg_needs_ltpo', ' \u00b7 works once Force LTPO Refresh is on')
           : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
@@ -17553,7 +17766,7 @@ function openReportPage() {
   });
   asbLogReportLoad();
   setTimeout(asbNavSync, 60);
-  requestAnimationFrame(asbFitPages);  zygiskHeaderRefreshLazy();
+  asbUiFrame.request(asbFitPages);  zygiskHeaderRefreshLazy();
 }
 function closeReportPage() {
   const p = _el('reportPage');
@@ -17571,7 +17784,7 @@ function closeReportPage() {
   asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'true');
   navSyncSoon();
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 /* Device diagnostics (fix230). The TSV collector is read-only and runs on demand only.
  * Every section, key and value is inserted with textContent: kernel/build data is never HTML. */
@@ -17595,6 +17808,7 @@ const DEVICE_SECTION_ORDER = [
   ['system_load', 'dev_sec_system_load', 'Current system pressure', 'sw'],
   ['kernel', 'dev_sec_kernel', 'Kernel build', 'kernel'],
   ['kernel_origin', 'dev_sec_kernel_origin', 'Kernel origin evidence', 'kernel'],
+  ['kernel_bore', 'dev_sec_kernel_bore', 'BORE scheduler', 'kernel'],
   ['kernel_btf', 'dev_sec_kernel_btf', 'BTF evidence', 'kernel'],
   ['kernel_ebpf', 'dev_sec_kernel_ebpf', 'eBPF evidence', 'kernel'],
   ['kernel_fuse_bpf', 'dev_sec_kernel_fuse_bpf', 'FUSE-BPF evidence', 'kernel'],
@@ -17606,6 +17820,7 @@ const DEVICE_SECTION_ORDER = [
   ['susfs', 'dev_sec_susfs', 'SuSFS interface', 'root'],
   ['metamodule', 'dev_sec_metamodule', 'Metamodule', 'root'],
   ['companion_modules', 'dev_sec_companion_modules', 'Kernel companion modules', 'root'],
+  ['zygisk_provider', 'dev_sec_zygisk_provider', 'Zygisk provider', 'root'],
   ['zygisk_observer', 'dev_sec_zygisk_observer', 'Zygisk observer', 'root'],
   ['lsposed_hooks', 'dev_sec_lsposed_hooks', 'LSPosed hooks: problems and battery evidence', 'root'],
   ['asb', 'dev_sec_asb', 'ASB runtime', 'asb'],
@@ -17627,9 +17842,11 @@ const DEVICE_SECTION_GUIDES = {
   cpu_policy: ['dev_guide_cpu_policy', 'Current limits and the hardware range are different. A current limit alone does not identify ASB, the vendor or another writer.'],
   memory: ['dev_guide_memory', 'MemAvailable estimates memory available for new work. Cache is reusable and is not simply wasted memory.'],
   system_load: ['dev_guide_system_load', 'A bounded 0–100 pressure heuristic from measured components only. Missing components are excluded and weights are renormalized; below 40% coverage the result is unknown. This is not device health, a trend, or an A/B comparison. With pressure stall information (PSI) the score uses the time tasks waited for the CPU, memory and storage instead of load average and the share of memory in use.'],
+  zygisk_provider: ['dev_guide_zygisk_provider', 'Provider identity is read from installed module name/version metadata. Enabled, disabled and pending-removal states are separate. Module metadata does not prove which provider is active in the running Zygote; companion events do not identify a provider.'],
   zygisk_observer: ['dev_guide_zygisk_observer', 'Process telemetry plus an optional bounded request for fresh governor evidence. Configuration, injection evidence, hint acknowledgement and overhead are separate facts. Missing crash/ANR attribution and app activity sources remain unknown or not exposed.'],
   lsposed_hooks: ['dev_guide_lsposed_hooks', 'LSPosed does not count individual hook calls or their energy, and ASB adds no hook of its own to measure them. This card joins evidence per hooked app: enabled modules and their scope, LSPosed log volume and errors, crash and ANR records whose stack passes through a hook, CPU time of hooked apps and restart loops from the Zygisk start ledger. A finding is a correlation to check by disabling one module for one app, not a proven cause.'],
   kernel_origin: ['dev_guide_kernel_origin', 'Stock-like and custom-like describe exposed indicators, not a guaranteed builder or provenance. Capability decisions still use each exposed control node.'],
+  kernel_bore: ['dev_guide_kernel_bore', 'CONFIG_SCHED_BORE is build evidence; /proc/sys/kernel/sched_bore is the runtime interface. This read-only diagnostic never writes it. The separate Kernel setting accepts only Stock, Off and On, and an apply is successful only after read-back.'],
   kernel_btf: ['dev_guide_kernel_btf', 'BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.'],
   kernel_ebpf: ['dev_guide_kernel_ebpf', 'Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.'],
   kernel_fuse_bpf: ['dev_guide_kernel_fuse_bpf', 'FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.'],
@@ -17707,6 +17924,7 @@ function deviceValueClass(sec, key, value) {
   if (sec === 'kernel_features' && key === 'net_sch_cake') return v.indexOf('available;') === 0 ? ' dev-good' : '';
   if (sec === 'kernel_external' && key === 'status' && /conflict|error|unsafe/.test(v)) return ' dev-bad';
   if (sec === 'lsposed_hooks' && key === 'findings') return v === '0' ? ' dev-good' : ' dev-warn';
+  if (sec === 'zygisk_provider' && (key === 'provider' && v === 'conflict' || key === 'install_state' && v === 'multiple_enabled')) return ' dev-bad';
   if (sec === 'zygisk_observer' && key === 'ledger_restart_loops' && v !== 'none') return ' dev-warn';
   return '';
 }
@@ -17858,6 +18076,11 @@ function deviceDisplayValue(sec, key, value, d) {
   if (sec === 'asb' && key === 'smooth_log_last_epoch' && /^\d{9,}$/.test(value)) {
     const dt = new Date(parseInt(value, 10) * 1000);
     if (!isNaN(dt.getTime())) return dt.toLocaleString(ASB_LANG || undefined);
+  }
+  if (sec === 'zygisk_provider') {
+    if (key === 'install_state') return T('dev_zygisk_provider_install_' + value, deviceFallbackLabel(value));
+    if (key === 'provider' && value === 'unknown') return T('dev_zygisk_provider_unknown', deviceFallbackLabel(value));
+    if (key === 'provider' && value === 'conflict') return T('dev_zygisk_provider_conflict_value', deviceFallbackLabel(value));
   }
   if (sec === 'zygisk_observer') {
     if (key === 'enabled' || key === 'lifecycle_hints' || key === 'launch_hints' || key === 'spawn_ledger' || key === 'auto_mode')
@@ -18529,7 +18752,7 @@ async function zygiskControlSet(key, val, ctl) {
 function zygiskOpenSettings() {
   closeZygiskPage();
   if (typeof asbNavGo === 'function') asbNavGo('config'); else if (!_cfgOpen) openConfigPage();
-  _cfgSearch = ''; cfgShowGroup('zygisk'); requestAnimationFrame(asbFitPages);
+  _cfgSearch = ''; cfgShowGroup('zygisk'); asbUiFrame.request(asbFitPages);
 }
 function zygiskOffCard() {
   const card = logReportSec(T('zy_off_title', 'ASB Zygisk is off'), 'zygisk_master');
@@ -19873,7 +20096,7 @@ function openZygiskPage() {
   if (status) status.textContent = window._asbZygiskLinkData ? T('zy_status_cached', 'Last snapshot · refreshing…') : T('zy_status_loading', 'Reading…');
   asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);
   setTimeout(asbNavSync, 60);
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 function closeZygiskPage() {
   const p = _el('zygiskPage');
@@ -19892,7 +20115,7 @@ function closeZygiskPage() {
   }
   asbTabbarVisibility();
   navSyncSoon();
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 function deviceZygiskEditor(d, onDone) {
   const done = typeof onDone === 'function' ? onDone : asbDeviceInfoLoad;
@@ -20085,7 +20308,7 @@ function deviceInfoRender(d) {
     if (spec[0] === 'lsposed_hooks' && deviceVal(d, 'lsposed_hooks', 'collection') === 'on_demand') card.appendChild(deviceLsposedCollect(d));
     body.appendChild(card);
   });
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
   return shown;
 }
 function openDevicePage() {
@@ -20114,7 +20337,7 @@ function openDevicePage() {
    * 50 ms timer only postponed that first useful frame. */
   asbDeviceInfoLoad();
   setTimeout(asbNavSync, 60);
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 function closeDevicePage() {
   const p = _el('devicePage');
@@ -20133,7 +20356,7 @@ function closeDevicePage() {
   }
   asbTabbarVisibility();
   navSyncSoon();
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 function asbCosmicLoading(body, options) {
   body.textContent = '';
@@ -20242,7 +20465,7 @@ async function asbDeviceInfoLoad() {
   if ((!r || r.errno !== 0 || !d.count) && body.dataset.devShown === '1') {
     status.textContent = T('dev_cached_failed', 'Could not refresh · the snapshot from %s is shown').replace('%s', deviceInfoStamp(parseInt(body.dataset.devAt, 10) || Date.now()));
     if (btn) btn.disabled = false;
-    requestAnimationFrame(asbFitPages);
+    asbUiFrame.request(asbFitPages);
     return;
   }
   const scrollY = page ? page.scrollTop : 0;
@@ -20268,7 +20491,7 @@ async function asbDeviceInfoLoad() {
   }
   if (btn) btn.disabled = false;
   if (saveBtn) saveBtn.disabled = !window._asbDeviceInfoData;
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 /* fix290: the last digest is a viewer snapshot, not a new measurement. Paint it at once,
  * let the entrance/loading frame reach the WebView, then refresh in the same on-demand read.
@@ -20346,16 +20569,16 @@ async function asbLogReportLoad() {
       const s0 = logReportSec(T('lr_none_title', 'No capture found')); s0.classList.add('lgr-empty');
       const em = document.createElement('span'); em.className = 'lgr-empty-emo'; em.textContent = '📭'; s0.insertBefore(em, s0.firstChild);
       s0.appendChild(logReportNote(T('lr_none_body', 'Start an infinite log from this menu first. The report appears here as data accumulates - even while it is still recording.')));
-      body.appendChild(s0); requestAnimationFrame(asbFitPages); return;
+      body.appendChild(s0); asbUiFrame.request(asbFitPages); return;
     }
     if (!d.ok) {
       if (cached) status.textContent = T('lr_cached_failed', 'Could not refresh · the snapshot from %s is shown').replace('%s', deviceInfoStamp(cache.t));
       else { status.textContent = ''; body.textContent = ''; body.appendChild(logReportNote(T('lr_failed', 'Could not read the log data.'), true)); }
-      requestAnimationFrame(asbFitPages); return;
+      asbUiFrame.request(asbFitPages); return;
     }
     logReportRender(d);
     body.classList.remove('lv-stale'); body.dataset.lrShown = '1'; body.dataset.lrAt = String(window._asbLogReportAt || Date.now());
-    requestAnimationFrame(asbFitPages);
+    asbUiFrame.request(asbFitPages);
   } finally {
     _logReportLoading = false;
     if (btn) btn.disabled = false;
@@ -22477,7 +22700,7 @@ function asbApplyUiScale() {
  * can wrap differently in each language. */
 /* fix278: the fit is measured once, after a page has finished moving.
  *
- * Every caller schedules it with requestAnimationFrame(asbFitPages), and a single tab switch
+ * Every caller schedules it with asbUiFrame.request(asbFitPages), and a single tab switch
  * asked for it three or four times (open, close, tab-bar, render). Each pass zeroes two
  * layout variables and reads the page box up to six times - forced synchronous layouts of the
  * whole page, which in the bench landed in the very frames the slide had to start in. Calls
@@ -22495,7 +22718,7 @@ function asbFitPages() {
   const go = function () {
     const wait = (_asbNavAnimUntil || 0) - performance.now();
     if (wait > 8) { setTimeout(go, wait); return; }
-    requestAnimationFrame(function () {
+    asbUiFrame.request(function asbFitPagesFrame() {
       /* dev19: a transition can start between the check above and this frame (the Home
        * entrance does, right after parsing). Its scale would be measured into the cards. */
       if ((_asbNavAnimUntil || 0) - performance.now() > 8) { go(); return; }
@@ -22693,7 +22916,7 @@ function homeMeterPaint() {
     });
     box.hidden = false;
   });
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 async function homeMeterRefresh(force) {
   await lvMeterPoll(!!force);
@@ -22751,11 +22974,11 @@ async function asbDeviceFont() {
 asbApplyUiScale();
 /* Fit the already complete DOM now as well as at final load (fix326). This removes the
  * avoidable first-frame → loaded-card geometry jump without a fixed timer or root read. */
-requestAnimationFrame(asbFitPages);
+asbUiFrame.request(asbFitPages);
 window.addEventListener('resize', asbApplyUiScale);
 window.addEventListener('orientationchange', asbApplyUiScale);
-window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });
-window.addEventListener('orientationchange', function () { requestAnimationFrame(asbFitPages); });
+window.addEventListener('resize', function () { asbUiFrame.request(asbFitPages); });
+window.addEventListener('orientationchange', function () { asbUiFrame.request(asbFitPages); });
 /* fix325: start useful cache work after the first painted frame, not at arbitrary 1.8/2.5/4 s
  * timers. The boot preview owns the same collectors when shown; an ordinary opening warms them
  * immediately. The initial Live batch already contains the drain meter, so no second forced
@@ -22781,7 +23004,7 @@ window.addEventListener('load', function () {
    * still report its provisional width. Re-read the final viewport before fitting pages;
    * otherwise the early zoom (often 1) remains frozen and the whole interface grows. */
   asbApplyUiScale();
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
   asbDeviceFont();
 });
 
@@ -22836,12 +23059,12 @@ function asbNavIndicator() {
     requestAnimationFrame(function () { requestAnimationFrame(function () { bar.classList.add('ind-anim'); }); });
   }
 }
-window.addEventListener('resize', function () { asbNavIndicator._geo = null; requestAnimationFrame(asbNavIndicator); });
+window.addEventListener('resize', function () { asbNavIndicator._geo = null; asbUiFrame.request(asbNavIndicator); });
 try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { asbNavIndicator._geo = null; asbNavSyncSoon(); }); } catch (e) {}
 function asbNavSyncSoon() {
   if (asbNavSyncSoon._q) return;
   asbNavSyncSoon._q = true;
-  requestAnimationFrame(function () { asbNavSyncSoon._q = false; asbNavSync(); });
+  asbUiFrame.request(function asbNavSyncFrame() { asbNavSyncSoon._q = false; asbNavSync(); });
 }
 
 /* Header island fit (fix192). The profile value is free text - "smart \u2192 performance" on
@@ -22871,7 +23094,7 @@ function asbHeaderFitSoon(force) {
   if (force === true) asbHeaderFitSoon._f = true;
   if (asbHeaderFitSoon._q) return;
   asbHeaderFitSoon._q = true;
-  requestAnimationFrame(function () {
+  asbUiFrame.request(function asbHeaderFitFrame() {
     const f = !!asbHeaderFitSoon._f;
     asbHeaderFitSoon._q = false; asbHeaderFitSoon._f = false;
     asbHeaderFit(f);
@@ -23057,7 +23280,7 @@ function openConfigPage() {
    * batched shell, runs after the slide and only when that load is older than 30 s. The
    * device class travels in the same batch until it is known. */
   asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 30);
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 
 // The section label and the back chip are the only chrome that has to know which screen
@@ -23100,7 +23323,7 @@ function cfgSyncChrome() {
 
 function cfgBack() {
   uiSound('nav');
-  if (_cfgGroup) { cfgShowGroup(null); requestAnimationFrame(asbFitPages); return; }
+  if (_cfgGroup) { cfgShowGroup(null); asbUiFrame.request(asbFitPages); return; }
   closeConfigPage(true);
 }
 
@@ -23124,7 +23347,7 @@ function closeConfigPage(toMain) {
   _cfgOpen = false;
   /* The page underneath (Home or Monitor) is measured again: compaction the hub needed
      may be more than it needs (fix202). */
-  requestAnimationFrame(asbFitPages);
+  asbUiFrame.request(asbFitPages);
 }
 
 /*
@@ -24033,7 +24256,7 @@ function liveBatchParts(visible, prime) {
     _stockTelemetryLastMs = now;
     parts.push(['rom', stockTelemetryCmd(refresh)]);
   }
-  if (!_batCapFullMah) parts.push(['cfull', 'cat /sys/class/power_supply/battery/charge_full']);
+  if (!_batCapFullMah) parts.push(['cfull', 'cat /sys/class/power_supply/battery/charge_full', 604800000]);
   if (visible || prime) parts.push(['learner', 'cat /dev/.asb/learner_state.json']);
   parts.push(['status', MD + '/bin/asb status']);
   parts.push(['recovery', 'cat /dev/.asb/recovery.json']);
@@ -24043,7 +24266,7 @@ function liveBatchParts(visible, prime) {
    * once per page life. */
   if (visible) {
     parts.push(['gpuclk', 'cat ' + LV_GPU_KGSL + '/devfreq/cur_freq']);
-    if (!_lvGpuMaxHz) parts.push(['gpufreqs', 'cat ' + LV_GPU_KGSL + '/devfreq/available_frequencies']);
+    if (!_lvGpuMaxHz) parts.push(['gpufreqs', 'cat ' + LV_GPU_KGSL + '/devfreq/available_frequencies', 604800000]);
   }
   return parts;
 }
@@ -24069,7 +24292,7 @@ async function pollLive(visible) {
    * screen on. A hidden page is caught up the moment it is shown again (listener below). */
   if (document.hidden) return;
   if (_livePollRun) {
-    if (!visible || _livePollVisible) return _livePollRun;
+    if (!visible || (_livePollVisible && _livePollSeq === _livePageSeq)) return _livePollRun;
     if (!_livePollFollow) {
       _livePollFollow = _livePollRun.then(function () {
         if (!document.hidden) return pollLive(true);
@@ -24080,7 +24303,9 @@ async function pollLive(visible) {
     return _livePollFollow;
   }
   let releasePoll = null;
+  const pollSeq = _livePageSeq;
   _livePollVisible = !!visible;
+  _livePollSeq = pollSeq;
   _livePollRun = new Promise(function (resolve) { releasePoll = resolve; });
   try {
     if (_selectedProfile === 'stock') {
@@ -24089,6 +24314,11 @@ async function pollLive(visible) {
       // and mixing them into a ROM snapshot was the source of stale 95°C/cap/forecast cards.
       if (visible) await pollStockTelemetry(true);
       else await pollStockTelemetry(false);
+      if (visible && (pollSeq !== _livePageSeq || !_liveOpen || document.hidden)) return;
+      const stockSignature = JSON.stringify(Object.keys(_stockTelemetryKv).filter(function (k) {
+        return k !== 'tsms';
+      }).sort().map(function (k) { return [k, _stockTelemetryKv[k]]; }));
+      livePollTrack(stockSignature, visible, false, Object.keys(_stockTelemetryKv).length > 0);
       return;
     }
     const prime = !visible && (!_lvMonCache.tiles || _lvMonCache.tiles.profile !== _selectedProfile || _lvMonCache.tiles.lang !== ASB_LANG);
@@ -24097,6 +24327,15 @@ async function pollLive(visible) {
      * further down. Calling it here as well would double the /sys reads for nothing. */
     /* fix278: every read of this pass shares one root shell (was five, every 3 s). */
     const _lb = await runBatch(liveBatchParts(visible, prime));
+    /* A page change invalidates only this read-only paint. The shell was never a dangerous
+     * system operation and is allowed to finish; its stale result cannot repaint a closed or
+     * newly reopened Monitor. A fresh visible request joins through the follow-up above. */
+    if (visible && (pollSeq !== _livePageSeq || !_liveOpen || document.hidden)) return;
+    const snapshot = Object.keys(_lb).sort().map(function (k) {
+      return k + ':' + _lb[k].errno + ':' + (_lb[k].stdout || '');
+    }).join('\n');
+    const success = !!(_lb.state && _lb.state.errno === 0);
+    if (livePollTrack(snapshot, visible, prime, success)) { lvStale(false); return; }
     if (_lb.meter) lvMeterApply(_lb.meter.stdout || '', false);
     if (visible) lvGpuClockRead(_lb);
     /* Ordinary cold start paints Home from this same read. The boot preview's visible
@@ -24493,7 +24732,7 @@ async function pollLive(visible) {
         lpmEl.className = cls;
         asbMetricPaint('bnLpm', asbModemMetric(m));
         lpmEl.title = tip;
-        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(lvFitValues);
+        if (typeof requestAnimationFrame === 'function') asbUiFrame.request(lvFitValues);
       }).catch(function() { lpmEl.textContent = 'n/a'; asbMetricPaint('bnLpm', 'metric-neutral'); });
     }
     const hrEl = _el('liveHeadroom');
@@ -24853,11 +25092,18 @@ async function pollLive(visible) {
   }
 }
 
-_liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
+liveBackgroundSchedule();
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) return;
-  if (_liveOpen) pollLive(true);
-  else asbStartupLater(asbStartupLive, 300, 0);
+  if (document.hidden) {
+    if (_liveTimer) { clearTimeout(_liveTimer); _liveTimer = null; }
+    if (_liveBgTimer) { clearTimeout(_liveBgTimer); _liveBgTimer = null; }
+    return;
+  }
+  if (_liveOpen) liveMonitorSchedule(0);
+  else {
+    asbStartupLater(asbStartupLive, 300, 0);
+    liveBackgroundSchedule();
+  }
 });
 
 /* Once per Android boot, hide the first cold-cache reads behind a short ASB preview.
@@ -25104,7 +25350,7 @@ function asbHomeReveal() {
     entrance.onfinish = function () { entrance.cancel(); };
   } else {
     root.classList.remove('asb-home-pending');
-    requestAnimationFrame(asbFitPages);
+    asbUiFrame.request(asbFitPages);
   }
 }
 /* Local locale reads normally settle immediately. These are fail-safe exits only: a broken
