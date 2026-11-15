@@ -98,7 +98,7 @@ asb_feature_enabled() {
 }
 
 asb_update_desc() {
-  local _s _p
+  local _s _p _z
   _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
   # Second copy of this function - asb_utils.sh has the other. This one wins because
   # profile_core is sourced later, and it was missing the ''|none arm: a fresh install
@@ -112,6 +112,13 @@ asb_update_desc() {
     ''|none)     _s='description=status: no profile selected — open the WebUI to choose one' ;;
     *)           _s='description=status: Balanced ⚖️ | active ✅' ;;
   esac
+  _z=''
+  case "$_p" in
+    ''|none) ;;
+    *) [ -f "$MODDIR/runtime/asb_module_desc.sh" ] && _z="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_module_desc.sh" suffix 2>/dev/null)" ;;
+  esac
+  case "$_z" in *[/\&\\]*) _z='' ;; esac
+  _s="$_s$_z"
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
   rm -f "$MODDIR/module.prop.tmp"

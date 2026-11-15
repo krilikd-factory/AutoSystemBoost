@@ -25,6 +25,7 @@ asb_kc_node() {
       fi
       ;;
     kernel_usb_autosuspend) printf '%s\n' "${ASB_USB_AUTOSUSPEND_NODE:-/sys/module/usbcore/parameters/autosuspend}" ;;
+    kernel_rt_boost) printf '%s\n' "${ASB_RT_BOOST_NODE:-/proc/sys/kernel/sched_util_clamp_min_rt_default}" ;;
     *) return 1 ;;
   esac
 }
@@ -73,9 +74,9 @@ asb_kc_mode() {
     kernel_mglru_min_ttl:*) _akm_v=stock ;;
     mglru_mode:stock|mglru_mode:off|mglru_mode:on|mglru_mode:smart) ;;
     mglru_mode:*) _akm_v=smart ;;
-    kernel_timer_migration:stock|kernel_timer_migration:off|kernel_timer_migration:on) ;;
+    kernel_timer_migration:stock|kernel_timer_migration:auto|kernel_timer_migration:off|kernel_timer_migration:on) ;;
     kernel_timer_migration:*) _akm_v=off ;;
-    kernel_sched_nr_migrate:stock|kernel_sched_nr_migrate:1|kernel_sched_nr_migrate:2|kernel_sched_nr_migrate:4|kernel_sched_nr_migrate:8|kernel_sched_nr_migrate:16) ;;
+    kernel_sched_nr_migrate:stock|kernel_sched_nr_migrate:auto|kernel_sched_nr_migrate:1|kernel_sched_nr_migrate:2|kernel_sched_nr_migrate:4|kernel_sched_nr_migrate:8|kernel_sched_nr_migrate:16) ;;
     kernel_sched_nr_migrate:*) _akm_v=4 ;;
     kernel_sched_stats:stock|kernel_sched_stats:off) ;;
     kernel_sched_stats:*) _akm_v=stock ;;
@@ -89,6 +90,8 @@ asb_kc_mode() {
     kernel_lpm_prediction:*) _akm_v=auto ;;
     kernel_usb_autosuspend:stock|kernel_usb_autosuspend:off|kernel_usb_autosuspend:on) ;;
     kernel_usb_autosuspend:*) _akm_v=stock ;;
+    kernel_rt_boost:stock|kernel_rt_boost:auto|kernel_rt_boost:0|kernel_rt_boost:128|kernel_rt_boost:256|kernel_rt_boost:512) ;;
+    kernel_rt_boost:*) _akm_v=stock ;;
     *) return 1 ;;
   esac
   printf '%s\n' "$_akm_v"
@@ -108,6 +111,10 @@ asb_kc_valid_value() {
     kernel_sched_nr_migrate|kernel_mglru_min_ttl)
       case "$_akv_v" in ''|*[!0-9]*) return 1 ;; esac
       [ "${#_akv_v}" -le 9 ]
+      ;;
+    kernel_rt_boost)
+      case "$_akv_v" in ''|*[!0-9]*) return 1 ;; esac
+      [ "${#_akv_v}" -le 4 ] && [ "$_akv_v" -le 1024 ]
       ;;
     mglru_mode)
       case "$_akv_v" in
@@ -198,6 +205,21 @@ asb_kc_emit() {
   printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "$_akp_l" "$_akp_b"
 }
 
+asb_kc_rt_ready() {
+  if [ -n "${ASB_KC_RT_READY:-}" ]; then
+    [ "$ASB_KC_RT_READY" = 1 ]
+    return $?
+  fi
+  command -v getprop >/dev/null 2>&1 || return 0
+  [ "$(getprop sys.boot_completed 2>/dev/null)" = 1 ] || return 1
+  for _akq_s in kernel-post-boot vendor.post_boot qcom-post-boot post_boot; do
+    [ "$(getprop "init.svc.$_akq_s" 2>/dev/null)" = running ] && return 1
+  done
+  _akq_up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+  case "$_akq_up" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_akq_up" -ge 60 ]
+}
+
 asb_kc_hrtimer_covered() {
   _ahc_mode="$1" _ahc_base="$2"
   _ahc_node="${ASB_TIMER_MIGRATION_NODE:-/proc/sys/kernel/timer_migration}"
@@ -232,31 +254,31 @@ asb_kc_capture() {
 }
 
 asb_kc_restore() {
-  _akr_key="$1"
+  _akr_key="$1" _akr_mode="${2:-stock}"
   _akr_node="$(asb_kc_node "$_akr_key")" || return 1
   if [ "$_akr_key" = kernel_hrtimer_migration ] && [ ! -e "$_akr_node" ]; then
-    asb_kc_hrtimer_covered stock none
+    asb_kc_hrtimer_covered "$_akr_mode" none
     return $?
   fi
   _akr_prev="$(asb_kc_prev "$_akr_key")"
-  [ -f "$_akr_prev" ] || { asb_kc_emit "$_akr_key" stock_unowned stock "" none; return 0; }
+  [ -f "$_akr_prev" ] || { asb_kc_emit "$_akr_key" stock_unowned "$_akr_mode" "" none; return 0; }
   if ! asb_kc_kid_ok "$_akr_prev"; then
     rm -f "$_akr_prev" "$_akr_prev.kid" 2>/dev/null
-    asb_kc_emit "$_akr_key" stock_unowned stock "" none
+    asb_kc_emit "$_akr_key" stock_unowned "$_akr_mode" "" none
     return 0
   fi
   _akr_orig="$(asb_kc_clean "$(cat "$_akr_prev" 2>/dev/null)")"
-  asb_kc_valid_value "$_akr_key" "$_akr_orig" || { asb_kc_emit "$_akr_key" baseline_invalid stock "" invalid; return 1; }
-  [ -e "$_akr_node" ] || { asb_kc_emit "$_akr_key" not_exposed stock "" "$_akr_orig"; return 1; }
-  [ -w "$_akr_node" ] || { asb_kc_emit "$_akr_key" not_writable stock "" "$_akr_orig"; return 1; }
-  printf '%s\n' "$_akr_orig" > "$_akr_node" 2>/dev/null || { asb_kc_emit "$_akr_key" write_failed stock "" "$_akr_orig"; return 1; }
+  asb_kc_valid_value "$_akr_key" "$_akr_orig" || { asb_kc_emit "$_akr_key" baseline_invalid "$_akr_mode" "" invalid; return 1; }
+  [ -e "$_akr_node" ] || { asb_kc_emit "$_akr_key" not_exposed "$_akr_mode" "" "$_akr_orig"; return 1; }
+  [ -w "$_akr_node" ] || { asb_kc_emit "$_akr_key" not_writable "$_akr_mode" "" "$_akr_orig"; return 1; }
+  printf '%s\n' "$_akr_orig" > "$_akr_node" 2>/dev/null || { asb_kc_emit "$_akr_key" write_failed "$_akr_mode" "" "$_akr_orig"; return 1; }
   _akr_live="$(asb_kc_clean "$(cat "$_akr_node" 2>/dev/null)")"
   if asb_kc_same "$_akr_orig" "$_akr_live"; then
-    rm -f "$_akr_prev" "$_akr_prev.kid" 2>/dev/null || { asb_kc_emit "$_akr_key" state_cleanup_failed stock "$_akr_live" "$_akr_orig"; return 1; }
-    asb_kc_emit "$_akr_key" restored stock "$_akr_live" none
+    rm -f "$_akr_prev" "$_akr_prev.kid" 2>/dev/null || { asb_kc_emit "$_akr_key" state_cleanup_failed "$_akr_mode" "$_akr_live" "$_akr_orig"; return 1; }
+    asb_kc_emit "$_akr_key" restored "$_akr_mode" "$_akr_live" none
     return 0
   fi
-  asb_kc_emit "$_akr_key" readback_mismatch stock "$_akr_live" "$_akr_orig"
+  asb_kc_emit "$_akr_key" readback_mismatch "$_akr_mode" "$_akr_live" "$_akr_orig"
   return 1
 }
 
@@ -273,8 +295,10 @@ asb_kc_apply() {
     _aka_profile="$(cat "$ASB_KC_MODDIR/current_profile" 2>/dev/null | tr -d ' \t\r\n')"
   fi
   case "$_aka_key:$_aka_mode:$_aka_profile" in
-    kernel_hrtimer_migration:auto:battery|kernel_lpm_prediction:auto:battery) ;;
-    kernel_hrtimer_migration:auto:*|kernel_lpm_prediction:auto:*) asb_kc_restore "$_aka_key"; return $? ;;
+    *:auto:stock) asb_kc_restore "$_aka_key" auto; return $? ;;
+    kernel_lpm_prediction:auto:battery|kernel_timer_migration:auto:performance|kernel_hrtimer_migration:auto:performance) ;;
+    kernel_rt_boost:auto:battery|kernel_rt_boost:auto:performance|kernel_sched_nr_migrate:auto:*) ;;
+    *:auto:*) asb_kc_restore "$_aka_key" auto; return $? ;;
   esac
   _aka_prev="$(asb_kc_prev "$_aka_key")"
   _aka_saved=none
@@ -289,7 +313,7 @@ asb_kc_apply() {
       case "$_aka_smart" in 5|7) _aka_want="$_aka_smart" ;; *) _aka_want=7 ;; esac
       ;;
     kernel_mglru_min_ttl:1000|kernel_mglru_min_ttl:2000) _aka_want="$_aka_mode" ;;
-    kernel_timer_migration:off|kernel_hrtimer_migration:off|kernel_hrtimer_migration:auto|kernel_lpm_prediction:off) _aka_want=0 ;;
+    kernel_timer_migration:off|kernel_timer_migration:auto|kernel_hrtimer_migration:off|kernel_hrtimer_migration:auto|kernel_lpm_prediction:off) _aka_want=0 ;;
     kernel_timer_migration:on|kernel_hrtimer_migration:on|kernel_lpm_prediction:on|kernel_lpm_prediction:auto) _aka_want=1 ;;
     kernel_usb_autosuspend:off) _aka_want=-1 ;;
     kernel_usb_autosuspend:on) _aka_want=2 ;;
@@ -298,10 +322,21 @@ asb_kc_apply() {
     kernel_sched_autogroup:on|kernel_sched_child_runs_first:on) _aka_want=1 ;;
     kernel_sched_nr_migrate:1|kernel_sched_nr_migrate:2|kernel_sched_nr_migrate:4|kernel_sched_nr_migrate:8|kernel_sched_nr_migrate:16)
       _aka_want="$_aka_mode" ;;
+    kernel_sched_nr_migrate:auto)
+      case "$_aka_profile" in battery) _aka_want=2 ;; performance) _aka_want=8 ;; *) _aka_want=4 ;; esac
+      ;;
+    kernel_rt_boost:auto)
+      case "$_aka_profile" in battery) _aka_want=0 ;; *) _aka_want=256 ;; esac
+      ;;
+    kernel_rt_boost:0|kernel_rt_boost:128|kernel_rt_boost:256|kernel_rt_boost:512) _aka_want="$_aka_mode" ;;
     *) asb_kc_emit "$_aka_key" invalid_request "$_aka_mode" "" "$_aka_saved"; return 1 ;;
   esac
   if [ "$_aka_key" = kernel_lpm_prediction ] && asb_kc_lpm_inverted; then
     _aka_want="$(asb_kc_flip "$_aka_want")"
+  fi
+  if [ "$_aka_key" = kernel_rt_boost ] && [ "$_aka_saved" = none ] && ! asb_kc_rt_ready; then
+    asb_kc_emit "$_aka_key" deferred "$_aka_mode" "$(asb_kc_clean "$(cat "$_aka_node" 2>/dev/null)")" none
+    return 0
   fi
   asb_kc_capture "$_aka_key" "$_aka_node" "$_aka_prev" || { asb_kc_emit "$_aka_key" baseline_failed "$_aka_mode" "" "$_aka_saved"; return 1; }
   _aka_saved="$(asb_kc_clean "$(cat "$_aka_prev" 2>/dev/null)")"
@@ -345,10 +380,24 @@ asb_kc_status() {
 
 asb_kc_each() {
   _ake_action="$1" _ake_rc=0
-  for _ake_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
+  for _ake_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost; do
     asb_kc_run "$_ake_action" "$_ake_key" || _ake_rc=1
   done
   return "$_ake_rc"
+}
+
+asb_kc_follow() {
+  _akf_profile="$1" _akf_rc=0
+  case "$_akf_profile" in ''|stock) return 0 ;; esac
+  _akf_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost kernel_mglru_min_ttl kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_usb_autosuspend"
+  case "$(asb_kc_mode mglru_mode):$_akf_profile" in
+    smart:smart) ;;
+    *) _akf_keys="mglru_mode $_akf_keys" ;;
+  esac
+  for _akf_key in $_akf_keys; do
+    asb_kc_run apply "$_akf_key" "" "$_akf_profile" || _akf_rc=1
+  done
+  return "$_akf_rc"
 }
 
 case "${0##*/}" in
@@ -358,7 +407,8 @@ case "${0##*/}" in
       apply) if [ -z "$_akc_one" ]; then asb_kc_each apply; else asb_kc_run apply "$_akc_one" "${3:-}" "${4:-}"; fi ;;
       restore) if [ -z "$_akc_one" ]; then asb_kc_each restore; else asb_kc_run restore "$_akc_one"; fi ;;
       status) if [ -z "$_akc_one" ]; then asb_kc_each status; else asb_kc_run status "$_akc_one"; fi ;;
-      *) printf 'usage: asb_kernel_controls.sh apply|restore|status [registered_key]\n' >&2; exit 2 ;;
+      follow) asb_kc_follow "$_akc_one" ;;
+      *) printf 'usage: asb_kernel_controls.sh apply|restore|status [registered_key] | follow <profile>\n' >&2; exit 2 ;;
     esac
     ;;
 esac
