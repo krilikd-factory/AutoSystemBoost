@@ -320,12 +320,24 @@ _validate() {
   case "$_lpm_prediction" in ''|stock|auto|off|on) : ;; *) _die "kernel_lpm_prediction must be stock, auto, off or on" ;; esac
   case "$_usb_autosuspend" in ''|stock|off|on) : ;; *) _die "kernel_usb_autosuspend must be stock, off or on" ;; esac
   case "$_rt_boost" in ''|stock|auto|0|128|256|512) : ;; *) _die "kernel_rt_boost must be stock, auto, 0, 128, 256 or 512" ;; esac
-  case "$_bore" in ''|stock|off|on) : ;; *) _die "kernel_bore must be stock, off or on" ;; esac
+  case "$_bore" in ''|stock|auto|off|on) : ;; *) _die "kernel_bore must be stock, auto, off or on" ;; esac
   case "$_ltpo_idle_speed" in ''|fast|balanced|gentle) : ;; *) _die "ltpo_idle_speed must be fast, balanced or gentle" ;; esac
   case "$_night_charge" in ''|0|1) : ;; *) _die "night_charge_enable must be 0 or 1" ;; esac
   case "$_night_start" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) : ;; *) _die "night_charge_start must be HH:MM" ;; esac
   case "$_night_end" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) : ;; *) _die "night_charge_end must be HH:MM" ;; esac
   [ "$_night_start" != "$_night_end" ] || _die "night charge start and end must differ"
+  # dev64: closed vocabularies for the bounded ColorOS Settings owner. Missing keys remain
+  # valid during updates; once present, arbitrary Settings values never reach the runtime.
+  for _display_key in ui_recents_memory ui_recents_corner_radius ui_smooth_corners ui_nav_handle_autohide feel_pointer_speed feel_gesture_mistouch feel_game_memc feel_dc_dimming; do
+    _display_val="$(awk -F= -v k="$_display_key" '$1 ~ "^[[:space:]]*" k "[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+    case "$_display_key:$_display_val" in
+      *:) : ;;
+      ui_recents_corner_radius:stock|ui_recents_corner_radius:0|ui_recents_corner_radius:8|ui_recents_corner_radius:12|ui_recents_corner_radius:16|ui_recents_corner_radius:20|ui_recents_corner_radius:24|ui_recents_corner_radius:28|ui_recents_corner_radius:32) : ;;
+      feel_pointer_speed:stock|feel_pointer_speed:-[0-7]|feel_pointer_speed:[0-7]) : ;;
+      ui_recents_memory:stock|ui_recents_memory:on|ui_recents_memory:off|ui_smooth_corners:stock|ui_smooth_corners:on|ui_smooth_corners:off|ui_nav_handle_autohide:stock|ui_nav_handle_autohide:on|ui_nav_handle_autohide:off|feel_gesture_mistouch:stock|feel_gesture_mistouch:on|feel_gesture_mistouch:off|feel_game_memc:stock|feel_game_memc:on|feel_game_memc:off|feel_dc_dimming:stock|feel_dc_dimming:on|feel_dc_dimming:off) : ;;
+      *) _die "$_display_key has an unsupported value" ;;
+    esac
+  done
   return 0
 }
 

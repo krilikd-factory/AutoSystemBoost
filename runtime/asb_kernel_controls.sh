@@ -1,6 +1,7 @@
 #!/system/bin/sh
 
 ASB_KC_MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+[ -r "$ASB_KC_MODDIR/runtime/asb_settings.sh" ] && . "$ASB_KC_MODDIR/runtime/asb_settings.sh"
 ASB_KC_CONF="${ASB_CONF:-$ASB_KC_MODDIR/config/governor.conf}"
 ASB_KC_STATE="${ASB_KERNEL_STATE_DIR:-/data/adb/asb/kernel_controls}"
 ASB_KC_DBG_MP=""
@@ -93,7 +94,7 @@ asb_kc_mode() {
     kernel_usb_autosuspend:*) _akm_v=stock ;;
     kernel_rt_boost:stock|kernel_rt_boost:auto|kernel_rt_boost:0|kernel_rt_boost:128|kernel_rt_boost:256|kernel_rt_boost:512) ;;
     kernel_rt_boost:*) _akm_v=stock ;;
-    kernel_bore:stock|kernel_bore:off|kernel_bore:on) ;;
+    kernel_bore:stock|kernel_bore:auto|kernel_bore:off|kernel_bore:on) ;;
     kernel_bore:*) _akm_v=stock ;;
     *) return 1 ;;
   esac
@@ -285,6 +286,61 @@ asb_kc_restore() {
   return 1
 }
 
+asb_kc_json_num() {
+  sed -n 's/.*"'"$2"'":\(-\{0,1\}[0-9][0-9]*\).*/\1/p' "$1" 2>/dev/null | head -n 1
+}
+
+asb_kc_json_text() {
+  sed -n 's/.*"'"$2"'":"\([^"]*\)".*/\1/p' "$1" 2>/dev/null | head -n 1
+}
+
+asb_kc_conf_num() {
+  _akn_cfg="$(grep -E "^[[:space:]]*$1=" "$ASB_KC_CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \t\r\n')"
+  case "$_akn_cfg" in ''|*[!0-9]*) printf '%s\n' "$2" ;; *) printf '%s\n' "$_akn_cfg" ;; esac
+}
+
+asb_kc_bore_auto_hold() {
+  [ ! -e "${ASB_SAFE_MODE_FILE:-/dev/.asb/safe_mode}" ] || return 0
+  [ ! -e "${ASB_RECOVERY_DISABLED_FILE:-/data/adb/asb/recovery_disabled}" ] || return 0
+  command -v settings >/dev/null 2>&1 || return 0
+  [ "$(settings get global low_power 2>/dev/null | tr -d ' \t\r\n')" = 0 ] || return 0
+  _akb_cap="$(cat "${ASB_KC_BATTERY_CAPACITY:-/sys/class/power_supply/battery/capacity}" 2>/dev/null | tr -d ' \t\r\n')"
+  _akb_low="$(asb_kc_conf_num auto_battery_low_pct 20)"
+  case "$_akb_cap" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_akb_cap" -le 100 ] && [ "$_akb_cap" -gt "$_akb_low" ] || return 0
+  _akb_status="${ASB_KC_NATIVE_STATUS:-/dev/.asb/status}"
+  [ -r "$_akb_status" ] || return 0
+  [ "$(asb_kc_json_num "$_akb_status" temp_valid)" = 1 ] || return 0
+  _akb_age="$(asb_kc_json_num "$_akb_status" temp_age_s)"
+  case "$_akb_age" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_akb_age" -le "${ASB_KC_BORE_STATUS_MAX_AGE_S:-120}" ] || return 0
+  _akb_epoch="$(asb_kc_json_num "$_akb_status" temp_read_epoch)"
+  case "$_akb_epoch" in ''|*[!0-9]*) return 0 ;; esac
+  _akb_now="$(date +%s 2>/dev/null)"
+  case "$_akb_now" in ''|*[!0-9]*) return 0 ;; esac
+  _akb_epoch_age=$((_akb_now - _akb_epoch))
+  [ "$_akb_epoch_age" -ge 0 ] && [ "$_akb_epoch_age" -le "${ASB_KC_BORE_STATUS_MAX_AGE_S:-120}" ] || return 0
+  _akb_state="$(asb_kc_json_text "$_akb_status" state | tr 'a-z' 'A-Z')"
+  case "$_akb_state" in MODERATE|HEAVY) ;; *) return 0 ;; esac
+  [ "$(asb_kc_json_num "$_akb_status" thermal)" = 0 ] || return 0
+  _akb_cpu="$(asb_kc_json_num "$_akb_status" temp)"
+  _akb_skin="$(asb_kc_json_num "$_akb_status" skin_temp)"
+  _akb_surface="$(asb_kc_json_num "$_akb_status" surface_hotspot)"
+  _akb_board="$(asb_kc_json_num "$_akb_status" board_temp)"
+  _akb_enter="$(asb_kc_conf_num sustained_temp_enter 55)"
+  _akb_limit="$(asb_kc_conf_num thermal_skin_c 47)"
+  case "$_akb_cpu" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_akb_cpu" -lt "$_akb_enter" ] || return 0
+  for _akb_value in "$_akb_skin" "$_akb_surface" "$_akb_board"; do
+    case "$_akb_value" in ''|*[!0-9]*) return 0 ;; esac
+  done
+  [ "$_akb_skin" -lt "$_akb_limit" ] || return 0
+  _akb_hot=$((_akb_limit + 3))
+  [ "$_akb_surface" -lt "$_akb_hot" ] || return 0
+  [ "$_akb_board" -lt "$_akb_hot" ] || return 0
+  return 1
+}
+
 asb_kc_apply() {
   _aka_key="$1" _aka_smart="${2:-}" _aka_profile="${3:-${ASB_PROFILE:-}}"
   _aka_node="$(asb_kc_node "$_aka_key")" || return 1
@@ -298,6 +354,12 @@ asb_kc_apply() {
     _aka_profile="$(cat "$ASB_KC_MODDIR/current_profile" 2>/dev/null | tr -d ' \t\r\n')"
   fi
   case "$_aka_key:$_aka_mode:$_aka_profile" in
+    kernel_bore:auto:*)
+      if [ "$_aka_profile" != performance ] || asb_kc_bore_auto_hold; then
+        asb_kc_restore "$_aka_key" auto
+        return $?
+      fi
+      ;;
     *:auto:stock) asb_kc_restore "$_aka_key" auto; return $? ;;
     kernel_lpm_prediction:auto:battery|kernel_timer_migration:auto:performance|kernel_hrtimer_migration:auto:performance) ;;
     kernel_rt_boost:auto:battery|kernel_rt_boost:auto:performance|kernel_sched_nr_migrate:auto:*) ;;
@@ -333,7 +395,7 @@ asb_kc_apply() {
       ;;
     kernel_rt_boost:0|kernel_rt_boost:128|kernel_rt_boost:256|kernel_rt_boost:512) _aka_want="$_aka_mode" ;;
     kernel_bore:off) _aka_want=0 ;;
-    kernel_bore:on) _aka_want=1 ;;
+    kernel_bore:auto|kernel_bore:on) _aka_want=1 ;;
     *) asb_kc_emit "$_aka_key" invalid_request "$_aka_mode" "" "$_aka_saved"; return 1 ;;
   esac
   if [ "$_aka_key" = kernel_lpm_prediction ] && asb_kc_lpm_inverted; then
