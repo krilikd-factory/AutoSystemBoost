@@ -4364,6 +4364,19 @@ if [ -d /sys/devices/system/cpu/qcom_lpm/parameters ]; then
   done
   NOTE "idle governor qcom_lpm parameters:${_lpmp:- none}"
 fi
+for _cmi in nomount:NoMount vpnhide_builtin:"VPN Hide"; do
+  _cmid="${_cmi%%:*}"; _cmn="${_cmi#*:}"
+  if [ -r "/data/adb/modules/$_cmid/module.prop" ]; then
+    _cmv="$(sed -n 's/^version=//p' "/data/adb/modules/$_cmid/module.prop" | head -n 1)"
+    _cmc="$(sed -n 's/^versionCode=//p' "/data/adb/modules/$_cmid/module.prop" | head -n 1)"
+    case "$_cmv" in *"($_cmc)") ;; *) [ -n "$_cmc" ] && _cmv="$_cmv ($_cmc)" ;; esac
+    [ -e "/data/adb/modules/$_cmid/disable" ] && _cmv="$_cmv, disabled"
+    [ -r "/data/adb/modules_update/$_cmid/module.prop" ] && _cmv="$_cmv, update to $(sed -n 's/^version=//p' "/data/adb/modules_update/$_cmid/module.prop" | head -n 1) after reboot"
+  else
+    _cmv='not installed'
+  fi
+  NOTE "kernel companion module $_cmn: $_cmv"
+done
 NOTE "lockscreen_shortcuts = $(cfg lockscreen_shortcuts)"
 # The property that caused a bootloop. Worth naming explicitly in every report: if it is
 # ever back in system.prop, that is the first thing to look at.

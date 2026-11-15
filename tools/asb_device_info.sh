@@ -382,6 +382,35 @@ fi
 _emit metamodule nomount_driver "$_nm_state"
 _emit metamodule nomount_driver_version "${_nm_ver:-not exposed}"
 _emit metamodule nomount_evidence 'kernel config/sysfs; driver ownership not inferred'
+_cm_vc() {
+  _cmv_v="$(_kv "$1" version)" _cmv_c="$(_kv "$1" versionCode)"
+  case "$_cmv_c" in
+    '') printf '%s' "${_cmv_v:-unknown version}" ;;
+    *) case "$_cmv_v" in *"($_cmv_c)") printf '%s' "$_cmv_v" ;; *) printf '%s (%s)' "${_cmv_v:-unknown version}" "$_cmv_c" ;; esac ;;
+  esac
+}
+_cm_one() {
+  _cm_dir="$DATA/modules/$2"
+  _cm_upd="$DATA/modules_update/$2"
+  if [ -r "$_cm_dir/module.prop" ]; then
+    _cm_txt="$(_cm_vc "$_cm_dir/module.prop")"
+    if [ -e "$_cm_dir/remove" ]; then _cm_txt="$_cm_txt · removal pending"
+    elif [ -e "$_cm_dir/disable" ]; then _cm_txt="$_cm_txt · disabled"
+    else _cm_txt="$_cm_txt · enabled"; fi
+    if [ -r "$_cm_upd/module.prop" ]; then
+      _cm_txt="$_cm_txt · update to $(_cm_vc "$_cm_upd/module.prop") after reboot"
+    fi
+  elif [ -r "$_cm_upd/module.prop" ]; then
+    _cm_txt="$(_cm_vc "$_cm_upd/module.prop") · installed, active after reboot"
+  else
+    _cm_txt='not installed'
+  fi
+  _emit companion_modules "$1" "$_cm_txt · $3"
+}
+if [ -n "$_nm_ver" ]; then _cm_k="kernel driver version $_nm_ver"; else _cm_k="kernel driver: $_nm_state"; fi
+_cm_one nomount nomount "$_cm_k"
+if [ -e "$PROC/vpnhide_ctl" ]; then _cm_k='kernel interface /proc/vpnhide_ctl present'; else _cm_k='kernel interface /proc/vpnhide_ctl not exposed'; fi
+_cm_one vpnhide vpnhide_builtin "$_cm_k"
 _ntsync="$(_feature_state CONFIG_NTSYNC "$SYS/module/ntsync")"
 if [ -c "$DEV/ntsync" ]; then
   _ntsync='available; /dev/ntsync character device exposed'
