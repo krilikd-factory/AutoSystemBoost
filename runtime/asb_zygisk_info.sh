@@ -2,6 +2,68 @@
 # Read-only observer diagnostics. Requires _emit, _read, MODDIR, PROC and DATA from the collector.
 # Missing state is not proof that Zygisk or an application facility is unsupported.
 
+# Provider identity comes only from installed module metadata. IDs are not sufficient:
+# zygisksu has been shared by Zygisk Next, NeoZygisk and NyaZygisk, while rezygisk is
+# shared by ReZygisk-derived builds. No process maps, account data or secrets are read.
+_asb_zygisk_provider_info() {
+  _zp_root="${ASB_ZYGISK_MODULES_DIR:-$DATA/modules}"
+  _zp_total=0; _zp_enabled=0; _zp_scanned=0
+  _zp_provider=unknown; _zp_version=unknown; _zp_install_state=not_detected
+  _zp_installed=''; _zp_enabled_list=''; _zp_conflict=none; _zp_evidence='none'
+  for _zp_dir in "$_zp_root"/*; do
+    [ -d "$_zp_dir" ] || continue
+    [ "$_zp_scanned" -lt 64 ] || { _zp_conflict='scan limit reached; provider ambiguous'; break; }
+    _zp_scanned=$((_zp_scanned + 1))
+    _zp_prop="$_zp_dir/module.prop"
+    [ -r "$_zp_prop" ] || continue
+    _zp_name="$(sed -n 's/^name=//p' "$_zp_prop" 2>/dev/null | head -n 1 | tr -d '\r')"
+    _zp_norm="$(printf '%s' "$_zp_name" | tr 'A-Z' 'a-z' | tr -d ' _-')"
+    case "$_zp_norm" in
+      nyazygisk) _zp_kind=NyaZygisk ;;
+      neozygisk) _zp_kind=NeoZygisk ;;
+      brezygisk) _zp_kind=BreZygisk ;;
+      rezygisk) _zp_kind=ReZygisk ;;
+      zygisknext) _zp_kind='Zygisk Next' ;;
+      *) continue ;;
+    esac
+    _zp_ver="$(sed -n 's/^version=//p' "$_zp_prop" 2>/dev/null | head -n 1 | tr -d '\r')"
+    [ -n "$_zp_ver" ] || _zp_ver=unknown
+    if [ -e "$_zp_dir/remove" ]; then _zp_state=pending_removal
+    elif [ -e "$_zp_dir/disable" ]; then _zp_state=disabled
+    else _zp_state=enabled; fi
+    _zp_total=$((_zp_total + 1))
+    _zp_installed="${_zp_installed}${_zp_installed:+, }$_zp_kind ($_zp_state)"
+    _zp_evidence="${_zp_dir}/module.prop (name/version) plus disable/remove markers"
+    if [ "$_zp_state" = enabled ]; then
+      _zp_enabled=$((_zp_enabled + 1))
+      _zp_one="$_zp_kind"; _zp_one_ver="$_zp_ver"
+      _zp_enabled_list="${_zp_enabled_list}${_zp_enabled_list:+, }$_zp_kind"
+    else
+      _zp_inactive="$_zp_kind"; _zp_inactive_ver="$_zp_ver"; _zp_inactive_state="$_zp_state"
+    fi
+  done
+  if [ "$_zp_enabled" -eq 1 ]; then
+    _zp_provider="$_zp_one"; _zp_version="$_zp_one_ver"; _zp_install_state=enabled
+  elif [ "$_zp_enabled" -gt 1 ]; then
+    _zp_provider=conflict; _zp_version=unknown; _zp_install_state=multiple_enabled
+    _zp_conflict="multiple enabled providers: $_zp_enabled_list"
+  elif [ "$_zp_total" -eq 1 ]; then
+    _zp_provider="$_zp_inactive"; _zp_version="$_zp_inactive_ver"; _zp_install_state="$_zp_inactive_state"
+  elif [ "$_zp_total" -gt 1 ]; then
+    _zp_provider=unknown; _zp_version=unknown; _zp_install_state=multiple_inactive
+    _zp_conflict='no enabled provider; installed metadata is ambiguous'
+  fi
+  _emit zygisk_provider provider "$_zp_provider"
+  _emit zygisk_provider version "$_zp_version"
+  _emit zygisk_provider install_state "$_zp_install_state"
+  _emit zygisk_provider installed_providers "${_zp_installed:-none}"
+  _emit zygisk_provider enabled_count "$_zp_enabled"
+  _emit zygisk_provider runtime_state 'not runtime-discoverable from module metadata alone'
+  _emit zygisk_provider active_evidence 'not exposed by this read-only collector'
+  _emit zygisk_provider conflict "$_zp_conflict"
+  _emit zygisk_provider evidence "$_zp_evidence"
+}
+
 _asb_zygisk_info() {
   _zi_dir="${ASB_ZYGISK_DIR:-$DATA/asb/zygisk_observer}"
   _zi_run="${ASB_ZYGISK_RUN_DIR:-/dev/.asb/zygisk}"
@@ -263,4 +325,5 @@ _asb_zygisk_info() {
   _emit zygisk_observer overhead_confidence "$([ "$_zi_state" = 1 ] && echo 'measured event counters; snapshot only' || echo 'unknown: no event state')"
   _emit zygisk_observer data_minimization 'package name, PID/start ticks, process RSS and bounded counters; the ledger keeps package names and start counts for this boot in tmpfs only; a top-app start names its package to the root companion only for the launch-class lookup, which is not kept'
   _emit zygisk_observer denylist_basis 'starts the root manager flags for module unmounting; on KernelSU that is every app without root by default, so it is counted only and changes nothing'
+  _asb_zygisk_provider_info
 }

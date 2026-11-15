@@ -26,6 +26,7 @@ asb_kc_node() {
       ;;
     kernel_usb_autosuspend) printf '%s\n' "${ASB_USB_AUTOSUSPEND_NODE:-/sys/module/usbcore/parameters/autosuspend}" ;;
     kernel_rt_boost) printf '%s\n' "${ASB_RT_BOOST_NODE:-/proc/sys/kernel/sched_util_clamp_min_rt_default}" ;;
+    kernel_bore) printf '%s\n' "${ASB_BORE_NODE:-/proc/sys/kernel/sched_bore}" ;;
     *) return 1 ;;
   esac
 }
@@ -92,6 +93,8 @@ asb_kc_mode() {
     kernel_usb_autosuspend:*) _akm_v=stock ;;
     kernel_rt_boost:stock|kernel_rt_boost:auto|kernel_rt_boost:0|kernel_rt_boost:128|kernel_rt_boost:256|kernel_rt_boost:512) ;;
     kernel_rt_boost:*) _akm_v=stock ;;
+    kernel_bore:stock|kernel_bore:off|kernel_bore:on) ;;
+    kernel_bore:*) _akm_v=stock ;;
     *) return 1 ;;
   esac
   printf '%s\n' "$_akm_v"
@@ -100,7 +103,7 @@ asb_kc_mode() {
 asb_kc_valid_value() {
   _akv_key="$1" _akv_v="$2"
   case "$_akv_key" in
-    kernel_timer_migration|kernel_sched_stats|kernel_sched_autogroup|kernel_sched_child_runs_first|kernel_hrtimer_migration|kernel_lpm_prediction) case "$_akv_v" in 0|1) return 0 ;; *) return 1 ;; esac ;;
+    kernel_timer_migration|kernel_sched_stats|kernel_sched_autogroup|kernel_sched_child_runs_first|kernel_hrtimer_migration|kernel_lpm_prediction|kernel_bore) case "$_akv_v" in 0|1) return 0 ;; *) return 1 ;; esac ;;
     kernel_usb_autosuspend)
       case "$_akv_v" in
         -1) return 0 ;;
@@ -329,6 +332,8 @@ asb_kc_apply() {
       case "$_aka_profile" in battery) _aka_want=0 ;; *) _aka_want=256 ;; esac
       ;;
     kernel_rt_boost:0|kernel_rt_boost:128|kernel_rt_boost:256|kernel_rt_boost:512) _aka_want="$_aka_mode" ;;
+    kernel_bore:off) _aka_want=0 ;;
+    kernel_bore:on) _aka_want=1 ;;
     *) asb_kc_emit "$_aka_key" invalid_request "$_aka_mode" "" "$_aka_saved"; return 1 ;;
   esac
   if [ "$_aka_key" = kernel_lpm_prediction ] && asb_kc_lpm_inverted; then
@@ -380,7 +385,7 @@ asb_kc_status() {
 
 asb_kc_each() {
   _ake_action="$1" _ake_rc=0
-  for _ake_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost; do
+  for _ake_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore; do
     asb_kc_run "$_ake_action" "$_ake_key" || _ake_rc=1
   done
   return "$_ake_rc"
@@ -389,7 +394,7 @@ asb_kc_each() {
 asb_kc_follow() {
   _akf_profile="$1" _akf_rc=0
   case "$_akf_profile" in ''|stock) return 0 ;; esac
-  _akf_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost kernel_mglru_min_ttl kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_usb_autosuspend"
+  _akf_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost kernel_mglru_min_ttl kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_usb_autosuspend kernel_bore"
   case "$(asb_kc_mode mglru_mode):$_akf_profile" in
     smart:smart) ;;
     *) _akf_keys="mglru_mode $_akf_keys" ;;

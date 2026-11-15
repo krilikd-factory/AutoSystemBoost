@@ -141,9 +141,17 @@ _sf_status() {
 
 _sf_record() {
   mkdir -p "$STATE" 2>/dev/null || return 0
-  printf 'time=%s\nresult=%s\ntrigger=%s\npasses=%s\n' "$(_sf_now)" "$1" "${TRIGGER:-manual}" "${_pass:-0}" > "$STATE/last.tmp" 2>/dev/null &&
+  printf 'time=%s\nresult=%s\ntrigger=%s\npasses=%s\nboot_id=%s\nup=%s\n' "$(_sf_now)" "$1" "${TRIGGER:-manual}" "${_pass:-0}" "$(_sf_boot_id)" "$(_sf_up)" > "$STATE/last.tmp" 2>/dev/null &&
     mv -f "$STATE/last.tmp" "$STATE/last" 2>/dev/null
   chmod 0600 "$STATE/last" 2>/dev/null
+}
+
+_sf_manual_this_boot() {
+  [ -f "$STATE/last" ] || return 1
+  [ "$(sed -n 's/^trigger=//p' "$STATE/last" 2>/dev/null | head -n 1)" = manual ] || return 1
+  [ "$(sed -n 's/^boot_id=//p' "$STATE/last" 2>/dev/null | head -n 1)" = "$(_sf_boot_id)" ] || return 1
+  case "$(sed -n 's/^result=//p' "$STATE/last" 2>/dev/null | head -n 1)" in done|done_no_service) return 0 ;; esac
+  return 1
 }
 
 _sf_result() {
@@ -252,7 +260,7 @@ _sf_notify() {
   [ -n "$_nt" ] || _nt='SOTER'
   if [ -z "$_nb" ]; then
     case "$_nk" in
-      done) _nb='SOTER was repaired after the reboot. Switch fingerprint payment on again in your payment apps.' ;;
+      done) _nb='SOTER server data were cleared after the reboot; app functionality was not tested. Switch fingerprint payment on again in your payment apps.' ;;
       *) _nb='The automatic SOTER repair did not finish. Open ASB, Infirmary, SOTER Repair.' ;;
     esac
   fi
@@ -321,6 +329,18 @@ _sf_boot() {
   _sf_brec unlocked
   _sf_log "boot: unlocked ${_bw}s after boot_completed (via $_bvia); repair in ${SETTLE}s; $(_sf_snapshot)"
   sleep "$SETTLE"
+  if [ ! -f "$AUTO" ]; then
+    _sf_brec skipped auto_off
+    _sf_log "boot: skipped because automatic repair was switched off during the settle"
+    printf 'soter|result|state=auto_off|cleared=0|passes=0|services=%s\n' "$(_sf_services_line)"
+    return 0
+  fi
+  if _sf_manual_this_boot; then
+    _sf_brec skipped recent_manual
+    _sf_log "boot: skipped because a manual repair already completed in this boot"
+    printf 'soter|result|state=skipped_recent_manual|cleared=0|passes=0|services=%s\n' "$(_sf_services_line)"
+    return 0
+  fi
   TRIGGER=boot
   _sf_run
   if ! _sf_final "$_st"; then

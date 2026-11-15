@@ -250,6 +250,8 @@ _validate() {
   _lpm_prediction="$(awk -F= '$1 ~ "^[[:space:]]*kernel_lpm_prediction[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _usb_autosuspend="$(awk -F= '$1 ~ "^[[:space:]]*kernel_usb_autosuspend[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _rt_boost="$(awk -F= '$1 ~ "^[[:space:]]*kernel_rt_boost[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _bore="$(awk -F= '$1 ~ "^[[:space:]]*kernel_bore[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _ltpo_idle_speed="$(awk -F= '$1 ~ "^[[:space:]]*ltpo_idle_speed[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _night_charge="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_enable[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _night_start="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_start[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _night_end="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_end[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
@@ -318,6 +320,8 @@ _validate() {
   case "$_lpm_prediction" in ''|stock|auto|off|on) : ;; *) _die "kernel_lpm_prediction must be stock, auto, off or on" ;; esac
   case "$_usb_autosuspend" in ''|stock|off|on) : ;; *) _die "kernel_usb_autosuspend must be stock, off or on" ;; esac
   case "$_rt_boost" in ''|stock|auto|0|128|256|512) : ;; *) _die "kernel_rt_boost must be stock, auto, 0, 128, 256 or 512" ;; esac
+  case "$_bore" in ''|stock|off|on) : ;; *) _die "kernel_bore must be stock, off or on" ;; esac
+  case "$_ltpo_idle_speed" in ''|fast|balanced|gentle) : ;; *) _die "ltpo_idle_speed must be fast, balanced or gentle" ;; esac
   case "$_night_charge" in ''|0|1) : ;; *) _die "night_charge_enable must be 0 or 1" ;; esac
   case "$_night_start" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) : ;; *) _die "night_charge_start must be HH:MM" ;; esac
   case "$_night_end" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) : ;; *) _die "night_charge_end must be HH:MM" ;; esac

@@ -179,6 +179,15 @@ STEP_TIMEOUT="$(_cfg ltpo_idle_step_s)"; [ -n "$STEP_TIMEOUT" ] || STEP_TIMEOUT=
 case "$STEP_TIMEOUT" in ''|*[!0-9]*) STEP_TIMEOUT=1 ;; esac
 [ "$STEP_TIMEOUT" -ge 1 ] 2>/dev/null || STEP_TIMEOUT=1
 [ "$STEP_TIMEOUT" -le 5 ] 2>/dev/null || STEP_TIMEOUT=5
+# A single user preset owns both delays. Missing key = legacy config: retain its internal
+# values. Unknown values fail back to the shipped balanced timing instead of disabling LTPO.
+case "$(_cfg ltpo_idle_speed)" in
+  fast) TIMEOUT=1; STEP_TIMEOUT=1 ;;
+  gentle) TIMEOUT=5; STEP_TIMEOUT=3 ;;
+  balanced) TIMEOUT=2; STEP_TIMEOUT=1 ;;
+  '') : ;;
+  *) TIMEOUT=2; STEP_TIMEOUT=1 ;;
+esac
 STEPS="$(_idle_modes)"
 
 if [ "$(_cfg ltpo_peak_force)" = 1 ] && [ ! -f "$SFUNSUP" ] && command -v service >/dev/null 2>&1; then

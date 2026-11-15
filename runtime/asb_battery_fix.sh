@@ -68,8 +68,14 @@ _bf_compile_one() {
     _o="$(cmd package compile -m speed-profile -f "$1" 2>&1)"
     case "$_o" in
       *Success*) ;;
-      *[Uu]nknown*option*|*[Uu]sage*|*[Uu]nrecognized*|*[Ii]nvalid*argument*)
-        _o="$(pm compile -m speed-profile "$1" 2>&1)" ;;
+      *Failed\ transaction*|*[Uu]nknown*option*|*[Uu]sage*|*[Uu]nrecognized*|*[Ii]nvalid*argument*)
+        if command -v pm >/dev/null 2>&1; then
+          _po="$(pm compile -m speed-profile -f "$1" 2>&1)"
+          case "$_po" in
+            *Success*) _o="$_po" ;;
+            *) _o="$(printf '%s\n%s\n' "$_o" "$_po" | grep -m1 .)" ;;
+          esac
+        fi ;;
     esac
   fi
   case "$_o" in *Success*) return 0 ;; esac
@@ -153,8 +159,6 @@ _bf_compile_state() {
 _bf_mtime() { stat -c %Y "$1" 2>/dev/null || date -r "$1" +%s 2>/dev/null; }
 _bf_settle() {
   [ -f "$LASTLOG" ] || return 0
-  _sa="$(_kv done_at "$LASTLOG")"
-  case "$_sa" in ''|*[!0-9]*) ;; *) return 0 ;; esac
   [ "$(_kv done_boot "$LASTLOG")" = "$(_bootid)" ] || return 0
   _su="$(_kv done_up "$LASTLOG")"; _sn="$(_now)"; _sc="$(_upsec)"
   case "$_su$_sn$_sc" in ''|*[!0-9]*) return 0 ;; esac
@@ -163,6 +167,13 @@ _bf_settle() {
   _sr="$(_kv armed_at "$LASTLOG")"
   case "$_sr" in ''|*[!0-9]*) _sr=0 ;; esac
   [ "$_sv" -ge "$_sr" ] || return 0
+  _sa="$(_kv done_at "$LASTLOG")"
+  case "$_sa" in
+    ''|*[!0-9]*) ;;
+    *)
+      _sd=$((_sa - _sv)); [ "$_sd" -lt 0 ] && _sd=$((-_sd))
+      [ "$_sd" -le 120 ] && return 0 ;;
+  esac
   _t="$LASTLOG.tmp.$$"
   { printf 'done_at=%s\n' "$_sv"; grep -v '^done_at=' "$LASTLOG"; } > "$_t" 2>/dev/null && mv -f "$_t" "$LASTLOG" 2>/dev/null
   rm -f "$_t" 2>/dev/null
