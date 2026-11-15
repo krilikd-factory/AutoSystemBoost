@@ -238,3 +238,11 @@ zygisk_mode|internal|engine_or_derived|shell
 zygisk_hints|user|webui_standard|both
 zygisk_launch|user|webui_standard|both
 zygisk_ledger|user|webui_standard|both
+ui_recents_memory|user|webui_standard|shell
+ui_recents_corner_radius|user|webui_standard|shell
+ui_smooth_corners|user|webui_standard|shell
+ui_nav_handle_autohide|user|webui_standard|shell
+feel_pointer_speed|user|webui_standard|shell
+feel_gesture_mistouch|user|webui_standard|shell
+feel_game_memc|user|webui_standard|shell
+feel_dc_dimming|user|webui_standard|shell
