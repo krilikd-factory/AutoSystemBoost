@@ -4,6 +4,63 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev61 - a quieter idle WebUI, GPU load with its clock, pressure from PSI, "Vendor ↑"
+
+Input: the dev60 source, the owner's short export (1 h 17 min with the screen on: device page,
+report, asbdiag, logs) and four screenshots. The requests: less energy and heat without losing
+battery life; the Monitor said GPU 60-70 % and the Load sheet *moderate 40/100* with every app
+closed; other readings looked contradictory; and kernel "super patches" from GitHub. No native
+source or release binary changed.
+
+- **What the screenshots showed:** the GPU figure was this WebUI drawing itself. In the log,
+  with the WebUI closed, GPU busy had a median of 4 % (0.7 % weighted by clock); with the
+  Monitor open the GPU sat at its lowest clock (160 MHz) and 60-70 % busy. Busy share at the
+  lowest clock is light work, but the tile showed only the share.
+- **Idle WebUI:** dev17 kept the header sphere and the status dots moving on the page in front
+  so it does not look hung, which also meant a new frame on every vsync for as long as the page
+  is open. Ten seconds after the last touch these loops now stand still in CSS and one 100 ms
+  timer steps them (Web Animations `currentTime`), only those on screen; none run on a hidden
+  page, after a touch (full-rate CSS takes over from the same position) or when nothing is on
+  screen. A headless browser trace of the home screen: 60 DrawFrame/s active, 10/s calm. The
+  effect on the phone's power draw was not measured.
+- **GPU tile:** shows the clock beside the busy share (*62% 160 MHz*); the colour and the tooltip
+  use busy × clock / top clock (*62 % busy at 160 of 1200 MHz: about 8 % of what the GPU can
+  do*). The clock is read in the same root shell as the governor state, only while Monitor is
+  visible; the frequency table once per page life. The Monitor snapshot keeps the clock apart.
+- **Pressure (Device page, Load sheets):** `asb_pressure.sh` reads `/proc/pressure` when the
+  kernel has it and then scores CPU wait (weight 30, `some avg10` × 2), memory stall (25, × 5)
+  and storage stall (10, × 4) instead of loadavg per core (35) and memory in use (30); CPU busy
+  (25) and GPU (10) stay. The GPU component is now busy × clock / top clock where a clock and a
+  table are readable (kgsl devfreq or `/sys/kernel/gpu`). New rows: `basis`, `gpu_clock_mhz`,
+  `gpu_work_pct`, `psi_*`. Without PSI, or with a partial PSI, the old formula is used and the
+  sheet says that loadavg and the share of memory in use read high on an idle Android phone.
+  The Load sheet adds that this is pressure on the whole phone (the WebUI included), while the
+  load class above is what the foreground app asks for.
+- **"Who set the limit":** `vendor_raised` (the vendor raised the ceiling above ASB's for a
+  moment, a launch or touch boost) was labelled *Vendor* in the hot colour next to *Firmware
+  limits 0*, which only counts clamps. It is *Vendor ↑* in the neutral colour with a tooltip,
+  no longer marks the status chip as an issue, and a clamp or thermal overlay on the other
+  cluster now outranks it on the tile (before, a boost on the main cluster hid a clamp on the
+  prime).
+- **Readings that are consistent:** the trend arrow, *To saving* moving between 89 % and 64 %
+  and the *Basis* line change with the temperature trend and the situation by design; the FSM
+  going MODERATE → HEAVY matched the load class going light → medium.
+- **From the short log:** 7.4 %/h with the screen on, speaker music 38 min at 7.8 %/h, 601 MiB
+  over mobile data with the screen on (491 MiB video), CPU peak 64 °C, 4 min above 45 °C,
+  jank 3.1 %. The *before* snapshot caught a vendor launch boost (both clusters' minimum near
+  1.78 GHz, WALT `sched_boost=2`) that ended by itself. A candidate for later, not changed:
+  the FSM's MODERATE shortcut reads the raw GPU busy share, which at the lowest clock matched
+  MODERATE in 7 of 49 polls; changing it needs an A/B run.
+- **Kernel patches:** reviewed and not adopted (reasons in the kernel repository's status
+  document): BORE and HZ=1000 branches, sched_ext ports for other kernels, LZ4 1.9.4 and lz4kd.
+  None is a measured power improvement for this 6.12 GKI, several change the KMI.
+- **i18n:** `unit_mhz`, `lv_gpu_work_tip`, `lvp_basis_psi`, `lvp_basis_load`, `lvp_vs_class`,
+  twelve `dev_system_load_*` labels; `cap_tip_raised`, `lvi_gpu`, `lvi_capsrc` and
+  `dev_guide_system_load` rewritten or extended. 13 languages.
+- **Tests:** `t_webui_dev61_ambient_gpu_pressure`; `t_pressure_score_runtime` covers PSI, the
+  GPU clock (kgsl, MHz table, override) and the partial-PSI fallback.
+- **Kernel repository:** documentation only, no rebuild needed.
+
 ## V66 dev60 - compact kernel cards, honest hub counts, goal lines for battery/performance settings, SOTER after ten minutes
 
 Input: the dev59 source, the owner's dev59 phone export (asbdiag, device page, report, one
