@@ -3045,7 +3045,9 @@ ltk="$(ASB_LTE_LIGHT_TICK_S=1 sh -c '. "$1/hdr.sh"; echo "$LIGHT_TICK_LTE_S"' _ 
 
 # ---- screen off ------------------------------------------------------------------------
 # 1 s windows: stream mark 16 KiB/s (~128 kbit/s), transfer mark 3000 kbit/s (~375 KiB/s).
-export ASB_LTE_DELAY_S=1 ASB_LTE_OFF_MIN_KIB=16 ASB_LTE_OFF_BULK_HOLD_S=2
+# dev60: a 4 s hold. With 2 s the waits for the mask and the log line above could use up the
+# whole hold on a loaded runner, and the in-hold check below then saw a legitimate switch.
+export ASB_LTE_DELAY_S=1 ASB_LTE_OFF_MIN_KIB=16 ASB_LTE_OFF_BULK_HOLD_S=4
 cfg 1 0; echo screen=0 > "$T/state"; echo "mWakefulness=Asleep" > "$WAKEF"
 fresh; b=1000000; rx $b
 sh "$L" arm
@@ -3071,13 +3073,13 @@ i=0; while [ "$i" -lt 30 ] && [ "$(mask)" != "$NR_ON" ]; do sleep 0.1; i=$((i + 
 # The state handback and its log line are separate watcher operations. Under a parallel
 # regression the saved file can disappear just before the line is flushed; wait briefly
 # for that same required evidence instead of turning a valid handback into a host flake.
-i=0; while [ "$i" -lt 20 ] && ! grep -q 'bulk: .* kbit/s with the screen off - 5G back for at least 2s' "$T/st/lte_screenoff.log" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
-grep -q 'bulk: .* kbit/s with the screen off - 5G back for at least 2s' "$T/st/lte_screenoff.log" || f "transfer give-back not logged"
+i=0; while [ "$i" -lt 20 ] && ! grep -q 'bulk: .* kbit/s with the screen off - 5G back for at least 4s' "$T/st/lte_screenoff.log" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+grep -q 'bulk: .* kbit/s with the screen off - 5G back for at least 4s' "$T/st/lte_screenoff.log" || f "transfer give-back not logged"
 # Inside the hold a stream does not switch back at once...
 b=$((b + 50000)); rx $b; sleep 0.6
 [ -f "$SAVE" ] && f "re-switched to LTE inside the hold"
 # ...after it, it does.
-i=0; while [ "$i" -lt 14 ] && [ ! -f "$SAVE" ]; do b=$((b + 50000)); rx $b; sleep 0.5; i=$((i + 1)); done
+i=0; while [ "$i" -lt 20 ] && [ ! -f "$SAVE" ]; do b=$((b + 50000)); rx $b; sleep 0.5; i=$((i + 1)); done
 [ -f "$SAVE" ] || f "no LTE after the hold for a stream"
 sh "$L" screen_on
 [ -f "$T/st/lte_screenoff.pid" ] && f "screen_on left the screen-off watcher running"
@@ -11556,7 +11558,34 @@ assert 'unlock' in en['soter_auto_note'], en['soter_auto_note']
 ru = json.load(open(pathlib.Path(sys.argv[1]) / 'ru.json', encoding='utf-8'))
 assert 'разблокир' in ru['soter_auto_note'], ru['soter_auto_note']
 PY
-echo 'PASS soter boot sequence: boot_completed then the first unlock (ce_available, CE data directory, RUNNING_UNLOCKED once a minute), settle, one bounded retry, per-boot record in status, phase log, verify pass with service restart and SOTER logcat lines, localized notification, opt-in only'
+# dev60: on the owner's phone the keys the SOTER server created in the first minutes after a
+# reboot were rejected while a repair done about ten minutes later worked, so the default
+# wait after the unlock is 600 s; the override is kept for tests.
+reset_case; printf '1\n' > "$T/unlock_at"
+( unset ASB_SOTER_SETTLE; sh "$S" boot >/dev/null )
+grep -qx 'sleep 600' "$T/log" || fail "default settle after the unlock is not 600 s: $(grep '^sleep' "$T/log" | tr '\n' ' ')"
+grep -q 'repair in 600s' "$T/state/log" || fail 'the boot log does not say when the repair runs'
+grep -q '^SETTLE="${ASB_SOTER_SETTLE:-600}"$' "$S" || fail 'settle default'
+echo 'PASS soter boot sequence: boot_completed then the first unlock (ce_available, CE data directory, RUNNING_UNLOCKED once a minute), settle (600 s by default since dev60), one bounded retry, per-boot record in status, phase log, verify pass with service restart and SOTER logcat lines, localized notification, opt-in only'
+)
+
+t_camera_tools_flags_dev60() (
+# dev60: the Config hub counts the two Camera Tools cards. `flags` answers from the two state
+# files only, without probing USB, packages or ART, so the hub can ask it on every open.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_camera_tools.sh"
+fail() { echo "FAIL camera tools flags: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+f() { env -i PATH="$T/none" ASB_CAMTOOLS_STATE="$T/state" ASB_CAMTOOLS_RUN="$T/run" /bin/sh "$S" flags; }
+[ "$(f)" = 'camtools|flags|webcam=0|launch=0' ] || fail "no state dir: $(f)"
+mkdir -p "$T/state"; touch "$T/state/webcam"
+[ "$(f)" = 'camtools|flags|webcam=1|launch=0' ] || fail "webcam: $(f)"
+touch "$T/state/launch"; rm -f "$T/state/webcam"
+[ "$(f)" = 'camtools|flags|webcam=0|launch=1' ] || fail "launch: $(f)"
+[ ! -e "$T/run" ] && [ ! -e "$T/state/log" ] || fail 'flags wrote state'
+grep -q "'sh ' + shQuote(CAMTOOLS_SCRIPT) + ' flags'" "$ROOT/webroot/index.html" || fail 'the hub does not ask for the flags'
+echo 'PASS camera tools flags: state-file answer for the hub count, no probes, no writes'
 )
 
 t_camera_tools_dev59() (
@@ -11680,6 +11709,10 @@ OUT="$(sh "$S" launch on)"
 grep -q '^camtools|launch_compile|state=started|pkg=com.oplus.camera$' <<<"$OUT" && [ -f "$T/state/launch" ] || fail "launch on: $OUT"
 i=0; while [ "$i" -lt 50 ] && ! grep -qx 'state=compile_done' "$T/state/launch.state"; do /bin/sleep 0.1; i=$((i + 1)); done
 grep -qx 'state=compile_done' "$T/state/launch.state" || fail 'background worker did not finish'
+# dev60: the worker writes compile_done and then leaves through its EXIT trap, which removes
+# the lock; on a loaded CI runner the next line could run in between (mkdir: File exists).
+i=0; while [ "$i" -lt 50 ] && [ -d "$T/run/compile.lock" ]; do /bin/sleep 0.1; i=$((i + 1)); done
+[ ! -d "$T/run/compile.lock" ] || fail 'background worker kept its lock after finishing'
 mkdir "$T/run/compile.lock"
 [ "$(sh "$S" launch measure)" = 'camtools|measure|state=busy' ] || fail 'measured during a compilation'
 printf 'state=running\ntime=1\n' > "$T/state/launch.state"; rmdir "$T/run/compile.lock"

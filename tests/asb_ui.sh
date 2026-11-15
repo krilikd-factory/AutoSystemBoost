@@ -9747,7 +9747,9 @@ assert "else if (section.card === 'wakeup') {" in h and 'sectionItems.forEach' i
 panel = h[h.index('const ASB_KERNEL_STATUS_KEYS'):h.index('function cfgToastText')]
 assert 'asb_device_info.sh' not in panel and '_kernelPanel.caps' not in panel
 assert 'cfgRenderKernelControlsHelp' in h and 'kernelControlsRefresh' in h and 'kernelOpenDiagnostics' in h
-assert 'diagnostics.onclick = openDevicePage' in h
+assert 'diagnostics.onclick = kernelOpenDiagnostics' in h
+od = h[h.index('function kernelOpenDiagnostics()'):h.index('\n}\n', h.index('function kernelOpenDiagnostics()'))]
+assert 'openDevicePage();' in od and "_el('dev-group-kernel')" in od and 'scrollIntoView' in od and '++tries < 40' in od
 assert "groupId === 'kernel') kernelPanelEnsure()" in h and "if (_cfgGroup === 'kernel')" in panel
 assert 'kernelCapabilityState' not in h and 'cfgRenderKernelCapabilitiesCard' not in h
 assert 'kernelPanelLoad(true)' in h and "await kernelPanelLoad(true)" in h
@@ -9767,7 +9769,7 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 79, len(new)
+assert len(new) == 88, len(new)
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -9795,7 +9797,10 @@ const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
 eval(h.match(/\nconst KERNEL_WB_CRITICAL = [^\n]*/)[0].replace('const ','global.'));
 eval(h.match(/\nconst KERNEL_HIDE_WHEN_ABSENT = [^\n]*/)[0].replace('const ','global.'));
-for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupSelectSources','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupRisk','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelHiddenAbsent','kernelDefaultFact','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
+eval(h.match(/\nconst KERNEL_HIDE_STATES = \{[\s\S]*?\n\};/)[0].replace('const ','global.'));
+eval(h.match(/\nconst KERNEL_OPTION_VALUES = \{[\s\S]*?\n\};/)[0].replace('const ','global.'));
+global.Topt=o=>o;global.bfxT=(k,f,v)=>f.replace(/\{(\w+)\}/g,(m,x)=>v[x]);
+for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupSelectSources','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupRisk','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelHiddenAbsent','kernelShipped','kernelDefaultFact','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_hrtimer_migration|covered_by_timer_migration|auto|0|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
 if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_hrtimer_migration.state!=='covered_by_timer_migration'||c.kernel_hrtimer_migration.live!=='0'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
@@ -10619,7 +10624,7 @@ for token in ('html .cfg-tile-ico {','place-items:center;','align-self:center;',
     assert token in s, token
 assert 'grid-template-columns: repeat(3, 1fr);' in s
 expected={'ar': ['DSP والصوت وبلوتوث',
-        'إعدادات ومعالجة وتفاصيل',
+        'المعالجة، كاميرا الويب، الفتح السريع',
         'الحركات والتمويه',
         'Wi-Fi وLTE والإرسال',
         'Smart وDoze والحرارة وRAM',
@@ -10628,7 +10633,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'المفتاح الرئيسي والحالة',
         'الخدمات والعمليات والتشخيص'],
  'de': ['DSP, Lautstärke, Bluetooth',
-        'Presets, Verarbeitung, Details',
+        'Verarbeitung, Webcam, schneller Start',
         'Animationen, Weichzeichnung',
         'WLAN, LTE, Warteschlangen',
         'Smart, Doze, Wärme, RAM',
@@ -10637,7 +10642,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Hauptschalter und Status',
         'Dienste, Prozesse, Diagnose'],
  'en': ['DSP, volume, Bluetooth',
-        'Presets, processing, detail',
+        'Processing, webcam, fast start',
         'Animations, blur',
         'Wi-Fi, LTE, queues',
         'Smart, Doze, heat, RAM',
@@ -10646,7 +10651,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Master switch and status',
         'Services, processes, diagnostics'],
  'es': ['DSP, volumen, Bluetooth',
-        'Presets, procesado, detalle',
+        'Procesado, webcam, inicio rápido',
         'Animaciones, desenfoque',
         'Wi-Fi, LTE, colas',
         'Smart, Doze, calor, RAM',
@@ -10655,7 +10660,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Interruptor principal y estado',
         'Servicios, procesos, diagnóstico'],
  'fr': ['DSP, volume, Bluetooth',
-        'Préréglages, traitement, détails',
+        'Traitement, webcam, démarrage rapide',
         'Animations, flou',
         'Wi-Fi, LTE, files',
         'Smart, Doze, chaleur, RAM',
@@ -10664,7 +10669,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Interrupteur principal et état',
         'Services, processus, diagnostic'],
  'hy': ['DSP, ձայն, Bluetooth',
-        'Պրեսետներ, մշակում',
+        'Մշակում, վեբ-տեսախցիկ, արագ գործարկում',
         'Անիմացիա, լղոզում',
         'Wi-Fi, LTE, հերթեր',
         'Smart, Doze, տաքացում, RAM',
@@ -10673,7 +10678,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Հիմնական անջատիչ և վիճակ',
         'Ծառայություններ, պրոցեսներ, ախտորոշում'],
  'id': ['DSP, volume, Bluetooth',
-        'Preset, pemrosesan, detail',
+        'Pemrosesan, webcam, buka cepat',
         'Animasi, blur',
         'Wi-Fi, LTE, antrean',
         'Smart, Doze, panas, RAM',
@@ -10682,7 +10687,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Sakelar utama dan status',
         'Layanan, proses, diagnostik'],
  'it': ['DSP, volume, Bluetooth',
-        'Preset, elaborazione, dettagli',
+        'Elaborazione, webcam, avvio rapido',
         'Animazioni, sfocatura',
         'Wi-Fi, LTE, code',
         'Smart, Doze, calore, RAM',
@@ -10691,7 +10696,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Interruttore principale e stato',
         'Servizi, processi, diagnostica'],
  'pt': ['DSP, volume, Bluetooth',
-        'Presets, processamento, detalhe',
+        'Processamento, webcam, abertura rápida',
         'Animações, desfoque',
         'Wi-Fi, LTE, filas',
         'Smart, Doze, calor, RAM',
@@ -10700,7 +10705,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Interruptor principal e estado',
         'Serviços, processos, diagnóstico'],
  'ru': ['DSP, громкость, Bluetooth',
-        'Пресеты, обработка, детали',
+        'Обработка, веб-камера, быстрый запуск',
         'Анимации, размытие',
         'Wi-Fi, LTE, очереди',
         'Smart, Doze, нагрев, RAM',
@@ -10709,7 +10714,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Главный переключатель и статус',
         'Службы, процессы, диагностика'],
  'tr': ['DSP, ses, Bluetooth',
-        'Ön ayarlar, işleme, detay',
+        'İşleme, web kamerası, hızlı açılış',
         'Animasyonlar, bulanıklık',
         'Wi-Fi, LTE, kuyruklar',
         'Smart, Doze, ısı, RAM',
@@ -10718,7 +10723,7 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'Ana anahtar ve durum',
         'Hizmetler, işlemler, tanılama'],
  'uk': ['DSP, гучність, Bluetooth',
-        'Пресети, обробка, деталі',
+        'Обробка, вебкамера, швидкий запуск',
         'Анімації, розмиття',
         'Wi-Fi, LTE, черги',
         'Smart, Doze, нагрів, RAM',
@@ -10726,7 +10731,15 @@ expected={'ar': ['DSP والصوت وبلوتوث',
         'LTPO, вібрація, дотики',
         'Головний перемикач і статус',
         'Служби, процеси, діагностика'],
- 'zh': ['DSP、音量、蓝牙', '预设、处理、细节', '动画、模糊效果', 'Wi-Fi、LTE、队列', '智能、Doze、发热、内存', '调度器、MGLRU、唤醒', 'LTPO、振动、触控', '主开关与状态', '服务、进程、诊断']}
+ 'zh': ['DSP、音量、蓝牙',
+        '处理、摄像头、快速启动',
+        '动画、模糊效果',
+        'Wi-Fi、LTE、队列',
+        '智能、Doze、发热、内存',
+        '调度器、MGLRU、唤醒',
+        'LTPO、振动、触控',
+        '主开关与状态',
+        '服务、进程、诊断']}
 files=sorted((root/'webroot/i18n').glob('*.json'))
 assert len(files)==13
 keys=['audio','camera','iface','net','battery','kernel','feel','zygisk','ui']
@@ -10771,7 +10784,8 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',kernel:'Scheduler, MGLRU, wakeups',feel:'LTPO, vibration, touch',zygisk:'Master switch and status',ui:'Services, processes, diagnostics'};
   global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
   global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};
-  eval(grab('function cfgRenderHub(list) {','// Settings whose effect lands in a file')+';globalThis.renderHub=cfgRenderHub;');
+  global.setTimeout=()=>0;
+  eval(grab('function cfgGroupHiddenKeys(groupId) {','// Settings whose effect lands in a file').replace(/^let /gm,'var ')+';globalThis.renderHub=cfgRenderHub;');
   const list=new E('div');renderHub(list);const hub=list.children[0];
   chk(hub.className==='cfg-hub'&&hub.children.length===9,'nine-category hub was not rendered');
   hub.children.forEach((tile,i)=>{
@@ -13065,7 +13079,7 @@ for k, fb in re.findall(r"T\('((?:ct|soter)_[a-z_]+)', '([^']*)'\)", b + h[h.ind
 for k, fb in re.findall(r"bfxT\('((?:ct|soter)_[a-z_]+)', '([^']*)'", h):
     assert en.get(k) == fb, ('bfxT fallback differs', k)
 ct = sorted(k for k in en if k.startswith('ct_'))
-assert len(ct) == 72, len(ct)
+assert len(ct) == 74, len(ct)
 for p in sorted((root / 'webroot/i18n').glob('*.json')):
     d = json.loads(p.read_text(encoding='utf-8'))
     for k in ct + ['cfg_camera_section_tools', 'cfg_camera_section_tools_hint', 'dev_kernel_features_usb_webcam_uvc', 'dev_kernel_features_usb_webcam_service']:
@@ -13087,6 +13101,8 @@ global.document={createElement:el};
 const T=(k,f)=>f; function bfxT(k,f,v){let s=f;Object.keys(v||{}).forEach(x=>{s=s.split('{'+x+'}').join(v[x]);});return s;}
 function bfxEl(tag,cls,text){const e=el(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
 function techIcon(){return '<svg/>';} function uiSound(){} let toasts=[];function toast(t,k){toasts.push([t,k]);}
+function kernelMoreBlock(card,id,nodes){const b=el('button');b.className='kernel-more';card.appendChild(b);const body=el('div');body.className='kernel-more-body';body.hidden=true;nodes.forEach(n=>{if(n)body.appendChild(n);});card.appendChild(body);return body;}
+function cfgHubRepaintIfShowing(){}
 function shQuote(v){return "'"+v+"'";} const MD='/m'; var ASB_LANG='ru';
 let cmds=[],replies={};async function run(c){cmds.push(c);const k=Object.keys(replies).find(x=>c.endsWith(x));return {stdout:k?replies[k]:''};}
 const list=el('div');
@@ -13300,6 +13316,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 {
   cat <<'JS'
 const T = (k, d) => d;
+const Topt = o => o, bfxT = (k, d, v) => d.replace(/\{(\w+)\}/g, (m, x) => v[x]);
 function el(cls) { const e = { className: cls || '', children: [], textContent: '', classList: { s: new Set(), add(c) { this.s.add(c); } },
   appendChild(c) { this.children.push(c); return c; },
   querySelector(sel) { const c = sel.replace(/^\./, ''); const w = n => { for (const x of n.children) { if (x.className.split(' ').indexOf(c) >= 0) return x; const r = w(x); if (r) return r; } return null; }; return w(this); },
@@ -13312,7 +13329,10 @@ JS
   sed -n '/^function kernelControlAvailability(/,/^}/p' "$H"
   sed -n '/^function kernelUnavailableWhy(/,/^}/p' "$H"
   sed -n '/^const KERNEL_HIDE_WHEN_ABSENT = /p' "$H"
+  sed -n '/^const KERNEL_HIDE_STATES = /,/^};/p' "$H"
+  sed -n '/^const KERNEL_OPTION_VALUES = /,/^};/p' "$H"
   sed -n '/^function kernelHiddenAbsent(/,/^}/p' "$H"
+  sed -n '/^function kernelShipped(/,/^}/p' "$H"
   sed -n '/^function kernelDefaultFact(/,/^}/p' "$H"
   sed -n '/^function kernelDecorateControlRow(/,/^}/p' "$H"
   cat <<'JS'
@@ -13694,23 +13714,25 @@ for p in sorted((W / 'i18n').glob('*.json')):
 desc = en['cfg']['kernel_lpm_prediction']['desc']
 assert 'deeper sleep state sooner' not in desc and 'lighter sleep state' in desc
 assert "'%s'" % en['kc_lpm_default_on'] in h and "'%s'" % en['kc_lpm_default_off'] in h
-assert "const KERNEL_HIDE_WHEN_ABSENT = ['kernel_sched_autogroup'];" in h
+assert "const KERNEL_HIDE_WHEN_ABSENT = ['kernel_sched_autogroup', 'kernel_hrtimer_migration'];" in h
 assert '.cfg-row.kernel-absent-hidden { display:none; }' in h
 help_fn = h[h.index('function cfgRenderKernelControlsHelp('):h.index('\n}\n', h.index('function cfgRenderKernelControlsHelp('))]
-assert "kernelHiddenAbsent().indexOf('kernel_sched_autogroup') >= 0" in help_fn and "T('kernel_absent_autogroup'" in help_fn
+assert "const hidden = kernelHiddenAbsent();" in help_fn and "hidden.indexOf('kernel_sched_autogroup') >= 0" in help_fn and "T('kernel_absent_autogroup'" in help_fn
 PY
 node - "$ROOT/webroot/index.html" <<'JS' || fail 'runtime'
 const h = require('fs').readFileSync(process.argv[2], 'utf8');
 function grab(name) { const i = h.indexOf('function ' + name + '('); if (i < 0) throw Error('missing ' + name); return h.slice(i, h.indexOf('\n}\n', i) + 2); }
-const src = h.slice(h.indexOf('const KERNEL_HIDE_WHEN_ABSENT'), h.indexOf('\n', h.indexOf('const KERNEL_HIDE_WHEN_ABSENT'))) + '\n' +
-  grab('kernelHiddenAbsent') + grab('kernelDefaultFact') + grab('kernelDecorateControlRow') + grab('kernelControlAvailability') +
+const src = h.slice(h.indexOf('const KERNEL_HIDE_WHEN_ABSENT'), h.indexOf('\n};\n', h.indexOf('const KERNEL_HIDE_STATES')) + 3) + '\n' +
+  h.slice(h.indexOf('const KERNEL_OPTION_VALUES'), h.indexOf('\n};\n', h.indexOf('const KERNEL_OPTION_VALUES')) + 3) + '\n' +
+  grab('kernelHiddenAbsent') + grab('kernelShipped') + grab('kernelDefaultFact') + grab('kernelDecorateControlRow') + grab('kernelControlAvailability') +
   'return { kernelHiddenAbsent, kernelDefaultFact, kernelDecorateControlRow };';
 global._kernelPanel = { loading:false, controls:{} };
 global.ASB_KERNEL_STATUS_KEYS = ['kernel_lpm_prediction', 'kernel_sched_autogroup'];
 const T = (k, fb) => fb;
 const kernelStateText = s => s, kernelUnavailableWhy = () => 'why';
 const bfxEl = (tag, cls, txt) => ({ tag, className: cls, textContent: txt });
-const f = new Function('T', 'kernelStateText', 'kernelUnavailableWhy', 'bfxEl', src)(T, kernelStateText, kernelUnavailableWhy, bfxEl);
+const Topt = o => o, bfxT = (k, fb, v) => fb.replace(/\{(\w+)\}/g, (m, x) => v[x]);
+const f = new Function('T', 'kernelStateText', 'kernelUnavailableWhy', 'bfxEl', 'Topt', 'bfxT', src)(T, kernelStateText, kernelUnavailableWhy, bfxEl, Topt, bfxT);
 const P = _kernelPanel.controls;
 P.kernel_lpm_prediction = { state:'writable', mode:'auto', live:'1', baseline:'none' };
 if (!/ships prediction on/.test(f.kernelDefaultFact('kernel_lpm_prediction'))) throw Error('default on');
@@ -13736,6 +13758,191 @@ f.kernelDecorateControlRow(lp, 'kernel_lpm_prediction');
 if (lp.kids.length !== 1) throw Error('fact added twice');
 JS
 echo 'PASS companion/lpm/autogroup dev58: NoMount and VPN Hide module versions with state and kernel side on the Device page and in asbdiag, LPM card says what the kernel ships and describes prediction correctly, a missing Autogroup is hidden with the reason in the help card, 13 locales'
+)
+
+t_webui_dev60_cards_hub_explanations() (
+# dev60, from the owner's report on dev59:
+#  - the kernel help card and the wakeup-rules card showed every paragraph at once; each now
+#    keeps a one-line summary and folds the rest behind a Details toggle that remembers its
+#    state across re-renders;
+#  - Refresh status felt dead: a press now paints a busy label at once and ends with a toast
+#    saying how many controls the kernel lets ASB change; Open Device Diagnostics scrolls to
+#    the Kernel group of the Device page;
+#  - High-resolution Timer Migration could not be changed because this kernel moves those
+#    timers with Timer Migration; the row is hidden like a missing Autogroup, and the hub tile
+#    no longer counts it (the tile said 9 / 11);
+#  - the Camera tile said 6 / 6 while the screen showed eight cards: cards that are not
+#    CFG_ITEMS (Camera Tools, the wakeup rules, the notification fix) count now, and the
+#    Camera Tools cards carry the Camera hue instead of the Infirmary green;
+#  - battery and performance settings outside Kernel got the kernel cards' layout: a short
+#    description, three goal lines and a per-option table (switches included), 13 locales.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui dev60 cards/hub/explanations: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'P' || fail 'static contract and locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+assert "kernel_hrtimer_migration: ['covered_by_timer_migration', 'not_exposed']" in h
+help_fn = h[h.index('function cfgRenderKernelControlsHelp('):h.index('\n}\n', h.index('function cfgRenderKernelControlsHelp('))]
+assert "kernelMoreBlock(card, 'help', more)" in help_fn and "kernelRefreshButton('kernelControlsRefresh')" in help_fn
+assert help_fn.index("T('kernel_controls_summary'") < help_fn.index("kernelMoreBlock(")
+wb = h[h.index('function cfgRenderWakeupBlockerCard('):h.index('\n}\n', h.index('function cfgRenderWakeupBlockerCard('))]
+assert "kernelMoreBlock(card, 'wb', [" in wb and "T('kernel_wb_summary'" in wb and "kernelRefreshButton('kernelWakeupRefresh')" in wb
+assert wb.index("T('kernel_wb_summary'") < wb.index("kernelMoreBlock(card, 'wb', [") < wb.index("T('kernel_wb_sub'")
+assert '.kernel-more-body[hidden] { display:none; }' in h and '.bfx-btn.is-busy' in h
+assert "bfxEl('div', 'cfg-row bfx-card camtools-card cat-camera')" in h
+assert '.bfx-card.cfg-row.cat-camera .bfx-emblem { --tech-icon:var(--cat); color:var(--cat);' in h
+assert "camera: 'Processing, webcam, fast start'" in h
+row = h[h.index('function cfgRenderRow('):h.index('let _cfgSearch')]
+assert "const dBool = it.type === 'bool';" in row and "(dBool ? ['1', '0'] : (it.opts || Object.keys(dOpt)))" in row
+assert "T('cfg_sw_on', 'On')" in row and "T('cfg_sw_off', 'Off')" in row
+hub = h[h.index('function cfgGroupHiddenKeys('):h.index('// Settings whose effect lands in a file')]
+assert 'const total = items.length + extras.length;' in hub and 'cfgHubExtrasEnsure();' in hub
+assert "_cfgHubSig !== cfgHubSig()" in hub and 'cfgHubExtraSig()' in h[h.index('function cfgHubSig('):h.index('\n}\n', h.index('function cfgHubSig('))]
+assert "else cfgHubRepaintIfShowing();" in h[h.index('async function kernelPanelLoad('):h.index('function kernelStateText(')]
+# Search shows the same kernel rows as the category: hidden ones are not found, the rest are
+# decorated (state badge, disabled when unavailable) and repainted when the status arrives.
+sm = h[h.index('function cfgSearchMatches('):h.index('\n}\n', h.index('function cfgSearchMatches('))]
+assert "const hidden = cfgGroupHiddenKeys('kernel');" in sm and 'if (hidden.indexOf(it.key) >= 0) return false;' in sm
+rm = h[h.index('function cfgRenderMatches('):h.index('\n}\n', h.index('function cfgRenderMatches('))]
+assert 'kernelPanelEnsure();' in rm and 'kernelDecorateControlRow(list.lastChild, it.key);' in rm
+assert "if (_cfgGroup === 'kernel' || (_cfgOpen && _cfgSearch)) { try { cfgRender(); } catch (e) {} }" in h
+L = {p.stem: json.loads(p.read_text(encoding='utf-8')) for p in sorted((root / 'webroot/i18n').glob('*.json'))}
+assert len(L) == 13
+en = L['en']
+new = ['cfg_sw_on', 'cfg_sw_off', 'kernel_more_show', 'kernel_more_hide', 'kernel_refreshed', 'kernel_refresh_failed', 'kernel_refreshing',
+       'kernel_controls_summary', 'kernel_hidden_count', 'kernel_absent_hrtimer', 'kernel_wb_summary', 'kc_default_same',
+       'kc_mglru_no_nonleaf', 'ct_wc_summary', 'ct_la_summary']
+ph = re.compile(r'\{[a-z_]+\}')
+for k in new:
+    m = re.search(r"\b(?:T|bfxT)\('%s',\s*'((?:[^'\\]|\\.)*)'" % k, h)
+    assert m and m.group(1).replace("\\'", "'") == en[k], ('JS fallback differs from en.json', k)
+items = {}
+for m in re.finditer(r"\{ key:'([A-Za-z0-9_]+)', type:'([a-z]+)'(.*?)\}(?=,?\s*(?://[^\n]*\n\s*)?(?:\{ key:|\]))", h[h.index('const CFG_ITEMS = ['):h.index('\n];', h.index('const CFG_ITEMS = ['))], re.S):
+    o = re.search(r"opts:\[([^\]]*)\]", m.group(3))
+    items[m.group(1)] = (m.group(2), [x.strip().strip("'") for x in o.group(1).split(',')] if o else None)
+EXPL = ['perf_ceiling_pct', 'BG_TRIM_LEVEL', 'doze_level', 'doze_trim_whitelist', 'gms_freeze', 'gms_trim', 'gnss_trim', 'wakelock_action',
+        'wakelock_fitness', 'sustained_temp_mode', 'sustained_temp_enter', 'cool_gaming', 'bat_suppress_gaming', 'auto_battery_enable',
+        'charge_aware_enable', 'heavy_prime_escape', 'prime_escape_burst_s', 'prime_escape_rest_s', 'night_quiet_enable', 'profile_class_auto',
+        'smart_battery_bias', 'smart_lab', 'smart_lab_mem', 'smart_media_guard', 'smart_records_balanced', 'camera_hold_enable', 'ltpo_force',
+        'ltpo_peak_force', 'ltpo_video', 'anim_speed', 'disable_blur', 'ui_effects_level', 'UX_MANAGE_TIMEOUTS', 'wifi_powersave',
+        'wifi_scan_throttle', 'net_screen_off_lte', 'net_lte_light', 'night_modem_idle', 'net_rps', 'net_txqueue', 'net_route_tune',
+        'net_wifi_leave', 'net_congestion', 'net_congestion_wifi', 'net_congestion_mobile', 'net_qdisc', 'net_qdisc_wifi', 'net_qdisc_mobile',
+        'athena_service', 'phantom_procs', 'log_level', 'mmfeed_off', 'bt_a2dp_offload']
+assert len(EXPL) == 53 and all(k in items for k in EXPL), [k for k in EXPL if k not in items]
+for name, d in L.items():
+    for k in new + ['grp_camera_desc']:
+        assert isinstance(d.get(k), str) and d[k].strip(), (name, k)
+        assert sorted(ph.findall(d[k])) == sorted(ph.findall(en[k])), (name, k, 'placeholders')
+    for k in EXPL:
+        c = d['cfg'][k]
+        desc = c['desc']
+        assert desc.count('\n\n') == 1, (name, k, 'one summary paragraph, then the goal lines')
+        goals = desc.split('\n\n')[1].split('\n')
+        assert len(goals) == 3 and goals[0].startswith('\U0001F50B') and goals[2].startswith('✋'), (name, k, goals)
+        if name != 'en': assert desc != en['cfg'][k]['desc'], (name, k, 'untranslated')
+        typ, opts = items[k]
+        if 'descOpt' in c:
+            keys = set(c['descOpt'])
+            if typ == 'bool': assert keys == {'1', '0'}, (name, k, keys)
+            elif typ == 'range': assert all(re.fullmatch(r'-?[0-9]+', x) for x in keys), (name, k, keys)
+            else: assert opts and keys <= set(opts), (name, k, keys, opts)
+            assert keys == set(en['cfg'][k]['descOpt']), (name, k, 'option set differs from English')
+    for k in ('cool_gaming', 'smart_lab', 'ltpo_force', 'gnss_trim', 'wakelock_action', 'net_congestion_wifi', 'gms_freeze'):
+        assert 'descOpt' in d['cfg'][k], (name, k)
+    assert set(d['cfg']['gms_freeze']['descOpt']) == {'off', 'safe', 'more', 'max'}, name
+    assert set(d['cfg']['net_qdisc_mobile']['descOpt']) == {'auto', 'fq', 'fq_codel', 'cake'}, name
+assert '0x0004' in en['kc_mglru_no_nonleaf'] and 'x86 feature' not in en['kc_mglru_no_nonleaf']
+P
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui dev60 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const h = require('fs').readFileSync(process.argv[2], 'utf8');
+function grab(name) { const m = h.match(new RegExp('\\n(?:async )?function ' + name + '\\([^)]*\\) \\{[\\s\\S]*?\\n\\}')); if (!m) throw Error('missing ' + name); return m[0]; }
+function block(start) { const i = h.indexOf('\n' + start); if (i < 0) throw Error('missing ' + start); return h.slice(i, h.indexOf('\n};\n', i) + 3); }
+function el(tag) { return { tag, children: [], className: '', id: '', hidden: false, attrs: {}, _t: '', disabled: false, classList: { s: new Set(), add(c) { this.s.add(c); } },
+  set textContent(v) { this._t = String(v); this.children = []; }, get textContent() { return this._t + this.children.map(c => c.textContent).join(' '); },
+  set innerHTML(v) { this._html = v; }, get innerHTML() { return this._html || ''; },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+  appendChild(c) { this.children.push(c); return c; }, querySelector() { return null; }, querySelectorAll() { return []; } }; }
+global.document = { createElement: el };
+const T = (k, f) => f, Topt = o => o, bfxT = (k, f, v) => f.replace(/\{(\w+)\}/g, (m, x) => v[x]);
+function bfxEl(tag, cls, text) { const e = el(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+let sounds = [], toasts = [], timers = [], opened = 0, scrolled = 0, loads = 0;
+const uiSound = k => sounds.push(k), toast = (m, t) => toasts.push([m, t]);
+global.setTimeout = fn => { timers.push(fn); return timers.length; };
+let devGroup = null; const _el = id => (id === 'dev-group-kernel' ? devGroup : null);
+const openDevicePage = () => { opened++; };
+let _wbBusy = false, _cfgGroup = '', _cfgOpen = true, _cfgSearch = '', _cfgHubSig = '', renders = 0;
+const cfgRender = () => { renders++; };
+const ASB_KERNEL_STATUS_KEYS = ['mglru_mode', 'kernel_timer_migration', 'kernel_hrtimer_migration', 'kernel_usb_autosuspend', 'kernel_sched_autogroup'];
+let _kernelPanel = { loaded: false, loading: false, controls: Object.create(null), wakeup: null };
+let nextControls = null;
+async function kernelPanelLoad() { loads++; _kernelPanel.loading = true; await null; _kernelPanel.controls = nextControls || Object.create(null); _kernelPanel.loading = false; _kernelPanel.loaded = true; }
+function kernelPanelEnsure() {}
+let _ctFlags = null, _nf = null;
+eval([block('const KERNEL_HIDE_WHEN_ABSENT').split('\n').slice(0, 2).join('\n'), block('const KERNEL_HIDE_STATES'), block('const KERNEL_OPTION_VALUES'),
+  'let _kernelMore = Object.create(null);',
+  grab('kernelHiddenAbsent'), grab('kernelControlAvailability'), grab('kernelShipped'), grab('kernelDefaultFact'), grab('kernelMoreBlock'),
+  grab('kernelVisibleKeys'), grab('kernelRefreshClick'), grab('kernelOpenDiagnostics'), grab('kernelRefreshButton'),
+  grab('cfgGroupHiddenKeys'), grab('cfgGroupExtraCards')].join('\n').replace(/^const /gm, 'var ').replace(/^let /gm, 'var '));
+const chk = (c, m) => { if (!c) throw Error(m); };
+(async () => {
+  // Details toggle: closed by default, opens and closes, and a re-render keeps the choice.
+  let card = el('div'); let body = kernelMoreBlock(card, 'help', [bfxEl('div', 'kernel-note', 'long text'), null]);
+  const btn = card.children[0];
+  chk(body.hidden === true && btn.textContent === 'Details' && btn.getAttribute('aria-expanded') === 'false' && body.children.length === 1, 'closed by default');
+  btn.onclick({ stopPropagation() {} });
+  chk(body.hidden === false && btn.textContent === 'Hide details' && btn.getAttribute('aria-expanded') === 'true', 'opens');
+  card = el('div'); body = kernelMoreBlock(card, 'help', []);
+  chk(body.hidden === false && card.children[0].textContent === 'Hide details', 'state lost on re-render');
+  card.children[0].onclick(); chk(body.hidden === true, 'closes');
+  // HR timers covered by timer migration: hidden, and not counted in the Kernel tile.
+  _kernelPanel.controls = { kernel_hrtimer_migration: { state: 'covered_by_timer_migration', mode: 'auto', live: '0', baseline: 'none' },
+    kernel_timer_migration: { state: 'writable', mode: 'auto', live: '1', baseline: '1' },
+    kernel_usb_autosuspend: { state: 'writable', mode: 'on', live: '2', baseline: '2' },
+    kernel_sched_autogroup: { state: 'writable', mode: 'stock', live: '1', baseline: 'none' },
+    mglru_mode: { state: 'writable', mode: 'smart', live: '0x0001', baseline: '0x0003' } };
+  chk(kernelHiddenAbsent().join() === 'kernel_hrtimer_migration', 'hrtimer not hidden: ' + kernelHiddenAbsent());
+  chk(cfgGroupHiddenKeys('kernel').join() === 'kernel_hrtimer_migration' && cfgGroupHiddenKeys('camera').length === 0, 'hub hidden keys');
+  chk(kernelVisibleKeys().length === 4, 'visible keys');
+  // What the kernel ships, said once per card.
+  chk(/ships 1: stock, on give the same/.test(kernelDefaultFact('kernel_timer_migration')), 'timer fact: ' + kernelDefaultFact('kernel_timer_migration'));
+  chk(/ships 2: stock, on give the same/.test(kernelDefaultFact('kernel_usb_autosuspend')), 'usb fact');
+  chk(/0x0004 flag/.test(kernelDefaultFact('mglru_mode')) && /light step \(5\) reads 0x0001/.test(kernelDefaultFact('mglru_mode')), 'mglru fact');
+  _kernelPanel.controls.mglru_mode.live = '0x0007'; chk(kernelDefaultFact('mglru_mode') === '', 'mglru with all flags kept needs no fact');
+  chk(kernelDefaultFact('kernel_sched_autogroup') === '', 'no shipped value, no fact');
+  // Extra cards in the hub count.
+  chk(cfgGroupExtraCards('camera').join() === 'false,false', 'camera extras before flags');
+  _ctFlags = { webcam: '1', launch: '0' }; chk(cfgGroupExtraCards('camera').join() === 'true,false', 'camera extras');
+  _kernelPanel.wakeup = { saved: ['a'] }; chk(cfgGroupExtraCards('kernel').join() === 'true', 'wakeup rules count when saved');
+  _nf = { count: 0 }; chk(cfgGroupExtraCards('battery').join() === 'false', 'notification fix off');
+  chk(cfgGroupExtraCards('audio').length === 0, 'other groups have no extras');
+  // Refresh: sound at once, busy label while reading, a toast with the count at the end.
+  nextControls = _kernelPanel.controls; sounds = []; toasts = [];
+  const p = kernelRefreshClick();
+  chk(sounds[0] === 'nav' && _kernelPanel.loading === true, 'no immediate feedback');
+  const busy = kernelRefreshButton('x'); chk(busy.disabled && /is-busy/.test(busy.className) && busy.textContent === 'Checking…', 'busy button');
+  await p;
+  chk(toasts.length === 1 && toasts[0][1] === 'good' && toasts[0][0] === 'Kernel status read: 4 of 4 controls can be changed', 'toast: ' + JSON.stringify(toasts));
+  const idle = kernelRefreshButton('x'); chk(!idle.disabled && idle.textContent === 'Refresh status' && idle.onclick === kernelRefreshClick, 'idle button');
+  nextControls = Object.create(null); toasts = [];
+  await kernelRefreshClick(); chk(toasts[0][1] === 'err' && /Could not read/.test(toasts[0][0]), 'failed read toast');
+  // Diagnostics: opens the page, then scrolls to the Kernel group once it exists.
+  timers = []; kernelOpenDiagnostics();
+  chk(opened === 1 && timers.length === 1, 'device page / wait');
+  timers.shift()(); chk(timers.length === 1, 'keeps waiting');
+  devGroup = { scrollIntoView() { scrolled++; } }; timers.shift()();
+  chk(scrolled === 1 && timers.length === 0, 'scroll to the kernel group');
+  devGroup = null; timers = []; kernelOpenDiagnostics(); for (let i = 0; i < 60 && timers.length; i++) timers.shift()();
+  chk(timers.length === 0, 'unbounded wait');
+  console.log('ok');
+})().catch(e => { console.error(e && e.stack || e); process.exit(1); });
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS webui dev60: kernel help and wakeup cards fold into Details (state kept), Refresh gives instant feedback and a counted toast, Diagnostics scrolls to Kernel, covered HR timers hidden, not counted and not found by search (found kernel rows decorated), Camera Tools in Camera hue and counted with the other extra cards, kernel facts (shipped value, MGLRU 0x0004), 53 battery/performance cards with goal lines and per-option tables incl. switches, 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

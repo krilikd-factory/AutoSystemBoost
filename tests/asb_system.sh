@@ -3534,7 +3534,7 @@ grep -q "case \"\$_pv\" in ''|\*=unsupported)" "$N" || fail "congestion kind wit
 grep -qF 'if ! asb_kc_same "$_aka_want" "$_aka_before"; then' "$ROOT/runtime/asb_kernel_controls.sh" || fail "MGLRU readback-equal value is still rewritten"
 grep -q 'lru_gen_took_' "$ROOT/runtime/smart_dynamic_tune.sh" || fail "the per-boot readback memo is gone: a clamped node (OP15 reads 0x0001) never equals a 5/7 request, so the helper's equal-value skip alone rewrites it on every Smart pass"
 grep -q 'a bit missing here is one this kernel does not keep' "$ROOT/tools/asb_diag.sh" || fail "MGLRU bits not explained"
-grep -q 'In detail: only an app that held the CPU for 10+ minutes' "$ROOT/webroot/index.html" || fail "wakelock card does not describe the fix137 rule"
+grep -q 'an app that held the CPU for 10+ minutes and was not used today' "$ROOT/webroot/i18n/en.json" || fail "wakelock card does not describe the fix137 rule (dev60: in the Act line of the per-option table)"
 for f in "$ROOT"/webroot/i18n/*.json; do
   case "${f##*/}" in en.json) continue ;; esac
   grep -q '10' "$f" || fail "${f##*/} lacks the wakelock rule text"
