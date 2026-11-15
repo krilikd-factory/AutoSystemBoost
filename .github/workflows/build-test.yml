@@ -52,6 +52,7 @@ jobs:
             runtime/asb_junk_cleanup.sh \
             runtime/asb_pressure_snapshot.sh \
             runtime/asb_soter_fix.sh \
+            runtime/asb_camera_tools.sh \
             runtime/asb_module_desc.sh \
             tools/asb_kernel_uv_coexist.sh \
             tools/asb_device_info.sh
@@ -123,6 +124,7 @@ jobs:
             runtime/asb_junk_cleanup.sh \
             runtime/asb_pressure_snapshot.sh \
             runtime/asb_soter_fix.sh \
+            runtime/asb_camera_tools.sh \
             runtime/asb_module_desc.sh \
             tools/asb_kernel_uv_coexist.sh \
             tools/asb_device_info.sh
@@ -223,6 +225,7 @@ jobs:
             "runtime/asb_pressure.sh" \
             "runtime/asb_pressure_snapshot.sh" \
             "runtime/asb_soter_fix.sh" \
+            "runtime/asb_camera_tools.sh" \
             "runtime/asb_module_desc.sh" \
             src/zygisk/zygisk.hpp \
             src/zygisk/asb_observer_protocol.h \
