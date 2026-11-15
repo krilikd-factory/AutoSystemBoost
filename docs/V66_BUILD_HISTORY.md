@@ -4,6 +4,30 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev56 - LPM prediction on qcom-cpu-lpm kernels
+
+Input: the dev55 source, the owner's device export and asbdiag on the KRILIKD kernel built from
+it, and a screenshot of the kernel controls. No native source or release binary changed.
+
+- **Idle prediction (LPM) works on qcom-cpu-lpm kernels.** The card only knew
+  `/sys/module/lpm_levels/parameters/lpm_prediction` of the older lpm_levels driver. The phone
+  runs the `qcom-cpu-lpm` governor, which has no module parameters (asbdiag found none) but
+  creates `/sys/devices/system/cpu/qcom_lpm/parameters/prediction_disabled` (the same file in
+  the 5.15 and 6.6 Qualcomm vendor trees of this governor).
+  - The control uses that node when lpm_levels is absent. It is written inverted; status,
+    readback and the baseline are reported in the card's terms (1 = prediction on), and Stock
+    writes the captured raw value back.
+  - asbdiag lists the governor's parameters; the Device page reports the same logical value.
+  - The card and "not exposed" texts no longer claim that qcom-cpu-lpm has no such switch.
+    13 languages.
+- **Autogroup:** the "not exposed" reason now also says that, even when built in, autogroup
+  regroups only tasks left in the root CPU cgroup, while Android places app tasks in its own CPU
+  groups. Nothing else changes: the kernel still has no `CONFIG_SCHED_AUTOGROUP`.
+- **HR timer migration** is unchanged: Linux 6.12 has one `timer_migration` switch for timers and
+  high-resolution timers, and the card shows that it is covered by Timer Migration.
+- **Tests:** `t_kernel_lpm_qcom_prediction_dev56`.
+- **Kernel repository (paired):** the NoMount job checks the packaged version before upload.
+
 ## V66 dev55 - review fixes for dev54 and a faster WebUI
 
 Input: the owner's dev54 source (host regression 525/525) and the dev54 review. No native source
