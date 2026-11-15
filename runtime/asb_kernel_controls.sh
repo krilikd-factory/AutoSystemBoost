@@ -15,7 +15,15 @@ asb_kc_node() {
     kernel_sched_autogroup) printf '%s\n' "${ASB_SCHED_AUTOGROUP_NODE:-/proc/sys/kernel/sched_autogroup_enabled}" ;;
     kernel_sched_child_runs_first) printf '%s\n' "${ASB_SCHED_CHILD_RUNS_FIRST_NODE:-/proc/sys/kernel/sched_child_runs_first}" ;;
     kernel_hrtimer_migration) printf '%s\n' "${ASB_HRTIMER_MIGRATION_NODE:-/proc/sys/kernel/hrtimer_migration}" ;;
-    kernel_lpm_prediction) printf '%s\n' "${ASB_LPM_PREDICTION_NODE:-/sys/module/lpm_levels/parameters/lpm_prediction}" ;;
+    kernel_lpm_prediction)
+      if [ -n "${ASB_LPM_PREDICTION_NODE:-}" ]; then
+        printf '%s\n' "$ASB_LPM_PREDICTION_NODE"
+      elif [ -e "${ASB_LPM_LEVELS_NODE:-/sys/module/lpm_levels/parameters/lpm_prediction}" ]; then
+        printf '%s\n' "${ASB_LPM_LEVELS_NODE:-/sys/module/lpm_levels/parameters/lpm_prediction}"
+      else
+        printf '%s\n' "${ASB_QCOM_LPM_PREDICTION_NODE:-/sys/devices/system/cpu/qcom_lpm/parameters/prediction_disabled}"
+      fi
+      ;;
     kernel_usb_autosuspend) printf '%s\n' "${ASB_USB_AUTOSUSPEND_NODE:-/sys/module/usbcore/parameters/autosuspend}" ;;
     *) return 1 ;;
   esac
@@ -166,8 +174,28 @@ asb_kc_kid_write() {
   return 0
 }
 
+asb_kc_lpm_inverted() {
+  case "$(asb_kc_node kernel_lpm_prediction)" in
+    */prediction_disabled) return 0 ;;
+  esac
+  return 1
+}
+
+asb_kc_flip() {
+  case "$1" in
+    0) printf '1\n' ;;
+    1) printf '0\n' ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
 asb_kc_emit() {
-  printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "${4:-unknown}" "${5:-none}"
+  _akp_l="${4:-unknown}" _akp_b="${5:-none}"
+  if [ "$1" = kernel_lpm_prediction ] && asb_kc_lpm_inverted; then
+    _akp_l="$(asb_kc_flip "$_akp_l")"
+    _akp_b="$(asb_kc_flip "$_akp_b")"
+  fi
+  printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "$_akp_l" "$_akp_b"
 }
 
 asb_kc_hrtimer_covered() {
@@ -272,6 +300,9 @@ asb_kc_apply() {
       _aka_want="$_aka_mode" ;;
     *) asb_kc_emit "$_aka_key" invalid_request "$_aka_mode" "" "$_aka_saved"; return 1 ;;
   esac
+  if [ "$_aka_key" = kernel_lpm_prediction ] && asb_kc_lpm_inverted; then
+    _aka_want="$(asb_kc_flip "$_aka_want")"
+  fi
   asb_kc_capture "$_aka_key" "$_aka_node" "$_aka_prev" || { asb_kc_emit "$_aka_key" baseline_failed "$_aka_mode" "" "$_aka_saved"; return 1; }
   _aka_saved="$(asb_kc_clean "$(cat "$_aka_prev" 2>/dev/null)")"
   _aka_before="$(asb_kc_clean "$(cat "$_aka_node" 2>/dev/null)")"
