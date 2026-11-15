@@ -744,6 +744,12 @@ for _spec in \
   _k="${_spec%%:*}"; _p="${_spec#*:}"; case "$_p" in /sys/*) _f="$SYS${_p#/sys}" ;; *) _f="$PROC${_p#/proc}" ;; esac
   _v="$(_read "$_f")"; [ -n "$_v" ] && _emit kernel_runtime "$_k" "$_v"
 done
+if [ ! -e "$SYS/module/lpm_levels/parameters/lpm_prediction" ]; then
+  case "$(_read "$SYS/devices/system/cpu/qcom_lpm/parameters/prediction_disabled")" in
+    0) _emit kernel_runtime lpm_prediction 1 ;;
+    1) _emit kernel_runtime lpm_prediction 0 ;;
+  esac
+fi
 
 # Every exposed cpufreq policy, with hardware and current bounds kept distinct.
 for _d in "$SYS"/devices/system/cpu/cpufreq/policy*; do
