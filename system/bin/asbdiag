@@ -4356,6 +4356,14 @@ for _lpmm in lpm_levels qcom_lpm qcom_cpu_lpm; do
   done
   NOTE "idle driver $_lpmm parameters:${_lpmp:- none}"
 done
+if [ -d /sys/devices/system/cpu/qcom_lpm/parameters ]; then
+  _lpmp=""
+  for _lpmf in /sys/devices/system/cpu/qcom_lpm/parameters/*; do
+    [ -f "$_lpmf" ] || continue
+    _lpmp="$_lpmp ${_lpmf##*/}=$(head -c 12 "$_lpmf" 2>/dev/null | tr -d '\r\n' | tr -cd 'A-Za-z0-9_.-')"
+  done
+  NOTE "idle governor qcom_lpm parameters:${_lpmp:- none}"
+fi
 NOTE "lockscreen_shortcuts = $(cfg lockscreen_shortcuts)"
 # The property that caused a bootloop. Worth naming explicitly in every report: if it is
 # ever back in system.prop, that is the first thing to look at.
