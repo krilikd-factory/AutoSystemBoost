@@ -7038,6 +7038,8 @@ const TECH_ICON_PATHS = {
   wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.3 2.3-2.4-.6-.6-2.4z"/>',
   /* soter_fix (dev47): a fingerprint with a small repair arrow - the payment-biometric key
      server being reset and restarted, not a generic wrench. */
+  webcam: '<circle cx="12" cy="9.2" r="5.6"/><circle cx="12" cy="9.2" r="2.1"/><path d="M8.9 14l-1.7 5.6h9.6L15.1 14"/><path d="M5.2 19.6h13.6"/>',
+  camera_launch: '<path d="M3.6 8.2h3.1l1.6-2.3h5.5l1.6 2.3h3a1.6 1.6 0 0 1 1.6 1.6v8.3a1.6 1.6 0 0 1-1.6 1.6H3.6A1.6 1.6 0 0 1 2 18.1V9.8a1.6 1.6 0 0 1 1.6-1.6z"/><path d="M12.8 10.2l-2.4 3.5h3.2l-2.3 3.7"/>',
   soter_fix: '<path d="M6.2 9.5a6 6 0 0 1 11.6 0"/><path d="M8.3 19.5c-.9-1.6-1.3-3.3-1.3-5.2a5 5 0 0 1 10 0v1"/><path d="M12 14.2v1.6c0 1.6.4 3 1.2 4.2"/><path d="M9.6 13.8a2.4 2.4 0 0 1 4.8 0"/><path d="M16.5 18.2a2.6 2.6 0 1 0 2.4-2.9"/><path d="M19.5 13.6v1.9h-1.9"/>',
   /* mmfeed: a telemetry bar-chart struck through - the feedback collector being shut
      off. Not an eye: this kills event reporting and dumps, not visibility. */
@@ -10239,7 +10241,11 @@ const CFG_GROUP_SECTIONS = {
     { id:'perf', icon:'camera_hold', titleKey:'cfg_camera_section_perf',
       title:'Camera Performance', hintKey:'cfg_camera_section_perf_hint',
       hint:'Keep the phone responsive while the camera is open.',
-      keys:['camera_hold_enable'] }
+      keys:['camera_hold_enable'] },
+    { id:'tools', icon:'webcam', titleKey:'cfg_camera_section_tools',
+      title:'Camera Tools', hintKey:'cfg_camera_section_tools_hint',
+      hint:'Use the phone as a USB webcam and keep the camera app fully compiled, with measured launch times.',
+      keys:[], card:'camtools' }
   ],
   iface: [
     { id:'speed', icon:'anim_speed', titleKey:'cfg_iface_section_speed',
@@ -10641,7 +10647,9 @@ function soterPaint(parsed) {
     (lt > 0 && f.last_result && f.last_result !== 'none')
       ? new Date(lt * 1000).toLocaleString() + (f.last_trigger === 'boot' ? ' · ' + T('soter_trigger_boot', 'after reboot') : '') + ' · ' + soterResultText(f.last_result)
       : T('soter_never', 'not run yet'), false);
+  if (f.auto === '1') soterRow(host, T('soter_row_boot', 'Automatic repair, this boot'), soterBootText(f), soterBootWarn(f));
   soterAutoPaint(f.auto === '1' ? '1' : f.auto === '0' ? '0' : '', f.installed === '1');
+  if (f.auto === '1' && f.notify_lang !== soterLang()) soterStoreTexts();
   if (chip) {
     if (f.installed === '0') { chip.className = 'bfx-chip is-off'; chip.textContent = T('soter_chip_absent', 'Not installed'); }
     else if (f.installed !== '1') { chip.className = 'bfx-chip is-wait'; chip.textContent = T('soter_chip_unknown', 'Unknown'); }
@@ -10650,6 +10658,35 @@ function soterPaint(parsed) {
   }
   if (runBtn) runBtn.disabled = _soterBusy || f.installed !== '1';
   if (refresh) refresh.disabled = _soterBusy;
+}
+/* dev59: the boot run records itself per boot (boot_id), so the card can say whether it
+ * already happened, is waiting for the first unlock, or never started in this boot. */
+function soterBootText(f) {
+  const st = f.boot_state || 'none', res = f.boot_result || 'none';
+  if (st === 'waiting') return T('soter_boot_waiting', 'waiting for the first unlock');
+  if (st === 'unlocked') return T('soter_boot_unlocked', 'phone unlocked - the repair starts in about a minute');
+  if (st === 'skipped') return res === 'no_boot' ? T('soter_boot_no_boot', 'skipped - Android did not finish booting') : T('soter_boot_no_unlock', 'skipped - the phone was not unlocked within 6 hours');
+  if (st !== 'done') return T('soter_boot_none', 'has not started in this boot - it runs after the next reboot');
+  const t = parseInt(f.boot_time, 10), u = parseInt(f.boot_unlock, 10);
+  const parts = [];
+  if (t > 0) parts.push(new Date(t * 1000).toLocaleTimeString());
+  if (u >= 0) parts.push(bfxT('soter_boot_unlock_after', 'unlocked {s} s after boot', { s: String(u) }));
+  parts.push(soterResultText(res));
+  if (f.boot_first && f.boot_first !== 'none') parts.push(T('soter_boot_retried', 'second try'));
+  return parts.join(' · ');
+}
+function soterBootWarn(f) {
+  const st = f.boot_state || 'none';
+  if (st === 'waiting' || st === 'unlocked') return false;
+  return st !== 'done' || (f.boot_result !== 'done' && f.boot_result !== 'done_no_service');
+}
+function soterLang() { return String((typeof ASB_LANG === 'string' && ASB_LANG) || 'en').replace(/[^A-Za-z_-]/g, '').slice(0, 12) || 'en'; }
+function soterStoreTexts() {
+  const cmd = 'sh ' + shQuote(SOTER_FIX_SCRIPT) + ' texts ' + shQuote(soterLang()) + ' '
+    + shQuote(T('soter_notify_title', 'SOTER Repair')) + ' '
+    + shQuote(T('soter_notify_done', 'SOTER was repaired after the reboot. Switch fingerprint payment on again in your payment apps.')) + ' '
+    + shQuote(T('soter_notify_failed', 'The automatic SOTER repair did not finish. Open ASB, Infirmary, SOTER Repair.'));
+  return run(cmd).catch(function () { return null; });
 }
 function soterAutoPaint(v, installed) {
   const sw = _el('soterAuto');
@@ -10672,6 +10709,7 @@ async function soterAutoToggle() {
   _soterBusy = false;
   const m = /^soter\|auto\|state=([01])$/m.exec(r && r.stdout != null ? String(r.stdout) : '');
   if (m && m[1] === (want === 'on' ? '1' : '0')) {
+    if (want === 'on') await soterStoreTexts();
     uiSound(want === 'on' ? 'toggle_on' : 'toggle_off');
     toast(want === 'on' ? T('soter_auto_on', 'SOTER repair will run after every reboot') : T('soter_auto_off', 'Automatic SOTER repair is off'), want === 'on' ? 'good' : 'perf');
   } else toast(T('soter_auto_failed', 'Could not change the automatic repair'), 'err');
@@ -10697,7 +10735,7 @@ function cfgRenderSoterFixCard(list) {
   const auto = bfxEl('div', 'soter-auto');
   const autoText = bfxEl('div', 'soter-auto-text');
   autoText.appendChild(bfxEl('div', 'soter-auto-title', T('soter_auto', 'Repair automatically after every reboot')));
-  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair after each reboot, about a minute after you first unlock the phone (SOTER keys need the unlocked storage). Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.')));
+  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair after each reboot, about a minute after you first unlock the phone (SOTER keys need the unlocked storage), and posts a notification when it has finished. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.')));
   auto.appendChild(autoText);
   const sw = bfxEl('div', 'cfg-switch'); sw.id = 'soterAuto';
   sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', 'false'); sw.setAttribute('aria-disabled', 'true');
@@ -10915,6 +10953,7 @@ function cfgRenderGroup(list, groupId) {
       cfgRenderSoterFixCard(list);
     }
     else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
+    else if (section.card === 'camtools') cfgRenderCameraToolsCards(list);
     else if (section.card === 'wakeup') {
       // Kernel management is one reading flow: ordinary bounded controls first,
       // then their optional wakeup-list companion, without a second page section.
@@ -10936,6 +10975,250 @@ function cfgRenderGroup(list, groupId) {
   items.filter(it => !rendered[it.key])
     .forEach(it => cfgRenderRow(list, it, false));
   if (navItems.length > 1) list.appendChild(asbPageJump(navItems, T('dev_nav_title', 'Jump to'), 'cfg-page-nav'));
+}
+
+/* Camera → Camera Tools (dev59). One shell owner, runtime/asb_camera_tools.sh, answers
+ * `status` with one webcam line and one launch line. USB webcam: Android's own webcam service
+ * (com.android.DeviceAsWebcam) streams through the kernel's UVC gadget driver once
+ * ro.usb.uvc.enabled is set (post-fs-data, so it takes a reboot) and a uvc.0 function exists
+ * in the USB gadget; the card checks each part and never claims more than it read. Fast
+ * start: ART `speed` compilation of the camera app the camera intent resolves to, with an
+ * `am start -W -S` measurement the user starts, so the effect is a number on this phone. */
+const CAMTOOLS_SCRIPT = MD + '/runtime/asb_camera_tools.sh';
+let _ctBusy = false, _ctSeq = 0, _ctPoll = 0, _ctWc = {}, _ctLa = {};
+function ctParse(txt) {
+  const out = { webcam: null, launch: null, other: {} };
+  String(txt || '').split('\n').forEach(function (line) {
+    const p = line.split('|');
+    if (p[0] !== 'camtools' || !p[1]) return;
+    const f = {};
+    p.slice(2).forEach(function (x) { const i = x.indexOf('='); if (i > 0) f[x.slice(0, i)] = x.slice(i + 1); });
+    if (p[1] === 'webcam') out.webcam = f;
+    else if (p[1] === 'launch') out.launch = f;
+    else out.other[p[1]] = f;
+  });
+  return out;
+}
+function ctSafe(v, n) { return String(v == null ? '' : v).replace(/[^A-Za-z0-9 ._:,/+-]/g, '').slice(0, n || 48); }
+function ctSwitchPaint(id, on, locked) {
+  const sw = _el(id);
+  if (!sw) return;
+  sw.className = 'cfg-switch' + (on ? ' on' : '') + (_ctBusy ? ' busy' : '');
+  sw.setAttribute('aria-checked', on ? 'true' : 'false');
+  sw.setAttribute('aria-disabled', locked ? 'true' : 'false');
+  sw.style.opacity = locked ? '0.42' : '';
+}
+function ctWebcamPaint(f) {
+  const host = _el('ctWcRows'), chip = _el('ctWcChip');
+  if (!host) return;
+  host.textContent = '';
+  _ctWc = f || {};
+  if (!f) {
+    if (chip) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('soter_chip_unknown', 'Unknown'); }
+    soterRow(host, T('ct_wc_row_app', 'Webcam service (ROM)'), T('ct_read_failed', 'Could not read the state'), true);
+    ctSwitchPaint('ctWcSwitch', false, true);
+    return;
+  }
+  const app = f.app === '1' ? (f.app_enabled === '1' ? T('ct_wc_app_on', 'included and enabled') : T('ct_wc_app_off', 'included, disabled - switching the mode on enables it')) : T('ct_wc_app_absent', 'not included in this ROM');
+  soterRow(host, T('ct_wc_row_app', 'Webcam service (ROM)'), app, f.app !== '1');
+  const kern = f.kernel === 'ok' ? T('ct_wc_kernel_ok', 'UVC gadget driver available') : f.kernel === 'absent' ? T('ct_wc_kernel_absent', 'the kernel refused a UVC function') : T('ct_wc_kernel_unknown', 'no USB gadget found to test');
+  soterRow(host, T('ct_wc_row_kernel', 'Kernel'), kern, f.kernel !== 'ok');
+  const fn = { present: T('ct_wc_fn_present', 'present'), created: T('ct_wc_fn_created', 'created by ASB in this boot'), missing: T('ct_wc_fn_missing', 'not created yet'), no_gadget: T('ct_wc_fn_no_gadget', 'no USB gadget') }[f['function']] || ctSafe(f['function']);
+  soterRow(host, T('ct_wc_row_function', 'USB webcam function'), fn, f['function'] === 'no_gadget');
+  const prop = f.prop === 'true' ? T('ct_wc_prop_on', 'on') : (f.enabled === '1' ? T('ct_wc_prop_reboot', 'off - reboot to apply') : T('ct_wc_prop_off', 'off'));
+  soterRow(host, T('ct_wc_row_prop', 'Android webcam switch'), prop, f.enabled === '1' && f.prop !== 'true');
+  soterRow(host, T('ct_wc_row_usb', 'USB mode now'), ctSafe(f.usb) || T('soter_chip_unknown', 'Unknown'), false);
+  if (f.last && f.last !== '-') soterRow(host, T('ct_wc_row_last', 'Last start'), f.last === 'active' ? T('ct_wc_last_active', 'webcam mode accepted') : T('ct_wc_last_refused', 'the USB driver did not switch to webcam mode'), f.last !== 'active');
+  const ready = f.app === '1' && f.kernel === 'ok' && f.prop === 'true' && (f['function'] === 'present' || f['function'] === 'created');
+  const active = /uvc/.test(String(f.usb || ''));
+  if (chip) {
+    if (f.app !== '1' || f.kernel === 'absent') { chip.className = 'bfx-chip is-off'; chip.textContent = T('ct_chip_unavailable', 'Unavailable'); }
+    else if (active) { chip.className = 'bfx-chip is-ok'; chip.textContent = T('ct_chip_active', 'Active'); }
+    else if (f.enabled !== '1') { chip.className = 'bfx-chip is-off'; chip.textContent = T('ct_chip_off', 'Off'); }
+    else if (ready) { chip.className = 'bfx-chip is-ready'; chip.textContent = T('soter_chip_ready', 'Ready'); }
+    else { chip.className = 'bfx-chip is-wait'; chip.textContent = T('ct_chip_reboot', 'Needs a reboot'); }
+  }
+  ctSwitchPaint('ctWcSwitch', f.enabled === '1', f.app !== '1' && f.enabled !== '1');
+  const start = _el('ctWcStart'), stop = _el('ctWcStop');
+  if (start) start.disabled = _ctBusy || !ready || active;
+  if (stop) stop.disabled = _ctBusy || !active;
+}
+function ctFilterText(v) {
+  const m = { speed: T('ct_la_filter_speed', 'fully compiled (speed)'), 'speed-profile': T('ct_la_filter_profile', 'profile-guided (speed-profile, Android default)'), verify: T('ct_la_filter_verify', 'not compiled (verify)'), everything: T('ct_la_filter_speed', 'fully compiled (speed)') };
+  return m[v] || (v && v !== 'unknown' ? ctSafe(v) : T('soter_chip_unknown', 'Unknown'));
+}
+function ctLaunchPaint(f) {
+  const host = _el('ctLaRows'), chip = _el('ctLaChip');
+  if (!host) return;
+  host.textContent = '';
+  _ctLa = f || {};
+  if (!f) {
+    if (chip) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('soter_chip_unknown', 'Unknown'); }
+    soterRow(host, T('ct_la_row_app', 'Camera app'), T('ct_read_failed', 'Could not read the state'), true);
+    ctSwitchPaint('ctLaSwitch', false, true);
+    return;
+  }
+  const noCam = !f.pkg || f.pkg === '-';
+  soterRow(host, T('ct_la_row_app', 'Camera app'), noCam ? T('ct_la_no_camera', 'no camera app answers the camera intent') : ctSafe(f.pkg, 64), noCam);
+  soterRow(host, T('ct_la_row_filter', 'Compilation'), ctFilterText(f.filter), false);
+  const job = { running: T('ct_la_job_running', 'compiling now - this takes a minute or two'), compile_done: T('ct_la_job_compiled', 'compiled'), compile_failed: T('ct_la_job_compile_failed', 'Android refused the compilation'), reset_done: T('ct_la_job_reset', 'returned to the Android default'), reset_failed: T('ct_la_job_reset_failed', 'Android refused the reset'), interrupted: T('ct_la_job_interrupted', 'interrupted by a reboot') }[f.state];
+  if (job) soterRow(host, T('ct_la_row_job', 'Last job'), job, /failed|interrupted/.test(f.state || ''));
+  const hist = String(f.history || '').split(';').filter(function (x) { return /^[0-9]+:[0-9]+:/.test(x); });
+  if (hist.length) {
+    soterRow(host, T('ct_la_row_measure', 'Measured cold starts'), hist.slice(-4).reverse().map(function (h) {
+      const p = h.split(':');
+      return bfxT('ct_la_measure_item', '{ms} ms ({filter}, {time})', { ms: p[1], filter: ctSafe(p[2], 20), time: new Date(parseInt(p[0], 10) * 1000).toLocaleTimeString() });
+    }).join(' · '), false);
+  } else soterRow(host, T('ct_la_row_measure', 'Measured cold starts'), T('ct_la_measure_none', 'none yet - press Measure before and after compiling'), false);
+  if (chip) {
+    if (noCam) { chip.className = 'bfx-chip is-off'; chip.textContent = T('ct_chip_unavailable', 'Unavailable'); }
+    else if (f.state === 'running') { chip.className = 'bfx-chip is-run'; chip.textContent = T('ct_chip_compiling', 'Compiling…'); }
+    else if (f.filter === 'speed' || f.filter === 'everything') { chip.className = 'bfx-chip is-ok'; chip.textContent = T('ct_chip_compiled', 'Compiled'); }
+    else if (f.enabled === '1') { chip.className = 'bfx-chip is-wait'; chip.textContent = T('ct_chip_pending', 'Not compiled yet'); }
+    else { chip.className = 'bfx-chip is-off'; chip.textContent = T('ct_chip_off', 'Off'); }
+  }
+  ctSwitchPaint('ctLaSwitch', f.enabled === '1', noCam || f.state === 'running');
+  const m = _el('ctLaMeasure');
+  if (m) m.disabled = _ctBusy || noCam || f.state === 'running';
+}
+async function ctLoad(manual) {
+  if (!_el('ctWcCard') || _ctBusy) return;
+  const seq = ++_ctSeq;
+  if (manual) uiSound('nav');
+  let r = null;
+  try { r = await run('sh ' + shQuote(CAMTOOLS_SCRIPT) + ' status'); } catch (e) {}
+  if (seq !== _ctSeq || !_el('ctWcCard')) return;
+  const p = ctParse(r && r.stdout != null ? String(r.stdout) : '');
+  ctWebcamPaint(p.webcam);
+  ctLaunchPaint(p.launch);
+  if (p.launch && p.launch.state === 'running' && _ctPoll < 75) {
+    _ctPoll++;
+    setTimeout(function () { if (_el('ctWcCard')) ctLoad(false); }, 4000);
+  } else if (!(p.launch && p.launch.state === 'running')) _ctPoll = 0;
+}
+async function ctCommand(args) {
+  _ctBusy = true;
+  let r = null;
+  try { r = await run('sh ' + shQuote(CAMTOOLS_SCRIPT) + ' ' + args); } catch (e) {}
+  _ctBusy = false;
+  return ctParse(r && r.stdout != null ? String(r.stdout) : '');
+}
+async function ctWebcamToggle() {
+  const sw = _el('ctWcSwitch');
+  if (!sw || _ctBusy || sw.getAttribute('aria-disabled') === 'true') return;
+  const want = _ctWc.enabled === '1' ? 'off' : 'on';
+  sw.className = sw.className + ' busy';
+  const p = await ctCommand('webcam ' + want);
+  const f = p.other.webcam_set || {};
+  if (f.state === 'on') { uiSound('toggle_on'); toast(T('ct_wc_on_toast', 'USB webcam mode prepared - reboot once to apply'), 'good'); }
+  else if (f.state === 'off') { uiSound('toggle_off'); toast(T('ct_wc_off_toast', 'USB webcam mode off after the next reboot'), 'perf'); }
+  else if (f.state === 'no_app') toast(T('ct_wc_app_absent_toast', 'This ROM does not include Android’s webcam service'), 'err');
+  else toast(T('ct_failed', 'The change did not go through'), 'err');
+  ctLoad(false);
+}
+async function ctWebcamStart() {
+  if (_ctBusy) return;
+  uiSound('capture');
+  const note = _el('ctWcNote'); if (note) note.textContent = T('ct_wc_starting', 'Switching USB to webcam mode…');
+  const p = await ctCommand('webcam start');
+  const f = p.other.webcam_start || {};
+  const msg = { active: T('ct_wc_start_active', 'Webcam mode is on - open a video app on the computer'), refused: T('ct_wc_start_refused', 'The USB driver of this ROM did not switch to webcam mode'), needs_reboot: T('ct_wc_start_reboot', 'Reboot once after switching the mode on'), off: T('ct_wc_start_off', 'Switch USB webcam mode on first'), no_gadget: T('ct_wc_fn_no_gadget', 'no USB gadget'), kernel_refused: T('ct_wc_kernel_absent', 'the kernel refused a UVC function') }[f.state] || T('ct_failed', 'The change did not go through');
+  if (note) note.textContent = msg;
+  toast(msg, f.state === 'active' ? 'good' : 'err');
+  ctLoad(false);
+}
+async function ctWebcamStop() {
+  if (_ctBusy) return;
+  uiSound('nav');
+  await ctCommand('webcam stop');
+  const note = _el('ctWcNote'); if (note) note.textContent = T('ct_wc_stopped', 'USB is back in its previous mode');
+  ctLoad(false);
+}
+async function ctLaunchToggle() {
+  const sw = _el('ctLaSwitch');
+  if (!sw || _ctBusy || sw.getAttribute('aria-disabled') === 'true') return;
+  const want = _ctLa.enabled === '1' ? 'off' : 'on';
+  sw.className = sw.className + ' busy';
+  const p = await ctCommand('launch ' + want);
+  const f = p.other['launch_' + (want === 'on' ? 'compile' : 'reset')] || {};
+  if (f.state === 'started') { uiSound(want === 'on' ? 'toggle_on' : 'toggle_off'); toast(want === 'on' ? T('ct_la_on_toast', 'Compiling the camera app in the background') : T('ct_la_off_toast', 'Returning the camera app to the Android default'), want === 'on' ? 'good' : 'perf'); }
+  else if (f.state === 'busy') toast(T('ct_la_busy', 'A compilation is already running'), 'perf');
+  else if (f.state === 'no_camera') toast(T('ct_la_no_camera', 'no camera app answers the camera intent'), 'err');
+  else toast(T('ct_failed', 'The change did not go through'), 'err');
+  _ctPoll = 0;
+  setTimeout(function () { ctLoad(false); }, 1200);
+}
+async function ctLaunchMeasure() {
+  if (_ctBusy) return;
+  uiSound('capture');
+  const note = _el('ctLaNote'); if (note) note.textContent = T('ct_la_measuring', 'Opening the camera cold - come back here afterwards');
+  const p = await ctCommand('launch measure');
+  const f = p.other.measure || {};
+  let msg;
+  if (f.state === 'done') msg = bfxT('ct_la_measured', 'Cold start: {ms} ms ({filter})', { ms: ctSafe(f.ms, 8), filter: ctSafe(f.filter, 20) });
+  else if (f.state === 'busy') msg = T('ct_la_busy', 'A compilation is already running');
+  else if (f.state === 'no_camera') msg = T('ct_la_no_camera', 'no camera app answers the camera intent');
+  else msg = T('ct_la_measure_failed', 'Android did not report a launch time');
+  if (note) note.textContent = msg;
+  toast(msg, f.state === 'done' ? 'good' : 'err');
+  ctLoad(false);
+}
+function ctCard(id, icon, title, desc, chipId, rowsId) {
+  const card = bfxEl('div', 'cfg-row bfx-card camtools-card'); card.id = id;
+  const head = bfxEl('div', 'bfx-head');
+  const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon(icon); head.appendChild(em);
+  const titles = bfxEl('div', 'bfx-titles');
+  titles.appendChild(bfxEl('div', 'bfx-title', title));
+  const chip = bfxEl('span', 'bfx-chip is-off', T('junk_scan', 'Scanning…')); chip.id = chipId; titles.appendChild(chip);
+  head.appendChild(titles); card.appendChild(head);
+  card.appendChild(bfxEl('div', 'bfx-desc', desc));
+  const rows = bfxEl('div', 'junk-cats'); rows.id = rowsId; card.appendChild(rows);
+  return card;
+}
+function ctSwitchRow(card, id, title, note, onToggle) {
+  const auto = bfxEl('div', 'soter-auto');
+  const txt = bfxEl('div', 'soter-auto-text');
+  txt.appendChild(bfxEl('div', 'soter-auto-title', title));
+  txt.appendChild(bfxEl('div', 'soter-auto-note', note));
+  auto.appendChild(txt);
+  const sw = bfxEl('div', 'cfg-switch'); sw.id = id;
+  sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', 'false'); sw.setAttribute('aria-disabled', 'true');
+  sw.onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); onToggle(); };
+  auto.appendChild(sw);
+  card.appendChild(auto);
+}
+function ctButton(actions, id, cls, label, fn) {
+  const b = bfxEl('button', 'bfx-btn ' + cls, label);
+  b.type = 'button'; b.id = id; b.disabled = true; b.onclick = fn; actions.appendChild(b);
+  return b;
+}
+function cfgRenderCameraToolsCards(list) {
+  const wc = ctCard('ctWcCard', 'webcam', T('ct_wc_title', 'USB Webcam'),
+    T('ct_wc_desc', 'Turns the phone into a standard USB webcam for a computer, through Android’s own webcam service and the kernel’s UVC gadget driver. Connect the cable, then choose Webcam in the USB settings or press Start here. It works only when the ROM includes that service and its USB driver accepts the webcam function - this card checks each part. Experimental.'),
+    'ctWcChip', 'ctWcRows');
+  ctSwitchRow(wc, 'ctWcSwitch', T('ct_wc_switch', 'USB webcam mode'),
+    T('ct_wc_switch_note', 'Sets Android’s webcam switch at every boot and prepares the webcam function; takes effect after one reboot. Off returns everything to the ROM’s state after a reboot.'), ctWebcamToggle);
+  const wa = bfxEl('div', 'bfx-actions');
+  ctButton(wa, 'ctWcStart', 'bfx-primary', T('ct_wc_start', 'Start webcam'), ctWebcamStart);
+  ctButton(wa, 'ctWcStop', 'bfx-secondary', T('ct_wc_stop', 'Stop'), ctWebcamStop);
+  const wr = ctButton(wa, 'ctWcRefresh', 'bfx-secondary', T('soter_refresh', 'Check again'), function () { ctLoad(true); });
+  wr.disabled = false;
+  wc.appendChild(wa);
+  const wn = bfxEl('div', 'bfx-note'); wn.id = 'ctWcNote'; wc.appendChild(wn);
+  list.appendChild(wc);
+  const la = ctCard('ctLaCard', 'camera_launch', T('ct_la_title', 'Fast Camera Start'),
+    T('ct_la_desc', 'Compiles the camera app completely ahead of time (ART speed mode instead of Android’s profile-guided default), so its code is not interpreted or compiled while it starts. It costs extra storage, often 100-300 MB, and a minute or two of compiling. Measure closes the camera and opens it cold, recording Android’s launch time - measure before and after to see what it changes on this phone. After an app update ASB compiles again about ten minutes after boot.'),
+    'ctLaChip', 'ctLaRows');
+  ctSwitchRow(la, 'ctLaSwitch', T('ct_la_switch', 'Keep the camera app fully compiled'),
+    T('ct_la_switch_note', 'Off returns the camera app to Android’s default compilation.'), ctLaunchToggle);
+  const lb = bfxEl('div', 'bfx-actions');
+  ctButton(lb, 'ctLaMeasure', 'bfx-primary', T('ct_la_measure', 'Measure launch'), ctLaunchMeasure);
+  const lr = ctButton(lb, 'ctLaRefresh', 'bfx-secondary', T('soter_refresh', 'Check again'), function () { ctLoad(true); });
+  lr.disabled = false;
+  la.appendChild(lb);
+  const ln = bfxEl('div', 'bfx-note'); ln.id = 'ctLaNote'; la.appendChild(ln);
+  list.appendChild(la);
+  ctLoad(false);
 }
 
 // null = the hub is showing; a group id = that group's screen is.
@@ -17087,7 +17370,7 @@ const DEVICE_KERNEL_FEATURE_ORDER = [
   'bbr_v1', 'bbr_v2', 'bbr_v3',
   'net_sch_cake', 'net_sch_cake_config', 'net_sch_cake_module',
   'net_sch_cake_symbols', 'net_sch_cake_qdisc', 'net_sch_cake_evidence',
-  'wireguard', 'vpn_hide', 'ip_set', 'cifs', 'usb_arsenal', 'oplus_sdp_900ma',
+  'wireguard', 'vpn_hide', 'ip_set', 'cifs', 'usb_arsenal', 'usb_webcam_uvc', 'usb_webcam_service', 'oplus_sdp_900ma',
   'lto', 'tmpfs_xattr_posix_acl', 'unicode_bypass_fix', 'unicode_bypass_evidence',
   'droidspaces', 'ntsync', 'overlayfs',
   'sched_stats', 'sched_stats_config', 'sched_stats_node',
