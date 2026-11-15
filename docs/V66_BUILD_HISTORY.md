@@ -4,6 +4,67 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev63 - WebUI scheduling, bounded kernel evidence and benchmark isolation
+
+Input: the owner's dev62 source, the V66 WebUI acceleration audit and the phone log/archive
+set. Ten requested items were implemented at source level; the existing config registry,
+first-frame queue, batch bridge, event-driven LTPO watcher, kernel-bound writer and Safe mode
+remain the owners of their respective operations. No persistent polling worker was added.
+
+- **WebUI work and page lifecycle:** fitting/navigation paints share one animation-frame
+  queue. Three slow visible frames select the reduced-effects presentation, which keeps
+  colours, selected states and feedback but drops expensive blur/decorative perpetual motion.
+  The existing batch bridge has an explicit opt-in TTL (`part[2]`, bounded to seven days),
+  keyed by both part and command; two-element calls still execute and failed reads are not
+  cached. Monitor uses one locked schedule with 3/5/8/12-second backoff only after unchanged
+  complete successful snapshots. Hidden pages clear their timers; visibility restoration,
+  stale-page sequence checks and one fresh follow-up paint remain covered by runtime tests.
+- **BORE:** Device diagnostics reports `CONFIG_SCHED_BORE`, the fixed
+  `/proc/sys/kernel/sched_bore` node and write access as different evidence classes. The
+  `kernel_bore=stock|off|on` control accepts only 0/1, records a kernel-bound baseline,
+  validates and reads back every write and restores the exact baseline. Stock is the shipped
+  default, so upgrading does not change scheduler policy. A KRILIKD installation log alone
+  is not treated as a runtime interface.
+- **LTPO idle descent:** `ltpo_idle_speed=fast|balanced|gentle` maps to 1 s/1 s, 2 s/1 s and
+  5 s/3 s initial/step delays in the existing blocking input watcher. It still descends only
+  through advertised Android modes, restores the panel maximum on touch and preserves camera,
+  game and external-owner guards. No synthetic `peak_refresh_rate=1.0`, static table from
+  another panel or new polling worker was introduced; below the Android floor, descent toward
+  1 Hz remains panel/ADFR-dependent.
+- **Battery Fix and ART:** same-boot monotonic evidence rebuilds an invalid/missing RTC
+  `done_at`, while a timestamp already close to that evidence is retained. A PackageManager
+  Binder `Failed transaction` now tries the bounded `pm compile -m speed-profile -f` fallback
+  and retains the original diagnostic if that also fails. One failed transaction is not
+  reported as proof that every package rejected compilation.
+- **SOTER:** a successful manual repair in the current boot suppresses a duplicate delayed
+  automatic clear; switching automatic repair off during the settle is honoured. Completion
+  records boot ID and uptime. The notification now says that server data were cleared and app
+  functionality was not tested, rather than claiming that the service or payments work.
+- **Monitor semantics:** the foreground app's class and whole-system PSI/CPU/GPU pressure are
+  labelled as separate metrics before the detailed note, so a light foreground app no longer
+  contradicts the system load bar.
+- **Profiles and benchmark evidence:** a benchmark-intent session skips the per-profile
+  memory update. Smart still normalizes to the Balanced store, but an AnTuTu Smart →
+  Performance run can no longer teach that shared store. Battery was not relabelled from that
+  evidence. In the FSM, saturated GPU load with quiet CPU reaches MODERATE before the
+  LIGHT_IDLE shortcut; thermal exits and the existing GPU-bound latch remain downstream.
+  SUSTAINED/HEAVY/MODERATE/LIGHT_IDLE thresholds, thermal ownership and Safe mode were not
+  replaced with benchmark-specific static tables.
+- **Zygisk provider identity:** the read-only collector recognizes NyaZygisk, NeoZygisk,
+  BreZygisk, ReZygisk and Zygisk Next from bounded `module.prop` name/version metadata and
+  disable/remove markers. Multiple enabled providers are a conflict, inactive ambiguity stays
+  unknown, and module metadata is explicitly not proof of activity inside running Zygote
+  processes. Values continue to reach the page through `textContent`.
+- **Localization and package contracts:** BORE, LTPO, ART, Monitor and provider strings are
+  complete in all 13 locales. The two new Config cards have unique SVG icons; the ownership
+  registry is synchronized at 237 keys / 105 cards.
+- **Verification:** the affected runtime fixtures were repaired without hiding production
+  stderr or deleting assertions. The complete WebUI suite passed 131/131. The full source-only
+  host regression with `ASB_DSP_REFERENCE_OPTIONAL=1` passed all 549 PASS lines with zero
+  failed commands and zero `I/O error`. The optional reference DSP `.so` files remain absent;
+  no replacement binaries were invented. These are host results, not physical ColorOS WebView,
+  KRILIKD BORE, 1 Hz panel, SOTER payment or new AnTuTu validation.
+
 ## V66 dev62 - Liquid Glass retuned to the ColorOS 17 references (fix351)
 
 Input: the dev61 source and three ColorOS 17 screenshots (the media platter, the stopwatch
