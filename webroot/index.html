@@ -3695,6 +3695,23 @@ html[data-asb-theme="light"] .junk-cat.is-warn .junk-cat-meta { color:#8a5a00; }
 /* Settings → Kernel: compact evidence and an exact-name editor. All device strings enter
  * through textContent in the renderer; these styles only provide the layout. */
 .kernel-card { display:block; padding:14px; }
+.kernel-more { display:inline-flex; align-items:center; gap:6px; margin:8px 0 2px; padding:5px 11px; border-radius:99px; cursor:pointer;
+  border:1px solid color-mix(in srgb,var(--cat,#8a8f98) 42%,var(--border)); background:color-mix(in srgb,var(--cat,#8a8f98) 6%,transparent);
+  color:var(--cat-ink,var(--cat,var(--text-secondary))); font:650 11.5px/1.2 var(--sans); }
+.kernel-more::after { content:"\25BE"; font-size:10px; transition:transform .2s ease; }
+.kernel-more[aria-expanded="true"]::after { transform:rotate(180deg); }
+.kernel-more:active { transform:scale(.96); }
+.kernel-more-body { margin-top:4px; }
+.kernel-more-body[hidden] { display:none; }
+.bfx-btn { transition:transform .12s ease, opacity .15s ease; }
+.bfx-btn:active:not(:disabled) { transform:scale(.97); }
+.bfx-btn.is-busy { opacity:.72; cursor:progress; }
+.bfx-card.cfg-row.cat-camera .bfx-emblem { --tech-icon:var(--cat); color:var(--cat); background:color-mix(in srgb,var(--cat) 12%,transparent); border-color:color-mix(in srgb,var(--cat) 34%,transparent); }
+.bfx-card.cfg-row.cat-camera .bfx-primary:not(:disabled) { color:#06121f; border-color:color-mix(in srgb,var(--cat) 70%,#fff);
+  background:linear-gradient(135deg,color-mix(in srgb,var(--cat) 80%,#fff),var(--cat)); box-shadow:0 4px 14px color-mix(in srgb,var(--cat) 22%,transparent); }
+.bfx-card.cfg-row.cat-camera .bfx-secondary:not(:disabled) { color:var(--cat); border-color:color-mix(in srgb,var(--cat) 48%,var(--border)); background:color-mix(in srgb,var(--cat) 7%,transparent); }
+.bfx-card.cfg-row.cat-camera .bfx-chip.is-ready, .bfx-card.cfg-row.cat-camera .bfx-chip.is-ok { color:var(--cat); background:color-mix(in srgb,var(--cat) 14%,transparent); border-color:color-mix(in srgb,var(--cat) 44%,transparent); }
+html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disabled) { color:#fff; }
 .kernel-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
 .kernel-card-title { color:var(--text); font:700 14px/1.3 var(--sans); }
 .kernel-card-sub { margin-top:4px; color:var(--text-secondary); font-size:11.5px; line-height:1.4; }
@@ -9735,7 +9752,7 @@ const CFG_ITEMS = [
   { key:'bt_link_stability', type:'seg', def:'stock', stock:'stock', opts:['stock','stable'], name:'Bluetooth Link Stability',
     desc:'Optional workaround for Bluetooth audio dropouts during playback. Stable suppresses Wi-Fi scanning while audio plays, which can help on devices where the two radios interfere. New networks may appear more slowly. No codec is forced and pairing is unchanged. Leave this off if your connection is already stable.' },
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
-    desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. Auto is the hands-off setting: ASB writes nothing and whatever the ROM chose stays. On actively writes hardware encoding (usually also what the phone ships with, but ASB sets it rather than leaving it). Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
+    desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU.\n\n🔋 Battery life: Auto or On\n🎛️ Bluetooth equaliser apps: Off\n✋ Not sure: Auto' },
   { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['off','all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
     desc:'Choose which outputs ASB DSP may process: the built-in speaker, wired headphones/USB DACs, or Bluetooth. Unavailable outputs are ignored. Off bypasses the whole DSP while preserving every level for later. Bluetooth processing can move playback away from hardware offload and increase screen-off CPU use; exclude Bluetooth if long listening sessions matter more than the effect.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
@@ -9772,80 +9789,80 @@ const CFG_ITEMS = [
   { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:10, step:1, name:'Macro & Low-light Sharpening',
     desc:'Controls separate sharpening scales for macro and low-light processing. 0 follows Camera Grade; higher values add a progressively stronger correction, with 10 targeting 3.2× before firmware limits. Close subjects and high ISO can make halos more visible. Raise this only when those modes are genuinely soft. Reboot to apply.' },
   { key:'camera_hold_enable', type:'bool', def:'1', name:'Hold Performance While Camera Runs',
-    desc:'While the camera is actively streaming, the governor keeps the current CPU ceiling and cores instead of lowering them. This can reduce performance dips during bursts or video, but uses more power while the camera remains open. On preserves the hold; Off lets normal governor rules apply. Thermal and vendor safety limits remain authoritative.' },
+    desc:'While the camera is streaming, the governor keeps the CPU ceiling and cores instead of lowering them. Thermal and vendor limits still apply.\n\n🔋 Battery life: Off\n⚡ Performance: On\n✋ Not sure: On' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
-    desc:'Master switch for profile-managed interface timing. Performance shortens animations and long-press/multi-tap windows; Battery keeps stock timing. Off leaves these values under ROM control. Use Animation Speed below for a fixed animation scale independent of the power profile.' },
+    desc:'Lets the power profile manage interface timing: Performance shortens animations and the long-press and multi-tap windows, Battery keeps stock timing.\n\n🔋 Battery life: no effect\n⚡ Feels faster: On\n✋ Not sure: Off' },
   { key:'anim_speed', type:'range', def:'-1', min:-1, max:8, step:1, stock:'-1', name:'Animation Speed',
-    desc:'Sets a fixed Android animation scale. −1 lets the power profile manage animations; 0 is the Android default, negative values are faster, positive values are slower, and the far-left setting disables animations. It applies to subsequent transitions. Very short or disabled animations can make transitions harder to follow but do not increase an app\'s actual processing speed.' },
+    desc:'A fixed Android animation speed. By profile lets the power profile choose; to the left is faster, to the right slower, the far left turns animations off. Shorter animations make the phone feel quicker but do not make apps process faster.\n\n🔋 Battery life: By profile\n⚡ Feels faster: Faster or Fastest\n✋ Not sure: By profile' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Fallback for ROMs that ignore live animation-scale changes. When enabled, a manual profile switch also restarts SystemUI: the screen may blink, the lock screen may return, and overlays from other modules can be torn down. It does not run on every automatic profile change. Leave this off unless you have confirmed that ordinary scale changes do not apply.' },
   // --- Display ---,
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
-    desc:'Disables system window blur in areas such as the shade, notifications, volume panel and transitions. This can reduce GPU work, but replaces translucent backgrounds with solid ones; heads-up notification text may be harder to read over some content. The setting is global rather than per panel. Window blur changes live; compositor blur may require a reboot.' },
+    desc:'Turns off window blur in the shade, notifications, the volume panel and transitions; backgrounds become solid.\n\n🔋 Battery life: On\n⚡ Performance: On\n✋ Not sure: Off' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
-    desc:'Normal keeps the device\'s full transition and Recents effects. Simplified reduces visual effects and may lower GPU use, but Recents becomes a plain list and OxygenOS removes the Cards/Simple selector. Restore Normal and reboot to recover it. The simplified option is exposed only on the OnePlus 15 because its behaviour on other models has not been validated.' },
+    desc:'How rich system transitions and the Recents effects are.\n\n🔋 Battery life: Simplified\n⚡ Performance: Simplified\n✋ Not sure: Auto' },
   // ---- Network ----------------------------------------------------------------,
   // The explicit radio master belongs first: every ASB modem/handover choice below depends on it.
   { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls',
     desc:'Independent master for ASB modem controls. OFF is the default: choosing any power profile leaves Android’s mobile-data context and TCP keepalive settings untouched. This is the recommended setting on WiFi-only or no-SIM devices. Turn it on only if this phone uses a SIM/eSIM and you deliberately want ASB’s separate radio options below. Turning it off immediately restores the Android values recorded before ASB changed them; it never changes airplane mode, carrier selection, roaming, preferred network type, Bluetooth or audio.' },
   { key:'night_modem_idle', type:'bool', def:'0', name:'Quiet Radio at Night',
-    desc:'During the learned sleep window, extends cellular keepalive intervals and gates selected rmnet data-path wakeups so the modem path can stay idle longer. Push notifications and app sync may wait until a later wake. Calls and SMS use separate modem paths; ASB does not change radio power, airplane mode, roaming or network selection. Changes are recorded and restored when disabled or uninstalled.' },
+    desc:'In the learned night window, stretches mobile keepalives and quiets part of the modem data path so the modem can stay idle longer. Calls and SMS are not affected.\n\n🔋 Battery life: On\n🔔 Notifications on time: Off\n✋ Not sure: Off' },
   { key:'net_screen_off_lte', type:'bool', def:'0', name:'LTE While Screen Off',
-    desc:'After the screen has been off for 90 seconds, prefers LTE instead of keeping 5G NSA active; the previous setting returns when the screen turns on. Calls and sufficiently heavy transfers are excluded, and a recent transfer can keep 5G for at least 10 minutes. Off by default because changing allowed network types can briefly re-register mobile data. If the ROM rejects the change, ASB restores the previous value and stops retrying.' },
+    desc:'90 seconds after the screen goes off the phone prefers LTE instead of keeping 5G active; 5G returns when the screen turns on. Calls and heavy transfers keep 5G.\n\n🔋 Battery life: On\n📶 Fastest mobile data: Off\n✋ Not sure: Off' },
   { key:'net_lte_light', type:'bool', def:'0', name:'5G Only When Needed',
-    desc:'With the screen on, switches from 5G NSA to LTE after three minutes of light mobile traffic below 2 Mbit/s. Sustained traffic above the implemented thresholds restores 5G and holds it for 10 minutes. ASB does not switch during calls, tethering, games or Wi-Fi use. Off by default: every network-type change can briefly re-register mobile data, and actual power use depends on the modem and signal.' },
+    desc:'With the screen on, switches from 5G to LTE after three minutes of light traffic below 2 Mbit/s and back to 5G for heavy traffic. Not during calls, tethering, games or Wi-Fi.\n\n🔋 Battery life: On\n📶 Fastest mobile data: Off\n✋ Not sure: Off' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
-    desc:'How the phone ramps up when downloading - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, Ethernet. WiFi and mobile take their own values from the cards below. Stock is what the device shipped with. bbr paces to the real measured speed, cubic is the classic. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
+    desc:'How downloads ramp up on links the Wi-Fi and mobile cards do not cover: USB and Bluetooth tethering, VPN, Ethernet.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: Stock' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
-    desc:'Download ramp for WiFi only. As global takes the value from the card above. A separate value is worth it when WiFi and mobile want different answers - they run at the same time and do not interfere.' },
+    desc:'Download ramp for Wi-Fi only.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: As global' },
   { key:'net_congestion_mobile', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 mobile',
-    desc:'Selects the TCP congestion-control algorithm for mobile data only. As Global follows the general Download Ramp card. Stock leaves the device value unchanged. BBR and CUBIC respond differently to loss and delay; neither is universally faster, and the better choice depends on the carrier and radio conditions. The card reports an unsupported algorithm instead of claiming it was applied.' },
+    desc:'Download ramp for mobile data only. bbr often helps on mobile links with loss and changing delay.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: As global' },
   { key:'net_qdisc', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 other links',
-    desc:'Controls packet queuing on links not covered by the Wi-Fi and mobile cards, including USB/Bluetooth tethering, VPN and Ethernet. Stock preserves the device configuration. fq_codel can reduce latency under load, fq pairs with flow pacing, and cake offers more queue management at extra CPU cost. Results depend on the link; no option guarantees higher throughput or stutter-free video.' },
+    desc:'How packets queue on links the Wi-Fi and mobile cards do not cover.\n\n🔋 Battery life: no measurable difference\n⚡ Low latency: fq_codel\n✋ Not sure: Stock' },
   { key:'net_qdisc_wifi', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 WiFi',
-    desc:'Queue discipline for WiFi only. As global takes the value from the card above. Independent of mobile data.' },
+    desc:'Packet queue for Wi-Fi only.\n\n🔋 Battery life: no measurable difference\n⚡ Low latency: fq_codel\n✋ Not sure: As global' },
   { key:'net_qdisc_mobile', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 mobile',
-    desc:'Queue discipline for mobile data only. As global takes the value from the card above. Independent of WiFi - both links can differ at the same time.' },
+    desc:'Packet queue for mobile data only.\n\n🔋 Battery life: no measurable difference\n⚡ Low latency: fq_codel\n✋ Not sure: As global' },
   { key:'net_rps', type:'seg', def:'stock', stock:'stock', opts:['stock','little','all'], name:'Spread Network Load',
-    desc:'Chooses which CPU cores may receive packets for Wi-Fi interfaces. Stock leaves the kernel and driver configuration untouched. Little uses the efficiency cluster; All allows every core. Spreading work can help on fast links but wakes more CPUs and may cost power on light traffic. Mobile-data receive distribution is left to the device. Actual gains depend on the driver and link.' },
+    desc:'Which CPU cores may process received Wi-Fi packets.\n\n🔋 Battery life: Stock or Little\n⚡ Performance: All\n✋ Not sure: Stock' },
   { key:'net_txqueue', type:'seg', def:'stock', stock:'stock', opts:['stock','short','shorter'], name:'Transmit Queue',
-    desc:'Sets how many packets may wait in the Wi-Fi transmit queue. Stock keeps the driver value; Short uses 256 and Shorter uses 128. Smaller queues can reduce delay under load, but may limit throughput or increase loss on fast or variable links. If uploads, streaming or latency become worse, return to Stock.' },
+    desc:'How many packets may wait in the Wi-Fi transmit queue. Shorter queues can cut delay under load but may limit throughput on fast or unstable links.\n\n🔋 Battery life: no difference\n⚡ Low latency (games, calls): Short\n✋ Not sure: Stock' },
   { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
-    desc:'Adjusts the initial TCP burst size for routes. Smart chooses from measured link conditions and leaves weak links closer to the factory value; Moderate is conservative, while Aggressive selects a larger class and can increase retransmissions on poor links. Stock restores the previous route values. This changes connection ramp-up, not the maximum speed of the radio or service.' },
+    desc:'The size of the first burst of a new TCP connection. A larger burst speeds up page loads and short downloads; on poor links it can cause retransmissions.\n\n🔋 Battery life: Smart\n⚡ Performance: Aggressive\n✋ Not sure: Smart' },
   { key:'net_mtu_probing', type:'seg', def:'stock', stock:'stock', opts:['stock','on'], name:'TCP MTU Recovery',
     desc:'Recovery for mobile or VPN routes that silently discard packets when path MTU discovery is blocked. On enables the kernel\'s black-hole-only probe (tcp_mtu_probing=1): healthy routes keep their normal MSS, while a suspected black hole can recover instead of stalling. It is not a general speed boost. Stock restores the exact 0, 1 or 2 value the device had before ASB; uninstall does the same.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
     desc:'Selects the Wi-Fi regulatory domain, which controls the channels and transmit rules the driver may use. Stock keeps the value supplied by the device. CR explicitly selects the Costa Rica domain; it is not a universal speed setting, and availability still depends on the ROM, access point and hardware. Use only channels and power levels permitted in your actual location.' },
   { key:'wifi_scan_throttle', type:'range', def:'2', min:0, max:5, step:1,
-    name:'WiFi Scan Rate', desc:'Controls how often ASB allows background Wi-Fi scanning. Less frequent scanning can reduce radio activity when you stay in one place, but known and new networks may be discovered later. This does not change the active connection\'s data rate. Choose Unthrottled to leave scanning unrestricted; the option descriptions below show each interval.', cat:'net' },
-  { key:'net_wifi_leave', type:'seg', desc:'Helps move away from a connected Wi-Fi network that has a weak signal or carries no usable traffic. Higher levels act sooner. With the screen on, ASB turns Wi-Fi off briefly and back on; repeated failures lengthen the pause from 30 seconds up to five minutes. This can interrupt active Wi-Fi sessions and may cause mobile-data use. It works independently of Cellular controls.', def:'off', stock:'off',
+    name:'WiFi Scan Rate', desc:'How often ASB allows background Wi-Fi scans. Fewer scans mean less radio work while you stay in one place, but networks are found later. The active connection\'s speed does not change.\n\n🔋 Battery life: every 10 or 30 minutes\n📶 Finding networks quickly: unthrottled\n✋ Not sure: every 5 minutes', cat:'net' },
+  { key:'net_wifi_leave', type:'seg', desc:'Helps the phone leave a Wi-Fi network that is too weak or carries no traffic, by turning Wi-Fi off and on briefly while the screen is on.\n\n🔋 Battery life: Weak signal\n📶 Uninterrupted Wi-Fi: Off\n✋ Not sure: Off', def:'off', stock:'off',
     opts:['off','weak','unusable','aggressive'], name:'Leave Bad Wi-Fi',
     cat:'net' },
-  { key:'wifi_powersave', type:'seg', desc:'Controls Wi-Fi power saving between packets. Screen Off enables it only while the display is off; Always also enables it during use. Lower radio activity can reduce power use but may add latency or affect games, casting and Wi-Fi calls. Off keeps the radio fully awake. Actual behaviour and savings depend on the driver and access point.', def:'off', stock:'off',
+  { key:'wifi_powersave', type:'seg', desc:'Wi-Fi power saving between packets: the radio dozes while no data flows.\n\n🔋 Battery life: Screen off or Always\n⚡ Performance: Off\n✋ Not sure: Screen off', def:'off', stock:'off',
     opts:['off','screen_off','always'], name:'WiFi Power Save', cat:'net' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
-    desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
+    desc:'Switches to the Battery profile when the charge gets low and back to your profile after charging.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: On' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
-    desc:'Nudges Smart toward battery saving. The value is a share of the remaining way from what Smart learned to pure Battery: 300 moves it 30% of that way, 600 moves it 60%. A learned 50% lean becomes 65% at 300 and 80% at 600 - at 400 and above Smart behaves almost like Battery during ordinary use. Halved during heavy work and games. 0 = off. Only affects Smart.' },
+    desc:'Nudges Smart toward Battery: 300 moves it 30 % of the remaining way from what it learned to Battery, 600 moves it 60 %. From about 400 Smart behaves almost like Battery in ordinary use. Halved during heavy work and games.\n\n🔋 Battery life: 300-400\n⚡ Performance: 0\n✋ Not sure: 0' },
   { key:'heavy_prime_escape', type:'bool', def:'1', stock:'1', name:'Prime Core Lift',
-    desc:'Smart only. When work - heavy or everyday scrolling - keeps the prime cores pinned at their ceiling on a cool phone, ASB briefly lifts that ceiling - never above what Balanced allows for the same load - and then rests. Off keeps the prime cores at Smart\u2019s ceiling all the time: a little cooler and more frugal, but long heavy tasks (installs, exports, big pages) take longer, and work that takes longer keeps the whole chip awake longer too. The lift already stops on its own when the phone is warm.' },
+    desc:'Smart only. When work keeps the prime cores at their ceiling on a cool phone, ASB lifts that ceiling briefly, never above Balanced, and then rests.\n\n🔋 Battery life: Off\n⚡ Performance: On\n✋ Not sure: On' },
   { key:'prime_escape_burst_s', type:'range', def:'20', stock:'20', min:5, max:60, step:5, name:'Prime Lift Length',
-    desc:'How long one prime-core lift may last, in seconds. Longer lets a long heavy task finish sooner; shorter keeps heat and drain down. 20 is the default. Used only while Prime Core Lift is on.' },
+    desc:'How long one prime-core lift may last, in seconds. Used only while Prime Core Lift is on.\n\n🔋 Battery life: 10\n⚡ Performance: 30-40\n✋ Not sure: 20' },
   { key:'prime_escape_rest_s', type:'range', def:'40', stock:'40', min:10, max:300, step:10, name:'Pause Between Lifts',
-    desc:'How long ASB waits after a lift before another one may start, in seconds. Longer = cooler and more economical under sustained heavy work; shorter = snappier. 40 is the default. Used only while Prime Core Lift is on.' },
+    desc:'How long ASB waits after a lift before the next one may start, in seconds. Used only while Prime Core Lift is on.\n\n🔋 Battery life: 90-120\n⚡ Performance: 20\n✋ Not sure: 40' },
   { key:'smart_lab', type:'bool', def:'1', stock:'0', name:'Smart Lab',
-    desc:'Smart tries more settings for itself, one at a time and side by side with the best one so far, and keeps a setting only when the battery measured it cheaper without the cores at their ceiling more often, more janky frames or faster warming. It tests "5G Only When Needed" against 5G allowed (only when that switch is on), the unlock lift against 15 points less, and its own lean for the three apps that cost the most with the screen on. A best setting whose cost climbs by 15 % is tested again at once. Smart profile only; results appear under What Smart learned.' },
+    desc:'Smart tests more settings itself, one at a time next to the best one so far, and keeps a setting only when it measured cheaper without more janky frames, more time at the ceiling or faster warming. Smart profile only.\n\n🔋 Battery life: On\n⚡ Performance: On (a setting that makes things worse is not kept)\n✋ Not sure: On' },
   { key:'smart_lab_mem', type:'bool', def:'1', stock:'0', name:'Smart Lab: Memory Bus',
-    desc:'Lets the lab also cap the CPU\'s votes on the memory bus: 75 % or 55 % of the bus maximum while the screen is calm (no touch for 10 seconds, nothing heavy, no camera), 50 % or the lowest step on quiet deep idle. Only the voters this kernel exposes are used; display, GPU, video and modem votes are never touched. Every write is read back and given back, and a value another component changed is left to it. A cap stays only if it measured cheaper.' },
+    desc:'Lets the lab also cap the CPU\'s votes on the memory bus while the screen is calm and in deep idle. Display, GPU, video and modem votes are never touched.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: On' },
   { key:'profile_class_auto', type:'bool', def:'1', stock:'0', name:'Profiles by Kind of Use',
-    desc:'Performance holds the CPU ceilings at 80 % of the maximum while a light app (messenger, settings, reader) runs at ordinary load; Battery lifts them to at least 70 % while a game runs, where its own are lower. App launches, heavy work, the camera, the unlock lift, a thermal cap and the cooldown are untouched.' },
+    desc:'Fits the profile to the kind of app: Performance holds CPU ceilings at 80 % for a light app at ordinary load, Battery lifts them to at least 70 % for a game. Launches, heavy work, the camera and thermal limits are untouched.\n\n🔋 Battery life: On\n⚡ Maximum speed everywhere: Off\n✋ Not sure: On' },
   { key:'smart_records_balanced', type:'bool', def:'1', stock:'0', name:'Balanced Uses Smart\'s Findings',
-    desc:'With the screen off on quiet deep idle, Balanced applies the screen-off CPU ceiling setting Smart measured as cheaper on this phone and kept through its check, when it is below Balanced\'s own. Nothing is tried or measured under Balanced; the ceilings are given back on wake and never raised.' },
+    desc:'In deep idle with the screen off, Balanced uses the screen-off CPU ceiling Smart measured as cheaper on this phone, when it is lower than Balanced\'s own. Nothing is tested under Balanced; ceilings are given back on wake.\n\n🔋 Battery life: On\n⚡ Performance: no effect with the screen on\n✋ Not sure: On' },
   { key:'smart_media_guard', type:'bool', def:'0', stock:'0', name:'Smart Media Guard',
-    desc:'An opt-in guard for a narrow case: a known video, feed or browser app stays in game-like CPU + GPU load for a full minute while you use it on battery. In Smart only, ASB then keeps the effective GPU ceiling at the same 70% media envelope already used for video. It never limits a known game, an unknown app, charging, thermal protection, CPU ceilings or frequency floors. Start with the 12-hour trial; if a high-refresh stream stutters, turn it back off.' },
+    desc:'Smart only, for one case: a known video, feed or browser app stays as heavy as a game for a full minute on battery. ASB then holds the GPU at the existing media limit; games, charging and thermal protection are never limited.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: Off' },
   // --- Power & battery ---,
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
-    desc:'While charging: more performance when cool, backs off when the battery heats up.' },
+    desc:'While charging, ASB allows more performance when the battery is cool and backs off as it warms up.\n\n🔋 Battery health: On\n⚡ Performance: On\n✋ Not sure: On' },
   { key:'night_charge_enable', type:'bool', def:'0', stock:'0', name:'Night Charge Limit',
     desc:'Optional charging control for the custom interval below. While a charger is connected inside that window, ASB asks a standard kernel interface to stop at 80%; at the end it restores the exact previous value so charging can continue toward 100%. Start is inclusive and end exclusive; windows may cross midnight, but equal endpoints are invalid. ASB never discharges a battery already above 80% and does not replace OEM Adaptive Charging. Off by default. If no supported writable interface exists, the badge says not exposed. Disable, window exit or uninstall restores only values still owned by ASB.' },
   { key:'night_charge_start', type:'time', def:'22:00', stock:'22:00', name:'Charge Limit Start',
@@ -9853,30 +9870,30 @@ const CFG_ITEMS = [
   { key:'night_charge_end', type:'time', def:'06:00', stock:'06:00', name:'Charge Limit End',
     desc:'Local time at which ASB restores the exact previous kernel value. Any HH:MM value is accepted, but it must differ from the start. An end earlier than the start makes the window cross midnight.' },
   { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','night','moderate','aggressive'], name:'Deep Sleep',
-    desc:'Controls how quickly Android enters Doze after the screen turns off. Stock keeps the ROM timing; Moderate targets five minutes and Aggressive two minutes, while Night applies only in the learned sleep window. Doze can defer background network, jobs and alarms until maintenance windows; high-priority push may still arrive. Use Stock if timely background activity matters more than earlier idle entry. Stock removes the ASB timing override.' },
+    desc:'How soon Android enters deep sleep (Doze) after the screen turns off. In Doze, background network, jobs and alarms wait for short maintenance windows; high-priority push still gets through.\n\n🔋 Battery life: Moderate or Aggressive\n🔔 Notifications on time: Stock\n✋ Not sure: Night only' },
   { key:'doze_trim_whitelist', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Doze Exemptions',
-    desc:'Controls Android\'s Doze exemptions separately from Doze timing. Trimming exemptions lets user-installed apps follow idle restrictions; protected system apps such as the dialer, SMS, clock and root manager are not removed. The app list lets you keep selected messengers, mail or VPN apps exempt. Changes are recorded and restored at level 0 or on uninstall. Trimming can delay notifications and background sync.' },
+    desc:'Some installed apps are allowed to ignore deep sleep. Trimming takes user-installed apps off that list; the dialer, SMS, clock, root manager and the apps you keep in the list below stay exempt.\n\n🔋 Battery life: Trim\n🔔 Notifications on time: Leave alone\n✋ Not sure: Leave alone' },
   { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
-    desc:'Chooses whether ASB acts on persistent app wakelocks; measurement and reporting remain available either way. When enabled, only eligible user-installed apps are considered after 45+ minutes of screen-off wakefulness with evidence that the phone is staying awake. In detail: only an app that held the CPU for 10+ minutes (or holds a long lock right now) and that Android does not count as used today can be moved to Android\'s restricted standby bucket. Kernel/system sources, critical apps, battery-optimization exemptions, mail, navigation and keyboards are excluded. Nothing is force-stopped; restrictions can delay background work or notifications. Leave Off to inspect reports without intervention.' },
+    desc:'What ASB does with apps that keep the phone awake with the screen off. Measuring and the reports work either way.\n\n🔋 Battery life: Act\n🔔 Notifications on time: Watch only\n✋ Not sure: Watch only' },
   { key:'wakelock_fitness', type:'seg', def:'protect', stock:'protect', opts:['protect','limit'], name:'Fitness Apps & Wakelocks',
-    desc:'By default, fitness and step-counter apps are protected from ASB wakelock intervention. Limit asks Android to ignore their wakelocks so they cannot keep the CPU awake by themselves. Watch and band companion apps are excluded. Step timelines, background workouts and sync can become incomplete even if hardware step counting continues. Protect or uninstall restores the recorded state. This setting works independently of Act on Wakelocks.' },
+    desc:'Fitness and step-counter apps often keep the CPU awake in the background.\n\n🔋 Battery life: Limit\n🏃 Complete step and workout records: Protect\n✋ Not sure: Protect' },
   { key:'gnss_trim', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Background GPS',
-    desc:'Limits background location use by eligible user-installed apps whose processes are cached while the screen is off. Such apps are reduced to coarse location and regain normal precision when opened. Navigation, fitness/route tracking, emergency, find-my and foreground apps are excluded. This can reduce location-related wakeups, but background features in an affected app may lose precise tracks or geofence accuracy.' },
+    desc:'Background apps get only coarse location while the screen is off and precise location again when opened. Navigation, fitness tracking, emergency and find-my apps are never trimmed.\n\n🔋 Battery life: Trim\n📍 Precise background tracks: Off\n✋ Not sure: Off' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
-    desc:'During a long screen-off stretch in the learned night window, the governor pauses its own nonessential periodic work so the device can remain idle. It does not silence apps, disable radios or guarantee a specific battery saving. Off keeps normal governor scheduling around the clock. Turn it off only if you need those governor updates during the night window.' },
+    desc:'During a long screen-off stretch in the learned night window, the governor pauses its own non-essential periodic work. Apps and radios are not touched.\n\n🔋 Battery life: On\n⚡ Performance: no effect\n✋ Not sure: On' },
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
-    desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
+    desc:'The temperature at which ASB starts holding performance back under long heavy load. The vendor\'s own thermal protection always stays active.\n\n🔋 Battery life / cooler phone: Manual with a lower temperature\n⚡ Performance: Smart\n✋ Not sure: Smart' },
   { key:'sustained_temp_enter', type:'range', def:'65', min:52, max:70, step:1, name:'Throttling Temperature',
-    desc:'Sets the CPU-zone temperature at which ASB begins limiting sustained performance in Manual mode. Lower values intervene earlier; higher values allow more heat before ASB backs off. The vendor\'s thermal limits remain active, and this slider is not a safety control. The default is 65 and the lower bound is 52 because some CPU zones read much hotter than the battery or shell. A threshold near or below the device\'s normal reading can cause constant throttling, longer work and more heat.' },
+    desc:'Manual mode only: the CPU temperature at which ASB starts limiting long heavy load. Lower means earlier and cooler but slower; higher means more speed and more heat. The vendor\'s limits stay in force.\n\n🔋 Battery life: 58-60\n⚡ Performance: 68-70\n✋ Not sure: 65' },
   { key:'perf_ceiling_pct', type:'range', def:'100', min:65, max:100, step:5, stock:'100', name:'Performance Ceiling',
-    desc:'Caps the peak CPU and GPU performance available to ASB as a percentage of the device maximum. It mainly limits demanding work; light tasks may never reach the cap. Lower values can reduce peaks and heat but can also lengthen tasks and keep components awake longer, so battery life does not automatically improve. 100 leaves ASB without this additional cap. Start near 85 if needed and compare heat, responsiveness and drain on your device.' },
+    desc:'Caps the highest CPU and GPU speed ASB allows, as a share of the device maximum. Light work rarely reaches the cap; heavy work becomes slower but cooler. A lower cap does not always save battery: slower work keeps the chip awake longer.\n\n🔋 Battery life: 85\n⚡ Performance: 100\n✋ Not sure: 100' },
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
-    desc:'Uses an earlier thermal response during games, around 40 °C, instead of waiting for higher sustained-load thresholds. This can reduce heat, but frame rate and frame-time stability may also fall depending on the game and device. Off leaves games under the normal profile and thermal policy; it does not disable vendor thermal protection.' },
+    desc:'In games ASB starts cooling down earlier, at about 40 °C, instead of waiting for the usual sustained-load threshold.\n\n🔋 Battery life / cooler phone: On\n⚡ Performance: Off\n✋ Not sure: On' },
   // --- Memory & UX ---,
   { key:'bat_suppress_gaming', type:'bool', def:'1', name:'No Game Mode on Battery Profile',
-    desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
+    desc:'In the Battery profile a game counts as ordinary heavy load instead of switching to the gaming state with its higher limits. Other profiles are not affected.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: On' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['off','safe','aggressive'], name:'Background Trim Level',
-    desc:'Controls how strongly ASB restricts background apps. Off leaves Android in charge and restores buckets changed by ASB. Safe adjusts standby buckets for apps that Android reports as unused, with critical apps protected. Aggressive adds stronger background and memory limits; apps may wake less often, lose state or deliver notifications late. Disruptive package or vendor-service actions require a separate explicit opt-in and are not enabled by this level alone.' },
+    desc:'How strongly ASB holds back apps you are not using: rarely used apps go to stricter Android standby buckets. Calls, messages, alarms and the keyboard stay protected.\n\n🔋 Battery life: Aggressive\n🔔 Notifications on time: Off or Safe\n✋ Not sure: Safe' },
   { key:'mglru_mode', type:'seg', def:'smart', stock:'stock',
     opts:['stock','off','on','smart'], name:'MGLRU Mode', cat:'battery',
     desc:'How the kernel picks which memory to free when RAM runs low. MGLRU is the newer method: it is designed to keep the apps you use in memory more reliably and to need less CPU work for reclaiming.\n\n🔋 Battery life: Smart\n⚡ Performance: On\n✋ Not sure: Smart (the default)' },
@@ -9911,12 +9928,12 @@ const CFG_ITEMS = [
     opts:['stock','auto','0','128','256','512'], name:'Real-time Boost (Audio · Camera · Display)', cat:'system',
     desc:'The minimum CPU speed that real-time threads ask for: sound playback and recording, screen composition, some camera threads and interrupt handlers. A higher floor gives them a faster start, which may help against crackling sound or dropped frames when the CPU runs slow, but costs power whenever these threads run. 1024 means full speed, 0 means only as fast as the load needs. Snapdragon phones usually set 0 at boot; ASB\'s CPU limits per app group still apply on top.\n\n🔋 Battery life: 0 or Auto\n⚡ Performance: 256 or Auto\n✋ Not sure: Auto' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
-    desc:'Reduces selected Google Play services background activity without disabling Play services itself. Lite limits location reporting and search-widget background work. Strict also removes Play services from the Doze exemption list, which can delay push notifications, sync and other background jobs. Choose Lite or Stock if timely delivery is essential. Changed permissions and exemptions are recorded and restored when ASB is removed.' },
+    desc:'Reduces Google Play services background work without turning components off.\n\n🔋 Battery life: Strict\n🔔 Notifications on time: Stock or Light\n✋ Not sure: Light' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
-    desc:'Disables individual components inside Google Play services. This is not package freezing - GMS itself stays enabled, so push notifications, sign-in, payments and the Play Store keep working.\n\nsafe turns off telemetry, usage reporting, checkin and analytics. Nothing user-facing depends on them; the phone does not notice they are gone.\n\nmore adds ads personalisation and location history uploads. Ads still appear, they are just less targeted; Maps still works but Timeline stops recording where you have been.\n\nNever touched at any level: push delivery, module loading, account sign-in and payments - freezing those is how a battery module turns into a thread about missing notifications.\n\nEvery component\u2019s prior state is recorded. Setting this back to off, or uninstalling ASB, puts them back - except ones you had already disabled yourself, which stay that way.' },
+    desc:'Turns off single components inside Google Play services. Play services itself stays on, so push, sign-in, payments and the Play Store keep working. Each level includes the previous one.\n\n🔋 Battery life: More\n🧩 Every Google feature: Off\n✋ Not sure: Safe' },
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
-  { key:'athena_service', type:'seg', desc:'Controls OxygenOS\'s AthenaService background-app killer. Off disables only that component while leaving the rest of com.oplus.athena in place; this may help apps that the OEM kills despite Android battery exemptions. More apps remaining active can increase RAM use and background drain, and notification behaviour still depends on each app. Stock restores the component state recorded by ASB; uninstall also restores it.', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
+  { key:'athena_service', type:'seg', desc:'OxygenOS\'s own background-app killer.\n\n🔋 Battery life: Stock\n🔔 Apps stay alive, notifications on time: Off\n✋ Not sure: Stock', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'heytap_mcs', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'HeyTap MCS / OPPO Push',
     desc:'Off disables com.heytap.mcs without hiding or replacing any system files. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Enabling the card also requests one `pm compile -m speed-profile -a` after the next reboot, once boot is complete. That compilation can temporarily use CPU, storage and battery; it never runs on every boot. Stock restores only the MCS state ASB changed and cancels a compile that has not started. After the reboot it waits for the charger (Charging or Full), so the compilation does not heat or drain a phone in your hand; with no charger within 24 h it stays pending until the next boot.' },
   { key:'zygisk_enabled', type:'bool', def:'0', stock:'0', name:'ASB Zygisk',
@@ -9930,21 +9947,21 @@ const CFG_ITEMS = [
   { key:'documentsui_fix', type:'bool', def:'0', stock:'0', name:'DocumentsUI / DSU Picker Fix',
     desc:'A one-time repair for a missing or broken system file picker on affected ColorOS/DSU setups. It enables and unhides DocumentsUI, returns its picker and files activities to their default state, and disables com.coloros.filemanager for user 0. THE COST: the ColorOS File Manager disappears until you turn this fix off. Only states ASB actually changed are recorded and restored on Off or uninstall. Nothing is re-applied at boot, and this card does not request ART compilation.' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
-    desc:'Applies a patch prepared from the device\'s own oplus_vrr_config.json: it enables supported panel power-saving paths left off by the OEM and disables selected display telemetry. The stock file is not modified. If no suitable table or change is found, the switch does nothing and the status badge explains why. Applying the table requires a reboot.\n\nThe Android refresh range is also opened: ASB removes its floor, uses the highest reported panel mode, restores the maximum on touch and selects 60 Hz after two quiet seconds so panel adaptation can continue. Camera, game and video ownership are preserved, and previous range values are restored on handback. If the verified OnePlus15-165HZ-LTPO writer is present, ASB yields unless you explicitly give ASB priority. A same-target bind from another module always keeps ownership: ASB neither stacks over it nor removes it. Power savings and low-idle rates depend on the panel and ROM; neither is guaranteed.' },
+    desc:'Lets the panel drop its refresh rate when nothing moves (60 Hz after two quiet seconds) and return to its top rate on touch, using a patched copy of the device\'s own refresh table. Needs a reboot; the stock file is not changed.\n\n🔋 Battery life: On\n⚡ Smoothness: Off\n✋ Not sure: Off' },
   { key:'ltpo_peak_force', type:'bool', def:'0', stock:'0', name:'Panel Maximum on Touch',
-    desc:'Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports, past a ROM that keeps ordinary apps at 120 Hz. The ceiling is whatever the panel advertises - 165 Hz on the OnePlus 15; a rate the panel does not list in its mode table cannot be selected, so ASB never invents one. To make that top mode actually reachable, ASB also unlocks OnePlus\'s own extreme-refresh availability toggles; it never forces the panel high all the time, so the request is still released the moment the touch watcher goes idle and the panel\'s own frame drop comes back. The unlocked toggles and the refresh range are recorded and restored on Off or uninstall. Costs more power while you touch the screen. A ROM that refuses the request, or has no such toggles, is left alone and the badge says so.' },
+    desc:'Works with Force LTPO Refresh: while you touch the screen, asks for the highest mode the panel reports (165 Hz on the OnePlus 15) instead of the ROM\'s 120 Hz for ordinary apps.\n\n🔋 Battery life: Off\n⚡ Smoothness: On\n✋ Not sure: Off' },
   { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
-    desc:'During eligible video playback, limits the panel peak to the lowest reported mode that matches 30 or 60 fps content, such as 60 Hz for either rate. ASB acts only with the screen on, audio playing, a compatible video layer, no high-smoothness request and no touch for three seconds. Touch, playback end or screen-off restores the previous value; the first instant after touch can still use the lower rate. Other frame rates are left unchanged. Matching modes avoids unnecessary refreshes without changing the video\'s frame rate.' },
+    desc:'During video playback without touch, lowers the panel to the lowest mode that fits 30 or 60 fps content, such as 60 Hz. Touch, the end of playback or screen-off restores the previous rate.\n\n🔋 Battery life: On\n⚡ Smoothness: no effect on the video itself\n✋ Not sure: On' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
-    desc:'Controls Android\'s limit on app-created phantom processes outside the normal activity lifecycle. No Limit disables that protection so long terminal jobs, emulators and compiles can survive, but runaway apps can also consume more memory and CPU. Limit 32 explicitly restores Android\'s ceiling. Leave Alone preserves the current device value, which another tool may have changed. Restart the affected app because the limit is read when its process starts.' },
+    desc:'Android\'s limit on extra child processes that apps start outside their normal lifecycle: terminals, emulators, build tools. Restart the affected app after a change.\n\n🔋 Battery life: Limit 32\n⚡ Long background jobs: No limit\n✋ Not sure: No limit' },
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
     desc:'Typing and tap feedback, on its own scale. The OEM sets these separately from alerts - its slider writes 1500 for notifications and 1600 for touch - and the two wants are different: an alert should be felt through a pocket, keypress feedback should not be punishing to hold. auto follows the strength above. There is no duration control to offer: nothing in the system exposes one, and Android takes duration from each effect\u2019s own waveform.' },
   { key:'mmfeed_off', type:'bool', def:'0', stock:'0', name:'Multimedia Telemetry Off',
-    desc:'Uses the device\'s own Multimedia_Feedback_List.xml to disable the multimedia feedback collector\'s isOpen switch, then binds the patched copy over the stock path without modifying the original file. The patch is prepared during installation and applied only when this switch is on; a reboot is required. If the file is absent or already closed, the switch does nothing and the badge reports that state. This can reduce diagnostic logging and I/O, but battery savings are not guaranteed. Audio and video processing are not changed.' },
+    desc:'Closes the OEM multimedia feedback collector using a patched copy of the device\'s own list; the original file is not changed. Needs a reboot. Audio and video processing do not change.\n\n🔋 Battery life: On\n⚡ Performance: On\n✋ Not sure: Off' },
   { key:'log_level', type:'seg', def:'1', stock:'stock', opts:['stock','0','1','2','3'], name:'Log Detail',
-    desc:'Controls ASB log detail and, except in Stock, selected device logging. Stock leaves device logging untouched. 0 minimises device and module diagnostics, making later bug reports much less useful. 1 records normal significant events; 2 adds learner and screen-transition details useful for battery reports; 3 is verbose and grows quickly, so use it only while reproducing a problem. Returning from 0 restores the logging state recorded by ASB.' },
+    desc:'How much ASB and selected device logs record.\n\n🔋 Battery life: Normal\n🔍 Problem reports: Detailed\n✋ Not sure: Normal' },
   { key:'lsposed_verbose', type:'seg', def:'keep', stock:'keep', opts:['keep','off'], name:'LSPosed Verbose Log',
     desc:'Keep leaves LSPosed settings and logs under LSPosed\'s control. Off changes LSPosed\'s own Verbose log setting, removes old verbose-log files and takes effect after LSPosed restarts or the phone reboots. The modules log - what the LSPosed modules themselves write - has no switch in LSPosed, so while Off is selected ASB also clears it periodically. This can remove evidence needed to debug another module. If you later enable verbose logging in LSPosed, ASB does not reverse that choice; Keep restores ownership without secretly managing LSPosed.' },
 ];
@@ -10076,7 +10093,7 @@ function grpName(g) {
 
 const CFG_GROUP_DESC = {
   audio: 'DSP, volume, Bluetooth',
-  camera: 'Presets, processing, detail',
+  camera: 'Processing, webcam, fast start',
   iface: 'Animations, blur',
   net: 'Wi-Fi, LTE, queues',
   battery: 'Smart, Doze, heat, RAM',
@@ -10664,7 +10681,7 @@ function soterPaint(parsed) {
 function soterBootText(f) {
   const st = f.boot_state || 'none', res = f.boot_result || 'none';
   if (st === 'waiting') return T('soter_boot_waiting', 'waiting for the first unlock');
-  if (st === 'unlocked') return T('soter_boot_unlocked', 'phone unlocked - the repair starts in about a minute');
+  if (st === 'unlocked') return T('soter_boot_unlocked', 'phone unlocked - the repair starts about ten minutes later');
   if (st === 'skipped') return res === 'no_boot' ? T('soter_boot_no_boot', 'skipped - Android did not finish booting') : T('soter_boot_no_unlock', 'skipped - the phone was not unlocked within 6 hours');
   if (st !== 'done') return T('soter_boot_none', 'has not started in this boot - it runs after the next reboot');
   const t = parseInt(f.boot_time, 10), u = parseInt(f.boot_unlock, 10);
@@ -10735,7 +10752,7 @@ function cfgRenderSoterFixCard(list) {
   const auto = bfxEl('div', 'soter-auto');
   const autoText = bfxEl('div', 'soter-auto-text');
   autoText.appendChild(bfxEl('div', 'soter-auto-title', T('soter_auto', 'Repair automatically after every reboot')));
-  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair after each reboot, about a minute after you first unlock the phone (SOTER keys need the unlocked storage), and posts a notification when it has finished. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.')));
+  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair after each reboot, about ten minutes after you first unlock the phone: SOTER keys need the unlocked storage, and keys created in the first minutes after a reboot did not work on this phone while a repair made later did. A notification comes when it has finished. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.')));
   auto.appendChild(autoText);
   const sw = bfxEl('div', 'cfg-switch'); sw.id = 'soterAuto';
   sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', 'false'); sw.setAttribute('aria-disabled', 'true');
@@ -10985,7 +11002,16 @@ function cfgRenderGroup(list, groupId) {
  * start: ART `speed` compilation of the camera app the camera intent resolves to, with an
  * `am start -W -S` measurement the user starts, so the effect is a number on this phone. */
 const CAMTOOLS_SCRIPT = MD + '/runtime/asb_camera_tools.sh';
-let _ctBusy = false, _ctSeq = 0, _ctPoll = 0, _ctWc = {}, _ctLa = {};
+let _ctBusy = false, _ctSeq = 0, _ctPoll = 0, _ctWc = {}, _ctLa = {}, _ctFlags = null, _ctFlagsAsked = false;
+/* dev60: the hub tile counts both tools; one cheap file read gives their switches. */
+async function ctFlagsEnsure() {
+  if (_ctFlagsAsked) return;
+  _ctFlagsAsked = true;
+  let r = null;
+  try { r = await run('sh ' + shQuote(CAMTOOLS_SCRIPT) + ' flags'); } catch (e) {}
+  const p = ctParse(r && r.stdout != null ? String(r.stdout) : '');
+  if (p.other.flags) { _ctFlags = { webcam: p.other.flags.webcam === '1' ? '1' : '0', launch: p.other.flags.launch === '1' ? '1' : '0' }; cfgHubRepaintIfShowing(); }
+}
 function ctParse(txt) {
   const out = { webcam: null, launch: null, other: {} };
   String(txt || '').split('\n').forEach(function (line) {
@@ -11091,6 +11117,7 @@ async function ctLoad(manual) {
   const p = ctParse(r && r.stdout != null ? String(r.stdout) : '');
   ctWebcamPaint(p.webcam);
   ctLaunchPaint(p.launch);
+  if (p.webcam && p.launch) _ctFlags = { webcam: p.webcam.enabled === '1' ? '1' : '0', launch: p.launch.enabled === '1' ? '1' : '0' };
   if (p.launch && p.launch.state === 'running' && _ctPoll < 75) {
     _ctPoll++;
     setTimeout(function () { if (_el('ctWcCard')) ctLoad(false); }, 4000);
@@ -11163,15 +11190,16 @@ async function ctLaunchMeasure() {
   toast(msg, f.state === 'done' ? 'good' : 'err');
   ctLoad(false);
 }
-function ctCard(id, icon, title, desc, chipId, rowsId) {
-  const card = bfxEl('div', 'cfg-row bfx-card camtools-card'); card.id = id;
+function ctCard(id, icon, title, summary, desc, chipId, rowsId) {
+  const card = bfxEl('div', 'cfg-row bfx-card camtools-card cat-camera'); card.id = id;
   const head = bfxEl('div', 'bfx-head');
   const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon(icon); head.appendChild(em);
   const titles = bfxEl('div', 'bfx-titles');
   titles.appendChild(bfxEl('div', 'bfx-title', title));
   const chip = bfxEl('span', 'bfx-chip is-off', T('junk_scan', 'Scanning…')); chip.id = chipId; titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', desc));
+  card.appendChild(bfxEl('div', 'bfx-desc', summary));
+  kernelMoreBlock(card, id, [bfxEl('div', 'bfx-desc', desc)]);
   const rows = bfxEl('div', 'junk-cats'); rows.id = rowsId; card.appendChild(rows);
   return card;
 }
@@ -11194,6 +11222,7 @@ function ctButton(actions, id, cls, label, fn) {
 }
 function cfgRenderCameraToolsCards(list) {
   const wc = ctCard('ctWcCard', 'webcam', T('ct_wc_title', 'USB Webcam'),
+    T('ct_wc_summary', 'The phone as a USB webcam for a computer, through Android’s own webcam service. Experimental.'),
     T('ct_wc_desc', 'Turns the phone into a standard USB webcam for a computer, through Android’s own webcam service and the kernel’s UVC gadget driver. Connect the cable, then choose Webcam in the USB settings or press Start here. It works only when the ROM includes that service and its USB driver accepts the webcam function - this card checks each part. Experimental.'),
     'ctWcChip', 'ctWcRows');
   ctSwitchRow(wc, 'ctWcSwitch', T('ct_wc_switch', 'USB webcam mode'),
@@ -11207,6 +11236,7 @@ function cfgRenderCameraToolsCards(list) {
   const wn = bfxEl('div', 'bfx-note'); wn.id = 'ctWcNote'; wc.appendChild(wn);
   list.appendChild(wc);
   const la = ctCard('ctLaCard', 'camera_launch', T('ct_la_title', 'Fast Camera Start'),
+    T('ct_la_summary', 'Keeps the camera app fully compiled. Measure the cold start before and after to see the difference.'),
     T('ct_la_desc', 'Compiles the camera app completely ahead of time (ART speed mode instead of Android’s profile-guided default), so its code is not interpreted or compiled while it starts. It costs extra storage, often 100-300 MB, and a minute or two of compiling. Measure closes the camera and opens it cold, recording Android’s launch time - measure before and after to see what it changes on this phone. After an app update ASB compiles again about ten minutes after boot.'),
     'ctLaChip', 'ctLaRows');
   ctSwitchRow(la, 'ctLaSwitch', T('ct_la_switch', 'Keep the camera app fully compiled'),
@@ -11345,7 +11375,8 @@ async function kernelPanelLoad(force) {
   _kernelPanel.wakeup = b && b.wakeup && b.wakeup.errno === 0 ? kernelWakeupParse(b.wakeup.stdout) : null;
   _kernelPanel.loaded = true;
   _kernelPanel.loading = false;
-  if (_cfgGroup === 'kernel') { try { cfgRender(); } catch (e) {} }
+  if (_cfgGroup === 'kernel' || (_cfgOpen && _cfgSearch)) { try { cfgRender(); } catch (e) {} }
+  else cfgHubRepaintIfShowing();
   kernelWakeupSourceDialogRender();
 }
 function kernelStateText(state) {
@@ -11382,24 +11413,63 @@ function kernelUnavailableWhy(key) {
   return Object.prototype.hasOwnProperty.call(fb, key) ? T('kc_why_' + key, fb[key]) : '';
 }
 /* dev58: a control the running kernel cannot have and that would not act on Android apps
- * even where it exists is hidden instead of shown as a dead card; the help card names it. */
-const KERNEL_HIDE_WHEN_ABSENT = ['kernel_sched_autogroup'];
+ * even where it exists is hidden instead of shown as a dead card; the help card names it.
+ * dev60: the same for HR-timer migration where the kernel has no separate switch and the
+ * Timer migration control already is the one mechanism (6.12 GKI): a card whose buttons can
+ * never be used read as a broken tweak. */
+const KERNEL_HIDE_WHEN_ABSENT = ['kernel_sched_autogroup', 'kernel_hrtimer_migration'];
+const KERNEL_HIDE_STATES = {
+  kernel_sched_autogroup: ['not_exposed'],
+  kernel_hrtimer_migration: ['covered_by_timer_migration', 'not_exposed']
+};
 function kernelHiddenAbsent() {
   return KERNEL_HIDE_WHEN_ABSENT.filter(function (k) {
     const c = _kernelPanel.controls[k];
-    return !!(c && c.state === 'not_exposed');
+    return !!(c && KERNEL_HIDE_STATES[k].indexOf(c.state) >= 0);
   });
 }
 /* dev58: what the kernel itself ships, from the captured baseline or (without one) the live
- * value, so a switch that cannot change anything on this phone says so. */
+ * value, so a switch that cannot change anything on this phone says so.
+ * dev60: the same for every control with fixed values (the owner's export: USB autosuspend
+ * On = 2 = the kernel's own 2, Timer migration On = 1 = its own 1), and MGLRU explains why
+ * the kernel reads 0x0001 or 0x0003 when 5 or 7 was written: arm64 has no non-leaf bit. */
+const KERNEL_OPTION_VALUES = {
+  kernel_timer_migration: { off:'0', on:'1' },
+  kernel_sched_nr_migrate: { '1':'1', '2':'2', '4':'4', '8':'8', '16':'16' },
+  kernel_sched_stats: { off:'0' },
+  kernel_sched_child_runs_first: { off:'0', on:'1' },
+  kernel_usb_autosuspend: { off:'-1', on:'2' },
+  kernel_rt_boost: { '0':'0', '128':'128', '256':'256', '512':'512' },
+  kernel_mglru_min_ttl: { '1000':'1000', '2000':'2000' }
+};
+function kernelShipped(c) {
+  if (!c) return '';
+  const base = c.baseline && c.baseline !== 'none' && c.baseline !== 'invalid' ? c.baseline : (c.mode === 'stock' ? c.live : '');
+  return String(base || '').replace(/[^0-9A-Za-z-]/g, '').slice(0, 12);
+}
 function kernelDefaultFact(key) {
-  if (key !== 'kernel_lpm_prediction') return '';
   const c = _kernelPanel.controls[key];
   if (!c) return '';
-  const base = c.baseline && c.baseline !== 'none' && c.baseline !== 'invalid' ? c.baseline : c.live;
-  if (base === '1') return T('kc_lpm_default_on', 'This kernel ships prediction on: Stock, Auto and On give the same result here; only Off changes something.');
-  if (base === '0') return T('kc_lpm_default_off', 'This kernel ships prediction off: On, and Auto in the Battery profile, turn it on.');
-  return '';
+  if (key === 'kernel_lpm_prediction') {
+    const base = c.baseline && c.baseline !== 'none' && c.baseline !== 'invalid' ? c.baseline : c.live;
+    if (base === '1') return T('kc_lpm_default_on', 'This kernel ships prediction on: Stock, Auto and On give the same result here; only Off changes something.');
+    if (base === '0') return T('kc_lpm_default_off', 'This kernel ships prediction off: On, and Auto in the Battery profile, turn it on.');
+    return '';
+  }
+  if (key === 'mglru_mode') {
+    const live = String(c.live || '').toLowerCase();
+    if ((c.mode === 'on' || c.mode === 'smart') && (live === '0x0001' || live === '0x0003')) {
+      return T('kc_mglru_no_nonleaf', 'This kernel drops the unsupported 0x0004 flag (non-leaf young): On (7) reads 0x0003, Smart\'s light step (5) reads 0x0001. Not a failed write.');
+    }
+    return '';
+  }
+  const map = KERNEL_OPTION_VALUES[key];
+  const shipped = kernelShipped(c);
+  if (!map || !shipped) return '';
+  const same = Object.keys(map).filter(function (o) { return map[o] === shipped; });
+  if (!same.length) return '';
+  const labels = [Topt('stock', key)].concat(same.map(function (o) { return Topt(o, key); }));
+  return bfxT('kc_default_same', 'This kernel ships {v}: {opts} give the same result here.', { v: shipped, opts: labels.join(', ') });
 }
 function kernelDecorateControlRow(row, key) {
   if (!row) return;
@@ -11411,13 +11481,11 @@ function kernelDecorateControlRow(row, key) {
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
-  if (a.state === 'not_exposed' && KERNEL_HIDE_WHEN_ABSENT.indexOf(key) >= 0 && row.classList) {
-    row.classList.add('kernel-absent-hidden');
-    return;
-  }
-  const why = a.state === 'not_exposed' ? kernelUnavailableWhy(key) : '';
+  const hide = KERNEL_HIDE_WHEN_ABSENT.indexOf(key) >= 0 && kernelHiddenAbsent().indexOf(key) >= 0 && !!row.classList;
+  if (hide) row.classList.add('kernel-absent-hidden');
+  const why = !hide && a.state === 'not_exposed' ? kernelUnavailableWhy(key) : '';
   if (why && row.appendChild && !(row.querySelector && row.querySelector('.kernel-why'))) row.appendChild(bfxEl('div', 'kernel-why', why));
-  const fact = a.state === 'available' ? kernelDefaultFact(key) : '';
+  const fact = !hide && a.state === 'available' ? kernelDefaultFact(key) : '';
   if (fact && row.appendChild && !(row.querySelector && row.querySelector('.kernel-fact'))) row.appendChild(bfxEl('div', 'kernel-why kernel-fact', fact));
   if (['not_exposed','not_readable','read_only','disabled','covered_by_timer_migration'].indexOf(a.state) >= 0) {
     row.classList.add('kernel-unavailable');
@@ -11432,19 +11500,80 @@ function kernelDecorateControlRow(row, key) {
 function kernelStateBadge(state) {
   return bfxEl('span', 'kernel-state ' + kernelStateClass(state), kernelStateText(state));
 }
+/* dev60: the long explanations of the kernel cards are folded behind a Details toggle; the
+ * open state survives the re-renders a refresh causes. */
+let _kernelMore = Object.create(null);
+function kernelMoreBlock(card, id, nodes) {
+  const open = !!_kernelMore[id];
+  const btn = bfxEl('button', 'kernel-more', open ? T('kernel_more_hide', 'Hide details') : T('kernel_more_show', 'Details'));
+  btn.type = 'button'; btn.id = 'kernelMore_' + id;
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  const body = bfxEl('div', 'kernel-more-body'); body.id = 'kernelMoreBody_' + id;
+  body.hidden = !open;
+  nodes.forEach(function (n) { if (n) body.appendChild(n); });
+  btn.onclick = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    _kernelMore[id] = !_kernelMore[id];
+    body.hidden = !_kernelMore[id];
+    btn.setAttribute('aria-expanded', _kernelMore[id] ? 'true' : 'false');
+    btn.textContent = _kernelMore[id] ? T('kernel_more_hide', 'Hide details') : T('kernel_more_show', 'Details');
+    uiSound('option');
+  };
+  card.appendChild(btn); card.appendChild(body);
+  return body;
+}
+function kernelVisibleKeys() {
+  const hidden = kernelHiddenAbsent();
+  return ASB_KERNEL_STATUS_KEYS.filter(function (k) { return hidden.indexOf(k) < 0; });
+}
+/* dev60: a press gives an immediate sound and a busy label, and a finished read a toast with
+ * what it found, so the button no longer looks dead when the status did not change. */
+async function kernelRefreshClick() {
+  if (_kernelPanel.loading) return;
+  uiSound('nav');
+  await kernelPanelLoad(true);
+  const keys = kernelVisibleKeys();
+  const read = Object.keys(_kernelPanel.controls).length > 0;
+  const n = keys.filter(function (k) { return kernelControlAvailability(k).state === 'available'; }).length;
+  if (read) toast(bfxT('kernel_refreshed', 'Kernel status read: {n} of {m} controls can be changed', { n: String(n), m: String(keys.length) }), 'good');
+  else toast(T('kernel_refresh_failed', 'Could not read the kernel status'), 'err');
+}
+function kernelOpenDiagnostics() {
+  openDevicePage();
+  let tries = 0;
+  (function seek() {
+    const g = _el('dev-group-kernel');
+    if (g && g.scrollIntoView) {
+      try { g.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { g.scrollIntoView(); }
+      return;
+    }
+    if (++tries < 40) setTimeout(seek, 150);
+  })();
+}
+function kernelRefreshButton(id) {
+  const b = bfxEl('button', 'bfx-btn bfx-secondary' + (_kernelPanel.loading ? ' is-busy' : ''), _kernelPanel.loading ? T('kernel_refreshing', 'Checking…') : T('kernel_refresh', 'Refresh status'));
+  b.type = 'button'; b.id = id; b.disabled = _kernelPanel.loading || _wbBusy;
+  b.onclick = kernelRefreshClick;
+  return b;
+}
 function cfgRenderKernelControlsHelp(list) {
   const card = bfxEl('div', 'cfg-row kernel-card cat-kernel'); card.id = 'kernelControlsHelp';
-  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_controls_help', 'Each switch below writes only its named standard kernel interface. Stock restores the value captured before ASB first wrote it. Missing or read-only interfaces are disabled; a different readback is reported as a mismatch, not as success.')));
-  if (kernelHiddenAbsent().indexOf('kernel_sched_autogroup') >= 0) {
-    card.appendChild(bfxEl('div', 'kernel-why kernel-absent-note', T('kernel_absent_autogroup', 'Scheduler Autogroup is hidden: this kernel has no such switch (GKI kernels are built without it), and on Android it would not touch apps anyway, because they run in Android\'s own CPU groups.')));
+  const hidden = kernelHiddenAbsent();
+  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_controls_summary', 'Each control writes only its own kernel switch; Stock puts back the value the kernel had.')));
+  if (hidden.length) card.appendChild(bfxEl('div', 'kernel-why kernel-absent-note', bfxT('kernel_hidden_count', 'Hidden: {n} - this kernel has no separate switch for them', { n: String(hidden.length) })));
+  const more = [bfxEl('div', 'kernel-note', T('kernel_controls_help', 'Each switch below writes only its named standard kernel interface. Stock restores the value captured before ASB first wrote it. Missing or read-only interfaces are disabled; a different readback is reported as a mismatch, not as success.'))];
+  if (hidden.indexOf('kernel_sched_autogroup') >= 0) {
+    more.push(bfxEl('div', 'kernel-why kernel-absent-note', T('kernel_absent_autogroup', 'Scheduler Autogroup is hidden: this kernel has no such switch (GKI kernels are built without it), and on Android it would not touch apps anyway, because they run in Android\'s own CPU groups.')));
   }
+  if (hidden.indexOf('kernel_hrtimer_migration') >= 0) {
+    more.push(bfxEl('div', 'kernel-why kernel-absent-note', T('kernel_absent_hrtimer', 'High-resolution Timer Migration is hidden: this kernel has no separate switch for it. Timer migration above already moves high-resolution timers too, so setting that one is enough.')));
+  }
+  kernelMoreBlock(card, 'help', more);
   const actions = bfxEl('div', 'bfx-actions');
-  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_refresh', 'Refresh status'));
-  refresh.type = 'button'; refresh.id = 'kernelControlsRefresh'; refresh.disabled = _kernelPanel.loading;
-  refresh.onclick = function () { kernelPanelLoad(true); };
+  actions.appendChild(kernelRefreshButton('kernelControlsRefresh'));
   const diagnostics = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_open_diagnostics', 'Open Device Diagnostics'));
-  diagnostics.type = 'button'; diagnostics.id = 'kernelOpenDiagnostics'; diagnostics.onclick = openDevicePage;
-  actions.appendChild(refresh); actions.appendChild(diagnostics); card.appendChild(actions); list.appendChild(card);
+  diagnostics.type = 'button'; diagnostics.id = 'kernelOpenDiagnostics'; diagnostics.onclick = kernelOpenDiagnostics;
+  actions.appendChild(diagnostics); card.appendChild(actions); list.appendChild(card);
 }
 function kernelWakeupValidName(name) {
   const s = String(name || '');
@@ -11670,11 +11799,11 @@ function cfgRenderWakeupBlockerCard(list) {
   const head = bfxEl('div', 'kernel-card-head');
   const titles = bfxEl('div');
   titles.appendChild(bfxEl('div', 'kernel-card-title', T('kernel_wb_title', 'Exact-name wakeup rules')));
-  titles.appendChild(bfxEl('div', 'kernel-card-sub', T('kernel_wb_sub', 'Up to 16 names, 1–63 printable ASCII characters each. No spaces, paths, patterns or automatic rules.')));
   head.appendChild(titles);
   head.appendChild(kernelStateBadge(wb ? (wb.node === 'writable' ? 'available' : (wb.node === 'not_writable' ? 'read_only' : wb.node)) : (_kernelPanel.loading ? 'loading' : 'unknown')));
   card.appendChild(head);
-  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_warning', 'Only add a name after diagnosing a concrete wakeup source. Blocking can delay notifications, networking or sensors. Existing locks are not force-released.')));
+  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_summary', 'Blocks only the names you add here, after a measured idle window shows them. A wrong name can delay alarms, calls or notifications.')));
+  const details = kernelMoreBlock(card, 'wb', [bfxEl('div', 'kernel-card-sub', T('kernel_wb_sub', 'Up to 16 names, 1–63 printable ASCII characters each. No spaces, paths, patterns or automatic rules.')), bfxEl('div', 'kernel-note', T('kernel_wb_warning', 'Only add a name after diagnosing a concrete wakeup source. Blocking can delay notifications, networking or sensors. Existing locks are not force-released.'))]);
   if (wb) kernelWakeupObservedList(card, wb);
   const editor = bfxEl('div', 'kernel-editor');
   const inputRow = bfxEl('div', 'kernel-input-row');
@@ -11693,7 +11822,7 @@ function cfgRenderWakeupBlockerCard(list) {
   meta.appendChild(bfxEl('span', '', T('kernel_wb_current_count', 'In kernel: {n}').replace('{n}', wb && wb.node !== 'not_exposed' && wb.node !== 'not_readable' ? wb.current.length : '—')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_events', 'Blocked events: {n}').replace('{n}', wb ? wb.events : 'unknown')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_abi', 'Kernel blocker ABI: {v}').replace('{v}', wb ? wb.abi : 'unknown')));
-  card.appendChild(meta);
+  details.appendChild(meta);
   if (wb && !same && wb.node !== 'not_exposed' && wb.node !== 'not_readable') {
     card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_diff', 'Saved policy and kernel readback differ. Apply the policy or refresh after another owner changes it.')));
   }
@@ -11701,15 +11830,13 @@ function cfgRenderWakeupBlockerCard(list) {
   readback.appendChild(bfxEl('div', 'kernel-readback-title', T('kernel_wb_readback', 'Kernel readback')));
   const currentText = wb && wb.current.length ? wb.current.map(function (n) { return n + (Object.prototype.hasOwnProperty.call(wb.blocked,n) ? ' · ' + wb.blocked[n] : ''); }).join('\n') : T('kernel_wb_none', 'None or not readable');
   readback.appendChild(bfxEl('div', 'kernel-readback-list', currentText));
-  card.appendChild(readback);
+  details.appendChild(readback);
   const actions = bfxEl('div', 'bfx-actions');
   const apply = bfxEl('button', 'bfx-btn bfx-primary', T('kernel_wb_apply', 'Save and apply')); apply.type = 'button'; apply.disabled = !wb || _wbBusy;
   apply.onclick = function () { kernelWakeupSave(false); };
   const clear = bfxEl('button', 'bfx-btn bfx-secondary kernel-clear', T('kernel_wb_clear', 'Clear saved and live rules')); clear.type = 'button'; clear.disabled = !wb || _wbBusy;
   clear.onclick = function () { kernelWakeupSave(true); };
-  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_refresh', 'Refresh status')); refresh.type = 'button'; refresh.disabled = _wbBusy || _kernelPanel.loading;
-  refresh.onclick = function () { kernelPanelLoad(true); };
-  actions.appendChild(apply); actions.appendChild(clear); actions.appendChild(refresh); card.appendChild(actions);
+  actions.appendChild(apply); actions.appendChild(clear); actions.appendChild(kernelRefreshButton('kernelWakeupRefresh')); card.appendChild(actions);
   list.appendChild(card);
 }
 function kernelWakeupAdd(raw) {
@@ -12455,17 +12582,55 @@ function cfgIsActive(it, cur) {
 // The hub: one tile per group, with how many settings are inside and how many of those
 // are currently active. The count matters - it is the difference between "I have not set
 // anything up in here" and "something in here is on and I forgot about it".
+/* dev60: the tile counts what the category screen shows. Controls the running kernel hides
+ * (no separate switch) are left out; cards that are not CFG_ITEMS but live in the category
+ * (Camera Tools, the wakeup rules, the notification fix) count, on when they are in use. */
+function cfgGroupHiddenKeys(groupId) {
+  return groupId === 'kernel' && typeof _kernelPanel !== 'undefined' && typeof kernelHiddenAbsent === 'function' ? kernelHiddenAbsent() : [];
+}
+function cfgGroupExtraCards(groupId) {
+  const ctf = typeof _ctFlags !== 'undefined' ? _ctFlags : null;
+  if (groupId === 'camera') return [!!(ctf && ctf.webcam === '1'), !!(ctf && ctf.launch === '1')];
+  if (groupId === 'kernel') {
+    const kp = typeof _kernelPanel !== 'undefined' ? _kernelPanel : null;
+    return [!!(kp && kp.wakeup && kp.wakeup.saved && kp.wakeup.saved.length)];
+  }
+  if (groupId === 'battery') return [!!(typeof _nf !== 'undefined' && _nf && _nf.count)];
+  return [];
+}
+function cfgHubExtraSig() {
+  return CFG_GROUPS.map(function (g) { return g.id + ':' + cfgGroupHiddenKeys(g.id).join(',') + ':' + cfgGroupExtraCards(g.id).map(function (b) { return b ? 1 : 0; }).join(''); }).join(';');
+}
+let _cfgHubExtrasAsked = false;
+function cfgHubExtrasEnsure() {
+  if (_cfgHubExtrasAsked) return;
+  _cfgHubExtrasAsked = true;
+  setTimeout(function () {
+    if (typeof kernelPanelEnsure === 'function') kernelPanelEnsure();
+    if (typeof ctFlagsEnsure === 'function') ctFlagsEnsure();
+  }, 450);
+}
+function cfgHubRepaintIfShowing() {
+  if (typeof _cfgOpen !== 'undefined' && _cfgOpen && !_cfgGroup && !_cfgSearch && _cfgHubSig !== cfgHubSig()) {
+    try { cfgRender(); } catch (e) {}
+  }
+}
 function cfgRenderHub(list) {
   const hub = document.createElement('div');
   hub.className = 'cfg-hub';
+  cfgHubExtrasEnsure();
   CFG_GROUPS.forEach(g => {
-    const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === g.id);
-    if (!items.length) return;
+    const hiddenKeys = cfgGroupHiddenKeys(g.id);
+    const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === g.id && hiddenKeys.indexOf(it.key) < 0);
+    const extras = cfgGroupExtraCards(g.id);
+    if (!items.length && !extras.length) return;
     let on = 0;
     items.forEach(it => {
       const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
       if (cfgIsActive(it, cur)) on++;
     });
+    extras.forEach(b => { if (b) on++; });
+    const total = items.length + extras.length;
     const tile = document.createElement('button');
     const tileCat = g.id === 'ui' ? 'ux' : g.id;
     tile.className = 'cfg-tile cat-' + tileCat;
@@ -12491,7 +12656,7 @@ function cfgRenderHub(list) {
     foot.className = 'cfg-tile-foot';
     const cnt = document.createElement('div');
     cnt.className = 'cfg-tile-count' + (on ? ' has-on' : '');
-    cnt.textContent = on ? (on + ' / ' + items.length) : String(items.length);
+    cnt.textContent = on ? (on + ' / ' + total) : String(total);
     foot.appendChild(cnt);
     tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + cnt.textContent);
     const bar = document.createElement('div');
@@ -13168,12 +13333,14 @@ const _unav = ASB_CAP_REQUIRES[it.key];
     if (dOpt && typeof dOpt === "object") {
       const ul = document.createElement("div");
       ul.className = "cfg-desc-opts";
-      (it.opts || Object.keys(dOpt)).forEach(function (o) {
+      const dBool = it.type === 'bool';
+      (dBool ? ['1', '0'] : (it.opts || Object.keys(dOpt))).forEach(function (o) {
         if (dOpt[o] == null) return;
         const li = document.createElement("div");
         li.className = "cfg-desc-opt" + (String(o) === String(cur) ? " is-cur" : "");
         const k = document.createElement("span");
-        k.className = "cfg-desc-opt-k"; k.textContent = Topt(o, it.key);
+        k.className = "cfg-desc-opt-k";
+        k.textContent = dBool ? (o === '1' ? T('cfg_sw_on', 'On') : T('cfg_sw_off', 'Off')) : Topt(o, it.key);
         const v = document.createElement("span");
         v.className = "cfg-desc-opt-v"; v.textContent = dOpt[o];
         li.appendChild(k); li.appendChild(v); ul.appendChild(li);
@@ -13196,7 +13363,9 @@ let _cfgSearch = '';
 
 function cfgSearchMatches() {
   const q = _cfgSearch.toLowerCase();
+  const hidden = cfgGroupHiddenKeys('kernel');
   return CFG_ITEMS.filter(it => {
+    if (hidden.indexOf(it.key) >= 0) return false;
     const n = String(Tcfg(it.key, "name", it.name) || '').toLowerCase();
     const d = String(Tcfg(it.key, "desc", '') || '').toLowerCase();
     return n.indexOf(q) >= 0 || d.indexOf(q) >= 0;
@@ -13254,7 +13423,11 @@ function cfgRenderMatches(list) {
   }
   /* Results carry their category, because the same word can land in two of them and
      "which section was this in" is half of what the user is trying to find out. */
-  hits.forEach(it => cfgRenderRow(list, it, true));
+  if (hits.some(it => ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0)) kernelPanelEnsure();
+  hits.forEach(it => {
+    cfgRenderRow(list, it, true);
+    if (ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0) kernelDecorateControlRow(list.lastChild, it.key);
+  });
 }
 
 /* Single place that decides whether the tab bar is on screen.
@@ -13351,7 +13524,7 @@ var _cfgShownScreen = null;
  * before the slide can start. Any other paint of the list clears it. */
 var _cfgHubSig = '';
 function cfgHubSig() {
-  return ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + JSON.stringify(_cfgVals);
+  return ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + JSON.stringify(_cfgVals) + '|' + cfgHubExtraSig();
 }
 // When the running entrance ends, and the one repaint waiting for it (fix145).
 var _cfgEnterUntil = 0, _cfgRepaintTimer = 0;
