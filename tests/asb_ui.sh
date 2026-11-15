@@ -14300,12 +14300,12 @@ python3 - "$ROOT/webroot" <<'PY' || fail 'contract'
 import json,re,sys,pathlib
 W=pathlib.Path(sys.argv[1]); h=(W/'index.html').read_text()
 LOC=['en','ru','uk','de','fr','es','it','pt','tr','id','zh','ar','hy']
-m=re.search(r"\{ key:'kernel_bore', type:'seg', def:'stock', stock:'stock',\s*opts:\['stock','off','on'\]",h)
+m=re.search(r"\{ key:'kernel_bore', type:'seg', def:'stock', stock:'stock',\s*opts:\['stock','auto','off','on'\]",h)
 assert m
 for loc in LOC:
  d=json.loads((W/f'i18n/{loc}.json').read_text())
  c=d['cfg']['kernel_bore']
- assert set(c['descOpt'])=={'stock','off','on'}
+ assert set(c['descOpt'])=={'stock','auto','off','on'}
  assert all(v.strip() for v in c['descOpt'].values())
  assert c['desc'].count('\n🔋 ')==1 and c['desc'].count('⚡ ')==1 and c['desc'].count('\n✋ ')==1
  assert set(c['descOpt']) <= set(d['optFor']['kernel_bore'])
@@ -14324,7 +14324,7 @@ assert "kernel_bore: '%s'"%en['kc_why_kernel_bore'] in h
 assert "kernel_bore: ['dev_guide_kernel_bore', '%s']"%en['dev_guide_kernel_bore'] in h
 assert 'textContent' in h[h.index('/* Device diagnostics'):h.index('function parseDeviceInfo')]
 PY
-echo 'PASS WebUI BORE dev63: Stock/off/on card, status allowlist, fixed-value map, live apply path, diagnostics and 13-locale schema'
+echo 'PASS WebUI BORE dev63: Stock/Auto/off/on card, status allowlist, fixed-value map, live apply path, diagnostics and 13-locale schema'
 )
 
 
@@ -14378,6 +14378,43 @@ JS
 } > "$T/t.js"
 out="$(node "$T/t.js")" || fail "$out"; [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI Zygisk provider dev63: separate diagnostics card, textContent-only values, conflict/unknown states and 13 locales'
+)
+
+t_webui_display_ui_dev64() (
+# dev64: the eight SetEdit-derived cards use the bounded Settings owner and a real verdict.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL WebUI display/ui dev64: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'card, owner or locale contract'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+h = (root/'webroot/index.html').read_text(encoding='utf-8')
+keys = {'ui_recents_memory','ui_recents_corner_radius','ui_smooth_corners','ui_nav_handle_autohide',
+        'feel_pointer_speed','feel_gesture_mistouch','feel_game_memc','feel_dc_dimming'}
+body = h[h.index('const CFG_ITEMS = ['):h.index('const CFG_GROUPS = [')]
+items = set(re.findall(r"\{ key:'([^']+)'", body))
+assert keys <= items, sorted(keys-items)
+listed = re.search(r"var DISPLAY_UI_KEYS = \[(.*?)\];", h, re.S)
+assert listed and set(re.findall(r"'([^']+)'", listed.group(1))) == keys
+for key in keys:
+    assert key + ':APPLY_LIVE' in h, key + ' is not live'
+branch = h[h.index('} else if (DISPLAY_UI_KEYS.indexOf(key) >= 0) {'):h.index('} else if (BLUR_KEYS.indexOf(key) >= 0) {')]
+for token in ('asb_display_ui_apply.sh', 'dr.errno === 0', "ds === 'applied'", "ds === 'restored'",
+              "ds === 'stock_unowned'", "ds === 'restore_failed'", "t_cfg_write_rejected"):
+    assert token in branch, token
+assert 'dr.errno === 0 && ds ===' in branch, 'stored config alone can still produce a success toast'
+for key in keys:
+    assert re.search(r'\b' + key + r":'[a-z_]+'", h), key + ' icon mapping missing'
+for p in sorted((root/'webroot/i18n').glob('*.json')):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for key in keys:
+        c = d['cfg'][key]
+        assert c['name'].strip() and c['desc'].strip(), (p.name,key)
+    for key in ('t_cfg_restored','t_cfg_stock_unowned','t_cfg_restore_failed','t_cfg_write_rejected'):
+        assert d[key].strip(), (p.name,key)
+    assert set(d['optFor']['ui_recents_corner_radius']) == {'stock','0','8','12','16','20','24','28','32'}
+print('PASS WebUI display/ui dev64: eight cards, unique mappings, live read-back verdicts, exact-restore states and 13 locales')
+PY
 )
 
 t_webui_performance_lifecycle_dev63() (

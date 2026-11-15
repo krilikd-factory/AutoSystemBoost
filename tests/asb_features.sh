@@ -12057,10 +12057,10 @@ rm -f "$T/clamp"; mode stock; run apply kernel_bore >/dev/null
 # Strict safe-writer validation and zero-change shipped default.
 cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
 cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
-for v in stock off on stock; do
+for v in stock auto off on stock; do
   MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_bore "$v" >/dev/null || fail "safe writer refused $v"
 done
-for v in auto 2 yes; do
+for v in 2 yes; do
   set +e; MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_bore "$v" >/dev/null 2>&1; rc=$?; set -e
   [ "$rc" -ne 0 ] || fail "safe writer accepted $v"
 done
@@ -12069,7 +12069,120 @@ grep -qx 'kernel_bore|advanced|webui_sensitive|shell' "$ROOT/config/key_ownershi
 [ "$(grep -c 'kernel_rt_boost kernel_bore' "$ROOT/common/install.sh")" = 2 ] || fail 'install carry-over/snapshot lists'
 [ "$(grep -c 'apply kernel_bore' "$ROOT/service.sh")" = 3 ] || fail 'boot/reinforce passes'
 grep -Fq 'kernel_usb_autosuspend kernel_bore"' "$ROOT/runtime/asb_kernel_controls.sh" || fail 'profile follow list'
-echo 'PASS BORE controls dev63: fixed node, Stock/off/on, exact baseline, kernel-change guard, access failures, readback, safe writer and boot/profile ownership'
+echo 'PASS BORE controls dev63: fixed node, Stock/Auto/off/on, exact baseline, kernel-change guard, access failures, readback, safe writer and boot/profile ownership'
+)
+
+
+t_bore_auto_dev65() (
+# dev65: conservative Auto has one owner, no worker and a fail-closed evidence gate.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_kernel_controls.sh"
+fail() { echo "FAIL BORE Auto dev65: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/mod/config" "$T/state" "$T/proc/sys/kernel" "$T/bin" "$T/data"
+NODE="$T/proc/sys/kernel/sched_bore"
+STATUS="$T/native-status"
+CAP="$T/capacity"
+SAFE="$T/safe-mode"
+RECOVERY="$T/data/recovery_disabled"
+cat > "$T/mod/config/governor.conf" <<'EOF'
+kernel_bore=auto
+auto_battery_low_pct=20
+sustained_temp_enter=55
+thermal_skin_c=47
+EOF
+cat > "$T/bin/settings" <<'SH'
+#!/bin/sh
+[ "${1:-} ${2:-} ${3:-}" = 'get global low_power' ] || exit 1
+printf '%s\n' "${LOW_POWER:-0}"
+SH
+REAL_CAT="$(command -v cat)"
+cat > "$T/bin/cat" <<'SH'
+#!/bin/sh
+if [ "${1:-}" = "$BORE_NODE" ] && [ -f "$CLAMP_FLAG" ]; then printf '0\n'; else exec "$REAL_CAT" "$@"; fi
+SH
+chmod 0755 "$T/bin/settings" "$T/bin/cat"
+write_status() {
+  _now="$(date +%s)"; _epoch=$((_now - EPOCH_OFFSET))
+  printf '{"state":"%s","thermal":%s,"temp":%s,"temp_valid":%s,"temp_age_s":%s,"temp_read_epoch":%s,"skin_temp":%s,"surface_hotspot":%s,"board_temp":%s}\n' \
+    "$STATE" "$THERMAL" "$TEMP" "$TEMP_VALID" "$AGE" "$_epoch" "$SKIN" "$SURFACE" "$BOARD" > "$STATUS"
+}
+reset_fixture() {
+  rm -f "$SAFE" "$RECOVERY" "$T/clamp" "$T/state/kernel_bore.prev" "$T/state/kernel_bore.prev.kid"
+  PROFILE=performance; LOW_POWER=0; STATE=MODERATE; THERMAL=0; TEMP=40; TEMP_VALID=1
+  AGE=0; EPOCH_OFFSET=0; SKIN=35; SURFACE=36; BOARD=37; TEST_PATH="$T/bin:/usr/bin:/bin"
+  printf '90\n' > "$CAP"; chmod 0644 "$NODE" 2>/dev/null || :; printf '0\n' > "$NODE"; write_status
+}
+run() {
+  PATH="$TEST_PATH" LOW_POWER="$LOW_POWER" REAL_CAT="$REAL_CAT" BORE_NODE="$NODE" CLAMP_FLAG="$T/clamp" \
+  MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_KERNEL_STATE_DIR="$T/state" \
+  ASB_BORE_NODE="$NODE" ASB_KC_KERNEL_ID=k-auto ASB_SAFE_MODE_FILE="$SAFE" \
+  ASB_RECOVERY_DISABLED_FILE="$RECOVERY" ASB_KC_BATTERY_CAPACITY="$CAP" \
+  ASB_KC_NATIVE_STATUS="$STATUS" ASB_KC_BORE_STATUS_MAX_AGE_S=120 \
+    sh "$S" apply kernel_bore '' "$PROFILE"
+}
+set_case() {
+  case "$1" in
+    battery|balanced|smart) PROFILE="$1" ;;
+    battery_saver) LOW_POWER=1 ;;
+    low_power_unknown) LOW_POWER=null ;;
+    settings_missing) TEST_PATH=/usr/bin:/bin ;;
+    low_charge) printf '20\n' > "$CAP" ;;
+    missing_capacity) rm -f "$CAP" ;;
+    invalid_capacity) printf 'unknown\n' > "$CAP" ;;
+    safe_mode) : > "$SAFE" ;;
+    watchdog) : > "$RECOVERY" ;;
+    missing_status) rm -f "$STATUS" ;;
+    stale_age) AGE=121; write_status ;;
+    stale_epoch) EPOCH_OFFSET=121; write_status ;;
+    future_epoch) EPOCH_OFFSET=-5; write_status ;;
+    malformed_status) printf '{broken\n' > "$STATUS" ;;
+    invalid_temp_valid) TEMP_VALID=0; write_status ;;
+    hot_cpu) TEMP=55; write_status ;;
+    hot_skin) SKIN=47; write_status ;;
+    hot_surface) SURFACE=50; write_status ;;
+    hot_board) BOARD=50; write_status ;;
+    thermal_cap) THERMAL=1; write_status ;;
+    idle) STATE=DEEP_IDLE; write_status ;;
+    light_idle) STATE=LIGHT_IDLE; write_status ;;
+    gaming) STATE=GAMING; write_status ;;
+    sustained) STATE=SUSTAINED; write_status ;;
+    unknown_state) STATE=UNKNOWN; write_status ;;
+    malformed_temp) TEMP=hot; write_status ;;
+    *) fail "unknown fixture $1" ;;
+  esac
+}
+want_applied() { [ "$out" = 'kernel_bore|applied|auto|1|0' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ "$("$REAL_CAT" "$T/state/kernel_bore.prev")" = 0 ] || fail "$1 apply: $out"; }
+want_restored() { [ "$out" = 'kernel_bore|restored|auto|0|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 restore: $out"; }
+want_unowned() { [ "$out" = 'kernel_bore|stock_unowned|auto|unknown|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 unowned: $out"; }
+reset_fixture; out="$(run)"; want_applied initial
+PROFILE=performance; STATE=HEAVY; write_status; out="$(run)"; want_applied heavy
+for c in battery balanced smart battery_saver low_power_unknown settings_missing low_charge missing_capacity invalid_capacity \
+         safe_mode watchdog missing_status stale_age stale_epoch future_epoch malformed_status invalid_temp_valid \
+         hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
+  reset_fixture; out="$(run)"; want_applied "$c setup"
+  set_case "$c"; out="$(run)"; want_restored "$c"
+  reset_fixture; set_case "$c"; out="$(run)"; want_unowned "$c"
+done
+# A stock one is captured and restored just as exactly as the zero used above.
+reset_fixture; printf '1\n' > "$NODE"; out="$(run)"
+[ "$out" = 'kernel_bore|applied|auto|1|1' ] || fail "one baseline capture: $out"
+PROFILE=battery; out="$(run)"
+[ "$out" = 'kernel_bore|restored|auto|1|none' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "one baseline restore: $out"
+# Auto never turns missing, read-only or non-binary ABI into a successful write.
+reset_fixture; rm -f "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|not_exposed|auto|unknown|none' ] || fail "missing ABI: rc=$rc out=$out"
+reset_fixture; chmod 0444 "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|not_writable|auto|unknown|none' ] || fail "read-only ABI: rc=$rc out=$out"
+reset_fixture; printf '2\n' > "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|baseline_failed|auto|unknown|none' ] && [ "$("$REAL_CAT" "$NODE")" = 2 ] || fail "malformed ABI: rc=$rc out=$out"
+# A clamped readback retains the baseline; a later successful restore consumes it.
+reset_fixture; : > "$T/clamp"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|readback_mismatch|auto|0|0' ] && [ -f "$T/state/kernel_bore.prev" ] || fail "Auto readback mismatch: rc=$rc out=$out"
+rm -f "$T/clamp"; PROFILE=battery; out="$(run)"; want_restored mismatch_recovery
+! sed -n '/^asb_kc_bore_auto_hold() {/,/^}/p' "$S" | grep -Eq '^[[:space:]]*#' || fail 'new helper comment contract changed unexpectedly'
+echo 'PASS BORE Auto dev65: Performance-only fresh MODERATE/HEAVY gate, all profile/thermal/battery/state/Safe-mode/watchdog holds, fail-closed ABI, exact baseline and readback cleanup'
 )
 
 

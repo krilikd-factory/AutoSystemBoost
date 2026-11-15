@@ -731,8 +731,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "237" ] || fail "expected 237 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "237" ] || fail "expected 237 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "245" ] || fail "expected 245 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "245" ] || fail "expected 245 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -755,7 +755,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "105" ] || fail "expected 105 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "113" ] || fail "expected 113 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -799,7 +799,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (237 keys; 41 user, 64 advanced, 132 internal)'
+echo 'PASS config ownership registry contract (245 keys; 49 user, 64 advanced, 132 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -9701,6 +9701,127 @@ grep -nE '^[[:space:]]*#|[[:space:]]#[[:space:]]' "$H" | grep -v '^1:#!' && fail
 echo 'PASS module desc zygisk: "[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]", six Zygisk states, one wording in every writer, old-format lines replaced, unchanged refresh writes nothing, bounded 10 s settle after boot, profile writer appends it, WebUI refresh once per session'
 )
 
+t_display_ui_settings_runtime_dev64() (
+set -euo pipefail
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_display_ui.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL display/ui settings dev64: $*" >&2; exit 1; }
+M="$T/mod"; S="$T/settings"; W="$T/writer"
+mkdir -p "$M/runtime" "$M/config" "$S" "$T/bin" "$W/mod/config" "$W/state"
+cp "$ROOT/runtime/asb_display_ui_apply.sh" "$ROOT/runtime/asb_settings.sh" "$ROOT/runtime/asb_baseline.sh" "$M/runtime/"
+cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$W/mod/config/"
+cat > "$M/config/governor.conf" <<'CFG'
+ui_recents_memory=stock
+ui_recents_corner_radius=stock
+ui_smooth_corners=stock
+ui_nav_handle_autohide=stock
+feel_pointer_speed=stock
+feel_gesture_mistouch=stock
+feel_game_memc=stock
+feel_dc_dimming=stock
+CFG
+cat > "$T/bin/settings" <<'MOCK'
+#!/bin/sh
+p="$S/$1.$2"
+case "$1" in
+  get) [ -f "$S/$2.$3" ] && cat "$S/$2.$3" || printf 'null\n' ;;
+  put)
+    [ "${FAIL_SETTING:-}" = "$2/$3" ] && exit 0
+    printf '%s\n' "$4" > "$S/$2.$3"
+    ;;
+  delete) rm -f "$S/$2.$3" ;;
+  *) exit 1 ;;
+esac
+MOCK
+chmod +x "$T/bin/settings"
+export S PATH="$T/bin:$PATH" MODDIR="$M" ASB_BASELINE="$T/baseline.txt"
+printf '30000\n' > "$S/system.screen_off_timeout"
+setval() { printf '%s\n' "$3" > "$S/$1.$2"; }
+getval() { [ -f "$S/$1.$2" ] && cat "$S/$1.$2" || printf 'null\n'; }
+setcfg() { sed -i "s|^$1=.*|$1=$2|" "$M/config/governor.conf"; }
+run_apply() { sh "$M/runtime/asb_display_ui_apply.sh" "$@"; }
+setval secure display_memory_information_recent_task 0
+setval global oost_recent_task_radius 0
+setval global oost_recent_task_radius_dp -1
+setval global smooth_corner_enabled 1
+setval global oost_navigation_handle_auto_hide 1
+setval system pointer_speed 0
+setval secure gesture_mistouch_prevention_enable 1
+setval secure display_memc_game_enable 0
+setval secure display_dc_settings_switch 1
+out="$(run_apply apply ui_recents_memory)"
+[ "$out" = 'ui_recents_memory|stock_unowned|no_baseline' ] || fail "untouched stock: $out"
+[ ! -e "$ASB_BASELINE" ] || fail 'stock without ownership created a baseline'
+setcfg ui_recents_memory on
+setcfg ui_recents_corner_radius 20
+setcfg ui_smooth_corners off
+setcfg ui_nav_handle_autohide off
+setcfg feel_pointer_speed -7
+setcfg feel_gesture_mistouch off
+setcfg feel_game_memc on
+setcfg feel_dc_dimming off
+run_apply apply >/dev/null || fail 'bounded apply set rejected'
+[ "$(getval secure display_memory_information_recent_task)" = 1 ] || fail 'Recents memory mapping'
+[ "$(getval global oost_recent_task_radius)" = 1 ] || fail 'Recents radius master mapping'
+[ "$(getval global oost_recent_task_radius_dp)" = 20 ] || fail 'Recents radius dp mapping'
+[ "$(getval global smooth_corner_enabled)" = 0 ] || fail 'smooth corners mapping'
+[ "$(getval global oost_navigation_handle_auto_hide)" = 0 ] || fail 'navigation handle mapping'
+[ "$(getval system pointer_speed)" = -7 ] || fail 'pointer speed mapping'
+[ "$(getval secure gesture_mistouch_prevention_enable)" = 0 ] || fail 'mistouch mapping'
+[ "$(getval secure display_memc_game_enable)" = 1 ] || fail 'game MEMC mapping'
+[ "$(getval secure display_dc_settings_switch)" = 0 ] || fail 'DC dimming mapping'
+for key in ui_recents_memory ui_recents_corner_radius ui_smooth_corners ui_nav_handle_autohide feel_pointer_speed feel_gesture_mistouch feel_game_memc feel_dc_dimming; do setcfg "$key" stock; done
+run_apply apply >/dev/null || fail 'exact baseline restore rejected'
+[ "$(getval secure display_memory_information_recent_task)" = 0 ] || fail 'Recents memory restore'
+[ "$(getval global oost_recent_task_radius)" = 0 ] || fail 'Recents radius master restore'
+[ "$(getval global oost_recent_task_radius_dp)" = -1 ] || fail 'Recents radius dp restore'
+[ "$(getval global smooth_corner_enabled)" = 1 ] || fail 'smooth corners restore'
+[ "$(getval global oost_navigation_handle_auto_hide)" = 1 ] || fail 'navigation handle restore'
+[ "$(getval system pointer_speed)" = 0 ] || fail 'pointer speed restore'
+[ "$(getval secure gesture_mistouch_prevention_enable)" = 1 ] || fail 'mistouch restore'
+[ "$(getval secure display_memc_game_enable)" = 0 ] || fail 'game MEMC restore'
+[ "$(getval secure display_dc_settings_switch)" = 1 ] || fail 'DC dimming restore'
+# A rejected write is a visible error and returns the original value, never a false success.
+# Start away from the requested value: matching the target by coincidence is not a rejected write fixture.
+printf '0\n' > "$S/secure.display_dc_settings_switch"
+setcfg feel_dc_dimming on
+if out="$(FAIL_SETTING=secure/display_dc_settings_switch run_apply apply feel_dc_dimming 2>/dev/null)"; then fail 'rejected DC write returned success'; fi
+[ "$out" = 'feel_dc_dimming|write_failed|readback_mismatch' ] || fail "rejected write verdict: $out"
+[ "$(getval secure display_dc_settings_switch)" = 0 ] || fail 'rejected DC write did not restore the pre-attempt value'
+setcfg feel_dc_dimming stock
+run_apply apply feel_dc_dimming >/dev/null || fail 'Stock restore after a rejected edit failed'
+[ "$(getval secure display_dc_settings_switch)" = 1 ] || fail 'rejected edit damaged the persistent pre-ASB baseline'
+# Failure of only the dp half must also roll back the radius master.
+setcfg ui_recents_corner_radius 24
+if out="$(FAIL_SETTING=global/oost_recent_task_radius_dp run_apply apply ui_recents_corner_radius 2>/dev/null)"; then fail 'partial radius write returned success'; fi
+[ "$out" = 'ui_recents_corner_radius|write_failed|readback_mismatch' ] || fail "partial radius verdict: $out"
+[ "$(getval global oost_recent_task_radius)" = 0 ] || fail 'partial radius master was not rolled back'
+[ "$(getval global oost_recent_task_radius_dp)" = -1 ] || fail 'partial radius dp was not rolled back'
+setcfg ui_recents_corner_radius stock
+# Boot reconciles only explicit overrides; it must not restore a stock key over a later user change.
+printf '5\n' > "$S/system.pointer_speed"
+run_apply boot >/dev/null || fail 'stock-only boot failed'
+[ "$(getval system pointer_speed)" = 5 ] || fail 'stock boot overwrote a later user value'
+# Atomic config validation accepts only the same bounded vocabulary.
+run_writer() { MODDIR="$W/mod" ASB_CONFIG_STATE="$W/state" sh "$ROOT/runtime/asb_config_safe.sh" "$@"; }
+run_writer set feel_pointer_speed -7 "$W/state/snapshot" >/dev/null || fail 'valid pointer speed rejected'
+run_writer set ui_recents_corner_radius 32 "$W/state/snapshot" >/dev/null || fail 'valid radius rejected'
+for pair in 'feel_pointer_speed -8' 'feel_pointer_speed 8' 'ui_recents_corner_radius 33' 'feel_game_memc 1'; do
+  before="$(sha256sum "$W/mod/config/governor.conf" | cut -d' ' -f1)"
+  if run_writer set $pair "$W/state/snapshot" >/dev/null 2>&1; then fail "invalid value accepted: $pair"; fi
+  after="$(sha256sum "$W/mod/config/governor.conf" | cut -d' ' -f1)"
+  [ "$before" = "$after" ] || fail "invalid write changed config: $pair"
+done
+need() { grep -F "$2" "$1" >/dev/null || fail "$3"; }
+need "$ROOT/common/install.sh" 'asb_display_ui_apply.sh' 'installer executable registration missing'
+need "$ROOT/service.sh" 'asb_display_ui_apply.sh" boot' 'boot reconcile missing'
+need "$ROOT/.github/workflows/build-test.yml" 'runtime/asb_display_ui_apply.sh' 'test CI syntax list missing'
+need "$ROOT/.github/workflows/build-release.yml" 'runtime/asb_display_ui_apply.sh' 'release CI syntax list missing'
+need "$ROOT/webroot/index.html" 'DISPLAY_UI_KEYS' 'WebUI read-back verdict branch missing'
+echo 'PASS display/ui settings dev64: eight bounded mappings, exact restore, rejected-write and paired-radius rollback, stock boot ownership, atomic config validation, installer/CI/WebUI wiring'
+)
+
 t_benchmark_learning_isolation_dev63() (
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -9722,6 +9843,78 @@ assert 'INTENT_BENCHMARK' not in s[a:b], 'Battery classifier must not be relabel
 assert 'fsm.ses_intent = INTENT_BENCHMARK;' in s[b:b+500], 'non-Battery thermal burst classifier disappeared'
 PY
 echo 'PASS benchmark learning isolation dev63: Smart benchmark bursts no longer teach the shared Balanced store; Battery classification and ordinary sessions unchanged'
+)
+
+t_scheduler_ab_evidence_dev65() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+TOOL="$ROOT/tools/asb_scheduler_ab.py"
+fail() { echo "FAIL scheduler A/B evidence dev65: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+python3 -I "$TOOL" template --output "$T/template.json" --family 6.12.x-android16 \
+  --source-commit 0123456789abcdef0123456789abcdef01234567 --feature-set bore || fail 'template'
+python3 - "$T" <<'PY' || fail 'template contract'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); d=json.loads((p/'template.json').read_text())
+assert d['status']=='not_measured' and d['kind']=='asb_scheduler_capture'
+assert set(d['metrics'])=={'frame_time_p95_ms','frame_time_p99_ms','jank_percent','cpu_residency','temperature_c','battery_current_ma','battery_drain_percent_per_hour','network_latency_ms','network_jitter_ms','thermal_throttling_duration_s','kernel_logs','asb_counters'}
+assert all(v is None for v in d['metrics'].values())
+PY
+python3 -I "$TOOL" validate "$T/template.json" > "$T/validation.json" || fail 'not-measured template rejected'
+python3 - "$T" "$TOOL" <<'PY' || fail 'validation/comparison semantics'
+import copy,json,pathlib,subprocess,sys
+p=pathlib.Path(sys.argv[1]); tool=sys.argv[2]
+def run(*args): return subprocess.run(['python3','-I',tool,*map(str,args)],text=True,capture_output=True)
+def write(name,data): q=p/name; q.write_text(json.dumps(data)); return q
+base=json.loads((p/'template.json').read_text())
+base.update(status='measured',label='6.12.69 BORE off')
+base['kernel'].update(release='6.12.69-android16-test',version='#1 SMP')
+base['identity'].update(root='KernelSU test build',susfs='SUSFS test build',asb='V66 dev65')
+base['workload'].update(name='identical scroll workload',duration_s=600,screen='on')
+base['thermal_state'].update(start_skin_c=34.0,start_cpu_c=41.0,throttled_at_start=False)
+base['bore'].update(build_config='y',runtime='off')
+base['metrics'].update(frame_time_p95_ms=10.0,frame_time_p99_ms=16,jank_percent=2.5,cpu_residency={'p0':{'1000000':2.5}},kernel_logs={'throttle':'none'},asb_counters={'profile_switches':2})
+b=write('base.json',base)
+r=run('validate',b); assert r.returncode==0,r.stderr
+candidate=copy.deepcopy(base); candidate['label']='6.12.69 BORE on'; candidate['bore']['runtime']='on'
+candidate['thermal_state'].update(start_skin_c=34.5,start_cpu_c=41.0)
+candidate['metrics']['frame_time_p95_ms']=9.0; candidate['metrics']['cpu_residency']['p0']['1000000']=3.0
+candidate['metrics']['asb_counters']['profile_switches']=2
+c=write('candidate.json',candidate); out=p/'comparison.json'
+r=run('compare',b,c,'--output',out); assert r.returncode==0,r.stderr
+report=json.loads(out.read_text()); m=report['metrics']
+assert m['metrics.frame_time_p95_ms']['delta']==-1.0
+assert m['metrics.cpu_residency.p0.1000000']['delta']==0.5
+assert m['metrics.asb_counters.profile_switches']['delta']==0
+assert m['metrics.kernel_logs.throttle']['delta'] is None and m['metrics.kernel_logs.throttle']['status']=='recorded_not_compared'
+assert m['metrics.network_latency_ms']['status']=='not_measured' and m['metrics.network_latency_ms']['delta'] is None
+assert report['thermal_comparability']['start_delta_c']['start_skin_c']==0.5
+assert report['improvement_claim']=='not_computed' and 'not independently attested' in report['evidence_scope']
+partial=copy.deepcopy(candidate); partial['metrics']['frame_time_p95_ms']=None
+q=write('partial.json',partial); r=run('compare',b,q); assert r.returncode==0,r.stderr
+line=json.loads(r.stdout)['metrics']['metrics.frame_time_p95_ms']; assert line['status']=='not_comparable' and line['delta'] is None and line['candidate'] is None
+for section,key in [('identity','root'),('identity','susfs'),('identity','asb'),('identity','feature_set'),('kernel','release'),('kernel','version'),('kernel','source_commit'),('kernel','family'),('workload','name'),('workload','duration_s'),('workload','screen'),('bore','build_config')]:
+ bad=copy.deepcopy(candidate); bad[section][key]='different-value'
+ q=write('bad.json',bad); r=run('compare',b,q)
+ assert r.returncode!=0,(section,key,r.stdout,r.stderr)
+bad=copy.deepcopy(candidate); bad['bore']['runtime']='off'; q=write('bad-direction.json',bad)
+assert run('compare',b,q).returncode!=0
+bad=copy.deepcopy(base); bad['status']='not_measured'; q=write('unmeasured.json',bad)
+assert run('compare',q,c).returncode!=0
+for mutate in ('no_numeric','bad_commit','unknown_identity','bad_duration'):
+ bad=copy.deepcopy(base)
+ if mutate=='no_numeric': bad['metrics']={k:None for k in bad['metrics']}
+ elif mutate=='bad_commit': bad['kernel']['source_commit']='not_recorded'
+ elif mutate=='unknown_identity': bad['identity']['root']='unknown'
+ else: bad['workload']['duration_s']=0
+ q=write(mutate+'.json',bad); assert run('validate',q).returncode!=0,mutate
+bad=copy.deepcopy(base); bad['status']='not_measured'; q=write('false-unmeasured.json',bad)
+assert run('validate',q).returncode!=0
+(p/'nan.json').write_text('{"schema":1,"kind":"asb_scheduler_capture","status":"not_measured","metrics":{},"x":NaN}')
+assert run('validate',p/'nan.json').returncode!=0
+print('scheduler A/B fixtures OK')
+PY
+echo 'PASS scheduler A/B evidence dev65: null-safe measured-only validation, exact kernel/root/SUSFS/ASB/workload identity, numeric deltas without improvement claims'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
