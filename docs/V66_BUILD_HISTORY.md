@@ -4,6 +4,81 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev65 - conservative BORE Auto and measured-only scheduler A/B evidence
+
+Input: the dev64 source and the owner's GKI 6.12/6.18 compatibility and scheduler-policy audit.
+The audit's runtime part is implemented in the existing ASB kernel owner; the kernel-source,
+KMI and patch-applicability parts remain in the companion kernel repository.
+
+- **Conservative, opt-in BORE Auto:** `kernel_bore` now accepts `stock|auto|off|on` in the
+  closed config vocabulary, safe writer, WebUI and all 13 locales. The shipped default remains
+  `stock`; upgrades therefore do not change BORE policy. Auto is evaluated only by the existing
+  boot/profile/reinforce calls, with no polling worker or second writer.
+- **Fresh evidence and exact restore:** Auto can request `1` only in Performance, with Android
+  battery saver explicitly off, a known charge above the configured low threshold, a zero native
+  thermal cap and fresh `MODERATE` or `HEAVY` state. Both `temp_age_s` and the age derived from
+  `temp_read_epoch` must be at most 120 s; CPU, skin, surface and board readings must be numeric
+  and below the existing configured thermal boundaries. Other profiles, low/unknown charge,
+  unavailable/unknown battery-saver state, idle/gaming/SUSTAINED, heat, missing/stale/malformed
+  native status, Safe mode and watchdog recovery take the exact kernel-bound baseline restore
+  path. With no owned baseline they write nothing. Missing, read-only, non-binary or mismatching
+  BORE ABI never produces `applied`; baseline is removed only after successful restore readback.
+- **Measured-only offline A/B:** `tools/asb_scheduler_ab.py` creates an explicitly
+  `not_measured` template, validates declared field captures and compares a same-kernel BORE
+  off/on pair. It rejects mismatched kernel commit/release/version/family, root, SUSFS, ASB,
+  feature-set and workload identities. Only finite numeric leaves receive candidate-minus-
+  baseline deltas; nulls stay `not_measured`, partial data become `not_comparable`, logs remain
+  uncomputed evidence, and no improvement percentage or verdict is generated. This is a host
+  source tool, not a new on-device polling collector or release-package user tool.
+- **Tests:** targeted fixtures exercise Auto in both directions for every guard, exact zero/one
+  baselines, stale epoch versus stale age, Safe mode/watchdog, unknown/missing/read-only/
+  malformed ABI and readback cleanup. A/B fixtures cover template nulls, measured validation,
+  nested numeric deltas and every identity rejection. These are host tests, not physical
+  OnePlus 15 BORE responsiveness, thermal, battery-drain or ColorOS WebView validation.
+- **Full host regression:** the complete source-only run passed 553 `PASS` lines with zero
+  failed tests and zero `I/O error`. The single `SKIP` is the explicitly optional DSP reference
+  staging gate because the reference prebuilt `.so` files are absent; no replacement binaries
+  were created. A second clean-unpack run is part of the source-archive release check.
+
+## V66 dev64 - bounded ColorOS interface and display controls
+
+Input: the dev63 source and six SetEdit JSON exports from the owner's OnePlus 15. The exports
+were used as device evidence and ideas, not as permission to write every discovered key.
+Eight non-duplicating controls were added; adaptive-refresh, animation-scale and blur keys
+were deliberately left with their existing ASB owners.
+
+- **Interface:** Recents memory indicator (`secure/display_memory_information_recent_task`),
+  paired Recents radius master/dp value (`global/oost_recent_task_radius` and
+  `global/oost_recent_task_radius_dp`, bounded to stock/0/8/12/16/20/24/28/32), smooth screen
+  corners (`global/smooth_corner_enabled`) and navigation-handle auto-hide
+  (`global/oost_navigation_handle_auto_hide`).
+- **Display & response:** pointer speed (`system/pointer_speed`, stock or -7..7 for an actual
+  pointer rather than touchscreen polling), gesture mistouch prevention
+  (`secure/gesture_mistouch_prevention_enable`), game MEMC
+  (`secure/display_memc_game_enable`) and the DC-dimming system switch
+  (`secure/display_dc_settings_switch`). MEMC/DC visual activation remains panel-, game- and
+  ColorOS-dependent; a successful Settings write is not presented as proof of that activation.
+- **One bounded runtime owner:** `runtime/asb_display_ui_apply.sh` maps only the closed values
+  above through the existing Settings/content fallback. Every write is read back. `stock`
+  writes nothing when ASB has no baseline, and otherwise restores the exact pre-ASB value.
+  Boot re-asserts explicit overrides only. Uninstall continues through the common baseline
+  replay; no polling worker, arbitrary namespace/key/value writer or SystemUI restart was added.
+- **Two restore scopes:** a failed edit rolls back to a separate pre-attempt snapshot, while
+  the long-lived pre-ASB baseline remains intact for the later explicit return to Stock. The
+  paired Recents radius values roll back together if either half fails. WebUI distinguishes
+  `applied`, `restored`, `stock_unowned`, `write_failed` and `restore_failed`; a saved config
+  line alone never produces an applied toast.
+- **Schema and package:** all eight cards have unique SVG icons, live apply semantics,
+  snapshot/export coverage, safe-writer validation, update migration and installer/CI/boot
+  wiring. The ownership registry is synchronized at 245 keys / 113 cards. Names, descriptions,
+  per-option details and apply verdicts are present in all 13 locales.
+- **Verification:** targeted runtime fixtures cover all mappings, exact restore, rejected
+  writes, paired-radius rollback, pre-attempt versus pre-ASB restore, stock boot ownership and
+  invalid-value rejection. The complete source-only host regression with
+  `ASB_DSP_REFERENCE_OPTIONAL=1` passed all 561 PASS lines with zero failed commands and zero
+  `I/O error`. Optional reference DSP `.so` files remain absent. These are host results, not a
+  physical OnePlus 15/ColorOS WebView, launcher-radius, MEMC, DC-dimming or power measurement.
+
 ## V66 dev63 - WebUI scheduling, bounded kernel evidence and benchmark isolation
 
 Input: the owner's dev62 source, the V66 WebUI acceleration audit and the phone log/archive
