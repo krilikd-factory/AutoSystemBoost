@@ -268,6 +268,7 @@
     },
     "kernel_bore": {
       "stock": "Stock",
+      "auto": "Auto",
       "off": "Off",
       "on": "On"
     },
@@ -275,6 +276,17 @@
       "fast": "Fast",
       "balanced": "Balanced",
       "gentle": "Gentle"
+    },
+    "ui_recents_corner_radius": {
+      "stock": "Stock",
+      "0": "0 dp",
+      "8": "8 dp",
+      "12": "12 dp",
+      "16": "16 dp",
+      "20": "20 dp",
+      "24": "24 dp",
+      "28": "28 dp",
+      "32": "32 dp"
     }
   },
   "prof_none": "not selected",
@@ -819,9 +831,10 @@
     },
     "kernel_bore": {
       "name": "BORE Scheduler",
-      "desc": "BORE (Burst-Oriented Response Enhancer) changes how the kernel scheduler scores interactive and CPU-intensive tasks. On requests the BORE policy; Off disables it. Stock restores the exact value this kernel had before ASB first changed it. This card appears as writable only when /proc/sys/kernel/sched_bore exposes 0 or 1 and permits root writes; every change requires read-back. No responsiveness, smoothness or battery gain is promised.\n\n🔋 Battery life: Stock until measured on this kernel\n⚡ Responsiveness: On can be tried; return to Stock if it is worse\n✋ Not sure: Stock",
+      "desc": "BORE (Burst-Oriented Response Enhancer) changes how the kernel scheduler scores interactive and CPU-intensive tasks. On requests the BORE policy; Off disables it. Conservative Auto enables it only in Performance with fresh native thermal evidence and a normal active state, and otherwise restores the exact baseline. Stock restores the exact value this kernel had before ASB first changed it. This card appears as writable only when /proc/sys/kernel/sched_bore exposes 0 or 1 and permits root writes; every change requires read-back. No responsiveness, smoothness or battery gain is promised.\n\n🔋 Battery life: Stock until measured on this kernel\n⚡ Responsiveness: Auto or On can be tried; return to Stock if worse\n✋ Not sure: Stock",
       "descOpt": {
         "stock": "Restores the exact 0 or 1 captured before ASB first changed this kernel; without an ASB baseline, writes nothing.",
+        "auto": "Performance only: enables BORE with fresh native thermal evidence and a normal active state. Restores the exact baseline in other profiles, battery saver, low charge, heat, idle/gaming, Safe mode and watchdog recovery; missing or stale status follows that restore path, and with no baseline writes nothing.",
         "off": "Writes 0 to disable BORE, then verifies the value read back from the kernel.",
         "on": "Writes 1 to enable BORE, then verifies the value read back from the kernel. This is an experiment, not a guaranteed improvement."
       }
@@ -904,6 +917,79 @@
         "fast": "Reaches the advertised idle floor sooner and can step down during short pauses; actual power use is device-dependent.",
         "balanced": "Keeps the previous ASB timing: two seconds before the first step and one second between advertised modes.",
         "gentle": "Waits longer and steps down more slowly, preserving a higher refresh rate through short pauses."
+      }
+    },
+    "ui_recents_memory": {
+      "name": "Recents Memory Indicator",
+      "desc": "Controls the ColorOS memory readout in Recents through display_memory_information_recent_task. Stock leaves the ROM/user setting alone; after an ASB override it restores the exact previous value. Applies live only when Settings read-back confirms the write.",
+      "descOpt": {
+        "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
+        "on": "Enable this setting and verify the write by read-back.",
+        "off": "Disable this setting and verify the write by read-back."
+      }
+    },
+    "ui_recents_corner_radius": {
+      "name": "Recents Corner Radius",
+      "desc": "Sets the ColorOS Recents card radius in dp and its matching oost_recent_task_radius master. Both values are captured and restored together. A ROM or launcher that ignores these keys can still retain its own appearance; ASB reports only verified Settings writes, not a visual guarantee.",
+      "descOpt": {
+        "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
+        "0": "Set the radius to 0 dp and enable the paired ColorOS radius master.",
+        "8": "Set the radius to 8 dp and enable the paired ColorOS radius master.",
+        "12": "Set the radius to 12 dp and enable the paired ColorOS radius master.",
+        "16": "Set the radius to 16 dp and enable the paired ColorOS radius master.",
+        "20": "Set the radius to 20 dp and enable the paired ColorOS radius master.",
+        "24": "Set the radius to 24 dp and enable the paired ColorOS radius master.",
+        "28": "Set the radius to 28 dp and enable the paired ColorOS radius master.",
+        "32": "Set the radius to 32 dp and enable the paired ColorOS radius master."
+      }
+    },
+    "ui_smooth_corners": {
+      "name": "Smooth Screen Corners",
+      "desc": "Controls the ColorOS smooth_corner_enabled setting for rounded interface geometry. This is not a display-panel overclock or a rendering bypass. Stock preserves the existing value; unsupported visual behaviour is not claimed merely because the setting was stored.",
+      "descOpt": {
+        "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
+        "on": "Enable this setting and verify the write by read-back.",
+        "off": "Disable this setting and verify the write by read-back."
+      }
+    },
+    "ui_nav_handle_autohide": {
+      "name": "Auto-hide Navigation Handle",
+      "desc": "Controls oost_navigation_handle_auto_hide for the gesture navigation handle. It does not switch navigation mode or hide the handle permanently. The original setting is restored when returned to Stock.",
+      "descOpt": {
+        "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
+        "on": "Enable this setting and verify the write by read-back.",
+        "off": "Disable this setting and verify the write by read-back."
+      }
+    },
+    "feel_pointer_speed": {
+      "name": "Pointer Speed",
+      "desc": "Sets Android pointer_speed from -7 to 7 for a mouse, trackpad or other pointer; it is not a touchscreen sensitivity or polling-rate hack. Stock leaves the current value untouched and restores the exact pre-ASB value after an override."
+    },
+    "feel_gesture_mistouch": {
+      "name": "Gesture Mistouch Prevention",
+      "desc": "Controls the ColorOS gesture_mistouch_prevention_enable switch. On may reject some edge touches; Off deliberately disables that protection. Game-specific OEM rules can still apply. No touch sampling-rate change is claimed.",
+      "descOpt": {
+        "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
+        "on": "Enable this setting and verify the write by read-back.",
+        "off": "Disable this setting and verify the write by read-back."
+      }
+    },
+    "feel_game_memc": {
+      "name": "Game MEMC",
+      "desc": "Controls display_memc_game_enable, the ColorOS game motion-interpolation setting. Actual interpolation depends on the panel, supported games and OEM display service; it can add latency or power use. ASB verifies the setting write, not MEMC activation in every game.",
+      "descOpt": {
+        "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
+        "on": "Enable this setting and verify the write by read-back.",
+        "off": "Disable this setting and verify the write by read-back."
+      }
+    },
+    "feel_dc_dimming": {
+      "name": "DC Dimming System Switch",
+      "desc": "Controls display_dc_settings_switch where ColorOS exposes DC dimming. Panel and brightness restrictions still belong to the OEM; this does not force an unsupported panel mode or bypass thermal/display drivers. Stock restores the exact previous setting.",
+      "descOpt": {
+        "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
+        "on": "Enable this setting and verify the write by read-back.",
+        "off": "Disable this setting and verify the write by read-back."
       }
     }
   },
@@ -3549,7 +3635,7 @@
   "kernel_wb_critical_short": "system source",
   "kc_why_kernel_bore": "This kernel exposes no /proc/sys/kernel/sched_bore control. CONFIG_SCHED_BORE or an install-log line alone does not prove a runtime interface. ASB writes nothing.",
   "dev_sec_kernel_bore": "BORE scheduler",
-  "dev_guide_kernel_bore": "CONFIG_SCHED_BORE is build evidence; /proc/sys/kernel/sched_bore is the runtime interface. This read-only diagnostic never writes it. The separate Kernel setting accepts only Stock, Off and On, and an apply is successful only after read-back.",
+  "dev_guide_kernel_bore": "CONFIG_SCHED_BORE is build evidence; /proc/sys/kernel/sched_bore is the runtime interface. This read-only diagnostic never writes it. The separate Kernel setting accepts Stock, conservative Auto, Off and On; an apply is successful only after read-back.",
   "dev_kernel_bore_config": "CONFIG_SCHED_BORE",
   "dev_kernel_bore_node": "Runtime control node",
   "dev_kernel_bore_runtime_interface": "Runtime interface",
@@ -3710,5 +3796,9 @@
   "dev_zygisk_provider_install_pending_removal": "Pending removal",
   "dev_zygisk_provider_install_not_detected": "Not detected in module metadata",
   "dev_zygisk_provider_install_multiple_enabled": "Multiple enabled providers",
-  "dev_zygisk_provider_install_multiple_inactive": "Multiple installations; none enabled"
+  "dev_zygisk_provider_install_multiple_inactive": "Multiple installations; none enabled",
+  "t_cfg_restored": " · original value restored",
+  "t_cfg_stock_unowned": " · stock value left untouched",
+  "t_cfg_restore_failed": "original value could not be restored",
+  "t_cfg_write_rejected": "the ROM did not confirm the setting"
 }

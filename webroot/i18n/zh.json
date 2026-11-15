@@ -763,6 +763,7 @@
       "desc": "BORE 会改变内核调度器对交互型和 CPU 密集型任务的评分。“开启”启用该策略，“关闭”将其禁用。“原厂”恢复 ASB 首次修改前的准确值。只有 /proc/sys/kernel/sched_bore 提供 0 或 1 且允许 root 写入时才可修改；每次更改都会回读验证。不承诺提升响应、流畅度或续航。\n\n🔋 续航：在此内核上实测前使用“原厂”\n⚡ 响应：可尝试“开启”；若变差请恢复“原厂”\n✋ 不确定：原厂",
       "descOpt": {
         "stock": "恢复 ASB 首次修改前保存的 0 或 1；没有 ASB 基准值时不写入任何内容。",
+        "auto": "仅在性能模式下，且原生温度状态为最新、系统处于正常活动状态时启用 BORE。其他模式、省电、低电量、发热、空闲/游戏、安全模式和 watchdog 恢复均恢复精确基准值；状态缺失或过期时也执行该恢复路径，没有基准值则不写入。",
         "off": "写入 0 以禁用 BORE，然后验证从内核回读的值。",
         "on": "写入 1 以启用 BORE，然后验证回读值。这是一次实验，并非保证有所改善。"
       }
@@ -774,6 +775,79 @@
         "fast": "更快达到声明的空闲下限，并可在短暂停顿时降频；实际功耗取决于设备。",
         "balanced": "保留 ASB 先前的计时：第一步前等待两秒，声明的模式之间间隔一秒。",
         "gentle": "等待更久、降频更慢，在短暂停顿期间保持更高刷新率。"
+      }
+    },
+    "ui_recents_memory": {
+      "name": "最近任务内存指示",
+      "desc": "最近任务内存指示：控制 secure/display_memory_information_recent_task。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。",
+      "descOpt": {
+        "stock": "Stock：不修改现有值；ASB 更改后恢复此前的精确值。",
+        "on": "启用设置并通过回读确认写入。",
+        "off": "停用设置并通过回读确认写入。"
+      }
+    },
+    "ui_recents_corner_radius": {
+      "name": "最近任务卡片圆角",
+      "desc": "最近任务卡片圆角：控制 global/oost_recent_task_radius + oost_recent_task_radius_dp。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。",
+      "descOpt": {
+        "stock": "Stock：不修改现有值；ASB 更改后恢复此前的精确值。",
+        "0": "设置 0 dp 圆角并启用关联的 ColorOS 开关。",
+        "8": "设置 8 dp 圆角并启用关联的 ColorOS 开关。",
+        "12": "设置 12 dp 圆角并启用关联的 ColorOS 开关。",
+        "16": "设置 16 dp 圆角并启用关联的 ColorOS 开关。",
+        "20": "设置 20 dp 圆角并启用关联的 ColorOS 开关。",
+        "24": "设置 24 dp 圆角并启用关联的 ColorOS 开关。",
+        "28": "设置 28 dp 圆角并启用关联的 ColorOS 开关。",
+        "32": "设置 32 dp 圆角并启用关联的 ColorOS 开关。"
+      }
+    },
+    "ui_smooth_corners": {
+      "name": "屏幕平滑圆角",
+      "desc": "屏幕平滑圆角：控制 global/smooth_corner_enabled。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。",
+      "descOpt": {
+        "stock": "Stock：不修改现有值；ASB 更改后恢复此前的精确值。",
+        "on": "启用设置并通过回读确认写入。",
+        "off": "停用设置并通过回读确认写入。"
+      }
+    },
+    "ui_nav_handle_autohide": {
+      "name": "自动隐藏导航手柄",
+      "desc": "自动隐藏导航手柄：控制 global/oost_navigation_handle_auto_hide。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。",
+      "descOpt": {
+        "stock": "Stock：不修改现有值；ASB 更改后恢复此前的精确值。",
+        "on": "启用设置并通过回读确认写入。",
+        "off": "停用设置并通过回读确认写入。"
+      }
+    },
+    "feel_pointer_speed": {
+      "name": "指针速度",
+      "desc": "指针速度：控制 system/pointer_speed。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。"
+    },
+    "feel_gesture_mistouch": {
+      "name": "防误触手势",
+      "desc": "防误触手势：控制 secure/gesture_mistouch_prevention_enable。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。",
+      "descOpt": {
+        "stock": "Stock：不修改现有值；ASB 更改后恢复此前的精确值。",
+        "on": "启用设置并通过回读确认写入。",
+        "off": "停用设置并通过回读确认写入。"
+      }
+    },
+    "feel_game_memc": {
+      "name": "游戏 MEMC",
+      "desc": "游戏 MEMC：控制 secure/display_memc_game_enable。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。",
+      "descOpt": {
+        "stock": "Stock：不修改现有值；ASB 更改后恢复此前的精确值。",
+        "on": "启用设置并通过回读确认写入。",
+        "off": "停用设置并通过回读确认写入。"
+      }
+    },
+    "feel_dc_dimming": {
+      "name": "DC 调光系统开关",
+      "desc": "DC 调光系统开关：控制 secure/display_dc_settings_switch。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。",
+      "descOpt": {
+        "stock": "Stock：不修改现有值；ASB 更改后恢复此前的精确值。",
+        "on": "启用设置并通过回读确认写入。",
+        "off": "停用设置并通过回读确认写入。"
       }
     }
   },
@@ -1011,6 +1085,7 @@
     },
     "kernel_bore": {
       "stock": "原厂",
+      "auto": "自动",
       "off": "关闭",
       "on": "开启"
     },
@@ -1018,6 +1093,17 @@
       "fast": "快速",
       "balanced": "均衡",
       "gentle": "缓和"
+    },
+    "ui_recents_corner_radius": {
+      "stock": "默认",
+      "0": "0 dp",
+      "8": "8 dp",
+      "12": "12 dp",
+      "16": "16 dp",
+      "20": "20 dp",
+      "24": "24 dp",
+      "28": "28 dp",
+      "32": "32 dp"
     }
   },
   "prof_none": "未选择",
@@ -3816,5 +3902,9 @@
   "dev_zygisk_provider_install_pending_removal": "待删除",
   "dev_zygisk_provider_install_not_detected": "未在模块元数据中检测到",
   "dev_zygisk_provider_install_multiple_enabled": "多个已启用的提供程序",
-  "dev_zygisk_provider_install_multiple_inactive": "多个安装；均未启用"
+  "dev_zygisk_provider_install_multiple_inactive": "多个安装；均未启用",
+  "t_cfg_restored": " · 已恢复原值",
+  "t_cfg_stock_unowned": " · 未修改 Stock 值",
+  "t_cfg_restore_failed": "无法恢复原值",
+  "t_cfg_write_rejected": "系统未确认该设置"
 }

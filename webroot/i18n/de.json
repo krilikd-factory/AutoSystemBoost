@@ -733,6 +733,7 @@
       "desc": "BORE verändert, wie der Kernel-Scheduler interaktive und CPU-intensive Tasks bewertet. Ein aktiviert die Richtlinie, Aus deaktiviert sie. Standard stellt den exakten Wert vor der ersten ASB-Änderung wieder her. Schreibzugriff wird nur angeboten, wenn /proc/sys/kernel/sched_bore 0 oder 1 liefert und Root-Schreiben erlaubt; jede Änderung wird zurückgelesen. Keine Zusage für Reaktion, Flüssigkeit oder Akkulaufzeit.\n\n🔋 Akku: Standard, bis auf diesem Kernel gemessen wurde\n⚡ Reaktion: Ein testen; bei Verschlechterung zurück zu Standard\n✋ Unsicher: Standard",
       "descOpt": {
         "stock": "Stellt die vor der ersten ASB-Änderung gespeicherte 0 oder 1 wieder her; ohne ASB-Basiswert wird nichts geschrieben.",
+        "auto": "Aktiviert BORE nur im Leistungsprofil bei frischen Thermaldaten und normalem aktivem Zustand. Stellt sonst, bei Akkusparmodus, niedrigem Ladestand, Hitze, Idle/Gaming, Safe Mode und Watchdog-Wiederherstellung den exakten Basiswert wieder her; fehlende oder veraltete Statusdaten folgen demselben Wiederherstellungspfad, ohne Basiswert wird nichts geschrieben.",
         "off": "Schreibt 0 zum Deaktivieren von BORE und prüft den zurückgelesenen Kernel-Wert.",
         "on": "Schreibt 1 zum Aktivieren von BORE und prüft den zurückgelesenen Wert. Ein Experiment, kein garantierter Gewinn."
       }
@@ -744,6 +745,79 @@
         "fast": "Erreicht das gemeldete Leerlaufminimum früher und kann schon in kurzen Pausen absenken; der tatsächliche Verbrauch ist geräteabhängig.",
         "balanced": "Behält das bisherige ASB-Timing: zwei Sekunden vor dem ersten Schritt und eine Sekunde zwischen gemeldeten Modi.",
         "gentle": "Wartet länger und senkt langsamer ab, damit kurze Pausen mit höherer Frequenz überbrückt werden."
+      }
+    },
+    "ui_recents_memory": {
+      "name": "Speicheranzeige in zuletzt verwendet",
+      "desc": "Speicheranzeige in zuletzt verwendet: steuert secure/display_memory_information_recent_task. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab.",
+      "descOpt": {
+        "stock": "Stock: fremden Wert unverändert lassen und nach einer ASB-Änderung exakt wiederherstellen.",
+        "on": "Einstellung aktivieren und den Schreibvorgang per Read-back bestätigen.",
+        "off": "Einstellung deaktivieren und den Schreibvorgang per Read-back bestätigen."
+      }
+    },
+    "ui_recents_corner_radius": {
+      "name": "Eckenradius der Übersicht",
+      "desc": "Eckenradius der Übersicht: steuert global/oost_recent_task_radius + oost_recent_task_radius_dp. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab.",
+      "descOpt": {
+        "stock": "Stock: fremden Wert unverändert lassen und nach einer ASB-Änderung exakt wiederherstellen.",
+        "0": "Radius 0 dp setzen und den zugehörigen ColorOS-Schalter aktivieren.",
+        "8": "Radius 8 dp setzen und den zugehörigen ColorOS-Schalter aktivieren.",
+        "12": "Radius 12 dp setzen und den zugehörigen ColorOS-Schalter aktivieren.",
+        "16": "Radius 16 dp setzen und den zugehörigen ColorOS-Schalter aktivieren.",
+        "20": "Radius 20 dp setzen und den zugehörigen ColorOS-Schalter aktivieren.",
+        "24": "Radius 24 dp setzen und den zugehörigen ColorOS-Schalter aktivieren.",
+        "28": "Radius 28 dp setzen und den zugehörigen ColorOS-Schalter aktivieren.",
+        "32": "Radius 32 dp setzen und den zugehörigen ColorOS-Schalter aktivieren."
+      }
+    },
+    "ui_smooth_corners": {
+      "name": "Glatte Bildschirmecken",
+      "desc": "Glatte Bildschirmecken: steuert global/smooth_corner_enabled. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab.",
+      "descOpt": {
+        "stock": "Stock: fremden Wert unverändert lassen und nach einer ASB-Änderung exakt wiederherstellen.",
+        "on": "Einstellung aktivieren und den Schreibvorgang per Read-back bestätigen.",
+        "off": "Einstellung deaktivieren und den Schreibvorgang per Read-back bestätigen."
+      }
+    },
+    "ui_nav_handle_autohide": {
+      "name": "Navigationsleiste automatisch ausblenden",
+      "desc": "Navigationsleiste automatisch ausblenden: steuert global/oost_navigation_handle_auto_hide. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab.",
+      "descOpt": {
+        "stock": "Stock: fremden Wert unverändert lassen und nach einer ASB-Änderung exakt wiederherstellen.",
+        "on": "Einstellung aktivieren und den Schreibvorgang per Read-back bestätigen.",
+        "off": "Einstellung deaktivieren und den Schreibvorgang per Read-back bestätigen."
+      }
+    },
+    "feel_pointer_speed": {
+      "name": "Zeigergeschwindigkeit",
+      "desc": "Zeigergeschwindigkeit: steuert system/pointer_speed. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab."
+    },
+    "feel_gesture_mistouch": {
+      "name": "Schutz vor versehentlichen Gesten",
+      "desc": "Schutz vor versehentlichen Gesten: steuert secure/gesture_mistouch_prevention_enable. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab.",
+      "descOpt": {
+        "stock": "Stock: fremden Wert unverändert lassen und nach einer ASB-Änderung exakt wiederherstellen.",
+        "on": "Einstellung aktivieren und den Schreibvorgang per Read-back bestätigen.",
+        "off": "Einstellung deaktivieren und den Schreibvorgang per Read-back bestätigen."
+      }
+    },
+    "feel_game_memc": {
+      "name": "Spiele-MEMC",
+      "desc": "Spiele-MEMC: steuert secure/display_memc_game_enable. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab.",
+      "descOpt": {
+        "stock": "Stock: fremden Wert unverändert lassen und nach einer ASB-Änderung exakt wiederherstellen.",
+        "on": "Einstellung aktivieren und den Schreibvorgang per Read-back bestätigen.",
+        "off": "Einstellung deaktivieren und den Schreibvorgang per Read-back bestätigen."
+      }
+    },
+    "feel_dc_dimming": {
+      "name": "DC-Dimming-Systemschalter",
+      "desc": "DC-Dimming-Systemschalter: steuert secure/display_dc_settings_switch. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab.",
+      "descOpt": {
+        "stock": "Stock: fremden Wert unverändert lassen und nach einer ASB-Änderung exakt wiederherstellen.",
+        "on": "Einstellung aktivieren und den Schreibvorgang per Read-back bestätigen.",
+        "off": "Einstellung deaktivieren und den Schreibvorgang per Read-back bestätigen."
       }
     }
   },
@@ -1011,6 +1085,7 @@
     },
     "kernel_bore": {
       "stock": "Standard",
+      "auto": "Auto",
       "off": "Aus",
       "on": "Ein"
     },
@@ -1018,6 +1093,17 @@
       "fast": "Schnell",
       "balanced": "Ausgewogen",
       "gentle": "Sanft"
+    },
+    "ui_recents_corner_radius": {
+      "stock": "Standard",
+      "0": "0 dp",
+      "8": "8 dp",
+      "12": "12 dp",
+      "16": "16 dp",
+      "20": "20 dp",
+      "24": "24 dp",
+      "28": "28 dp",
+      "32": "32 dp"
     }
   },
   "prof_none": "nicht gewählt",
@@ -3816,5 +3902,9 @@
   "dev_zygisk_provider_install_pending_removal": "Entfernung vorgemerkt",
   "dev_zygisk_provider_install_not_detected": "In Modulmetadaten nicht erkannt",
   "dev_zygisk_provider_install_multiple_enabled": "Mehrere aktivierte Anbieter",
-  "dev_zygisk_provider_install_multiple_inactive": "Mehrere Installationen; keine aktiviert"
+  "dev_zygisk_provider_install_multiple_inactive": "Mehrere Installationen; keine aktiviert",
+  "t_cfg_restored": " · Ausgangswert wiederhergestellt",
+  "t_cfg_stock_unowned": " · Stock-Wert unverändert gelassen",
+  "t_cfg_restore_failed": "Ausgangswert konnte nicht wiederhergestellt werden",
+  "t_cfg_write_rejected": "das ROM hat die Einstellung nicht bestätigt"
 }

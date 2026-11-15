@@ -733,6 +733,7 @@
       "desc": "BORE, çekirdek zamanlayıcısının etkileşimli ve CPU yoğun görevleri değerlendirmesini değiştirir. Açık ilkeyi etkinleştirir, Kapalı devre dışı bırakır. Varsayılan, ASB’nin ilk değişikliğinden önceki tam değeri geri yükler. Yazma yalnızca /proc/sys/kernel/sched_bore 0 veya 1 sunup root yazımına izin verdiğinde kullanılabilir; her değişiklik geri okunur. Yanıt, akıcılık veya pil kazancı vaat edilmez.\n\n🔋 Pil: Bu çekirdekte ölçülene kadar Varsayılan\n⚡ Yanıt: Açık denenebilir; kötüleşirse Varsayılan’a dönün\n✋ Emin değilseniz: Varsayılan",
       "descOpt": {
         "stock": "ASB’nin ilk değişikliğinden önce kaydedilen 0 veya 1 değerini geri yükler; ASB taban değeri yoksa hiçbir şey yazmaz.",
+        "auto": "Yalnızca Performans profilinde, yeni yerel termal veri ve normal etkin durumla BORE’yi açar. Diğer profillerde, pil tasarrufunda, düşük şarjda, ısıda, boşta/oyunda, Güvenli modda ve watchdog kurtarmasında tam taban değerini geri yükler; eksik veya eski durum aynı geri yükleme yolunu izler ve taban değer yoksa yazmaz.",
         "off": "BORE’yi kapatmak için 0 yazar ve çekirdekten geri okunan değeri doğrular.",
         "on": "BORE’yi açmak için 1 yazar ve geri okunan değeri doğrular. Bu bir denemedir, garantili iyileştirme değildir."
       }
@@ -744,6 +745,79 @@
         "fast": "Bildirilen boşta tabanına daha erken ulaşır ve kısa duraklamalarda düşebilir; gerçek güç kullanımı cihaza bağlıdır.",
         "balanced": "Önceki ASB zamanlamasını korur: ilk adımdan önce iki saniye ve bildirilen modlar arasında bir saniye.",
         "gentle": "Daha uzun bekler ve daha yavaş düşerek kısa duraklamalarda daha yüksek yenileme hızını korur."
+      }
+    },
+    "ui_recents_memory": {
+      "name": "Son Kullanılanlar bellek göstergesi",
+      "desc": "Son Kullanılanlar bellek göstergesi: secure/display_memory_information_recent_task ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır.",
+      "descOpt": {
+        "stock": "Stock: mevcut değeri değiştirme; ASB değişikliğinden sonra önceki değeri aynen geri yükle.",
+        "on": "Ayarı aç ve yazmayı geri okuma ile doğrula.",
+        "off": "Ayarı kapat ve yazmayı geri okuma ile doğrula."
+      }
+    },
+    "ui_recents_corner_radius": {
+      "name": "Son kartların köşe yarıçapı",
+      "desc": "Son kartların köşe yarıçapı: global/oost_recent_task_radius + oost_recent_task_radius_dp ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır.",
+      "descOpt": {
+        "stock": "Stock: mevcut değeri değiştirme; ASB değişikliğinden sonra önceki değeri aynen geri yükle.",
+        "0": "Yarıçapı 0 dp yap ve ilişkili ColorOS anahtarını aç.",
+        "8": "Yarıçapı 8 dp yap ve ilişkili ColorOS anahtarını aç.",
+        "12": "Yarıçapı 12 dp yap ve ilişkili ColorOS anahtarını aç.",
+        "16": "Yarıçapı 16 dp yap ve ilişkili ColorOS anahtarını aç.",
+        "20": "Yarıçapı 20 dp yap ve ilişkili ColorOS anahtarını aç.",
+        "24": "Yarıçapı 24 dp yap ve ilişkili ColorOS anahtarını aç.",
+        "28": "Yarıçapı 28 dp yap ve ilişkili ColorOS anahtarını aç.",
+        "32": "Yarıçapı 32 dp yap ve ilişkili ColorOS anahtarını aç."
+      }
+    },
+    "ui_smooth_corners": {
+      "name": "Yumuşak ekran köşeleri",
+      "desc": "Yumuşak ekran köşeleri: global/smooth_corner_enabled ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır.",
+      "descOpt": {
+        "stock": "Stock: mevcut değeri değiştirme; ASB değişikliğinden sonra önceki değeri aynen geri yükle.",
+        "on": "Ayarı aç ve yazmayı geri okuma ile doğrula.",
+        "off": "Ayarı kapat ve yazmayı geri okuma ile doğrula."
+      }
+    },
+    "ui_nav_handle_autohide": {
+      "name": "Gezinme tutamacını otomatik gizle",
+      "desc": "Gezinme tutamacını otomatik gizle: global/oost_navigation_handle_auto_hide ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır.",
+      "descOpt": {
+        "stock": "Stock: mevcut değeri değiştirme; ASB değişikliğinden sonra önceki değeri aynen geri yükle.",
+        "on": "Ayarı aç ve yazmayı geri okuma ile doğrula.",
+        "off": "Ayarı kapat ve yazmayı geri okuma ile doğrula."
+      }
+    },
+    "feel_pointer_speed": {
+      "name": "İşaretçi hızı",
+      "desc": "İşaretçi hızı: system/pointer_speed ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır."
+    },
+    "feel_gesture_mistouch": {
+      "name": "Yanlışlıkla dokunma koruması",
+      "desc": "Yanlışlıkla dokunma koruması: secure/gesture_mistouch_prevention_enable ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır.",
+      "descOpt": {
+        "stock": "Stock: mevcut değeri değiştirme; ASB değişikliğinden sonra önceki değeri aynen geri yükle.",
+        "on": "Ayarı aç ve yazmayı geri okuma ile doğrula.",
+        "off": "Ayarı kapat ve yazmayı geri okuma ile doğrula."
+      }
+    },
+    "feel_game_memc": {
+      "name": "Oyun MEMC",
+      "desc": "Oyun MEMC: secure/display_memc_game_enable ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır.",
+      "descOpt": {
+        "stock": "Stock: mevcut değeri değiştirme; ASB değişikliğinden sonra önceki değeri aynen geri yükle.",
+        "on": "Ayarı aç ve yazmayı geri okuma ile doğrula.",
+        "off": "Ayarı kapat ve yazmayı geri okuma ile doğrula."
+      }
+    },
+    "feel_dc_dimming": {
+      "name": "DC karartma sistem anahtarı",
+      "desc": "DC karartma sistem anahtarı: secure/display_dc_settings_switch ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır.",
+      "descOpt": {
+        "stock": "Stock: mevcut değeri değiştirme; ASB değişikliğinden sonra önceki değeri aynen geri yükle.",
+        "on": "Ayarı aç ve yazmayı geri okuma ile doğrula.",
+        "off": "Ayarı kapat ve yazmayı geri okuma ile doğrula."
       }
     }
   },
@@ -1011,6 +1085,7 @@
     },
     "kernel_bore": {
       "stock": "Varsayılan",
+      "auto": "Otomatik",
       "off": "Kapalı",
       "on": "Açık"
     },
@@ -1018,6 +1093,17 @@
       "fast": "Hızlı",
       "balanced": "Dengeli",
       "gentle": "Yumuşak"
+    },
+    "ui_recents_corner_radius": {
+      "stock": "Varsayılan",
+      "0": "0 dp",
+      "8": "8 dp",
+      "12": "12 dp",
+      "16": "16 dp",
+      "20": "20 dp",
+      "24": "24 dp",
+      "28": "28 dp",
+      "32": "32 dp"
     }
   },
   "prof_none": "seçilmedi",
@@ -3816,5 +3902,9 @@
   "dev_zygisk_provider_install_pending_removal": "Kaldırma bekliyor",
   "dev_zygisk_provider_install_not_detected": "Modül meta verilerinde algılanmadı",
   "dev_zygisk_provider_install_multiple_enabled": "Birden fazla etkin sağlayıcı",
-  "dev_zygisk_provider_install_multiple_inactive": "Birden fazla kurulum; hiçbiri etkin değil"
+  "dev_zygisk_provider_install_multiple_inactive": "Birden fazla kurulum; hiçbiri etkin değil",
+  "t_cfg_restored": " · özgün değer geri yüklendi",
+  "t_cfg_stock_unowned": " · Stock değeri değiştirilmedi",
+  "t_cfg_restore_failed": "özgün değer geri yüklenemedi",
+  "t_cfg_write_rejected": "ROM ayarı doğrulamadı"
 }

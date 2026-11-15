@@ -733,6 +733,7 @@
       "desc": "BORE mengubah cara penjadwal kernel menilai tugas interaktif dan berat CPU. Nyala mengaktifkan kebijakan, Mati menonaktifkannya. Bawaan memulihkan nilai persis sebelum perubahan pertama ASB. Penulisan hanya tersedia jika /proc/sys/kernel/sched_bore mengekspos 0 atau 1 dan mengizinkan tulis root; setiap perubahan dibaca kembali. Tidak ada janji peningkatan respons, kelancaran, atau baterai.\n\n🔋 Baterai: Bawaan sampai diukur pada kernel ini\n⚡ Respons: coba Nyala; kembali ke Bawaan jika memburuk\n✋ Tidak yakin: Bawaan",
       "descOpt": {
         "stock": "Memulihkan 0 atau 1 yang disimpan sebelum perubahan pertama ASB; tanpa nilai dasar ASB, tidak ada yang ditulis.",
+        "auto": "Hanya di profil Performance, mengaktifkan BORE dengan data termal native baru dan status aktif normal. Memulihkan baseline persis di profil lain, penghemat baterai, daya rendah, panas, idle/game, Safe mode, dan pemulihan watchdog; status yang hilang atau kedaluwarsa mengikuti pemulihan itu dan tanpa baseline tidak menulis apa pun.",
         "off": "Menulis 0 untuk menonaktifkan BORE lalu memverifikasi nilai yang dibaca kembali dari kernel.",
         "on": "Menulis 1 untuk mengaktifkan BORE lalu memverifikasi nilai yang dibaca kembali. Ini percobaan, bukan peningkatan yang dijamin."
       }
@@ -744,6 +745,79 @@
         "fast": "Mencapai batas idle yang diumumkan lebih cepat dan dapat turun saat jeda singkat; konsumsi daya nyata bergantung pada perangkat.",
         "balanced": "Mempertahankan pewaktuan ASB sebelumnya: dua detik sebelum langkah pertama dan satu detik antarmode yang diumumkan.",
         "gentle": "Menunggu lebih lama dan turun lebih lambat untuk mempertahankan refresh lebih tinggi selama jeda singkat."
+      }
+    },
+    "ui_recents_memory": {
+      "name": "Indikator memori Terbaru",
+      "desc": "Indikator memori Terbaru: mengontrol secure/display_memory_information_recent_task. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi.",
+      "descOpt": {
+        "stock": "Stock: jangan ubah nilai yang ada; setelah perubahan ASB, pulihkan nilai sebelumnya secara persis.",
+        "on": "Aktifkan setelan dan konfirmasi penulisan dengan read-back.",
+        "off": "Nonaktifkan setelan dan konfirmasi penulisan dengan read-back."
+      }
+    },
+    "ui_recents_corner_radius": {
+      "name": "Radius sudut kartu Terbaru",
+      "desc": "Radius sudut kartu Terbaru: mengontrol global/oost_recent_task_radius + oost_recent_task_radius_dp. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi.",
+      "descOpt": {
+        "stock": "Stock: jangan ubah nilai yang ada; setelah perubahan ASB, pulihkan nilai sebelumnya secara persis.",
+        "0": "Tetapkan radius 0 dp dan aktifkan sakelar ColorOS terkait.",
+        "8": "Tetapkan radius 8 dp dan aktifkan sakelar ColorOS terkait.",
+        "12": "Tetapkan radius 12 dp dan aktifkan sakelar ColorOS terkait.",
+        "16": "Tetapkan radius 16 dp dan aktifkan sakelar ColorOS terkait.",
+        "20": "Tetapkan radius 20 dp dan aktifkan sakelar ColorOS terkait.",
+        "24": "Tetapkan radius 24 dp dan aktifkan sakelar ColorOS terkait.",
+        "28": "Tetapkan radius 28 dp dan aktifkan sakelar ColorOS terkait.",
+        "32": "Tetapkan radius 32 dp dan aktifkan sakelar ColorOS terkait."
+      }
+    },
+    "ui_smooth_corners": {
+      "name": "Sudut layar halus",
+      "desc": "Sudut layar halus: mengontrol global/smooth_corner_enabled. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi.",
+      "descOpt": {
+        "stock": "Stock: jangan ubah nilai yang ada; setelah perubahan ASB, pulihkan nilai sebelumnya secara persis.",
+        "on": "Aktifkan setelan dan konfirmasi penulisan dengan read-back.",
+        "off": "Nonaktifkan setelan dan konfirmasi penulisan dengan read-back."
+      }
+    },
+    "ui_nav_handle_autohide": {
+      "name": "Sembunyikan handle navigasi",
+      "desc": "Sembunyikan handle navigasi: mengontrol global/oost_navigation_handle_auto_hide. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi.",
+      "descOpt": {
+        "stock": "Stock: jangan ubah nilai yang ada; setelah perubahan ASB, pulihkan nilai sebelumnya secara persis.",
+        "on": "Aktifkan setelan dan konfirmasi penulisan dengan read-back.",
+        "off": "Nonaktifkan setelan dan konfirmasi penulisan dengan read-back."
+      }
+    },
+    "feel_pointer_speed": {
+      "name": "Kecepatan pointer",
+      "desc": "Kecepatan pointer: mengontrol system/pointer_speed. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi."
+    },
+    "feel_gesture_mistouch": {
+      "name": "Pencegahan sentuhan tak sengaja",
+      "desc": "Pencegahan sentuhan tak sengaja: mengontrol secure/gesture_mistouch_prevention_enable. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi.",
+      "descOpt": {
+        "stock": "Stock: jangan ubah nilai yang ada; setelah perubahan ASB, pulihkan nilai sebelumnya secara persis.",
+        "on": "Aktifkan setelan dan konfirmasi penulisan dengan read-back.",
+        "off": "Nonaktifkan setelan dan konfirmasi penulisan dengan read-back."
+      }
+    },
+    "feel_game_memc": {
+      "name": "MEMC game",
+      "desc": "MEMC game: mengontrol secure/display_memc_game_enable. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi.",
+      "descOpt": {
+        "stock": "Stock: jangan ubah nilai yang ada; setelah perubahan ASB, pulihkan nilai sebelumnya secara persis.",
+        "on": "Aktifkan setelan dan konfirmasi penulisan dengan read-back.",
+        "off": "Nonaktifkan setelan dan konfirmasi penulisan dengan read-back."
+      }
+    },
+    "feel_dc_dimming": {
+      "name": "Sakelar peredupan DC",
+      "desc": "Sakelar peredupan DC: mengontrol secure/display_dc_settings_switch. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi.",
+      "descOpt": {
+        "stock": "Stock: jangan ubah nilai yang ada; setelah perubahan ASB, pulihkan nilai sebelumnya secara persis.",
+        "on": "Aktifkan setelan dan konfirmasi penulisan dengan read-back.",
+        "off": "Nonaktifkan setelan dan konfirmasi penulisan dengan read-back."
       }
     }
   },
@@ -1011,6 +1085,7 @@
     },
     "kernel_bore": {
       "stock": "Bawaan",
+      "auto": "Otomatis",
       "off": "Mati",
       "on": "Nyala"
     },
@@ -1018,6 +1093,17 @@
       "fast": "Cepat",
       "balanced": "Seimbang",
       "gentle": "Lembut"
+    },
+    "ui_recents_corner_radius": {
+      "stock": "Standar",
+      "0": "0 dp",
+      "8": "8 dp",
+      "12": "12 dp",
+      "16": "16 dp",
+      "20": "20 dp",
+      "24": "24 dp",
+      "28": "28 dp",
+      "32": "32 dp"
     }
   },
   "prof_none": "belum dipilih",
@@ -3816,5 +3902,9 @@
   "dev_zygisk_provider_install_pending_removal": "Menunggu penghapusan",
   "dev_zygisk_provider_install_not_detected": "Tidak terdeteksi dalam metadata modul",
   "dev_zygisk_provider_install_multiple_enabled": "Beberapa penyedia aktif",
-  "dev_zygisk_provider_install_multiple_inactive": "Beberapa pemasangan; tidak ada yang aktif"
+  "dev_zygisk_provider_install_multiple_inactive": "Beberapa pemasangan; tidak ada yang aktif",
+  "t_cfg_restored": " · nilai asli dipulihkan",
+  "t_cfg_stock_unowned": " · nilai Stock tidak diubah",
+  "t_cfg_restore_failed": "nilai asli tidak dapat dipulihkan",
+  "t_cfg_write_rejected": "ROM tidak mengonfirmasi setelan"
 }

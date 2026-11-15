@@ -843,6 +843,7 @@
       "desc": "BORE modifie l’évaluation des tâches interactives et gourmandes en CPU par l’ordonnanceur du noyau. Activé applique la politique, Désactivé la coupe. Origine restaure la valeur exacte précédant la première modification ASB. L’écriture n’est proposée que si /proc/sys/kernel/sched_bore expose 0 ou 1 et autorise root ; chaque changement est relu. Aucun gain de réactivité, fluidité ou autonomie n’est promis.\n\n🔋 Autonomie : Origine jusqu’à mesure sur ce noyau\n⚡ Réactivité : essayez Activé ; revenez à Origine si c’est pire\n✋ En cas de doute : Origine",
       "descOpt": {
         "stock": "Restaure le 0 ou 1 enregistré avant la première modification ASB ; sans valeur de référence ASB, rien n’est écrit.",
+        "auto": "En mode Performance uniquement, active BORE avec des données thermiques récentes et un état actif normal. Restaure la valeur de référence exacte dans les autres profils, en économie de batterie, charge faible, chaleur, veille/jeu, mode sans échec et récupération du watchdog ; un état absent ou obsolète suit cette restauration et, sans référence, rien n’est écrit.",
         "off": "Écrit 0 pour désactiver BORE, puis vérifie la valeur relue du noyau.",
         "on": "Écrit 1 pour activer BORE, puis vérifie la valeur relue. C’est un essai, pas un gain garanti."
       }
@@ -854,6 +855,79 @@
         "fast": "Atteint plus tôt le minimum de repos annoncé et peut descendre pendant de courtes pauses ; la consommation réelle dépend de l’appareil.",
         "balanced": "Conserve l’ancien rythme ASB : deux secondes avant le premier palier et une seconde entre les modes annoncés.",
         "gentle": "Attend plus longtemps et descend plus lentement pour conserver une fréquence élevée pendant les courtes pauses."
+      }
+    },
+    "ui_recents_memory": {
+      "name": "Mémoire dans les applications récentes",
+      "desc": "Mémoire dans les applications récentes : contrôle secure/display_memory_information_recent_task. « Stock » conserve la valeur actuelle ; après une modification, ASB restaure exactement la valeur précédente. Le succès exige une relecture Settings confirmée ; l’effet visible dépend de ColorOS, de l’écran et de l’application.",
+      "descOpt": {
+        "stock": "Stock : ne pas modifier la valeur existante et restaurer exactement la valeur antérieure après ASB.",
+        "on": "Activer le réglage et confirmer l’écriture par relecture.",
+        "off": "Désactiver le réglage et confirmer l’écriture par relecture."
+      }
+    },
+    "ui_recents_corner_radius": {
+      "name": "Rayon des cartes récentes",
+      "desc": "Rayon des cartes récentes : contrôle global/oost_recent_task_radius + oost_recent_task_radius_dp. « Stock » conserve la valeur actuelle ; après une modification, ASB restaure exactement la valeur précédente. Le succès exige une relecture Settings confirmée ; l’effet visible dépend de ColorOS, de l’écran et de l’application.",
+      "descOpt": {
+        "stock": "Stock : ne pas modifier la valeur existante et restaurer exactement la valeur antérieure après ASB.",
+        "0": "Définir un rayon de 0 dp et activer le commutateur ColorOS associé.",
+        "8": "Définir un rayon de 8 dp et activer le commutateur ColorOS associé.",
+        "12": "Définir un rayon de 12 dp et activer le commutateur ColorOS associé.",
+        "16": "Définir un rayon de 16 dp et activer le commutateur ColorOS associé.",
+        "20": "Définir un rayon de 20 dp et activer le commutateur ColorOS associé.",
+        "24": "Définir un rayon de 24 dp et activer le commutateur ColorOS associé.",
+        "28": "Définir un rayon de 28 dp et activer le commutateur ColorOS associé.",
+        "32": "Définir un rayon de 32 dp et activer le commutateur ColorOS associé."
+      }
+    },
+    "ui_smooth_corners": {
+      "name": "Coins d’écran adoucis",
+      "desc": "Coins d’écran adoucis : contrôle global/smooth_corner_enabled. « Stock » conserve la valeur actuelle ; après une modification, ASB restaure exactement la valeur précédente. Le succès exige une relecture Settings confirmée ; l’effet visible dépend de ColorOS, de l’écran et de l’application.",
+      "descOpt": {
+        "stock": "Stock : ne pas modifier la valeur existante et restaurer exactement la valeur antérieure après ASB.",
+        "on": "Activer le réglage et confirmer l’écriture par relecture.",
+        "off": "Désactiver le réglage et confirmer l’écriture par relecture."
+      }
+    },
+    "ui_nav_handle_autohide": {
+      "name": "Masquage automatique de la poignée",
+      "desc": "Masquage automatique de la poignée : contrôle global/oost_navigation_handle_auto_hide. « Stock » conserve la valeur actuelle ; après une modification, ASB restaure exactement la valeur précédente. Le succès exige une relecture Settings confirmée ; l’effet visible dépend de ColorOS, de l’écran et de l’application.",
+      "descOpt": {
+        "stock": "Stock : ne pas modifier la valeur existante et restaurer exactement la valeur antérieure après ASB.",
+        "on": "Activer le réglage et confirmer l’écriture par relecture.",
+        "off": "Désactiver le réglage et confirmer l’écriture par relecture."
+      }
+    },
+    "feel_pointer_speed": {
+      "name": "Vitesse du pointeur",
+      "desc": "Vitesse du pointeur : contrôle system/pointer_speed. « Stock » conserve la valeur actuelle ; après une modification, ASB restaure exactement la valeur précédente. Le succès exige une relecture Settings confirmée ; l’effet visible dépend de ColorOS, de l’écran et de l’application."
+    },
+    "feel_gesture_mistouch": {
+      "name": "Protection contre les gestes accidentels",
+      "desc": "Protection contre les gestes accidentels : contrôle secure/gesture_mistouch_prevention_enable. « Stock » conserve la valeur actuelle ; après une modification, ASB restaure exactement la valeur précédente. Le succès exige une relecture Settings confirmée ; l’effet visible dépend de ColorOS, de l’écran et de l’application.",
+      "descOpt": {
+        "stock": "Stock : ne pas modifier la valeur existante et restaurer exactement la valeur antérieure après ASB.",
+        "on": "Activer le réglage et confirmer l’écriture par relecture.",
+        "off": "Désactiver le réglage et confirmer l’écriture par relecture."
+      }
+    },
+    "feel_game_memc": {
+      "name": "MEMC dans les jeux",
+      "desc": "MEMC dans les jeux : contrôle secure/display_memc_game_enable. « Stock » conserve la valeur actuelle ; après une modification, ASB restaure exactement la valeur précédente. Le succès exige une relecture Settings confirmée ; l’effet visible dépend de ColorOS, de l’écran et de l’application.",
+      "descOpt": {
+        "stock": "Stock : ne pas modifier la valeur existante et restaurer exactement la valeur antérieure après ASB.",
+        "on": "Activer le réglage et confirmer l’écriture par relecture.",
+        "off": "Désactiver le réglage et confirmer l’écriture par relecture."
+      }
+    },
+    "feel_dc_dimming": {
+      "name": "Interrupteur DC Dimming",
+      "desc": "Interrupteur DC Dimming : contrôle secure/display_dc_settings_switch. « Stock » conserve la valeur actuelle ; après une modification, ASB restaure exactement la valeur précédente. Le succès exige une relecture Settings confirmée ; l’effet visible dépend de ColorOS, de l’écran et de l’application.",
+      "descOpt": {
+        "stock": "Stock : ne pas modifier la valeur existante et restaurer exactement la valeur antérieure après ASB.",
+        "on": "Activer le réglage et confirmer l’écriture par relecture.",
+        "off": "Désactiver le réglage et confirmer l’écriture par relecture."
       }
     }
   },
@@ -1113,6 +1187,7 @@
     },
     "kernel_bore": {
       "stock": "Origine",
+      "auto": "Auto",
       "off": "Désactivé",
       "on": "Activé"
     },
@@ -1120,6 +1195,17 @@
       "fast": "Rapide",
       "balanced": "Équilibré",
       "gentle": "Progressif"
+    },
+    "ui_recents_corner_radius": {
+      "stock": "stock",
+      "0": "0 dp",
+      "8": "8 dp",
+      "12": "12 dp",
+      "16": "16 dp",
+      "20": "20 dp",
+      "24": "24 dp",
+      "28": "28 dp",
+      "32": "32 dp"
     }
   },
   "prof_none": "non sélectionné",
@@ -3816,5 +3902,9 @@
   "dev_zygisk_provider_install_pending_removal": "Suppression en attente",
   "dev_zygisk_provider_install_not_detected": "Non détecté dans les métadonnées des modules",
   "dev_zygisk_provider_install_multiple_enabled": "Plusieurs fournisseurs activés",
-  "dev_zygisk_provider_install_multiple_inactive": "Plusieurs installations ; aucune activée"
+  "dev_zygisk_provider_install_multiple_inactive": "Plusieurs installations ; aucune activée",
+  "t_cfg_restored": " · valeur d’origine restaurée",
+  "t_cfg_stock_unowned": " · valeur Stock inchangée",
+  "t_cfg_restore_failed": "impossible de restaurer la valeur d’origine",
+  "t_cfg_write_rejected": "le ROM n’a pas confirmé le réglage"
 }

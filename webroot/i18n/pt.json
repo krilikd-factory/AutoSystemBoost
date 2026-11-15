@@ -733,6 +733,7 @@
       "desc": "O BORE muda como o agendador do kernel avalia tarefas interativas e intensivas em CPU. Ligado ativa a política, Desligado a desativa. Padrão restaura o valor exato anterior à primeira alteração do ASB. A gravação só aparece quando /proc/sys/kernel/sched_bore expõe 0 ou 1 e permite escrita root; cada alteração é relida. Não há promessa de ganho de resposta, fluidez ou bateria.\n\n🔋 Bateria: Padrão até medir neste kernel\n⚡ Resposta: teste Ligado; volte a Padrão se piorar\n✋ Em dúvida: Padrão",
       "descOpt": {
         "stock": "Restaura o 0 ou 1 salvo antes da primeira alteração do ASB; sem valor-base do ASB, nada é gravado.",
+        "auto": "Somente no perfil Desempenho, ativa o BORE com evidência térmica nativa recente e estado ativo normal. Restaura o valor-base exato nos outros perfis, economia de bateria, carga baixa, calor, idle/jogos, modo de segurança e recuperação do watchdog; estado ausente ou desatualizado segue essa restauração e, sem valor-base, nada é gravado.",
         "off": "Grava 0 para desativar o BORE e verifica o valor relido do kernel.",
         "on": "Grava 1 para ativar o BORE e verifica o valor relido. É um experimento, não uma melhoria garantida."
       }
@@ -744,6 +745,79 @@
         "fast": "Alcança antes o mínimo de repouso anunciado e pode reduzir em pausas curtas; o consumo real depende do aparelho.",
         "balanced": "Mantém a temporização anterior do ASB: dois segundos antes do primeiro passo e um entre modos anunciados.",
         "gentle": "Espera mais e reduz mais devagar, preservando uma taxa maior durante pausas curtas."
+      }
+    },
+    "ui_recents_memory": {
+      "name": "Memória em Recentes",
+      "desc": "Memória em Recentes: controla secure/display_memory_information_recent_task. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação.",
+      "descOpt": {
+        "stock": "Stock: não alterar o valor existente e restaurar exatamente o anterior depois do ASB.",
+        "on": "Ativar a definição e confirmar a escrita por leitura.",
+        "off": "Desativar a definição e confirmar a escrita por leitura."
+      }
+    },
+    "ui_recents_corner_radius": {
+      "name": "Raio dos cartões recentes",
+      "desc": "Raio dos cartões recentes: controla global/oost_recent_task_radius + oost_recent_task_radius_dp. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação.",
+      "descOpt": {
+        "stock": "Stock: não alterar o valor existente e restaurar exatamente o anterior depois do ASB.",
+        "0": "Definir o raio para 0 dp e ativar o controlo ColorOS associado.",
+        "8": "Definir o raio para 8 dp e ativar o controlo ColorOS associado.",
+        "12": "Definir o raio para 12 dp e ativar o controlo ColorOS associado.",
+        "16": "Definir o raio para 16 dp e ativar o controlo ColorOS associado.",
+        "20": "Definir o raio para 20 dp e ativar o controlo ColorOS associado.",
+        "24": "Definir o raio para 24 dp e ativar o controlo ColorOS associado.",
+        "28": "Definir o raio para 28 dp e ativar o controlo ColorOS associado.",
+        "32": "Definir o raio para 32 dp e ativar o controlo ColorOS associado."
+      }
+    },
+    "ui_smooth_corners": {
+      "name": "Cantos suaves do ecrã",
+      "desc": "Cantos suaves do ecrã: controla global/smooth_corner_enabled. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação.",
+      "descOpt": {
+        "stock": "Stock: não alterar o valor existente e restaurar exatamente o anterior depois do ASB.",
+        "on": "Ativar a definição e confirmar a escrita por leitura.",
+        "off": "Desativar a definição e confirmar a escrita por leitura."
+      }
+    },
+    "ui_nav_handle_autohide": {
+      "name": "Ocultar indicador de navegação",
+      "desc": "Ocultar indicador de navegação: controla global/oost_navigation_handle_auto_hide. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação.",
+      "descOpt": {
+        "stock": "Stock: não alterar o valor existente e restaurar exatamente o anterior depois do ASB.",
+        "on": "Ativar a definição e confirmar a escrita por leitura.",
+        "off": "Desativar a definição e confirmar a escrita por leitura."
+      }
+    },
+    "feel_pointer_speed": {
+      "name": "Velocidade do ponteiro",
+      "desc": "Velocidade do ponteiro: controla system/pointer_speed. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação."
+    },
+    "feel_gesture_mistouch": {
+      "name": "Proteção contra toques acidentais",
+      "desc": "Proteção contra toques acidentais: controla secure/gesture_mistouch_prevention_enable. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação.",
+      "descOpt": {
+        "stock": "Stock: não alterar o valor existente e restaurar exatamente o anterior depois do ASB.",
+        "on": "Ativar a definição e confirmar a escrita por leitura.",
+        "off": "Desativar a definição e confirmar a escrita por leitura."
+      }
+    },
+    "feel_game_memc": {
+      "name": "MEMC em jogos",
+      "desc": "MEMC em jogos: controla secure/display_memc_game_enable. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação.",
+      "descOpt": {
+        "stock": "Stock: não alterar o valor existente e restaurar exatamente o anterior depois do ASB.",
+        "on": "Ativar a definição e confirmar a escrita por leitura.",
+        "off": "Desativar a definição e confirmar a escrita por leitura."
+      }
+    },
+    "feel_dc_dimming": {
+      "name": "Interruptor de escurecimento CC",
+      "desc": "Interruptor de escurecimento CC: controla secure/display_dc_settings_switch. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação.",
+      "descOpt": {
+        "stock": "Stock: não alterar o valor existente e restaurar exatamente o anterior depois do ASB.",
+        "on": "Ativar a definição e confirmar a escrita por leitura.",
+        "off": "Desativar a definição e confirmar a escrita por leitura."
       }
     }
   },
@@ -1011,6 +1085,7 @@
     },
     "kernel_bore": {
       "stock": "Padrão",
+      "auto": "Automático",
       "off": "Desligado",
       "on": "Ligado"
     },
@@ -1018,6 +1093,17 @@
       "fast": "Rápida",
       "balanced": "Equilibrada",
       "gentle": "Suave"
+    },
+    "ui_recents_corner_radius": {
+      "stock": "Padrão",
+      "0": "0 dp",
+      "8": "8 dp",
+      "12": "12 dp",
+      "16": "16 dp",
+      "20": "20 dp",
+      "24": "24 dp",
+      "28": "28 dp",
+      "32": "32 dp"
     }
   },
   "prof_none": "não selecionado",
@@ -3816,5 +3902,9 @@
   "dev_zygisk_provider_install_pending_removal": "Remoção pendente",
   "dev_zygisk_provider_install_not_detected": "Não detetado nos metadados dos módulos",
   "dev_zygisk_provider_install_multiple_enabled": "Vários fornecedores ativados",
-  "dev_zygisk_provider_install_multiple_inactive": "Várias instalações; nenhuma ativada"
+  "dev_zygisk_provider_install_multiple_inactive": "Várias instalações; nenhuma ativada",
+  "t_cfg_restored": " · valor original restaurado",
+  "t_cfg_stock_unowned": " · valor Stock inalterado",
+  "t_cfg_restore_failed": "não foi possível restaurar o valor original",
+  "t_cfg_write_rejected": "a ROM não confirmou a definição"
 }
