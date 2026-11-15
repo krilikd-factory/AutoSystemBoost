@@ -558,7 +558,7 @@
     },
     "kernel_lpm_prediction": {
       "name": "Previsione inattività (LPM)",
-      "desc": "L’interruttore lpm_prediction appartiene al vecchio driver di inattività Snapdragon lpm_levels. I kernel Snapdragon più recenti usano il governor qcom-cpu-lpm, che non lo ha, e allora ASB non scrive nulla. Su un kernel che lo espone, Auto attiva la previsione solo nel profilo Battery; On può risparmiare energia a riposo a scapito della latenza di risveglio, Off prova il compromesso opposto. Non è l’LPM di Android né la politica radio."
+      "desc": "Previsione degli stati di inattività del driver cpuidle Snapdragon: lpm_prediction sui kernel più vecchi con il driver lpm_levels, prediction_disabled del governor qcom-cpu-lpm su quelli più recenti (lì ASB scrive il valore invertito e lo mostra nei termini della scheda, 1 = previsione attiva). Auto attiva la previsione solo nel profilo Battery; On può risparmiare energia a riposo a scapito della latenza di risveglio, Off prova il compromesso opposto; Stock ripristina il valore proprio del kernel. Non è l’LPM di Android né la politica radio."
     },
     "kernel_usb_autosuspend": {
       "name": "Autosospensione USB",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "dopo il riavvio",
   "lsp_db_schema_empty": "Il database di LSPosed trovato da ASB non contiene tabelle, quindi non c’è un elenco di moduli da leggere. Se LSPosed mostra dei moduli, li conserva altrove: invia l’esportazione diagnostica.",
   "kc_why_kernel_sched_nr_migrate": "Serve un kernel compilato con il debug dello scheduler (CONFIG_SCHED_DEBUG) e debugfs. ASB monta debugfs in privato solo per il momento in cui legge o scrive il valore, quindi se entrambi sono inclusi non serve altro.",
-  "kc_why_kernel_sched_autogroup": "Questo kernel non ha l’interruttore autogroup. I kernel GKI di norma sono compilati senza CONFIG_SCHED_AUTOGROUP perché modifica signal_struct, su cui sono compilati i moduli del produttore; ASB non lo aggira.",
-  "kc_why_kernel_lpm_prediction": "Questo kernel non espone l’interruttore lpm_prediction. Appartiene al vecchio driver di inattività lpm_levels; i kernel con il governor qcom-cpu-lpm non lo hanno. ASB non scrive nulla; l’esportazione diagnostica elenca i parametri del driver di inattività di questo kernel.",
+  "kc_why_kernel_sched_autogroup": "Questo kernel non ha l’interruttore autogroup. I kernel GKI di norma sono compilati senza CONFIG_SCHED_AUTOGROUP perché modifica signal_struct, su cui sono compilati i moduli del produttore; ASB non lo aggira. Anche se integrato, raggrupperebbe solo i task rimasti nel cgroup CPU radice, e Android colloca i task delle app nei propri gruppi CPU.",
+  "kc_why_kernel_lpm_prediction": "Questo kernel non espone né lpm_prediction del vecchio driver lpm_levels né prediction_disabled del governor qcom-cpu-lpm. ASB non scrive nulla; l’esportazione diagnostica elenca i parametri del driver di inattività di questo kernel.",
   "kernel_wb_observe_title": "Rilevato nella finestra di inattività",
   "kernel_wb_observe_idle": "Nessuna misurazione. Avvia prima di spegnere lo schermo e aggiorna al risveglio. È inclusa anche l’attività a schermo acceso.",
   "kernel_wb_observe_running": "Finestra: {elapsed} · sorgenti cambiate: {n}",

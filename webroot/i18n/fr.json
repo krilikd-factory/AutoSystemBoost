@@ -638,7 +638,7 @@
     },
     "kernel_lpm_prediction": {
       "name": "Prédiction d’inactivité (LPM)",
-      "desc": "Le réglage lpm_prediction appartient à l’ancien pilote de veille Snapdragon lpm_levels. Les noyaux Snapdragon récents utilisent le gouverneur qcom-cpu-lpm, qui n’a pas ce réglage, et ASB n’écrit alors rien. Sur un noyau qui l’expose, Auto active la prédiction uniquement en profil Battery ; On peut économiser de l’énergie au repos au prix de la latence de réveil, Off teste le compromis inverse. Ce n’est ni le LPM d’Android ni la politique radio."
+      "desc": "Prédiction des états de veille du pilote cpuidle Snapdragon : lpm_prediction sur les anciens noyaux avec le pilote lpm_levels, prediction_disabled du gouverneur qcom-cpu-lpm sur les plus récents (ASB y écrit la valeur inversée et l’affiche dans les termes de la carte, 1 = prédiction active). Auto active la prédiction uniquement en profil Battery ; On peut économiser de l’énergie au repos au prix de la latence de réveil, Off teste le compromis inverse ; Stock rétablit la valeur propre du noyau. Ce n’est ni le LPM d’Android ni la politique radio."
     },
     "kernel_usb_autosuspend": {
       "name": "Autosuspension USB",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "après redémarrage",
   "lsp_db_schema_empty": "La base LSPosed trouvée par ASB ne contient aucune table : il n’y a donc aucune liste de modules à lire. Si LSPosed affiche lui-même des modules, il les garde ailleurs : envoyez l’export de diagnostic.",
   "kc_why_kernel_sched_nr_migrate": "Nécessite un noyau compilé avec le débogage de l’ordonnanceur (CONFIG_SCHED_DEBUG) et debugfs. ASB monte debugfs en privé uniquement le temps de lire ou d’écrire la valeur : si les deux sont intégrés, rien d’autre n’est nécessaire.",
-  "kc_why_kernel_sched_autogroup": "Ce noyau n’a pas de réglage autogroup. Les noyaux GKI sont normalement compilés sans CONFIG_SCHED_AUTOGROUP, car il modifie signal_struct, sur laquelle les modules du constructeur sont compilés ; ASB ne contourne pas cela.",
-  "kc_why_kernel_lpm_prediction": "Ce noyau n’expose pas de réglage lpm_prediction. Il appartient à l’ancien pilote de veille lpm_levels ; les noyaux avec le gouverneur qcom-cpu-lpm n’en ont pas. ASB n’écrit rien ; l’export de diagnostic liste les paramètres du pilote de veille de ce noyau.",
+  "kc_why_kernel_sched_autogroup": "Ce noyau n’a pas de réglage autogroup. Les noyaux GKI sont normalement compilés sans CONFIG_SCHED_AUTOGROUP, car il modifie signal_struct, sur laquelle les modules du constructeur sont compilés ; ASB ne contourne pas cela. Même intégré, il ne regrouperait que les tâches restées dans le cgroup CPU racine, et Android place les tâches des applications dans ses propres groupes CPU.",
+  "kc_why_kernel_lpm_prediction": "Ce noyau n’expose ni lpm_prediction de l’ancien pilote lpm_levels ni prediction_disabled du gouverneur qcom-cpu-lpm. ASB n’écrit rien ; l’export de diagnostic liste les paramètres du pilote de veille de ce noyau.",
   "kernel_wb_observe_title": "Détecté pendant la fenêtre de veille",
   "kernel_wb_observe_idle": "Aucune mesure. Démarrez avant d’éteindre l’écran, puis actualisez au réveil. L’activité écran allumé est également incluse.",
   "kernel_wb_observe_running": "Fenêtre : {elapsed} · sources modifiées : {n}",

@@ -558,7 +558,7 @@
     },
     "kernel_lpm_prediction": {
       "name": "空闲状态预测（LPM）",
-      "desc": "lpm_prediction 开关属于较旧的 Snapdragon lpm_levels 空闲驱动。较新的 Snapdragon 内核使用没有此开关的 qcom-cpu-lpm 调速器，此时 ASB 不写入任何内容。在提供该开关的内核上，Auto 仅在 Battery 配置下启用预测；On 可能以唤醒延迟为代价节省空闲功耗，Off 测试相反的取舍。这不是 Android LPM 或射频策略。"
+      "desc": "Snapdragon cpuidle 驱动的空闲状态预测：较旧的 lpm_levels 驱动内核上为 lpm_prediction，较新的 qcom-cpu-lpm 调速器上为 prediction_disabled（ASB 在那里写入相反的值，并按本卡片的含义显示，1 = 预测开启）。Auto 仅在 Battery 配置下启用预测；On 可能以唤醒延迟为代价节省空闲功耗，Off 测试相反的取舍；Stock 恢复内核自身的值。这不是 Android LPM 或射频策略。"
     },
     "kernel_usb_autosuspend": {
       "name": "USB 自动挂起",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "重启后",
   "lsp_db_schema_empty": "ASB 找到的 LSPosed 数据库中没有任何表，因此没有可读取的模块列表。如果 LSPosed 自身显示了模块，说明它们保存在别处：请发送诊断导出。",
   "kc_why_kernel_sched_nr_migrate": "需要启用调度器调试（CONFIG_SCHED_DEBUG）和 debugfs 编译的内核。ASB 仅在读取或写入该值的瞬间私下挂载 debugfs，因此只要两者都已编入，就无需其他操作。",
-  "kc_why_kernel_sched_autogroup": "此内核没有 autogroup 开关。GKI 内核通常不启用 CONFIG_SCHED_AUTOGROUP，因为它会改变厂商模块编译所依据的 signal_struct；ASB 不会绕过这一点。",
-  "kc_why_kernel_lpm_prediction": "此内核未提供 lpm_prediction 开关。它属于较旧的 lpm_levels 空闲驱动；使用 qcom-cpu-lpm 调速器的内核没有该开关。ASB 不写入任何内容；诊断导出会列出此内核拥有的空闲驱动参数。",
+  "kc_why_kernel_sched_autogroup": "此内核没有 autogroup 开关。GKI 内核通常不启用 CONFIG_SCHED_AUTOGROUP，因为它会改变厂商模块编译所依据的 signal_struct；ASB 不会绕过这一点。即使编译进内核，它也只会重新分组仍留在根 CPU cgroup 中的任务，而 Android 会把应用任务放入自己的 CPU 组。",
+  "kc_why_kernel_lpm_prediction": "此内核既未提供旧 lpm_levels 驱动的 lpm_prediction，也未提供 qcom-cpu-lpm 调速器的 prediction_disabled。ASB 不写入任何内容；诊断导出会列出此内核拥有的空闲驱动参数。",
   "kernel_wb_observe_title": "在空闲窗口内检测到",
   "kernel_wb_observe_idle": "尚未开始测量。请在息屏前开始，唤醒后更新。亮屏期间的活动也会计入该窗口。",
   "kernel_wb_observe_running": "窗口：{elapsed} · 有变化的来源：{n}",

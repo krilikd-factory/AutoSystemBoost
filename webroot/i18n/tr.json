@@ -528,7 +528,7 @@
     },
     "kernel_lpm_prediction": {
       "name": "Boşta Kalma Tahmini (LPM)",
-      "desc": "lpm_prediction anahtarı eski Snapdragon lpm_levels boşta kalma sürücüsüne aittir. Yeni Snapdragon çekirdekleri bu anahtarı olmayan qcom-cpu-lpm yöneticisini kullanır ve o zaman ASB hiçbir şey yazmaz. Bunu sunan bir çekirdekte Auto, tahmini yalnızca Battery profilinde açar; On uyanma gecikmesi pahasına boşta enerji tasarrufu sağlayabilir, Off ters dengeyi dener. Bu Android LPM veya radyo politikası değildir."
+      "desc": "Snapdragon cpuidle sürücüsünün boşta durum tahmini: lpm_levels sürücülü eski çekirdeklerde lpm_prediction, yenilerinde qcom-cpu-lpm yöneticisinin prediction_disabled değeri (ASB orada ters değeri yazar ve kartın terimleriyle gösterir, 1 = tahmin açık). Auto, tahmini yalnızca Battery profilinde açar; On uyanma gecikmesi pahasına boşta enerji tasarrufu sağlayabilir, Off ters dengeyi dener; Stock çekirdeğin kendi değerini geri yükler. Bu Android LPM veya radyo politikası değildir."
     },
     "kernel_usb_autosuspend": {
       "name": "USB otomatik askıya alma",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "yeniden başlatmadan sonra",
   "lsp_db_schema_empty": "ASB'nin bulduğu LSPosed veritabanında hiç tablo yok, bu yüzden okunacak bir modül listesi de yok. LSPosed modülleri gösteriyorsa onları başka bir yerde tutuyordur: tanılama dışa aktarımını gönderin.",
   "kc_why_kernel_sched_nr_migrate": "Zamanlayıcı hata ayıklaması (CONFIG_SCHED_DEBUG) ve debugfs ile derlenmiş bir çekirdek gerekir. ASB, debugfs'i yalnızca değeri okuduğu ya da yazdığı an için özel olarak bağlar; ikisi de derlemede varsa başka bir şey gerekmez.",
-  "kc_why_kernel_sched_autogroup": "Bu çekirdekte autogroup anahtarı yok. GKI çekirdekleri normalde CONFIG_SCHED_AUTOGROUP olmadan derlenir, çünkü üretici modüllerinin derlendiği signal_struct yapısını değiştirir; ASB bunu atlatmaz.",
-  "kc_why_kernel_lpm_prediction": "Bu çekirdek lpm_prediction anahtarı sunmuyor. Eski lpm_levels boşta kalma sürücüsüne aittir; qcom-cpu-lpm yöneticili çekirdeklerde yoktur. ASB hiçbir şey yazmaz; tanılama dışa aktarımı bu çekirdeğin boşta kalma sürücüsü parametrelerini listeler.",
+  "kc_why_kernel_sched_autogroup": "Bu çekirdekte autogroup anahtarı yok. GKI çekirdekleri normalde CONFIG_SCHED_AUTOGROUP olmadan derlenir, çünkü üretici modüllerinin derlendiği signal_struct yapısını değiştirir; ASB bunu atlatmaz. Derlenmiş olsa bile yalnızca kök CPU cgroup'unda kalan görevleri yeniden gruplar; Android ise uygulama görevlerini kendi CPU gruplarına yerleştirir.",
+  "kc_why_kernel_lpm_prediction": "Bu çekirdek ne eski lpm_levels sürücüsünün lpm_prediction anahtarını ne de qcom-cpu-lpm yöneticisinin prediction_disabled değerini sunuyor. ASB hiçbir şey yazmaz; tanılama dışa aktarımı bu çekirdeğin boşta kalma sürücüsü parametrelerini listeler.",
   "kernel_wb_observe_title": "Boşta kalma penceresinde algılandı",
   "kernel_wb_observe_idle": "Ölçüm başlamadı. Ekranı kapatmadan önce başlatın, uyandıktan sonra güncelleyin. Ekran açık etkinliği de dahil edilir.",
   "kernel_wb_observe_running": "Pencere: {elapsed} · değişen kaynak: {n}",

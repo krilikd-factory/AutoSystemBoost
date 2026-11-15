@@ -528,7 +528,7 @@
     },
     "kernel_lpm_prediction": {
       "name": "Prediksi Idle (LPM)",
-      "desc": "Sakelar lpm_prediction milik driver idle Snapdragon lpm_levels yang lama. Kernel Snapdragon yang lebih baru memakai governor qcom-cpu-lpm yang tidak memilikinya, dan saat itu ASB tidak menulis apa pun. Pada kernel yang menyediakannya, Auto menyalakan prediksi hanya di profil Battery; On dapat menghemat daya idle dengan biaya latensi bangun, Off menguji kompromi sebaliknya. Ini bukan LPM Android atau kebijakan radio."
+      "desc": "Prediksi status idle dari driver cpuidle Snapdragon: lpm_prediction pada kernel lama dengan driver lpm_levels, prediction_disabled milik governor qcom-cpu-lpm pada yang lebih baru (di sana ASB menulis nilai terbalik dan menampilkannya dalam istilah kartu, 1 = prediksi aktif). Auto menyalakan prediksi hanya di profil Battery; On dapat menghemat daya idle dengan biaya latensi bangun, Off menguji kompromi sebaliknya; Stock mengembalikan nilai bawaan kernel. Ini bukan LPM Android atau kebijakan radio."
     },
     "kernel_usb_autosuspend": {
       "name": "Autosuspend USB",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "setelah mulai ulang",
   "lsp_db_schema_empty": "Basis data LSPosed yang ditemukan ASB tidak berisi tabel, jadi tidak ada daftar modul untuk dibaca. Jika LSPosed sendiri menampilkan modul, ia menyimpannya di tempat lain: kirim ekspor diagnostik.",
   "kc_why_kernel_sched_nr_migrate": "Memerlukan kernel yang dibangun dengan debug penjadwal (CONFIG_SCHED_DEBUG) dan debugfs. ASB memasang debugfs secara privat hanya selama membaca atau menulis nilainya, jadi tidak perlu apa-apa lagi bila keduanya disertakan.",
-  "kc_why_kernel_sched_autogroup": "Kernel ini tidak punya sakelar autogroup. Kernel GKI biasanya dibangun tanpa CONFIG_SCHED_AUTOGROUP karena itu mengubah signal_struct yang menjadi dasar kompilasi modul vendor; ASB tidak mengakalinya.",
-  "kc_why_kernel_lpm_prediction": "Kernel ini tidak menyediakan sakelar lpm_prediction. Sakelar itu milik driver idle lpm_levels yang lama; kernel dengan governor qcom-cpu-lpm tidak memilikinya. ASB tidak menulis apa pun; ekspor diagnostik mencantumkan parameter driver idle yang dimiliki kernel ini.",
+  "kc_why_kernel_sched_autogroup": "Kernel ini tidak punya sakelar autogroup. Kernel GKI biasanya dibangun tanpa CONFIG_SCHED_AUTOGROUP karena itu mengubah signal_struct yang menjadi dasar kompilasi modul vendor; ASB tidak mengakalinya. Bahkan jika dibangun, fitur ini hanya mengelompokkan ulang tugas yang tetap berada di cgroup CPU root, sedangkan Android menempatkan tugas aplikasi di grup CPU-nya sendiri.",
+  "kc_why_kernel_lpm_prediction": "Kernel ini tidak menyediakan lpm_prediction dari driver lama lpm_levels maupun prediction_disabled dari governor qcom-cpu-lpm. ASB tidak menulis apa pun; ekspor diagnostik mencantumkan parameter driver idle yang dimiliki kernel ini.",
   "kernel_wb_observe_title": "Terdeteksi dalam jendela idle",
   "kernel_wb_observe_idle": "Pengukuran belum dimulai. Mulai sebelum mematikan layar, lalu perbarui setelah bangun. Aktivitas saat layar menyala juga dihitung.",
   "kernel_wb_observe_running": "Jendela: {elapsed} · sumber berubah: {n}",

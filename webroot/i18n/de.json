@@ -528,7 +528,7 @@
     },
     "kernel_lpm_prediction": {
       "name": "Leerlauf-Vorhersage (LPM)",
-      "desc": "Der Schalter lpm_prediction gehört zum älteren Snapdragon-Leerlauftreiber lpm_levels. Neuere Snapdragon-Kernel nutzen den Governor qcom-cpu-lpm ohne diesen Schalter, und dann schreibt ASB nichts. Auf einem Kernel, der ihn bietet, aktiviert Auto die Vorhersage nur im Profil Battery; On kann Leerlaufenergie auf Kosten der Aufwachlatenz sparen, Off testet den umgekehrten Kompromiss. Das ist weder Android-LPM noch Funkrichtlinie."
+      "desc": "Leerlaufvorhersage des Snapdragon-cpuidle-Treibers: lpm_prediction auf älteren Kerneln mit dem Treiber lpm_levels, prediction_disabled des Governors qcom-cpu-lpm auf neueren (dort schreibt ASB den invertierten Wert und zeigt ihn in den Begriffen der Karte, 1 = Vorhersage an). Auto aktiviert die Vorhersage nur im Profil Battery; On kann Leerlaufenergie auf Kosten der Aufwachlatenz sparen, Off testet den umgekehrten Kompromiss; Stock stellt den eigenen Wert des Kernels wieder her. Das ist weder Android-LPM noch Funkrichtlinie."
     },
     "kernel_usb_autosuspend": {
       "name": "USB-Autosuspend",
@@ -3347,8 +3347,8 @@
   "soter_trigger_boot": "nach Neustart",
   "lsp_db_schema_empty": "Die von ASB gefundene LSPosed-Datenbank enthält keine Tabellen, daher gibt es keine Modulliste zu lesen. Zeigt LSPosed selbst Module, liegen sie woanders: Senden Sie den Diagnoseexport.",
   "kc_why_kernel_sched_nr_migrate": "Benötigt einen Kernel mit Scheduler-Debugging (CONFIG_SCHED_DEBUG) und debugfs. ASB hängt debugfs privat nur für den Moment ein, in dem es den Wert liest oder schreibt; sind beide eingebaut, ist nichts weiter nötig.",
-  "kc_why_kernel_sched_autogroup": "Dieser Kernel hat keinen Autogroup-Schalter. GKI-Kernel werden normalerweise ohne CONFIG_SCHED_AUTOGROUP gebaut, weil es signal_struct ändert, gegen das Herstellermodule kompiliert sind; ASB umgeht das nicht.",
-  "kc_why_kernel_lpm_prediction": "Dieser Kernel bietet keinen lpm_prediction-Schalter. Er gehört zum älteren Leerlauftreiber lpm_levels; Kernel mit dem Governor qcom-cpu-lpm haben keinen. ASB schreibt nichts; der Diagnoseexport listet die Leerlauftreiber-Parameter dieses Kernels.",
+  "kc_why_kernel_sched_autogroup": "Dieser Kernel hat keinen Autogroup-Schalter. GKI-Kernel werden normalerweise ohne CONFIG_SCHED_AUTOGROUP gebaut, weil es signal_struct ändert, gegen das Herstellermodule kompiliert sind; ASB umgeht das nicht. Selbst eingebaut würde es nur Tasks in der Wurzel-CPU-cgroup umgruppieren, und Android legt App-Tasks in eigene CPU-Gruppen.",
+  "kc_why_kernel_lpm_prediction": "Dieser Kernel bietet weder lpm_prediction des älteren Treibers lpm_levels noch prediction_disabled des Governors qcom-cpu-lpm. ASB schreibt nichts; der Diagnoseexport listet die Leerlauftreiber-Parameter dieses Kernels.",
   "kernel_wb_observe_title": "Im Leerlauffenster erkannt",
   "kernel_wb_observe_idle": "Noch keine Messung. Vor dem Ausschalten des Bildschirms starten und nach dem Aufwecken aktualisieren. Aktivität bei eingeschaltetem Bildschirm zählt ebenfalls.",
   "kernel_wb_observe_running": "Fenster: {elapsed} · geänderte Quellen: {n}",

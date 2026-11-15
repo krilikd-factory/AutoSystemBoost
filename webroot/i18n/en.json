@@ -602,7 +602,7 @@
     },
     "kernel_lpm_prediction": {
       "name": "Idle Prediction (LPM)",
-      "desc": "The lpm_prediction switch belongs to the older Snapdragon lpm_levels idle driver. Newer Snapdragon kernels use the qcom-cpu-lpm governor, which has no such switch, and then ASB writes nothing. On a kernel that exposes it, Auto enables prediction only on Battery; On may save idle power at a wake-latency cost, Off tests the opposite trade-off. This is not Android LPM or radio policy."
+      "desc": "Idle-state prediction of the Snapdragon cpuidle driver: lpm_prediction on older kernels with the lpm_levels driver, prediction_disabled of the qcom-cpu-lpm governor on newer ones (ASB writes the inverted value there and shows it in the card's terms, 1 = prediction on). Auto enables prediction only on Battery; On may save idle power at a wake-latency cost, Off tests the opposite trade-off; Stock restores the kernel's own value. This is not Android LPM or radio policy."
     },
     "kernel_usb_autosuspend": {
       "name": "USB Autosuspend",
@@ -3206,8 +3206,8 @@
   "soter_trigger_boot": "after reboot",
   "lsp_db_schema_empty": "The LSPosed database ASB found holds no tables, so there is no module list to read. If LSPosed itself shows modules, it keeps them elsewhere: send the diagnostic export.",
   "kc_why_kernel_sched_nr_migrate": "Needs a kernel built with scheduler debugging (CONFIG_SCHED_DEBUG) and debugfs. ASB mounts debugfs privately only for the moment it reads or writes the value, so nothing more is needed when both are built in.",
-  "kc_why_kernel_sched_autogroup": "This kernel has no autogroup switch. GKI kernels are normally built without CONFIG_SCHED_AUTOGROUP because it changes signal_struct, which vendor modules are compiled against; ASB does not work around that.",
-  "kc_why_kernel_lpm_prediction": "This kernel exposes no lpm_prediction switch. It belongs to the older lpm_levels idle driver; kernels with the qcom-cpu-lpm governor have none. ASB writes nothing; the diagnostic export lists the idle-driver parameters this kernel has.",
+  "kc_why_kernel_sched_autogroup": "This kernel has no autogroup switch. GKI kernels are normally built without CONFIG_SCHED_AUTOGROUP because it changes signal_struct, which vendor modules are compiled against; ASB does not work around that. Even when built in, it would regroup only tasks left in the root CPU cgroup, and Android places app tasks in its own CPU groups.",
+  "kc_why_kernel_lpm_prediction": "This kernel exposes neither lpm_prediction of the older lpm_levels driver nor prediction_disabled of the qcom-cpu-lpm governor. ASB writes nothing; the diagnostic export lists the idle-driver parameters this kernel has.",
   "kernel_wb_observe_title": "Observed in the idle window",
   "kernel_wb_observe_idle": "No measurement has started. Start it before turning the screen off, then update after waking. The window also includes any screen-on activity.",
   "kernel_wb_observe_running": "Window: {elapsed} · changed sources: {n}",
