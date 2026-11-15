@@ -48,7 +48,7 @@
     },
     "bt_a2dp_offload": {
       "name": "Offload audio Bluetooth",
-      "desc": "Siapa yang mengodekan audio Bluetooth: blok perangkat keras khusus atau CPU. «Otomatis» tidak ikut campur: yang dipilih ROM tetap berlaku. «Aktif» menyalakan pengodean perangkat keras secara eksplisit (biasanya sama dengan bawaan pabrik, tetapi di sini ditulis ASB). «Nonaktif» memindahkannya ke CPU, yang dibutuhkan sebagian codec dan aplikasi ekualiser agar bisa bekerja sama sekali.",
+      "desc": "Apakah audio Bluetooth dienkode oleh blok perangkat keras khusus atau oleh CPU.\n\n🔋 Daya tahan baterai: Otomatis atau Aktif\n🎛️ Aplikasi equalizer Bluetooth: Mati\n✋ Jika ragu: Otomatis",
       "descOpt": {
         "auto": "Jangan ubah jalur audio Bluetooth pilihan ROM.",
         "on": "Minta encoding perangkat keras/offload jika didukung. Konsumsi nyata bergantung pada perangkat dan codec.",
@@ -101,15 +101,23 @@
     },
     "camera_hold_enable": {
       "name": "Tahan performa saat kamera aktif",
-      "desc": "Selama kamera aktif streaming, governor mempertahankan batas CPU dan core yang sedang digunakan alih-alih menurunkannya. Ini dapat mengurangi penurunan performa saat burst atau video, tetapi memakai lebih banyak daya selama kamera terbuka. Aktif mempertahankan performa; Nonaktif menerapkan aturan governor normal. Batas termal dan produsen tetap menjadi prioritas."
+      "desc": "Selama kamera mengalirkan gambar, governor mempertahankan batas CPU dan inti alih-alih menurunkannya. Batas panas dan vendor tetap berlaku.\n\n🔋 Daya tahan baterai: Mati\n⚡ Performa: Aktif\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Pratinjau, burst, dan rekaman lancar; lebih banyak daya selama kamera terbuka.",
+        "0": "Aturan governor biasa juga berlaku di kamera."
+      }
     },
     "UX_MANAGE_TIMEOUTS": {
       "name": "Kelola kecepatan antarmuka",
-      "desc": "Sakelar utama pengaturan waktu antarmuka berdasarkan profil. Performance memendekkan animasi serta jendela tekan lama/multi-tap; Battery mempertahankan stock. Nonaktif membiarkan nilai dikontrol ROM. Untuk kecepatan animasi tetap yang tidak bergantung pada profil, gunakan pengaturan di bawah."
+      "desc": "Membiarkan profil daya mengatur waktu antarmuka: Performa mempersingkat animasi serta jendela tekan lama dan ketuk ganda, Baterai mempertahankan waktu bawaan.\n\n🔋 Daya tahan baterai: tidak berpengaruh\n⚡ Terasa lebih cepat: Aktif\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "Waktu animasi dan sentuh mengikuti profil.",
+        "0": "ROM mempertahankan waktunya sendiri; Kecepatan animasi tetap berfungsi."
+      }
     },
     "anim_speed": {
       "name": "Kecepatan animasi",
-      "desc": "Menetapkan skala animasi Android tetap. −1 menyerahkan kontrol ke profil daya; 0 adalah default Android, negatif lebih cepat, positif lebih lambat, dan posisi paling kiri mematikan animasi. Berlaku untuk transisi berikutnya. Animasi sangat singkat atau mati dapat membuat transisi sulit diikuti, tetapi tidak mempercepat pemrosesan aplikasi yang sebenarnya."
+      "desc": "Kecepatan animasi Android yang tetap. Ikuti profil membiarkan profil daya memilih; ke kiri lebih cepat, ke kanan lebih lambat, paling kiri mematikan animasi. Animasi lebih pendek membuat ponsel terasa lebih cepat, tetapi tidak mempercepat kerja aplikasi.\n\n🔋 Daya tahan baterai: Ikuti profil\n⚡ Terasa lebih cepat: Lebih cepat atau Tercepat\n✋ Jika ragu: Ikuti profil"
     },
     "UX_ANIM_FORCE_RESTART": {
       "name": "Paksa mulai ulang animasi",
@@ -117,11 +125,15 @@
     },
     "disable_blur": {
       "name": "Matikan blur",
-      "desc": "Mematikan blur jendela sistem pada shade, notifikasi, panel volume, dan transisi. Dapat mengurangi kerja GPU, tetapi latar transparan diganti warna solid; teks notifikasi heads-up mungkin lebih sulit dibaca di atas konten tertentu. Berlaku global, bukan per panel. Blur jendela berubah langsung; blur compositor mungkin memerlukan mulai ulang."
+      "desc": "Mematikan blur jendela di panel notifikasi, notifikasi, panel volume, dan transisi; latar menjadi polos.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: Aktif\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "Latar polos dan kerja GPU sedikit berkurang; bagian compositor mungkin perlu mulai ulang.",
+        "0": "Blur ROM tetap ada."
+      }
     },
     "ui_effects_level": {
       "name": "Animasi sistem",
-      "desc": "Normal mempertahankan efek transisi dan Recents lengkap. Simplified mengurangi efek visual dan dapat meringankan GPU, tetapi Recents menjadi daftar sederhana dan OxygenOS menghapus pemilih Cards/Simple. Untuk memulihkan, pilih Normal lalu mulai ulang. Simplified hanya ditawarkan pada OnePlus 15 karena perilakunya pada model lain belum divalidasi.",
+      "desc": "Seberapa kaya transisi sistem dan efek Terbaru.\n\n🔋 Daya tahan baterai: Sederhana\n⚡ Performa: Sederhana\n✋ Jika ragu: Otomatis",
       "descOpt": {
         "auto": "Jangan ubah level efek sistem saat ini.",
         "stock": "Gunakan efek perangkat normal dan tampilan Recents.",
@@ -130,31 +142,64 @@
     },
     "net_congestion": {
       "name": "Percepatan unduhan · lainnya",
-      "desc": "Bagaimana ponsel berakselerasi saat mengunduh — untuk jaringan yang tidak dicakup dua kartu di bawah: tethering USB, VPN, tethering Bluetooth, Ethernet. Wi-Fi dan seluler mengambil nilainya dari kartu di bawah. «bbr» menyesuaikan diri dengan kecepatan nyata, «cubic» adalah yang klasik. Pada kernel bawaan bbr biasanya tidak ada, dan kartunya jujur menulis «tidak didukung»."
+      "desc": "Bagaimana unduhan menanjak pada koneksi yang tidak dicakup kartu Wi-Fi dan data seluler: tethering USB dan Bluetooth, VPN, Ethernet.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Performa: bbr\n✋ Jika ragu: Stok",
+      "descOpt": {
+        "auto": "Algoritme bawaan perangkat tetap dipakai (sering cubic).",
+        "bbr": "Menyesuaikan dengan kecepatan koneksi yang diukur; sering lebih baik pada koneksi seluler yang kehilangan paket dan jarak jauh.",
+        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket."
+      }
     },
     "net_congestion_wifi": {
       "name": "Percepatan unduhan · Wi-Fi",
-      "desc": "Akselerasi unduhan khusus Wi-Fi. «Ikuti umum» mengambil nilai dari kartu di atas. Nilai terpisah berguna ketika Wi-Fi dan seluler menuntut jawaban berbeda: keduanya bekerja bersamaan dan tidak saling mengganggu."
+      "desc": "Tanjakan unduhan khusus Wi-Fi.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Performa: bbr\n✋ Jika ragu: Seperti umum",
+      "descOpt": {
+        "auto": "Mengambil nilai dari kartu untuk koneksi lain.",
+        "bbr": "Menyesuaikan dengan kecepatan koneksi yang diukur; sering lebih baik pada koneksi seluler yang kehilangan paket dan jarak jauh.",
+        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket."
+      }
     },
     "net_congestion_mobile": {
       "name": "Percepatan unduhan · seluler",
-      "desc": "Memilih algoritma kontrol kemacetan TCP hanya untuk data seluler. As Global mengikuti kartu Download Ramp umum. Stock mempertahankan nilai perangkat. BBR dan CUBIC merespons kehilangan serta latensi secara berbeda; tidak ada yang selalu lebih cepat. Hasilnya bergantung pada operator dan kondisi radio. Algoritma yang tidak didukung dilaporkan apa adanya, bukan sebagai diterapkan."
+      "desc": "Tanjakan unduhan khusus data seluler. bbr sering membantu pada koneksi seluler dengan kehilangan paket dan jeda yang berubah-ubah.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Performa: bbr\n✋ Jika ragu: Seperti umum",
+      "descOpt": {
+        "auto": "Mengambil nilai dari kartu untuk koneksi lain.",
+        "bbr": "Menyesuaikan dengan kecepatan koneksi yang diukur; sering lebih baik pada koneksi seluler yang kehilangan paket dan jarak jauh.",
+        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket."
+      }
     },
     "net_qdisc": {
       "name": "Antrean paket · lainnya",
-      "desc": "Mengontrol antrean paket pada koneksi di luar kartu Wi-Fi dan seluler, termasuk tethering USB/Bluetooth, VPN, dan Ethernet. Stock mempertahankan konfigurasi perangkat. fq_codel dapat mengurangi latensi saat sibuk, fq cocok dengan pacing, dan cake mengelola antrean lebih lengkap dengan biaya CPU. Hasil bergantung pada koneksi; tidak ada opsi yang menjamin throughput lebih tinggi atau video bebas tersendat."
+      "desc": "Bagaimana paket mengantre pada koneksi yang tidak dicakup kartu Wi-Fi dan data seluler.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Latensi rendah: fq_codel\n✋ Jika ragu: Stok",
+      "descOpt": {
+        "auto": "Antrean bawaan perangkat tetap dipakai.",
+        "fq": "Antrean adil dengan pengaturan laju per aliran; cocok dipadukan dengan bbr.",
+        "fq_codel": "Menjaga antrean tetap pendek saat beban tinggi: jeda lebih kecil untuk game dan panggilan.",
+        "cake": "Pengelolaan antrean paling lengkap; memakai CPU sedikit lebih banyak."
+      }
     },
     "net_qdisc_wifi": {
       "name": "Antrean paket · Wi-Fi",
-      "desc": "Antrean paket khusus Wi-Fi. «Ikuti umum» mengambil nilai dari kartu di atas. Terpisah dari data seluler."
+      "desc": "Antrean paket khusus Wi-Fi.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Latensi rendah: fq_codel\n✋ Jika ragu: Seperti umum",
+      "descOpt": {
+        "auto": "Mengambil nilai dari kartu untuk koneksi lain.",
+        "fq": "Antrean adil dengan pengaturan laju per aliran; cocok dipadukan dengan bbr.",
+        "fq_codel": "Menjaga antrean tetap pendek saat beban tinggi: jeda lebih kecil untuk game dan panggilan.",
+        "cake": "Pengelolaan antrean paling lengkap; memakai CPU sedikit lebih banyak."
+      }
     },
     "net_qdisc_mobile": {
       "name": "Antrean paket · seluler",
-      "desc": "Antrean paket khusus data seluler. «Ikuti umum» mengambil nilai dari kartu di atas. Terpisah dari Wi-Fi."
+      "desc": "Antrean paket khusus data seluler.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Latensi rendah: fq_codel\n✋ Jika ragu: Seperti umum",
+      "descOpt": {
+        "auto": "Mengambil nilai dari kartu untuk koneksi lain.",
+        "fq": "Antrean adil dengan pengaturan laju per aliran; cocok dipadukan dengan bbr.",
+        "fq_codel": "Menjaga antrean tetap pendek saat beban tinggi: jeda lebih kecil untuk game dan panggilan.",
+        "cake": "Pengelolaan antrean paling lengkap; memakai CPU sedikit lebih banyak."
+      }
     },
     "net_route_tune": {
       "name": "Buffer jaringan",
-      "desc": "Mengatur ukuran burst TCP awal untuk rute. Smart memilih berdasarkan kondisi koneksi terukur dan membiarkan koneksi lemah mendekati nilai pabrik; Moderate konservatif, Aggressive memilih kelas lebih besar dan dapat menambah transmisi ulang pada koneksi buruk. Stock memulihkan nilai rute sebelumnya. Ini mengubah percepatan awal koneksi, bukan kecepatan maksimum radio atau layanan.",
+      "desc": "Ukuran semburan pertama koneksi TCP baru. Semburan lebih besar mempercepat halaman dan unduhan singkat; pada koneksi buruk bisa menyebabkan pengiriman ulang.\n\n🔋 Daya tahan baterai: Adaptif\n⚡ Performa: Agresif\n✋ Jika ragu: Adaptif",
       "descOpt": {
         "auto": "Pilih jendela rute awal berdasarkan kondisi koneksi terukur.",
         "off": "Pulihkan nilai rute yang dicatat sebelum perubahan ASB.",
@@ -168,7 +213,7 @@
     },
     "wifi_scan_throttle": {
       "name": "Frekuensi pemindaian Wi-Fi",
-      "desc": "Mengontrol seberapa sering ASB mengizinkan pemindaian Wi-Fi latar belakang. Pemindaian lebih jarang dapat mengurangi aktivitas radio saat tetap di satu tempat, tetapi menunda penemuan jaringan lama dan baru. Kecepatan data koneksi aktif tidak berubah. Unthrottled menghapus pembatasan; interval tercantum pada deskripsi opsi.",
+      "desc": "Seberapa sering ASB mengizinkan pemindaian Wi-Fi di latar belakang. Lebih sedikit pemindaian berarti radio lebih sedikit bekerja selama Anda di satu tempat, tetapi jaringan ditemukan lebih lambat. Kecepatan koneksi aktif tidak berubah.\n\n🔋 Daya tahan baterai: setiap 10 atau 30 menit\n📶 Menemukan jaringan dengan cepat: tanpa batas\n✋ Jika ragu: setiap 5 menit",
       "descOpt": {
         "0": "Tekan pemindaian latar belakang yang dikelola ASB; sistem atau pengguna masih dapat memulai pemindaian manual.",
         "1": "Izinkan pemindaian latar belakang sekitar setiap 10 menit.",
@@ -180,19 +225,27 @@
     },
     "auto_battery_enable": {
       "name": "Profil baterai otomatis",
-      "desc": "Pada 20% daya, profil beralih sendiri ke «Baterai» dan kembali pada 21% setelah diisi. Angka pada pengaturan sama dengan angka pada ikon baterai."
+      "desc": "Beralih ke profil Baterai saat daya rendah dan kembali ke profil Anda setelah diisi.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: Mati\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Daya rendah otomatis beralih ke Baterai; pengisian mengembalikan profil Anda.",
+        "0": "Profil pilihan Anda tetap di semua tingkat daya."
+      }
     },
     "smart_battery_bias": {
       "name": "Bias baterai Smart",
-      "desc": "Seberapa condong Smart pada daya tahan. Makin tinggi, makin lama frekuensi ditahan rendah; makin rendah, makin cepat dilepas. Mulai dari 400, Smart berperilaku hampir seperti «Baterai» bahkan saat dipakai aktif."
+      "desc": "Mendorong Smart ke arah Baterai: 300 menggesernya 30 % dari sisa jarak antara yang dipelajari dan Baterai, 600 menggeser 60 %. Mulai sekitar 400, Smart berperilaku hampir seperti Baterai dalam pemakaian biasa. Dibagi dua saat kerja berat dan game.\n\n🔋 Daya tahan baterai: 300–400\n⚡ Performa: 0\n✋ Jika ragu: 0"
     },
     "charge_aware_enable": {
       "name": "Mode sadar pengisian",
-      "desc": "Saat mengisi daya diberi ruang lebih, saat panas lebih sedikit. Ponsel yang tertancap ke pengisi daya tidak punya alasan berhemat seperti saat memakai baterai."
+      "desc": "Saat mengisi daya, ASB mengizinkan performa lebih tinggi selama baterai dingin dan mundur saat baterai menghangat.\n\n🔋 Kesehatan baterai: Aktif\n⚡ Performa: Aktif\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Lebih cepat di pengisi daya yang dingin, lebih lambat saat baterai menghangat.",
+        "0": "Pengisian daya tidak mengubah aturan performa."
+      }
     },
     "doze_level": {
       "name": "Tidur dalam",
-      "desc": "Mengontrol seberapa cepat Android masuk Doze setelah layar mati. Stock mempertahankan waktu ROM; Moderate menargetkan lima menit, Aggressive dua menit, dan Night hanya berlaku dalam jendela tidur yang dipelajari. Doze dapat menunda jaringan, pekerjaan, dan alarm latar belakang hingga jendela pemeliharaan; push prioritas tinggi masih dapat tiba. Gunakan Stock jika aktivitas latar belakang tepat waktu lebih penting. Stock menghapus override ASB.",
+      "desc": "Seberapa cepat Android masuk tidur dalam (Doze) setelah layar mati. Saat Doze, jaringan latar belakang, tugas, dan alarm menunggu jendela pemeliharaan singkat; push prioritas tinggi tetap masuk.\n\n🔋 Daya tahan baterai: Sedang atau Agresif\n🔔 Notifikasi tepat waktu: Stok\n✋ Jika ragu: Malam",
       "descOpt": {
         "stock": "Pertahankan waktu Doze ROM dan hapus override ASB.",
         "night": "Doze lebih awal hanya dalam jendela tidur yang dipelajari.",
@@ -202,11 +255,15 @@
     },
     "night_quiet_enable": {
       "name": "Malam tenang",
-      "desc": "Setelah layar lama mati dalam jendela malam yang dipelajari, governor menjeda pekerjaan periodiknya sendiri yang tidak penting agar perangkat tetap idle. Tidak membisukan aplikasi, mematikan radio, atau menjamin penghematan tertentu. Off mempertahankan penjadwalan governor normal sepanjang hari. Nonaktifkan hanya jika pembaruan governor tersebut diperlukan pada malam hari."
+      "desc": "Selama layar mati lama di jendela malam yang dipelajari, governor menjeda kerja periodiknya sendiri yang tidak penting. Aplikasi dan radio tidak disentuh.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: tidak berpengaruh\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Lebih sedikit governor bangun di malam hari.",
+        "0": "Governor mempertahankan jadwal normalnya sepanjang hari."
+      }
     },
     "sustained_temp_mode": {
       "name": "Titik pembatasan",
-      "desc": "Kapan ASB mulai menahan performa agar ponsel lebih dingin. «Bawaan» memakai titik picu perangkat Anda, dibaca saat boot dari zona termal CPU. «Cerdas» mulai dari titik itu dan menaikkannya 2 derajat bila sebuah sesi mencapai beban berkelanjutan dalam kurang dari semenit. «Manual» mengunci persis nilai penggeser di bawah.",
+      "desc": "Suhu saat ASB mulai menahan performa di bawah beban berat yang lama. Perlindungan panas bawaan vendor selalu tetap aktif.\n\n🔋 Daya tahan baterai / ponsel lebih dingin: Manual dengan suhu lebih rendah\n⚡ Performa: Pintar\n✋ Jika ragu: Pintar",
       "descOpt": {
         "stock": "Gunakan titik perangkat yang dibaca dari zona termal CPU saat boot.",
         "smart": "Mulai dari titik itu dan izinkan penyesuaian naik terbatas setelah sesi berkelanjutan yang memenuhi syarat.",
@@ -215,23 +272,36 @@
     },
     "sustained_temp_enter": {
       "name": "Suhu pembatasan",
-      "desc": "Menetapkan suhu zona CPU saat ASB mulai membatasi performa berkelanjutan dalam mode Manual. Nilai rendah bertindak lebih awal; nilai tinggi mengizinkan lebih banyak panas. Batas termal produsen tetap aktif dan slider ini bukan kontrol keselamatan. Default 65 dan batas bawah 52 karena beberapa zona CPU membaca jauh lebih panas daripada baterai atau bodi. Ambang dekat atau di bawah pembacaan normal dapat menyebabkan throttling terus-menerus, pekerjaan lebih lama, dan lebih banyak panas."
+      "desc": "Hanya mode manual: suhu CPU saat ASB mulai membatasi beban berat yang lama. Lebih rendah berarti lebih awal dan lebih dingin tetapi lebih lambat; lebih tinggi berarti lebih cepat dan lebih panas. Batas vendor tetap berlaku.\n\n🔋 Daya tahan baterai: 58–60\n⚡ Performa: 68–70\n✋ Jika ragu: 65"
     },
     "cool_gaming": {
       "name": "Gaming sejuk",
-      "desc": "Menggunakan respons termal lebih awal dalam game, sekitar 40 °C, alih-alih menunggu ambang beban berkelanjutan yang lebih tinggi. Dapat mengurangi panas, tetapi frame rate dan stabilitas frame time juga dapat turun bergantung pada game dan perangkat. Off kembali ke kebijakan profil dan suhu normal; perlindungan termal produsen tetap aktif."
+      "desc": "Dalam game, ASB mulai mendinginkan lebih awal, sekitar 40 °C, alih-alih menunggu ambang beban berkelanjutan yang biasa.\n\n🔋 Daya tahan baterai / ponsel lebih dingin: Aktif\n⚡ Performa: Mati\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Lebih sedikit panas pada sesi panjang; frame rate bisa sedikit turun di game berat.",
+        "0": "Game berjalan dengan aturan profil dan panas biasa sampai ponsel lebih panas."
+      }
     },
     "bat_suppress_gaming": {
       "name": "Tanpa mode game di profil Baterai",
-      "desc": "Pada profil «Baterai», permainan dihitung sebagai beban berat biasa dan bukan alasan menyalakan mode permainan. Mode permainan menaikkan batas atas frekuensi, yaitu kebalikan dari alasan orang memilih «Baterai». Hanya memengaruhi profil ini."
+      "desc": "Di profil Baterai, game dihitung sebagai beban berat biasa alih-alih beralih ke status game dengan batas lebih tinggi. Profil lain tidak terpengaruh.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: Mati\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Baterai tetap profil baterai, juga dalam game.",
+        "0": "Game mendapat perlakuan game penuh bahkan di Baterai."
+      }
     },
     "BG_TRIM_LEVEL": {
       "name": "Pembersihan latar belakang",
-      "desc": "Mengontrol seberapa kuat ASB membatasi aplikasi latar belakang. Off menyerahkan kontrol ke Android dan memulihkan bucket yang diubah ASB. Safe menyesuaikan bucket aplikasi yang dianggap tidak digunakan oleh Android, dengan aplikasi penting dilindungi. Aggressive menambah batas latar belakang dan memori lebih kuat; aplikasi dapat lebih jarang aktif, kehilangan keadaan, atau mengirim notifikasi terlambat. Tindakan disruptif pada paket atau layanan produsen memerlukan persetujuan eksplisit terpisah dan tidak aktif hanya karena level ini."
+      "desc": "Seberapa kuat ASB menahan aplikasi yang tidak Anda pakai: aplikasi yang jarang dipakai masuk ke grup siaga Android yang lebih ketat. Panggilan, pesan, alarm, dan keyboard tetap terlindungi.\n\n🔋 Daya tahan baterai: Agresif\n🔔 Notifikasi tepat waktu: Mati atau Aman\n✋ Jika ragu: Aman",
+      "descOpt": {
+        "off": "Hanya Android yang memutuskan; grup siaga yang diubah ASB dikembalikan.",
+        "safe": "Aplikasi yang jarang dipakai masuk ke grup siaga lebih ketat; aplikasi terlindungi tidak pernah disentuh.",
+        "aggressive": "Ditambah batas latar belakang dan memori yang lebih keras. Aplikasi bisa kehilangan status atau mengirim notifikasi lebih lambat."
+      }
     },
     "gms_trim": {
       "name": "Batasi layanan Google",
-      "desc": "Mengurangi aktivitas latar belakang Google Play services tertentu tanpa menonaktifkan layanan. Lite membatasi pelaporan lokasi dan pekerjaan widget pencarian. Strict juga menghapus pengecualian Doze Play services, yang dapat menunda push, sinkronisasi, dan pekerjaan latar belakang lain. Pilih Lite atau Stock jika pengiriman tepat waktu penting. Izin dan pengecualian yang diubah dicatat serta dipulihkan saat ASB dihapus.",
+      "desc": "Mengurangi kerja latar belakang layanan Google Play tanpa mematikan komponen.\n\n🔋 Daya tahan baterai: Ketat\n🔔 Notifikasi tepat waktu: Stok atau Ringan\n✋ Jika ragu: Ringan",
       "descOpt": {
         "stock": "Biarkan penjadwalan latar belakang Play services di bawah kendali ROM.",
         "lite": "Batasi pekerjaan lokasi dan widget pencarian tertentu.",
@@ -244,7 +314,7 @@
     },
     "phantom_procs": {
       "name": "Batas proses latar belakang",
-      "desc": "Mengontrol batas Android atas proses phantom yang dibuat aplikasi di luar siklus activity normal. No Limit mematikan perlindungan ini agar pekerjaan terminal lama, emulator, dan kompilasi dapat bertahan, tetapi aplikasi tak terkendali juga dapat memakai lebih banyak memori dan CPU. Limit 32 secara eksplisit memulihkan batas Android. Leave Alone mempertahankan nilai perangkat saat ini, yang mungkin diubah alat lain. Mulai ulang aplikasi terkait karena batas dibaca saat proses dimulai.",
+      "desc": "Batas Android untuk proses anak tambahan yang dijalankan aplikasi di luar siklus hidup normalnya: terminal, emulator, alat build. Mulai ulang aplikasi terkait setelah perubahan.\n\n🔋 Daya tahan baterai: Batas 32\n⚡ Tugas latar belakang panjang: Tanpa batas\n✋ Jika ragu: Tanpa batas",
       "descOpt": {
         "stock": "Jangan ubah pengaturan proses phantom saat ini.",
         "relaxed": "Nonaktifkan batas. Proses anak latar belakang dapat bertahan, tetapi penggunaan sumber daya tak terkendali kurang dibendung.",
@@ -261,7 +331,7 @@
     },
     "log_level": {
       "name": "Detail log",
-      "desc": "Mengontrol detail log ASB dan, kecuali Stock, logging perangkat tertentu. Stock tidak mengubah logging perangkat. 0 meminimalkan diagnostik perangkat dan ASB sehingga laporan bug berikutnya jauh kurang berguna. 1 mencatat kejadian penting normal; 2 menambahkan learner dan transisi layar untuk analisis baterai; 3 verbose, cepat membesar, dan hanya untuk mereproduksi masalah. Keluar dari 0 memulihkan keadaan logging yang dicatat ASB.",
+      "desc": "Seberapa banyak log ASB dan sebagian log perangkat mencatat.\n\n🔋 Daya tahan baterai: Biasa\n🔍 Laporan masalah: Rinci\n✋ Jika ragu: Biasa",
       "descOpt": {
         "0": "Minimalkan diagnostik perangkat dan ASB. Laporan berikutnya mungkin tidak memiliki bukti untuk analisis.",
         "1": "Catat kejadian ASB penting normal.",
@@ -284,20 +354,25 @@
     },
     "doze_trim_whitelist": {
       "name": "Pangkas pengecualian Doze",
-      "desc": "Mengontrol pengecualian Doze Android terpisah dari waktu Doze. Mengurangi pengecualian membuat aplikasi pengguna mengikuti pembatasan idle; aplikasi sistem terlindungi seperti telepon, SMS, jam, dan pengelola root tidak dihapus. Daftar aplikasi memungkinkan messenger, email, atau VPN pilihan tetap dikecualikan. Perubahan dicatat dan dipulihkan pada level 0 atau saat penghapusan. Pengurangan dapat menunda notifikasi dan sinkronisasi."
+      "desc": "Sebagian aplikasi terpasang boleh mengabaikan tidur dalam. Pemangkasan mengeluarkan aplikasi yang Anda pasang dari daftar itu; telepon, SMS, jam, pengelola root, dan aplikasi di daftar bawah tetap dikecualikan.\n\n🔋 Daya tahan baterai: Pangkas\n🔔 Notifikasi tepat waktu: Jangan sentuh\n✋ Jika ragu: Jangan sentuh",
+      "descOpt": {
+        "0": "Daftar pengecualian tetap seperti yang diatur ROM dan aplikasi.",
+        "1": "Aplikasi terpasang mengikuti tidur dalam seperti yang lain; aplikasi yang Anda pertahankan dan inti sistem tetap dikecualikan. Jangan sentuh atau mencopot modul mengembalikan daftarnya."
+      }
     },
     "gms_freeze": {
       "name": "Bekukan komponen Google",
-      "desc": "Menonaktifkan komponen Google Play services satu per satu. Level bersifat kumulatif. SAFE: telemetri, statistik, dan analitik — tidak ada yang dibutuhkan ponsel. MORE: menambah ID iklan, pelaporan lokasi, dan penjadwal cadangan. MAX: menambah pengindeksan Icing dan perekaman Fitness di latar belakang. HARGA MAX: pencarian dalam aplikasi dan sistem akan melewatkan sebagian hasil, dan langkah tidak dihitung di latar belakang. Notifikasi push tidak disentuh di level mana pun. Semuanya dipulihkan dengan beralih ke nonaktif — keadaan asli setiap komponen dicatat.",
+      "desc": "Mematikan komponen tertentu di dalam layanan Google Play. Layanannya sendiri tetap aktif, jadi push, masuk akun, pembayaran, dan Play Store tetap berfungsi. Setiap tingkat mencakup tingkat sebelumnya.\n\n🔋 Daya tahan baterai: Lebih\n🧩 Semua fitur Google: Mati\n✋ Jika ragu: Aman",
       "descOpt": {
-        "off": "Biarkan setiap komponen Google yang dikelola dalam keadaan asli yang dicatat.",
-        "safe": "Nonaktifkan komponen telemetri dan pelaporan tertentu. Periksa aplikasi yang bergantung.",
-        "more": "Nonaktifkan juga komponen iklan dan pengukuran tertentu. Dapat dibalik, tetapi fitur terkait dapat berubah."
+        "off": "Setiap komponen yang dikelola kembali ke keadaan asli yang tercatat.",
+        "safe": "Hanya telemetri, statistik penggunaan, dan analitik; tidak ada yang Anda pakai bergantung padanya.",
+        "more": "Ditambah personalisasi iklan, unggahan riwayat lokasi, dan penjadwal cadangan. Linimasa Maps berhenti merekam.",
+        "max": "Ditambah pengindeksan pencarian di perangkat dan penghitungan langkah di latar belakang. Sebagian hasil pencarian dan langkah latar belakang hilang."
       }
     },
     "athena_service": {
       "name": "Pembunuh latar Athena",
-      "desc": "Mengontrol pembunuh aplikasi latar belakang AthenaService OxygenOS. Off menonaktifkan hanya komponen tersebut dan mempertahankan bagian lain com.oplus.athena; dapat membantu aplikasi yang dihentikan OEM meskipun ada pengecualian Android. Lebih banyak aplikasi aktif dapat menambah penggunaan RAM dan konsumsi latar belakang; notifikasi tetap bergantung pada aplikasi. Stock memulihkan keadaan komponen yang dicatat ASB; penghapusan juga memulihkannya.",
+      "desc": "Pembunuh aplikasi latar belakang bawaan OxygenOS.\n\n🔋 Daya tahan baterai: Standar\n🔔 Aplikasi tetap hidup, notifikasi tepat waktu: Mati\n✋ Jika ragu: Standar",
       "descOpt": {
         "stock": "OxygenOS mempertahankan kebijakan latar belakang Athena normal.",
         "off": "Nonaktifkan hanya AthenaService. Aplikasi dapat aktif lebih lama, dengan lebih banyak RAM dan konsumsi latar belakang."
@@ -305,7 +380,7 @@
     },
     "net_rps": {
       "name": "Sebar beban jaringan",
-      "desc": "Memilih core CPU yang dapat memproses paket Wi-Fi masuk. Stock tidak mengubah konfigurasi kernel dan driver. Little memakai klaster efisiensi; All mengizinkan semua core. Penyebaran dapat membantu koneksi cepat, tetapi membangunkan lebih banyak CPU dan dapat menambah daya saat lalu lintas ringan. Distribusi penerimaan data seluler diserahkan ke perangkat. Hasil bergantung pada driver dan koneksi.",
+      "desc": "Inti CPU mana yang boleh memproses paket Wi-Fi yang diterima.\n\n🔋 Daya tahan baterai: Standar atau Kecil\n⚡ Performa: Semua\n✋ Jika ragu: Standar",
       "descOpt": {
         "stock": "Jangan ubah mask penerimaan paket kernel dan driver.",
         "little": "Izinkan pemrosesan penerimaan pada klaster efisiensi.",
@@ -314,7 +389,7 @@
     },
     "net_txqueue": {
       "name": "Antrean kirim",
-      "desc": "Menentukan jumlah paket yang menunggu dalam antrean transmisi Wi-Fi. Stock mempertahankan nilai driver; Short memakai 256 dan Shorter 128. Antrean lebih kecil dapat mengurangi latensi saat sibuk, tetapi membatasi throughput atau menambah kehilangan pada koneksi cepat atau berubah-ubah. Jika unggahan, streaming, atau latensi memburuk, kembali ke Stock.",
+      "desc": "Berapa banyak paket yang boleh menunggu di antrean kirim Wi-Fi. Antrean lebih pendek dapat mengurangi jeda saat beban tinggi, tetapi bisa membatasi throughput pada koneksi cepat atau tidak stabil.\n\n🔋 Daya tahan baterai: tidak ada beda\n⚡ Latensi rendah (game, panggilan): Pendek\n✋ Jika ragu: Standar",
       "descOpt": {
         "stock": "Pertahankan panjang antrean transmisi driver.",
         "short": "256 paket. Dapat mengurangi latensi antrean, tetapi tidak cocok untuk setiap koneksi cepat.",
@@ -323,23 +398,39 @@
     },
     "perf_ceiling_pct": {
       "name": "Batas atas performa",
-      "desc": "Membatasi puncak CPU dan GPU yang tersedia bagi ASB sebagai persentase maksimum perangkat. Terutama membatasi pekerjaan berat; tugas ringan mungkin tidak pernah mencapai batas. Nilai rendah dapat mengurangi puncak dan panas, tetapi memperpanjang tugas serta waktu komponen aktif, sehingga baterai tidak otomatis membaik. 100 tidak menambah batas ASB ini. Jika perlu mulai sekitar 85 dan bandingkan panas, respons, dan konsumsi pada perangkat Anda."
+      "desc": "Membatasi kecepatan CPU dan GPU tertinggi yang diizinkan ASB, sebagai bagian dari maksimum perangkat. Pekerjaan ringan jarang mencapai batas; pekerjaan berat menjadi lebih lambat tetapi lebih dingin. Batas yang lebih rendah tidak selalu menghemat baterai: pekerjaan yang lebih lambat membuat chip aktif lebih lama.\n\n🔋 Daya tahan baterai: 85\n⚡ Performa: 100\n✋ Jika ragu: 100"
     },
     "wakelock_action": {
       "name": "Tindak lanjuti wakelock",
-      "desc": "Menentukan apakah ASB bertindak terhadap wakelock aplikasi yang persisten; pengukuran dan laporan tetap tersedia dalam kedua keadaan. Saat aktif, hanya aplikasi pengguna yang memenuhi syarat dipertimbangkan setelah 45+ menit aktivitas dengan layar mati dan bukti bahwa ponsel tetap terjaga. Secara rinci: hanya aplikasi yang menggunakan CPU selama lebih dari 10 menit (atau sedang memegang kunci lama) dan tidak dihitung Android sebagai digunakan hari ini yang dapat dipindahkan ke bucket standby terbatas. Sumber kernel/sistem, aplikasi penting, pengecualian pengoptimalan baterai, email, navigasi, dan keyboard dikecualikan. Tidak ada force-stop; pembatasan dapat menunda pekerjaan atau notifikasi. Off memberi laporan tanpa intervensi."
+      "desc": "Apa yang dilakukan ASB terhadap aplikasi yang membuat ponsel terjaga saat layar mati. Pengukuran dan laporan tetap berjalan.\n\n🔋 Daya tahan baterai: Bertindak\n🔔 Notifikasi tepat waktu: Pantau saja\n✋ Jika ragu: Pantau saja",
+      "descOpt": {
+        "0": "Hanya mengukur dan melapor; tidak ada yang dibatasi.",
+        "1": "Setelah 45 menit terjaga dengan layar mati, aplikasi yang menahan CPU 10+ menit dan tidak dipakai hari ini masuk ke grup terbatas Android. Sistem, email, navigasi, dan keyboard dikecualikan; tidak ada yang dihentikan paksa."
+      }
     },
     "night_modem_idle": {
       "name": "Radio tenang di malam hari",
-      "desc": "Selama jendela tidur yang dipelajari, memperpanjang keepalive seluler dan membatasi wake-up rmnet tertentu agar jalur modem lebih lama idle. Notifikasi push dan sinkronisasi dapat menunggu wake-up berikutnya. Panggilan dan SMS memakai jalur modem terpisah; ASB tidak mengubah daya radio, mode pesawat, roaming, atau pemilihan jaringan. Perubahan dicatat dan dipulihkan saat dinonaktifkan atau dihapus."
+      "desc": "Di jendela malam yang dipelajari, memperpanjang keepalive seluler dan menenangkan sebagian jalur data modem agar modem bisa diam lebih lama. Panggilan dan SMS tidak terpengaruh.\n\n🔋 Daya tahan baterai: Aktif\n🔔 Notifikasi tepat waktu: Mati\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "Lebih sedikit modem bangun di malam hari; push dan sinkronisasi bisa menunggu sampai bangun berikutnya.",
+        "0": "Keepalive normal sepanjang malam."
+      }
     },
     "gnss_trim": {
       "name": "Pangkas GPS latar belakang",
-      "desc": "Membatasi lokasi latar belakang aplikasi pengguna yang memenuhi syarat dengan proses cached saat layar mati. Aplikasi menerima lokasi kasar dan mendapatkan presisi normal saat dibuka. Navigasi, fitness/rute, darurat, find-my, dan foreground dikecualikan. Ini dapat mengurangi wake-up lokasi, tetapi fitur latar belakang dapat kehilangan jejak presisi atau akurasi geofence."
+      "desc": "Saat layar mati, aplikasi latar belakang hanya mendapat lokasi perkiraan, dan lokasi akurat lagi saat dibuka. Navigasi, pelacakan kebugaran, darurat, dan pencari perangkat tidak pernah dipangkas.\n\n🔋 Daya tahan baterai: Pangkas\n📍 Jejak latar belakang akurat: Mati\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "0": "Aplikasi tetap mendapat ketelitian lokasi yang dimintanya.",
+        "1": "Saat layar mati, aplikasi latar belakang mendapat lokasi perkiraan: lebih sedikit fix GPS, jejak latar belakang kurang akurat."
+      }
     },
     "smart_media_guard": {
       "name": "Pelindung Media Smart",
-      "desc": "Perlindungan opsional hanya untuk Smart dan kasus sempit: aplikasi video, feed, atau browser yang dikenal mempertahankan beban CPU + GPU seperti game selama satu menit saat memakai baterai. ASB lalu membatasi hanya batas GPU efektif ke envelope media 70% yang sudah digunakan. Fitur ini tidak pernah membatasi game yang dikenal, aplikasi tidak dikenal, pengisian daya, perlindungan termal, batas CPU, atau minimum frekuensi. Coba 12 jam terlebih dahulu; matikan bila streaming refresh-rate tinggi tersendat."
+      "desc": "Hanya Smart, untuk satu kasus: aplikasi video, feed, atau peramban yang dikenal tetap seberat game selama satu menit penuh saat memakai baterai. ASB lalu menahan GPU di batas media yang sudah ada; game, pengisian daya, dan perlindungan panas tidak pernah dibatasi.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: Mati\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "Sesi video dan feed yang berat memakai lebih sedikit daya GPU; streaming refresh tinggi bisa tersendat.",
+        "0": "Aplikasi media mendapat GPU yang dimintanya."
+      }
     },
     "radio_policy_enable": {
       "name": "Kontrol seluler / radio",
@@ -355,7 +446,7 @@
     },
     "net_wifi_leave": {
       "name": "Tinggalkan Wi-Fi buruk",
-      "desc": "Membantu meninggalkan jaringan Wi-Fi terhubung yang sinyalnya lemah atau tidak membawa lalu lintas berguna. Level lebih tinggi bertindak lebih cepat. Dengan layar menyala, ASB mematikan lalu menyalakan Wi-Fi sebentar; kegagalan berulang memperpanjang jeda dari 30 detik hingga lima menit. Ini dapat memutus sesi Wi-Fi dan memakai data seluler. Bekerja terlepas dari Cellular controls.",
+      "desc": "Membantu ponsel meninggalkan jaringan Wi-Fi yang terlalu lemah atau tidak meneruskan lalu lintas, dengan mematikan dan menyalakan Wi-Fi sebentar saat layar menyala.\n\n🔋 Daya tahan baterai: Sinyal lemah\n📶 Wi-Fi tanpa putus: Mati\n✋ Jika ragu: Mati",
       "descOpt": {
         "off": "Jangan aktif meninggalkan Wi-Fi; Android dan driver mengontrol handover.",
         "weak": "Bertindak saat sinyal turun di bawah −80 dBm.",
@@ -370,7 +461,7 @@
         "screen_off": "Aktifkan hemat daya Wi-Fi hanya saat layar mati.",
         "always": "Pertahankan hemat daya Wi-Fi selama penggunaan dan saat layar mati."
       },
-      "desc": "Mengontrol hemat daya Wi-Fi di antara paket. Screen Off mengaktifkannya hanya saat layar mati; Always juga selama penggunaan. Aktivitas radio lebih sedikit dapat menghemat daya, tetapi menambah latensi atau memengaruhi game, casting, dan panggilan Wi-Fi. Off menjaga radio tetap aktif. Perilaku dan penghematan bergantung pada driver serta access point."
+      "desc": "Penghematan daya Wi-Fi di antara paket: radio terlelap selama tidak ada data mengalir.\n\n🔋 Daya tahan baterai: Layar mati atau Selalu\n⚡ Performa: Mati\n✋ Jika ragu: Layar mati"
     },
     "CAMERA_AGGRESSIVE_INJECT": {
       "name": "Mode kunci kamera",
@@ -378,39 +469,67 @@
     },
     "ltpo_force": {
       "name": "Paksa LTPO",
-      "desc": "Menerapkan patch yang disiapkan dari oplus_vrr_config.json perangkat: mengaktifkan jalur hemat daya panel yang didukung tetapi dibiarkan mati oleh OEM dan menonaktifkan telemetri tampilan tertentu. Berkas stock tidak diubah. Jika tidak ada tabel atau perubahan yang cocok, sakelar tidak melakukan apa pun dan status menjelaskan alasannya. Penerapan tabel memerlukan mulai ulang.\n\nRentang refresh Android juga dibuka: ASB menghapus batas bawah, memakai mode panel tertinggi yang dilaporkan, memulihkan maksimum saat disentuh, dan memilih 60 Hz setelah dua detik tenang agar adaptasi panel berlanjut. Kepemilikan kamera, game, dan video dipertahankan, nilai rentang lama dipulihkan saat penyerahan. Jika writer OnePlus15-165HZ-LTPO terverifikasi ada, ASB mengalah kecuali prioritas diberikan secara eksplisit. Penghematan dan laju idle rendah bergantung pada panel dan ROM; tidak dijamin. Bind eksternal pada file yang sama selalu mempertahankan kepemilikan: ASB tidak menumpuk di atasnya atau menghapusnya."
+      "desc": "Membiarkan panel menurunkan refresh rate saat tidak ada yang bergerak (60 Hz setelah dua detik tenang) dan kembali ke tertinggi saat disentuh, memakai salinan tabel refresh bawaan perangkat yang sudah dikoreksi. Perlu mulai ulang; file aslinya tidak berubah.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Kelancaran: Mati\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "Panel diam di rate lebih rendah dan kembali ke maksimum saat disentuh; penghematan tergantung panel dan ROM. Modul lain yang memiliki tabel yang sama tidak disentuh.",
+        "0": "Perilaku refresh ROM tetap bawaan."
+      }
     },
     "mmfeed_off": {
       "name": "Telemetri Multimedia Nonaktif",
-      "desc": "Menggunakan Multimedia_Feedback_List.xml perangkat untuk menetapkan sakelar isOpen pengumpul umpan balik multimedia ke false, lalu memasang salinan patch di atas jalur stock tanpa mengubah berkas asli. Patch disiapkan saat pemasangan dan diterapkan hanya ketika sakelar aktif; perlu mulai ulang. Jika berkas tidak ada atau sudah tertutup, tidak terjadi apa pun dan badge melaporkannya. Dapat mengurangi log diagnostik dan I/O, tetapi penghematan baterai tidak dijamin. Pemrosesan audio dan video tidak berubah."
+      "desc": "Menutup pengumpul umpan balik multimedia vendor memakai salinan daftar bawaan perangkat yang sudah dikoreksi; file aslinya tidak berubah. Perlu mulai ulang. Pemrosesan audio dan video tidak berubah.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: Aktif\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "Lebih sedikit log diagnostik dan I/O; penghematan tidak dijamin.",
+        "0": "Pengumpul berjalan seperti bawaan."
+      }
     },
     "net_screen_off_lte": {
       "name": "LTE saat layar mati",
-      "desc": "Setelah layar mati 90 detik, lebih memilih LTE daripada mempertahankan 5G NSA; pengaturan sebelumnya kembali saat layar menyala. Panggilan dan transfer yang cukup berat dikecualikan; setelah transfer baru-baru ini, 5G dapat dipertahankan setidaknya 10 menit. Nonaktif secara default karena mengubah jenis jaringan dapat mendaftarkan ulang data seluler sebentar. Jika ROM menolak, ASB memulihkan nilai lama dan berhenti mencoba."
+      "desc": "90 detik setelah layar mati, ponsel memilih LTE alih-alih menjaga 5G aktif; 5G kembali saat layar menyala. Panggilan dan transfer besar tetap memakai 5G.\n\n🔋 Daya tahan baterai: Aktif\n📶 Data seluler tercepat: Mati\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "Daya modem 5G lebih sedikit saat siaga; setiap peralihan bisa mendaftarkan ulang data seluler sebentar.",
+        "0": "Jenis jaringan tidak berubah mengikuti layar."
+      }
     },
     "net_lte_light": {
       "name": "5G hanya saat perlu",
-      "desc": "Dengan layar menyala, beralih dari 5G NSA ke LTE setelah tiga menit lalu lintas seluler ringan di bawah 2 Mbit/s. Lalu lintas berkelanjutan di atas ambang yang diterapkan memulihkan 5G selama 10 menit. Tidak beralih saat panggilan, tethering, game, atau Wi-Fi. Nonaktif secara default: setiap perubahan dapat mendaftarkan ulang data sebentar dan konsumsi nyata bergantung pada modem serta sinyal."
+      "desc": "Saat layar menyala, beralih dari 5G ke LTE setelah tiga menit lalu lintas ringan di bawah 2 Mbit/s dan kembali ke 5G untuk lalu lintas berat. Tidak saat panggilan, tethering, game, atau Wi-Fi.\n\n🔋 Daya tahan baterai: Aktif\n📶 Data seluler tercepat: Mati\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "5G hanya selama lalu lintas membutuhkannya; setiap peralihan bisa mendaftarkan ulang data seluler sebentar.",
+        "0": "5G tetap seperti pilihan Android."
+      }
     },
     "heavy_prime_escape": {
       "name": "Angkat inti prime",
-      "desc": "Hanya Smart. Saat beban - berat atau sehari-hari seperti menggulir feed - menahan inti prime di batas atasnya pada ponsel yang masih dingin, ASB menaikkan batas itu sebentar - tidak pernah melebihi yang diizinkan Balanced untuk beban yang sama - lalu beristirahat. Mati: inti prime selalu di batas Smart; sedikit lebih dingin dan hemat, tetapi tugas berat yang panjang (instalasi, ekspor, halaman besar) lebih lama selesai, dan kerja yang lebih lama juga membuat seluruh chip terjaga lebih lama. Saat ponsel hangat, pengangkatan sudah berhenti dengan sendirinya."
+      "desc": "Hanya Smart. Saat pekerjaan menahan inti prime di batas atasnya pada ponsel yang dingin, ASB menaikkan batas itu sebentar, tidak pernah melebihi Seimbang, lalu beristirahat.\n\n🔋 Daya tahan baterai: Mati\n⚡ Performa: Aktif\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Tugas berat yang panjang (instalasi, ekspor, halaman besar) selesai lebih cepat; pengangkatan berhenti sendiri saat ponsel hangat.",
+        "0": "Inti prime tetap di batas atas Smart: sedikit lebih dingin, tetapi tugas panjang lebih lama dan membuat chip aktif lebih lama."
+      }
     },
     "prime_escape_burst_s": {
       "name": "Durasi pengangkatan",
-      "desc": "Berapa detik satu pengangkatan inti prime boleh berlangsung. Lebih lama membuat tugas berat yang panjang lebih cepat selesai; lebih singkat menjaga panas dan konsumsi tetap rendah. Bawaan 20. Hanya dipakai saat Angkat inti prime aktif."
+      "desc": "Berapa lama satu pengangkatan inti prime boleh berlangsung, dalam detik. Hanya dipakai saat Angkat inti prime aktif.\n\n🔋 Daya tahan baterai: 10\n⚡ Performa: 30–40\n✋ Jika ragu: 20"
     },
     "prime_escape_rest_s": {
       "name": "Jeda antar pengangkatan",
-      "desc": "Berapa detik ASB menunggu setelah pengangkatan sebelum yang berikutnya boleh dimulai. Lebih lama = lebih dingin dan hemat saat beban berat berkelanjutan; lebih singkat = lebih gesit. Bawaan 40. Hanya dipakai saat Angkat inti prime aktif."
+      "desc": "Berapa detik ASB menunggu setelah pengangkatan sebelum mengizinkan yang berikutnya. Hanya dipakai saat Angkat inti prime aktif.\n\n🔋 Daya tahan baterai: 90–120\n⚡ Performa: 20\n✋ Jika ragu: 40"
     },
     "wakelock_fitness": {
       "name": "Aplikasi kebugaran & wakelock",
-      "desc": "Secara default, aplikasi fitness dan penghitung langkah dilindungi dari intervensi wakelock ASB. Limit meminta Android mengabaikan wakelock mereka agar tidak sendiri menjaga CPU aktif. Aplikasi pendamping jam dan gelang dikecualikan. Riwayat langkah, latihan latar belakang, dan sinkronisasi dapat menjadi tidak lengkap walaupun penghitungan perangkat keras berlanjut. Protect atau penghapusan memulihkan keadaan tercatat. Independen dari Act on Wakelocks."
+      "desc": "Aplikasi kebugaran dan penghitung langkah sering membuat CPU terjaga di latar belakang.\n\n🔋 Daya tahan baterai: Batasi\n🏃 Catatan langkah dan latihan lengkap: Lindungi\n✋ Jika ragu: Lindungi",
+      "descOpt": {
+        "protect": "Dikecualikan dari tindakan wakelock ASB.",
+        "limit": "Android mengabaikan wakelock mereka, sehingga tidak bisa membuat CPU terjaga sendirian. Riwayat langkah dan latihan latar belakang bisa berlubang; aplikasi pendamping jam dan gelang dikecualikan."
+      }
     },
     "ltpo_video": {
       "name": "Refresh terendah untuk video",
-      "desc": "Selama video yang memenuhi syarat, membatasi puncak panel ke mode terendah yang dilaporkan dan cocok dengan konten 30 atau 60 fps, misalnya 60 Hz untuk keduanya. ASB bertindak hanya dengan layar menyala, audio berbunyi, lapisan video kompatibel, tanpa permintaan smoothness tinggi, dan tiga detik tanpa sentuhan. Sentuhan, akhir pemutaran, atau layar mati memulihkan nilai sebelumnya; sesaat setelah sentuhan laju rendah masih dapat berlaku. Laju frame lain tidak diubah. Mode yang cocok menghindari refresh berlebihan tanpa mengubah frame rate video."
+      "desc": "Saat memutar video tanpa sentuhan, menurunkan panel ke mode terendah yang cocok untuk konten 30 atau 60 fps, misalnya 60 Hz. Sentuhan, akhir pemutaran, atau layar mati mengembalikan rate sebelumnya.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Kelancaran: tidak berpengaruh pada videonya\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Lebih sedikit refresh yang tidak perlu saat video; frame rate video itu sendiri tidak berubah.",
+        "0": "Panel mempertahankan rate biasanya saat video."
+      }
     },
     "lsposed_verbose": {
       "name": "Log rinci LSPosed",
@@ -470,23 +589,43 @@
     },
     "smart_lab": {
       "name": "Lab Smart",
-      "desc": "Smart mencoba sendiri lebih banyak setelan, satu per satu dan berdampingan dengan yang terbaik sejauh ini, lalu hanya mempertahankan setelan bila baterai mengukurnya lebih hemat tanpa inti lebih sering di batas, frame tersendat lebih banyak, atau panas lebih cepat. Ia membandingkan \"5G hanya saat perlu\" dengan 5G diizinkan (hanya bila sakelar itu aktif), dorongan saat membuka kunci dengan 15 poin lebih rendah, dan kecenderungannya sendiri untuk tiga aplikasi yang paling boros saat layar menyala. Setelan terbaik yang biayanya naik 15 % langsung diuji ulang. Hanya profil Smart; hasilnya ada di \"Yang dipelajari Smart\"."
+      "desc": "Smart menguji sendiri lebih banyak pengaturan, satu per satu di samping yang terbaik sejauh ini, dan hanya menyimpan pengaturan yang terukur lebih hemat tanpa lebih banyak frame tersendat, lebih lama di batas atas, atau pemanasan lebih cepat. Hanya profil Smart.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: Aktif (pengaturan yang memperburuk tidak disimpan)\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Smart terus menemukan pengaturan yang lebih hemat; hasilnya muncul di Yang dipelajari Smart.",
+        "0": "Smart hanya memakai yang sudah dipelajarinya."
+      }
     },
     "smart_lab_mem": {
       "name": "Lab Smart: bus memori",
-      "desc": "Mengizinkan lab juga membatasi permintaan CPU ke bus memori: 75 % atau 55 % dari maksimum bus saat layar tenang (10 detik tanpa sentuhan, tidak ada yang berat, tanpa kamera), 50 % atau langkah terendah saat diam dalam yang tenang. Hanya simpul yang disediakan kernel ini yang dipakai; permintaan layar, GPU, video, dan modem tidak pernah disentuh. Setiap penulisan dibaca ulang dan dikembalikan, dan nilai yang diubah komponen lain dibiarkan untuknya. Batas hanya bertahan bila terukur lebih hemat."
+      "desc": "Mengizinkan lab juga membatasi permintaan CPU pada bus memori saat layar tenang dan dalam diam dalam. Permintaan layar, GPU, video, dan modem tidak pernah disentuh.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: Mati\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Batas bus memori diuji dan hanya disimpan bila terukur lebih hemat.",
+        "0": "Bus memori tetap di bawah kendali kernel dan vendor."
+      }
     },
     "profile_class_auto": {
       "name": "Profil menurut jenis penggunaan",
-      "desc": "Performance menahan batas atas CPU di 80 % dari maksimum selama aplikasi ringan (pesan, setelan, pembaca) berjalan dengan beban biasa; Battery menaikkannya minimal ke 70 % selama game berjalan, bila miliknya lebih rendah. Pembukaan aplikasi, kerja berat, kamera, dorongan saat membuka kunci, batas suhu, dan pendinginan tidak disentuh."
+      "desc": "Menyesuaikan profil dengan jenis aplikasi: Performa menahan batas CPU di 80 % untuk aplikasi ringan dengan beban biasa, Baterai menaikkannya setidaknya ke 70 % untuk game. Peluncuran, kerja berat, kamera, dan batas panas tidak disentuh.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Kecepatan maksimum di mana saja: Mati\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Performa lebih hemat untuk aplikasi ringan; Baterai memberi game cukup tenaga.",
+        "0": "Setiap profil menerapkan batasnya sendiri ke semua aplikasi."
+      }
     },
     "smart_records_balanced": {
       "name": "Balanced memakai temuan Smart",
-      "desc": "Dengan layar mati saat diam dalam yang tenang, Balanced menerapkan batas atas CPU layar mati yang diukur Smart lebih hemat di ponsel ini dan dikonfirmasi lewat pemeriksaannya, bila lebih rendah dari milik Balanced. Di bawah Balanced tidak ada yang dicoba atau diukur; batas dikembalikan saat bangun dan tidak pernah dinaikkan."
+      "desc": "Dalam diam dalam dengan layar mati, Seimbang memakai batas CPU layar mati yang diukur Smart lebih hemat di ponsel ini, bila lebih rendah dari miliknya sendiri. Tidak ada yang diuji di bawah Seimbang; batas dikembalikan saat bangun.\n\n🔋 Daya tahan baterai: Aktif\n⚡ Performa: tidak berpengaruh saat layar menyala\n✋ Jika ragu: Aktif",
+      "descOpt": {
+        "1": "Seimbang tidur di batas layar mati yang diukur Smart.",
+        "0": "Seimbang mempertahankan batas layar matinya sendiri."
+      }
     },
     "ltpo_peak_force": {
       "name": "Maksimum panel saat disentuh",
-      "desc": "Bekerja dengan «Paksa LTPO». Selama layar disentuh, SurfaceFlinger diminta mode tertinggi yang dilaporkan panel itu sendiri, melewati ROM yang menahan aplikasi biasa di 120 Hz. Batas atasnya adalah apa yang diumumkan panel — 165 Hz pada OnePlus 15; laju yang tidak tercantum dalam tabel mode panel tidak bisa dipilih, jadi ASB tidak pernah mengarangnya. Agar mode tertinggi itu benar-benar dapat dicapai, ASB juga membuka sakelar ketersediaan «refresh ekstrem» milik OnePlus; ASB tidak pernah memaksa panel tinggi sepanjang waktu, sehingga permintaan dilepas begitu pemantau sentuhan menganggur dan penurunan frame milik panel kembali. Sakelar yang dibuka dan rentang refresh direkam dan dipulihkan saat Nonaktif atau pencopotan. Memakai lebih banyak daya selama Anda menyentuh layar. ROM yang menolak permintaan, atau tidak memiliki sakelar seperti itu, dibiarkan apa adanya dan lencana menyatakannya."
+      "desc": "Bekerja dengan Paksa LTPO: selama Anda menyentuh layar, meminta mode tertinggi yang dilaporkan panel (165 Hz di OnePlus 15) alih-alih 120 Hz ROM untuk aplikasi biasa.\n\n🔋 Daya tahan baterai: Mati\n⚡ Kelancaran: Aktif\n✋ Jika ragu: Mati",
+      "descOpt": {
+        "1": "Gulir dan sentuh berjalan di rate tertinggi panel; lebih banyak daya saat disentuh.",
+        "0": "Aplikasi biasa tetap memakai rate sentuh ROM."
+      }
     },
     "mglru_mode": {
       "name": "Mode MGLRU",
@@ -1506,7 +1645,7 @@
   "prof_balanced_desc": "Pemakaian harian: mulus dan hemat",
   "prof_battery_desc": "Baterai paling awet, frekuensi lebih rendah",
   "grp_audio_desc": "DSP, volume, Bluetooth",
-  "grp_camera_desc": "Preset, pemrosesan, detail",
+  "grp_camera_desc": "Pemrosesan, webcam, buka cepat",
   "grp_iface_desc": "Animasi, blur",
   "grp_net_desc": "Wi-Fi, LTE, antrean",
   "grp_battery_desc": "Smart, Doze, panas, RAM",
@@ -3436,7 +3575,7 @@
   "bfx_reset_absent": "tidak ada di Android ini: {n}",
   "bfx_reset_failed": "gagal dihapus: {n}",
   "soter_auto": "Perbaiki otomatis setelah setiap mulai ulang",
-  "soter_auto_note": "Menjalankan perbaikan yang sama setelah setiap mulai ulang, sekitar satu menit setelah ponsel pertama kali dibuka (kunci SOTER memerlukan penyimpanan yang sudah terbuka), dan mengirim notifikasi saat selesai. Setiap proses membuat kunci SOTER baru, jadi pembayaran sidik jari harus diaktifkan lagi di aplikasi tersebut setelah setiap mulai ulang.",
+  "soter_auto_note": "Menjalankan perbaikan yang sama setelah setiap mulai ulang, sekitar sepuluh menit setelah ponsel pertama kali dibuka: kunci SOTER memerlukan penyimpanan yang terbuka, dan kunci yang dibuat pada menit-menit pertama setelah mulai ulang tidak berfungsi di ponsel ini, sedangkan perbaikan yang dilakukan kemudian berhasil. Notifikasi datang saat selesai. Setiap proses membuat kunci SOTER baru, jadi pembayaran sidik jari harus diaktifkan lagi di aplikasi tersebut setelah setiap mulai ulang.",
   "soter_auto_on": "Perbaikan SOTER akan berjalan setelah setiap mulai ulang",
   "soter_auto_off": "Perbaikan SOTER otomatis nonaktif",
   "soter_auto_failed": "Tidak dapat mengubah perbaikan otomatis",
@@ -3498,7 +3637,7 @@
   "kernel_absent_autogroup": "«Autogroup penjadwal» disembunyikan: kernel ini tidak punya sakelar itu (kernel GKI dibuat tanpanya), dan di Android pun tidak akan menyentuh aplikasi, karena aplikasi berjalan di kelompok CPU milik Android sendiri.",
   "soter_row_boot": "Perbaikan otomatis, boot ini",
   "soter_boot_waiting": "menunggu buka kunci pertama",
-  "soter_boot_unlocked": "ponsel sudah dibuka - perbaikan dimulai dalam sekitar satu menit",
+  "soter_boot_unlocked": "ponsel sudah dibuka - perbaikan dimulai sekitar sepuluh menit lagi",
   "soter_boot_no_boot": "dilewati - Android tidak selesai booting",
   "soter_boot_no_unlock": "dilewati - ponsel tidak dibuka dalam 6 jam",
   "soter_boot_none": "belum berjalan di boot ini - akan berjalan setelah mulai ulang berikutnya",
@@ -3582,5 +3721,20 @@
   "cfg_camera_section_tools": "Alat kamera",
   "cfg_camera_section_tools_hint": "Ponsel sebagai webcam USB dan aplikasi kamera yang dikompilasi penuh, dengan waktu buka yang diukur.",
   "dev_kernel_features_usb_webcam_uvc": "Webcam USB (gadget UVC)",
-  "dev_kernel_features_usb_webcam_service": "Layanan webcam Android"
+  "dev_kernel_features_usb_webcam_service": "Layanan webcam Android",
+  "cfg_sw_on": "Aktif",
+  "cfg_sw_off": "Mati",
+  "kernel_more_show": "Detail",
+  "kernel_more_hide": "Sembunyikan detail",
+  "kernel_refreshed": "Status kernel terbaca: {n} dari {m} kontrol dapat diubah",
+  "kernel_refresh_failed": "Status kernel tidak dapat dibaca",
+  "kernel_refreshing": "Memeriksa…",
+  "kernel_controls_summary": "Setiap kontrol hanya menulis sakelar kernelnya sendiri; Stok mengembalikan nilai yang dimiliki kernel.",
+  "kernel_hidden_count": "Disembunyikan: {n} - kernel ini tidak punya sakelar terpisah untuknya",
+  "kernel_absent_hrtimer": "Migrasi timer resolusi tinggi disembunyikan: kernel ini tidak punya sakelar terpisah untuknya. Migrasi timer di atas sudah memindahkan timer resolusi tinggi juga, jadi cukup mengatur yang itu.",
+  "kernel_wb_summary": "Hanya memblokir nama yang Anda tambahkan di sini, setelah jendela diam yang diukur menunjukkannya. Nama yang salah bisa menunda alarm, panggilan, atau notifikasi.",
+  "kc_default_same": "Kernel ini dikirim dengan {v}: {opts} memberi hasil yang sama di sini.",
+  "kc_mglru_no_nonleaf": "Kernel ini membuang flag 0x0004 yang tidak didukung (non-leaf young): setelah Aktif (7) terbaca 0x0003, setelah langkah ringan Smart (5) 0x0001. Bukan penulisan yang gagal.",
+  "ct_wc_summary": "Ponsel sebagai webcam USB untuk komputer, lewat layanan webcam bawaan Android. Eksperimental.",
+  "ct_la_summary": "Menjaga aplikasi kamera tetap terkompilasi penuh. Ukur cold start sebelum dan sesudah untuk melihat bedanya."
 }

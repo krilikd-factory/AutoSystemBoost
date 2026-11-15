@@ -288,7 +288,7 @@
     },
     "athena_service": {
       "name": "Athena Background Killer",
-      "desc": "Controls OxygenOS's AthenaService background-app killer. Off disables only that component while leaving the rest of com.oplus.athena in place; this may help apps that the OEM kills despite Android battery exemptions. More apps remaining active can increase RAM use and background drain, and notification behaviour still depends on each app. Stock restores the component state recorded by ASB; uninstall also restores it.",
+      "desc": "OxygenOS's own background-app killer.\n\n🔋 Battery life: Stock\n🔔 Apps stay alive, notifications on time: Off\n✋ Not sure: Stock",
       "descOpt": {
         "stock": "OxygenOS keeps its normal Athena background policy.",
         "off": "Disable only AthenaService. Apps may stay active longer, with more RAM use and background drain."
@@ -313,15 +313,16 @@
         "moderate": "Target idle entry after five minutes with the screen off.",
         "aggressive": "Target idle entry after two minutes and shorten selected sensing/location windows. Background work may be deferred."
       },
-      "desc": "Controls how quickly Android enters Doze after the screen turns off. Stock keeps the ROM timing; Moderate targets five minutes and Aggressive two minutes, while Night applies only in the learned sleep window. Doze can defer background network, jobs and alarms until maintenance windows; high-priority push may still arrive. Use Stock if timely background activity matters more than earlier idle entry. Stock removes the ASB timing override."
+      "desc": "How soon Android enters deep sleep (Doze) after the screen turns off. In Doze, background network, jobs and alarms wait for short maintenance windows; high-priority push still gets through.\n\n🔋 Battery life: Moderate or Aggressive\n🔔 Notifications on time: Stock\n✋ Not sure: Night only"
     },
     "gms_freeze": {
       "descOpt": {
-        "off": "Leave every managed Google component in its recorded original state.",
-        "safe": "Disable selected telemetry and reporting components. Check apps that depend on them.",
-        "more": "Also disable selected advertising and measurement components. Reversible, but dependent features may change."
+        "off": "Every managed component back in its recorded original state.",
+        "safe": "Telemetry, usage statistics and analytics only; nothing you use depends on them.",
+        "more": "Also ad personalisation, location-history uploads and the backup scheduler. The Maps timeline stops recording.",
+        "max": "Also on-device search indexing and background step counting. Some search results and background steps are missing."
       },
-      "desc": "Disables individual Google Play services components. Levels are cumulative. SAFE: telemetry, stats and analytics - nothing the phone needs. MORE: adds the ad identifier, location reporting and the backup scheduler. MAX: adds Icing indexing and background Fitness recording. THE COST OF MAX: in-app and system search will miss some results, and steps are not counted in the background. Push notifications are untouched at every level. Everything is restored by switching to off - each component's original state is recorded."
+      "desc": "Turns off single components inside Google Play services. Play services itself stays on, so push, sign-in, payments and the Play Store keep working. Each level includes the previous one.\n\n🔋 Battery life: More\n🧩 Every Google feature: Off\n✋ Not sure: Safe"
     },
     "gms_trim": {
       "descOpt": {
@@ -329,7 +330,7 @@
         "lite": "Limit selected location and search-widget background work.",
         "strict": "Also remove the Play services Doze exemption; push and sync may be delayed."
       },
-      "desc": "Reduces selected Google Play services background activity without disabling Play services itself. Lite limits location reporting and search-widget background work. Strict also removes Play services from the Doze exemption list, which can delay push notifications, sync and other background jobs. Choose Lite or Stock if timely delivery is essential. Changed permissions and exemptions are recorded and restored when ASB is removed."
+      "desc": "Reduces Google Play services background work without turning components off.\n\n🔋 Battery life: Strict\n🔔 Notifications on time: Stock or Light\n✋ Not sure: Light"
     },
     "phantom_procs": {
       "descOpt": {
@@ -337,7 +338,7 @@
         "relaxed": "Disable the limit. Background child processes can survive, but runaway resource use is less contained.",
         "strict": "Explicitly set Android's limit to 32 phantom processes."
       },
-      "desc": "Controls Android's limit on app-created phantom processes outside the normal activity lifecycle. No Limit disables that protection so long terminal jobs, emulators and compiles can survive, but runaway apps can also consume more memory and CPU. Limit 32 explicitly restores Android's ceiling. Leave Alone preserves the current device value, which another tool may have changed. Restart the affected app because the limit is read when its process starts."
+      "desc": "Android's limit on extra child processes that apps start outside their normal lifecycle: terminals, emulators, build tools. Restart the affected app after a change.\n\n🔋 Battery life: Limit 32\n⚡ Long background jobs: No limit\n✋ Not sure: No limit"
     },
     "log_level": {
       "descOpt": {
@@ -347,14 +348,15 @@
         "3": "Verbose diagnostics that grow quickly. Use only while reproducing a problem.",
         "stock": "Do not change device logging through this setting."
       },
-      "desc": "Controls ASB log detail and, except in Stock, selected device logging. Stock leaves device logging untouched. 0 minimises device and module diagnostics, making later bug reports much less useful. 1 records normal significant events; 2 adds learner and screen-transition details useful for battery reports; 3 is verbose and grows quickly, so use it only while reproducing a problem. Returning from 0 restores the logging state recorded by ASB."
+      "desc": "How much ASB and selected device logs record.\n\n🔋 Battery life: Normal\n🔍 Problem reports: Detailed\n✋ Not sure: Normal"
     },
     "sustained_temp_mode": {
       "descOpt": {
         "stock": "Use the device trip point read from its CPU thermal zone at boot.",
         "smart": "Start from that point and allow bounded upward adjustment after qualifying sustained sessions.",
         "manual": "Use the temperature selected below without Smart adjustment."
-      }
+      },
+      "desc": "The temperature at which ASB starts holding performance back under long heavy load. The vendor's own thermal protection always stays active.\n\n🔋 Battery life / cooler phone: Manual with a lower temperature\n⚡ Performance: Smart\n✋ Not sure: Smart"
     },
     "ui_effects_level": {
       "descOpt": {
@@ -362,7 +364,7 @@
         "stock": "Use the device's normal effects and Recents presentation.",
         "flat": "Simplify effects. Recents becomes a plain list and OxygenOS hides the Cards/Simple selector; OnePlus 15 only."
       },
-      "desc": "Normal keeps the device's full transition and Recents effects. Simplified reduces visual effects and may lower GPU use, but Recents becomes a plain list and OxygenOS removes the Cards/Simple selector. Restore Normal and reboot to recover it. The simplified option is exposed only on the OnePlus 15 because its behaviour on other models has not been validated."
+      "desc": "How rich system transitions and the Recents effects are.\n\n🔋 Battery life: Simplified\n⚡ Performance: Simplified\n✋ Not sure: Auto"
     },
     "net_route_tune": {
       "descOpt": {
@@ -371,18 +373,19 @@
         "conservative": "Use a modest window increase.",
         "aggressive": "Use a larger window; poor links may see more retransmissions."
       },
-      "desc": "Adjusts the initial TCP burst size for routes. Smart chooses from measured link conditions and leaves weak links closer to the factory value; Moderate is conservative, while Aggressive selects a larger class and can increase retransmissions on poor links. Stock restores the previous route values. This changes connection ramp-up, not the maximum speed of the radio or service."
+      "desc": "The size of the first burst of a new TCP connection. A larger burst speeds up page loads and short downloads; on poor links it can cause retransmissions.\n\n🔋 Battery life: Smart\n⚡ Performance: Aggressive\n✋ Not sure: Smart"
     },
     "bt_a2dp_offload": {
       "descOpt": {
         "auto": "Leave the ROM's Bluetooth audio path unchanged.",
         "on": "Request hardware/offloaded encoding where supported. Actual power use depends on the device and codec.",
         "off": "Use CPU encoding. This can let some equaliser apps process Bluetooth audio, with potentially higher CPU use."
-      }
+      },
+      "desc": "Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU.\n\n🔋 Battery life: Auto or On\n🎛️ Bluetooth equaliser apps: Off\n✋ Not sure: Auto"
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Chooses which CPU cores may receive packets for Wi-Fi interfaces. Stock leaves the kernel and driver configuration untouched. Little uses the efficiency cluster; All allows every core. Spreading work can help on fast links but wakes more CPUs and may cost power on light traffic. Mobile-data receive distribution is left to the device. Actual gains depend on the driver and link.",
+      "desc": "Which CPU cores may process received Wi-Fi packets.\n\n🔋 Battery life: Stock or Little\n⚡ Performance: All\n✋ Not sure: Stock",
       "descOpt": {
         "stock": "Leave the kernel and driver receive-packet masks untouched.",
         "little": "Allow receive processing on the efficiency cluster.",
@@ -391,7 +394,7 @@
     },
     "net_txqueue": {
       "name": "Transmit Queue",
-      "desc": "Sets how many packets may wait in the Wi-Fi transmit queue. Stock keeps the driver value; Short uses 256 and Shorter uses 128. Smaller queues can reduce delay under load, but may limit throughput or increase loss on fast or variable links. If uploads, streaming or latency become worse, return to Stock.",
+      "desc": "How many packets may wait in the Wi-Fi transmit queue. Shorter queues can cut delay under load but may limit throughput on fast or unstable links.\n\n🔋 Battery life: no difference\n⚡ Low latency (games, calls): Short\n✋ Not sure: Stock",
       "descOpt": {
         "stock": "Keep the driver's transmit-queue length.",
         "short": "Use 256 packets. Can reduce queued delay but may not suit every fast link.",
@@ -400,15 +403,27 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "During the learned sleep window, extends cellular keepalive intervals and gates selected rmnet data-path wakeups so the modem path can stay idle longer. Push notifications and app sync may wait until a later wake. Calls and SMS use separate modem paths; ASB does not change radio power, airplane mode, roaming or network selection. Changes are recorded and restored when disabled or uninstalled."
+      "desc": "In the learned night window, stretches mobile keepalives and quiets part of the modem data path so the modem can stay idle longer. Calls and SMS are not affected.\n\n🔋 Battery life: On\n🔔 Notifications on time: Off\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "Fewer modem wakeups at night; push and sync can wait until the next wake.",
+        "0": "Normal keepalives all night."
+      }
     },
     "gnss_trim": {
       "name": "Trim Background GPS",
-      "desc": "Limits background location use by eligible user-installed apps whose processes are cached while the screen is off. Such apps are reduced to coarse location and regain normal precision when opened. Navigation, fitness/route tracking, emergency, find-my and foreground apps are excluded. This can reduce location-related wakeups, but background features in an affected app may lose precise tracks or geofence accuracy."
+      "desc": "Background apps get only coarse location while the screen is off and precise location again when opened. Navigation, fitness tracking, emergency and find-my apps are never trimmed.\n\n🔋 Battery life: Trim\n📍 Precise background tracks: Off\n✋ Not sure: Off",
+      "descOpt": {
+        "0": "Apps keep the location precision they ask for.",
+        "1": "Background apps get coarse location with the screen off: fewer GPS fixes, less precise background tracks."
+      }
     },
     "smart_media_guard": {
       "name": "Smart Media Guard",
-      "desc": "Optional, Smart-only protection for a narrow case: a known video, feed or browser app stays game-like CPU + GPU heavy for a full minute while you use it on battery. ASB then keeps only the effective GPU ceiling at the existing 70% media envelope. It never limits a known game, an unknown app, charging, thermal protection, CPU ceilings or frequency floors. Start with the 12-hour trial; turn it off if a high-refresh stream stutters."
+      "desc": "Smart only, for one case: a known video, feed or browser app stays as heavy as a game for a full minute on battery. ASB then holds the GPU at the existing media limit; games, charging and thermal protection are never limited.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "Heavy video and feed sessions use less GPU power; a high-refresh stream can stutter.",
+        "0": "Media apps get the GPU they ask for."
+      }
     },
     "radio_policy_enable": {
       "name": "Cellular / radio controls",
@@ -419,7 +434,12 @@
       "desc": "Optional workaround for Bluetooth audio dropouts during playback. Stable suppresses Wi-Fi scanning while audio plays, which can help on devices where the two radios interfere. New networks may appear more slowly. No codec is forced and pairing is unchanged. Leave this off if your connection is already stable."
     },
     "BG_TRIM_LEVEL": {
-      "desc": "Controls how strongly ASB restricts background apps. Off leaves Android in charge and restores buckets changed by ASB. Safe adjusts standby buckets for apps that Android reports as unused, with critical apps protected. Aggressive adds stronger background and memory limits; apps may wake less often, lose state or deliver notifications late. Disruptive package or vendor-service actions require a separate explicit opt-in and are not enabled by this level alone."
+      "desc": "How strongly ASB holds back apps you are not using: rarely used apps go to stricter Android standby buckets. Calls, messages, alarms and the keyboard stay protected.\n\n🔋 Battery life: Aggressive\n🔔 Notifications on time: Off or Safe\n✋ Not sure: Safe",
+      "descOpt": {
+        "off": "Android decides alone; standby buckets ASB changed are given back.",
+        "safe": "Rarely used apps go to stricter standby buckets; protected apps are never touched.",
+        "aggressive": "Also stronger background and memory limits. Apps can lose their state or deliver notifications later."
+      }
     },
     "mglru_hold": {
       "name": "Keep Apps In Memory",
@@ -427,7 +447,7 @@
     },
     "net_wifi_leave": {
       "name": "Leave Bad Wi-Fi",
-      "desc": "Helps move away from a connected Wi-Fi network that has a weak signal or carries no usable traffic. Higher levels act sooner. With the screen on, ASB turns Wi-Fi off briefly and back on; repeated failures lengthen the pause from 30 seconds up to five minutes. This can interrupt active Wi-Fi sessions and may cause mobile-data use. It works independently of Cellular controls.",
+      "desc": "Helps the phone leave a Wi-Fi network that is too weak or carries no traffic, by turning Wi-Fi off and on briefly while the screen is on.\n\n🔋 Battery life: Weak signal\n📶 Uninterrupted Wi-Fi: Off\n✋ Not sure: Off",
       "descOpt": {
         "off": "Do not actively leave Wi-Fi; Android and the driver control handover.",
         "weak": "Act when signal falls below −80 dBm.",
@@ -444,7 +464,7 @@
         "4": "Do not throttle background scanning.",
         "5": "Allow a background scan about every 30 minutes; discovery can be much slower."
       },
-      "desc": "Controls how often ASB allows background Wi-Fi scanning. Less frequent scanning can reduce radio activity when you stay in one place, but known and new networks may be discovered later. This does not change the active connection's data rate. Choose Unthrottled to leave scanning unrestricted; the option descriptions below show each interval."
+      "desc": "How often ASB allows background Wi-Fi scans. Fewer scans mean less radio work while you stay in one place, but networks are found later. The active connection's speed does not change.\n\n🔋 Battery life: every 10 or 30 minutes\n📶 Finding networks quickly: unthrottled\n✋ Not sure: every 5 minutes"
     },
     "wifi_powersave": {
       "name": "WiFi Power Save",
@@ -453,23 +473,39 @@
         "screen_off": "Enable Wi-Fi power saving only while the display is off.",
         "always": "Keep Wi-Fi power saving enabled during use and with the screen off."
       },
-      "desc": "Controls Wi-Fi power saving between packets. Screen Off enables it only while the display is off; Always also enables it during use. Lower radio activity can reduce power use but may add latency or affect games, casting and Wi-Fi calls. Off keeps the radio fully awake. Actual behaviour and savings depend on the driver and access point."
+      "desc": "Wi-Fi power saving between packets: the radio dozes while no data flows.\n\n🔋 Battery life: Screen off or Always\n⚡ Performance: Off\n✋ Not sure: Screen off"
     },
     "ltpo_force": {
       "name": "Force LTPO Refresh",
-      "desc": "Applies a patch prepared from the device's own oplus_vrr_config.json: it enables supported panel power-saving paths left off by the OEM and disables selected display telemetry. The stock file is not modified. If no suitable table or change is found, the switch does nothing and the status badge explains why. Applying the table requires a reboot.\n\nThe Android refresh range is also opened: ASB removes its floor, uses the highest reported panel mode, restores the maximum on touch and selects 60 Hz after two quiet seconds so panel adaptation can continue. Camera, game and video ownership are preserved, and previous range values are restored on handback. If the verified OnePlus15-165HZ-LTPO writer is present, ASB yields unless you explicitly give ASB priority. A same-target bind from another module always keeps ownership: ASB neither stacks over it nor removes it. Power savings and low-idle rates depend on the panel and ROM; neither is guaranteed."
+      "desc": "Lets the panel drop its refresh rate when nothing moves (60 Hz after two quiet seconds) and return to its top rate on touch, using a patched copy of the device's own refresh table. Needs a reboot; the stock file is not changed.\n\n🔋 Battery life: On\n⚡ Smoothness: Off\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "The panel idles lower and returns to its maximum on touch; savings depend on the panel and ROM. Another module that owns the same table is left alone.",
+        "0": "The ROM's refresh behaviour stays as shipped."
+      }
     },
     "mmfeed_off": {
       "name": "Multimedia Telemetry Off",
-      "desc": "Uses the device's own Multimedia_Feedback_List.xml to disable the multimedia feedback collector's isOpen switch, then binds the patched copy over the stock path without modifying the original file. The patch is prepared during installation and applied only when this switch is on; a reboot is required. If the file is absent or already closed, the switch does nothing and the badge reports that state. This can reduce diagnostic logging and I/O, but battery savings are not guaranteed. Audio and video processing are not changed."
+      "desc": "Closes the OEM multimedia feedback collector using a patched copy of the device's own list; the original file is not changed. Needs a reboot. Audio and video processing do not change.\n\n🔋 Battery life: On\n⚡ Performance: On\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "Less diagnostic logging and I/O; a saving is not guaranteed.",
+        "0": "The collector runs as shipped."
+      }
     },
     "net_screen_off_lte": {
       "name": "LTE While Screen Off",
-      "desc": "After the screen has been off for 90 seconds, prefers LTE instead of keeping 5G NSA active; the previous setting returns when the screen turns on. Calls and sufficiently heavy transfers are excluded, and a recent transfer can keep 5G for at least 10 minutes. Off by default because changing allowed network types can briefly re-register mobile data. If the ROM rejects the change, ASB restores the previous value and stops retrying."
+      "desc": "90 seconds after the screen goes off the phone prefers LTE instead of keeping 5G active; 5G returns when the screen turns on. Calls and heavy transfers keep 5G.\n\n🔋 Battery life: On\n📶 Fastest mobile data: Off\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "Less 5G modem power in standby; each switch can briefly re-register mobile data.",
+        "0": "The network type does not change with the screen."
+      }
     },
     "net_lte_light": {
       "name": "5G Only When Needed",
-      "desc": "With the screen on, switches from 5G NSA to LTE after three minutes of light mobile traffic below 2 Mbit/s. Sustained traffic above the implemented thresholds restores 5G and holds it for 10 minutes. ASB does not switch during calls, tethering, games or Wi-Fi use. Off by default: every network-type change can briefly re-register mobile data, and actual power use depends on the modem and signal."
+      "desc": "With the screen on, switches from 5G to LTE after three minutes of light traffic below 2 Mbit/s and back to 5G for heavy traffic. Not during calls, tethering, games or Wi-Fi.\n\n🔋 Battery life: On\n📶 Fastest mobile data: Off\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "5G only while the traffic needs it; each switch can briefly re-register mobile data.",
+        "0": "5G stays as Android chooses."
+      }
     },
     "lsposed_verbose": {
       "descOpt": {
@@ -536,72 +572,139 @@
       "desc": "Controls separate sharpening scales for macro and low-light processing. 0 follows Camera Grade; higher values add a progressively stronger correction, with 10 targeting 3.2× before firmware limits. Close subjects and high ISO can make halos more visible. Raise this only when those modes are genuinely soft. Reboot to apply."
     },
     "camera_hold_enable": {
-      "desc": "While the camera is actively streaming, the governor keeps the current CPU ceiling and cores instead of lowering them. This can reduce performance dips during bursts or video, but uses more power while the camera remains open. On preserves the hold; Off lets normal governor rules apply. Thermal and vendor safety limits remain authoritative."
+      "desc": "While the camera is streaming, the governor keeps the CPU ceiling and cores instead of lowering them. Thermal and vendor limits still apply.\n\n🔋 Battery life: Off\n⚡ Performance: On\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Smooth preview, bursts and recording; more power while the camera is open.",
+        "0": "Normal governor rules apply in the camera too."
+      }
     },
     "UX_MANAGE_TIMEOUTS": {
-      "desc": "Master switch for profile-managed interface timing. Performance shortens animations and long-press/multi-tap windows; Battery keeps stock timing. Off leaves these values under ROM control. Use Animation Speed below for a fixed animation scale independent of the power profile."
+      "desc": "Lets the power profile manage interface timing: Performance shortens animations and the long-press and multi-tap windows, Battery keeps stock timing.\n\n🔋 Battery life: no effect\n⚡ Feels faster: On\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "Animation and touch timing follow the profile.",
+        "0": "The ROM keeps its own timing; Animation Speed still works."
+      }
     },
     "anim_speed": {
-      "desc": "Sets a fixed Android animation scale. −1 lets the power profile manage animations; 0 is the Android default, negative values are faster, positive values are slower, and the far-left setting disables animations. It applies to subsequent transitions. Very short or disabled animations can make transitions harder to follow but do not increase an app's actual processing speed."
+      "desc": "A fixed Android animation speed. By profile lets the power profile choose; to the left is faster, to the right slower, the far left turns animations off. Shorter animations make the phone feel quicker but do not make apps process faster.\n\n🔋 Battery life: By profile\n⚡ Feels faster: Faster or Fastest\n✋ Not sure: By profile"
     },
     "UX_ANIM_FORCE_RESTART": {
       "desc": "Fallback for ROMs that ignore live animation-scale changes. When enabled, a manual profile switch also restarts SystemUI: the screen may blink, the lock screen may return, and overlays from other modules can be torn down. It does not run on every automatic profile change. Leave this off unless you have confirmed that ordinary scale changes do not apply."
     },
     "disable_blur": {
-      "desc": "Disables system window blur in areas such as the shade, notifications, volume panel and transitions. This can reduce GPU work, but replaces translucent backgrounds with solid ones; heads-up notification text may be harder to read over some content. The setting is global rather than per panel. Window blur changes live; compositor blur may require a reboot."
+      "desc": "Turns off window blur in the shade, notifications, the volume panel and transitions; backgrounds become solid.\n\n🔋 Battery life: On\n⚡ Performance: On\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "Solid backgrounds and slightly less GPU work; the compositor part may need a reboot.",
+        "0": "The ROM's blur stays."
+      }
     },
     "net_congestion_mobile": {
-      "desc": "Selects the TCP congestion-control algorithm for mobile data only. As Global follows the general Download Ramp card. Stock leaves the device value unchanged. BBR and CUBIC respond differently to loss and delay; neither is universally faster, and the better choice depends on the carrier and radio conditions. The card reports an unsupported algorithm instead of claiming it was applied."
+      "desc": "Download ramp for mobile data only. bbr often helps on mobile links with loss and changing delay.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: As global",
+      "descOpt": {
+        "auto": "Takes the value of the card for other links.",
+        "bbr": "Paces to the measured link speed; often better on lossy mobile and long-distance links.",
+        "cubic": "The classic Linux algorithm; backs off on loss."
+      }
     },
     "net_qdisc": {
-      "desc": "Controls packet queuing on links not covered by the Wi-Fi and mobile cards, including USB/Bluetooth tethering, VPN and Ethernet. Stock preserves the device configuration. fq_codel can reduce latency under load, fq pairs with flow pacing, and cake offers more queue management at extra CPU cost. Results depend on the link; no option guarantees higher throughput or stutter-free video."
+      "desc": "How packets queue on links the Wi-Fi and mobile cards do not cover.\n\n🔋 Battery life: no measurable difference\n⚡ Low latency: fq_codel\n✋ Not sure: Stock",
+      "descOpt": {
+        "auto": "The device's own queue stays.",
+        "fq": "Fair queue with flow pacing; pairs well with bbr.",
+        "fq_codel": "Keeps queues short under load: lower delay for games and calls.",
+        "cake": "The most queue management; costs a little more CPU."
+      }
     },
     "wifi_country": {
       "desc": "Selects the Wi-Fi regulatory domain, which controls the channels and transmit rules the driver may use. Stock keeps the value supplied by the device. CR explicitly selects the Costa Rica domain; it is not a universal speed setting, and availability still depends on the ROM, access point and hardware. Use only channels and power levels permitted in your actual location."
     },
     "doze_trim_whitelist": {
-      "desc": "Controls Android's Doze exemptions separately from Doze timing. Trimming exemptions lets user-installed apps follow idle restrictions; protected system apps such as the dialer, SMS, clock and root manager are not removed. The app list lets you keep selected messengers, mail or VPN apps exempt. Changes are recorded and restored at level 0 or on uninstall. Trimming can delay notifications and background sync."
+      "desc": "Some installed apps are allowed to ignore deep sleep. Trimming takes user-installed apps off that list; the dialer, SMS, clock, root manager and the apps you keep in the list below stay exempt.\n\n🔋 Battery life: Trim\n🔔 Notifications on time: Leave alone\n✋ Not sure: Leave alone",
+      "descOpt": {
+        "0": "The exemption list stays as the ROM and apps set it.",
+        "1": "User-installed apps follow deep sleep like all others; your kept apps and system essentials stay exempt. Leave alone or uninstall gives the list back."
+      }
     },
     "wakelock_action": {
-      "desc": "Chooses whether ASB acts on persistent app wakelocks; measurement and reporting remain available either way. When enabled, only eligible user-installed apps are considered after 45+ minutes of screen-off wakefulness with evidence that the phone is staying awake. In detail: only an app that held the CPU for 10+ minutes (or holds a long lock right now) and that Android does not count as used today can be moved to Android's restricted standby bucket. Kernel/system sources, critical apps, battery-optimization exemptions, mail, navigation and keyboards are excluded. Nothing is force-stopped; restrictions can delay background work or notifications. Leave Off to inspect reports without intervention."
+      "desc": "What ASB does with apps that keep the phone awake with the screen off. Measuring and the reports work either way.\n\n🔋 Battery life: Act\n🔔 Notifications on time: Watch only\n✋ Not sure: Watch only",
+      "descOpt": {
+        "0": "Measure and report only; nothing is restricted.",
+        "1": "After 45 minutes awake with the screen off, an app that held the CPU for 10+ minutes and was not used today goes to Android's restricted bucket. System, mail, navigation and keyboards are excluded; nothing is force-stopped."
+      }
     },
     "wakelock_fitness": {
-      "desc": "By default, fitness and step-counter apps are protected from ASB wakelock intervention. Limit asks Android to ignore their wakelocks so they cannot keep the CPU awake by themselves. Watch and band companion apps are excluded. Step timelines, background workouts and sync can become incomplete even if hardware step counting continues. Protect or uninstall restores the recorded state. This setting works independently of Act on Wakelocks."
+      "desc": "Fitness and step-counter apps often keep the CPU awake in the background.\n\n🔋 Battery life: Limit\n🏃 Complete step and workout records: Protect\n✋ Not sure: Protect",
+      "descOpt": {
+        "protect": "Exempt from ASB's wakelock measures.",
+        "limit": "Android ignores their wakelocks, so they cannot keep the CPU awake alone. Step timelines and background workouts can have gaps; watch and band companions are excluded."
+      }
     },
     "night_quiet_enable": {
-      "desc": "During a long screen-off stretch in the learned night window, the governor pauses its own nonessential periodic work so the device can remain idle. It does not silence apps, disable radios or guarantee a specific battery saving. Off keeps normal governor scheduling around the clock. Turn it off only if you need those governor updates during the night window."
+      "desc": "During a long screen-off stretch in the learned night window, the governor pauses its own non-essential periodic work. Apps and radios are not touched.\n\n🔋 Battery life: On\n⚡ Performance: no effect\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Fewer governor wakeups at night.",
+        "0": "The governor keeps its normal schedule around the clock."
+      }
     },
     "sustained_temp_enter": {
-      "desc": "Sets the CPU-zone temperature at which ASB begins limiting sustained performance in Manual mode. Lower values intervene earlier; higher values allow more heat before ASB backs off. The vendor's thermal limits remain active, and this slider is not a safety control. The default is 65 and the lower bound is 52 because some CPU zones read much hotter than the battery or shell. A threshold near or below the device's normal reading can cause constant throttling, longer work and more heat."
+      "desc": "Manual mode only: the CPU temperature at which ASB starts limiting long heavy load. Lower means earlier and cooler but slower; higher means more speed and more heat. The vendor's limits stay in force.\n\n🔋 Battery life: 58-60\n⚡ Performance: 68-70\n✋ Not sure: 65"
     },
     "perf_ceiling_pct": {
-      "desc": "Caps the peak CPU and GPU performance available to ASB as a percentage of the device maximum. It mainly limits demanding work; light tasks may never reach the cap. Lower values can reduce peaks and heat but can also lengthen tasks and keep components awake longer, so battery life does not automatically improve. 100 leaves ASB without this additional cap. Start near 85 if needed and compare heat, responsiveness and drain on your device."
+      "desc": "Caps the highest CPU and GPU speed ASB allows, as a share of the device maximum. Light work rarely reaches the cap; heavy work becomes slower but cooler. A lower cap does not always save battery: slower work keeps the chip awake longer.\n\n🔋 Battery life: 85\n⚡ Performance: 100\n✋ Not sure: 100"
     },
     "cool_gaming": {
-      "desc": "Uses an earlier thermal response during games, around 40 °C, instead of waiting for higher sustained-load thresholds. This can reduce heat, but frame rate and frame-time stability may also fall depending on the game and device. Off leaves games under the normal profile and thermal policy; it does not disable vendor thermal protection."
+      "desc": "In games ASB starts cooling down earlier, at about 40 °C, instead of waiting for the usual sustained-load threshold.\n\n🔋 Battery life / cooler phone: On\n⚡ Performance: Off\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Less heat in long sessions; the frame rate can drop a little in demanding games.",
+        "0": "Games run under the normal profile and thermal rules until the phone is hotter."
+      }
     },
     "ltpo_video": {
-      "desc": "During eligible video playback, limits the panel peak to the lowest reported mode that matches 30 or 60 fps content, such as 60 Hz for either rate. ASB acts only with the screen on, audio playing, a compatible video layer, no high-smoothness request and no touch for three seconds. Touch, playback end or screen-off restores the previous value; the first instant after touch can still use the lower rate. Other frame rates are left unchanged. Matching modes avoids unnecessary refreshes without changing the video's frame rate."
+      "desc": "During video playback without touch, lowers the panel to the lowest mode that fits 30 or 60 fps content, such as 60 Hz. Touch, the end of playback or screen-off restores the previous rate.\n\n🔋 Battery life: On\n⚡ Smoothness: no effect on the video itself\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Fewer needless refreshes during video; the video's own frame rate does not change.",
+        "0": "The panel keeps its usual rate during video."
+      }
     },
     "smart_lab": {
       "name": "Smart Lab",
-      "desc": "Smart tries more settings for itself, one at a time and side by side with the best one so far, and keeps a setting only when the battery measured it cheaper without the cores at their ceiling more often, more janky frames or faster warming. It tests \"5G Only When Needed\" against 5G allowed (only when that switch is on), the unlock lift against 15 points less, and its own lean for the three apps that cost the most with the screen on. A best setting whose cost climbs by 15 % is tested again at once. Smart profile only; results appear under What Smart learned."
+      "desc": "Smart tests more settings itself, one at a time next to the best one so far, and keeps a setting only when it measured cheaper without more janky frames, more time at the ceiling or faster warming. Smart profile only.\n\n🔋 Battery life: On\n⚡ Performance: On (a setting that makes things worse is not kept)\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Smart keeps learning cheaper settings; results appear under What Smart learned.",
+        "0": "Smart uses only what it has already learned."
+      }
     },
     "smart_lab_mem": {
       "name": "Smart Lab: Memory Bus",
-      "desc": "Lets the lab also cap the CPU's votes on the memory bus: 75 % or 55 % of the bus maximum while the screen is calm (no touch for 10 seconds, nothing heavy, no camera), 50 % or the lowest step on quiet deep idle. Only the voters this kernel exposes are used; display, GPU, video and modem votes are never touched. Every write is read back and given back, and a value another component changed is left to it. A cap stays only if it measured cheaper."
+      "desc": "Lets the lab also cap the CPU's votes on the memory bus while the screen is calm and in deep idle. Display, GPU, video and modem votes are never touched.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Memory-bus caps are tested and kept only when they measured cheaper.",
+        "0": "The memory bus stays under the kernel's and the vendor's control."
+      }
     },
     "profile_class_auto": {
       "name": "Profiles by Kind of Use",
-      "desc": "Performance holds the CPU ceilings at 80 % of the maximum while a light app (messenger, settings, reader) runs at ordinary load; Battery lifts them to at least 70 % while a game runs, where its own are lower. App launches, heavy work, the camera, the unlock lift, a thermal cap and the cooldown are untouched."
+      "desc": "Fits the profile to the kind of app: Performance holds CPU ceilings at 80 % for a light app at ordinary load, Battery lifts them to at least 70 % for a game. Launches, heavy work, the camera and thermal limits are untouched.\n\n🔋 Battery life: On\n⚡ Maximum speed everywhere: Off\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Performance spends less on light apps; Battery gives games enough.",
+        "0": "Each profile applies its own ceilings to every app."
+      }
     },
     "smart_records_balanced": {
       "name": "Balanced Uses Smart's Findings",
-      "desc": "With the screen off on quiet deep idle, Balanced applies the screen-off CPU ceiling setting Smart measured as cheaper on this phone and kept through its check, when it is below Balanced's own. Nothing is tried or measured under Balanced; the ceilings are given back on wake and never raised."
+      "desc": "In deep idle with the screen off, Balanced uses the screen-off CPU ceiling Smart measured as cheaper on this phone, when it is lower than Balanced's own. Nothing is tested under Balanced; ceilings are given back on wake.\n\n🔋 Battery life: On\n⚡ Performance: no effect with the screen on\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Balanced sleeps on Smart's measured screen-off ceiling.",
+        "0": "Balanced keeps its own screen-off ceiling."
+      }
     },
     "ltpo_peak_force": {
       "name": "Panel Maximum on Touch",
-      "desc": "Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports, past a ROM that keeps ordinary apps at 120 Hz. The ceiling is whatever the panel advertises - 165 Hz on the OnePlus 15; a rate the panel does not list in its mode table cannot be selected, so ASB never invents one. To make that top mode actually reachable, ASB also unlocks OnePlus's own extreme-refresh availability toggles; it never forces the panel high all the time, so the request is still released the moment the touch watcher goes idle and the panel's own frame drop comes back. The unlocked toggles and the refresh range are recorded and restored on Off or uninstall. Costs more power while you touch the screen. A ROM that refuses the request, or has no such toggles, is left alone and the badge says so."
+      "desc": "Works with Force LTPO Refresh: while you touch the screen, asks for the highest mode the panel reports (165 Hz on the OnePlus 15) instead of the ROM's 120 Hz for ordinary apps.\n\n🔋 Battery life: Off\n⚡ Smoothness: On\n✋ Not sure: Off",
+      "descOpt": {
+        "1": "Scrolling and touch run at the panel's top rate; more power while you touch.",
+        "0": "Ordinary apps keep the ROM's touch rate."
+      }
     },
     "mglru_mode": {
       "name": "MGLRU Mode",
@@ -702,6 +805,77 @@
         "128": "A light floor for audio and camera threads. Small extra cost.",
         "256": "A noticeable floor, for games and video recording. More power while these threads run.",
         "512": "A strong floor. Only if crackling or stutter remains; the highest power use of these options."
+      }
+    },
+    "bat_suppress_gaming": {
+      "desc": "In the Battery profile a game counts as ordinary heavy load instead of switching to the gaming state with its higher limits. Other profiles are not affected.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Battery stays a battery profile, also in games.",
+        "0": "Games get the full gaming treatment even in Battery."
+      }
+    },
+    "auto_battery_enable": {
+      "desc": "Switches to the Battery profile when the charge gets low and back to your profile after charging.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Low charge switches to Battery automatically; charging restores your profile.",
+        "0": "Your chosen profile stays at any charge level."
+      }
+    },
+    "charge_aware_enable": {
+      "desc": "While charging, ASB allows more performance when the battery is cool and backs off as it warms up.\n\n🔋 Battery health: On\n⚡ Performance: On\n✋ Not sure: On",
+      "descOpt": {
+        "1": "More speed on a cool charger, less when the battery heats up.",
+        "0": "Charging does not change the performance rules."
+      }
+    },
+    "heavy_prime_escape": {
+      "desc": "Smart only. When work keeps the prime cores at their ceiling on a cool phone, ASB lifts that ceiling briefly, never above Balanced, and then rests.\n\n🔋 Battery life: Off\n⚡ Performance: On\n✋ Not sure: On",
+      "descOpt": {
+        "1": "Long heavy tasks (installs, exports, big pages) finish sooner; the lift stops by itself when the phone is warm.",
+        "0": "The prime cores stay at Smart's ceiling: a little cooler, but long tasks take longer and keep the chip awake longer."
+      }
+    },
+    "prime_escape_burst_s": {
+      "desc": "How long one prime-core lift may last, in seconds. Used only while Prime Core Lift is on.\n\n🔋 Battery life: 10\n⚡ Performance: 30-40\n✋ Not sure: 20"
+    },
+    "prime_escape_rest_s": {
+      "desc": "How long ASB waits after a lift before the next one may start, in seconds. Used only while Prime Core Lift is on.\n\n🔋 Battery life: 90-120\n⚡ Performance: 20\n✋ Not sure: 40"
+    },
+    "smart_battery_bias": {
+      "desc": "Nudges Smart toward Battery: 300 moves it 30 % of the remaining way from what it learned to Battery, 600 moves it 60 %. From about 400 Smart behaves almost like Battery in ordinary use. Halved during heavy work and games.\n\n🔋 Battery life: 300-400\n⚡ Performance: 0\n✋ Not sure: 0"
+    },
+    "net_congestion": {
+      "desc": "How downloads ramp up on links the Wi-Fi and mobile cards do not cover: USB and Bluetooth tethering, VPN, Ethernet.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: Stock",
+      "descOpt": {
+        "auto": "The device's own algorithm stays (often cubic).",
+        "bbr": "Paces to the measured link speed; often better on lossy mobile and long-distance links.",
+        "cubic": "The classic Linux algorithm; backs off on loss."
+      }
+    },
+    "net_congestion_wifi": {
+      "desc": "Download ramp for Wi-Fi only.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: As global",
+      "descOpt": {
+        "auto": "Takes the value of the card for other links.",
+        "bbr": "Paces to the measured link speed; often better on lossy mobile and long-distance links.",
+        "cubic": "The classic Linux algorithm; backs off on loss."
+      }
+    },
+    "net_qdisc_wifi": {
+      "desc": "Packet queue for Wi-Fi only.\n\n🔋 Battery life: no measurable difference\n⚡ Low latency: fq_codel\n✋ Not sure: As global",
+      "descOpt": {
+        "auto": "Takes the value of the card for other links.",
+        "fq": "Fair queue with flow pacing; pairs well with bbr.",
+        "fq_codel": "Keeps queues short under load: lower delay for games and calls.",
+        "cake": "The most queue management; costs a little more CPU."
+      }
+    },
+    "net_qdisc_mobile": {
+      "desc": "Packet queue for mobile data only.\n\n🔋 Battery life: no measurable difference\n⚡ Low latency: fq_codel\n✋ Not sure: As global",
+      "descOpt": {
+        "auto": "Takes the value of the card for other links.",
+        "fq": "Fair queue with flow pacing; pairs well with bbr.",
+        "fq_codel": "Keeps queues short under load: lower delay for games and calls.",
+        "cake": "The most queue management; costs a little more CPU."
       }
     }
   },
@@ -1367,7 +1541,7 @@
   "prof_balanced_desc": "Everyday use - smooth and frugal",
   "prof_battery_desc": "Longest battery life, lower clocks",
   "grp_audio_desc": "DSP, volume, Bluetooth",
-  "grp_camera_desc": "Presets, processing, detail",
+  "grp_camera_desc": "Processing, webcam, fast start",
   "grp_iface_desc": "Animations, blur",
   "grp_net_desc": "Wi-Fi, LTE, queues",
   "grp_battery_desc": "Smart, Doze, heat, RAM",
@@ -3295,7 +3469,7 @@
   "bfx_reset_absent": "not present on this Android: {n}",
   "bfx_reset_failed": "could not be removed: {n}",
   "soter_auto": "Repair automatically after every reboot",
-  "soter_auto_note": "Runs the same repair after each reboot, about a minute after you first unlock the phone (SOTER keys need the unlocked storage), and posts a notification when it has finished. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.",
+  "soter_auto_note": "Runs the same repair after each reboot, about ten minutes after you first unlock the phone: SOTER keys need the unlocked storage, and keys created in the first minutes after a reboot did not work on this phone while a repair made later did. A notification comes when it has finished. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.",
   "soter_auto_on": "SOTER repair will run after every reboot",
   "soter_auto_off": "Automatic SOTER repair is off",
   "soter_auto_failed": "Could not change the automatic repair",
@@ -3357,7 +3531,7 @@
   "kernel_absent_autogroup": "Scheduler Autogroup is hidden: this kernel has no such switch (GKI kernels are built without it), and on Android it would not touch apps anyway, because they run in Android's own CPU groups.",
   "soter_row_boot": "Automatic repair, this boot",
   "soter_boot_waiting": "waiting for the first unlock",
-  "soter_boot_unlocked": "phone unlocked - the repair starts in about a minute",
+  "soter_boot_unlocked": "phone unlocked - the repair starts about ten minutes later",
   "soter_boot_no_boot": "skipped - Android did not finish booting",
   "soter_boot_no_unlock": "skipped - the phone was not unlocked within 6 hours",
   "soter_boot_none": "has not started in this boot - it runs after the next reboot",
@@ -3441,5 +3615,20 @@
   "cfg_camera_section_tools": "Camera Tools",
   "cfg_camera_section_tools_hint": "Use the phone as a USB webcam and keep the camera app fully compiled, with measured launch times.",
   "dev_kernel_features_usb_webcam_uvc": "USB webcam (UVC gadget)",
-  "dev_kernel_features_usb_webcam_service": "Android webcam service"
+  "dev_kernel_features_usb_webcam_service": "Android webcam service",
+  "cfg_sw_on": "On",
+  "cfg_sw_off": "Off",
+  "kernel_more_show": "Details",
+  "kernel_more_hide": "Hide details",
+  "kernel_refreshed": "Kernel status read: {n} of {m} controls can be changed",
+  "kernel_refresh_failed": "Could not read the kernel status",
+  "kernel_refreshing": "Checking…",
+  "kernel_controls_summary": "Each control writes only its own kernel switch; Stock puts back the value the kernel had.",
+  "kernel_hidden_count": "Hidden: {n} - this kernel has no separate switch for them",
+  "kernel_absent_hrtimer": "High-resolution Timer Migration is hidden: this kernel has no separate switch for it. Timer migration above already moves high-resolution timers too, so setting that one is enough.",
+  "kernel_wb_summary": "Blocks only the names you add here, after a measured idle window shows them. A wrong name can delay alarms, calls or notifications.",
+  "kc_default_same": "This kernel ships {v}: {opts} give the same result here.",
+  "kc_mglru_no_nonleaf": "This kernel drops the unsupported 0x0004 flag (non-leaf young): On (7) reads 0x0003, Smart's light step (5) reads 0x0001. Not a failed write.",
+  "ct_wc_summary": "The phone as a USB webcam for a computer, through Android’s own webcam service. Experimental.",
+  "ct_la_summary": "Keeps the camera app fully compiled. Measure the cold start before and after to see the difference."
 }
