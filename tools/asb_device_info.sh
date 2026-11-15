@@ -199,7 +199,7 @@ _emit kernel_bore runtime_interface "$_bore_interface"
 _emit kernel_bore state "$_bore_state"
 _emit kernel_bore write_access "$_bore_access"
 _emit kernel_bore toggle "$_bore_toggle"
-_emit kernel_bore control_policy 'fixed node; 0/1 only; read-back and exact kernel-bound Stock restore required'
+_emit kernel_bore control_policy 'fixed node; Stock/Auto/Off/On; 0/1 only; fresh native thermal/battery guards for Auto; read-back and exact kernel-bound baseline restore required'
 
 # One bounded kallsyms pass supplies named evidence to several built-in features.
 # Built-in drivers normally have no /sys/module directory, so config-only/module-only
