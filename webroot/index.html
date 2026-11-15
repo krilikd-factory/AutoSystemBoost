@@ -2745,6 +2745,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 .kernel-unavailable .cfg-sel-pop button { cursor: not-allowed; }
 .kernel-unavailable .cfg-sel-pop { display: none; }
 .kernel-why { margin-top:8px; color:var(--text-secondary); font-size:11.5px; line-height:1.45; }
+.cfg-row.kernel-absent-hidden { display:none; }
 .cfg-row-top {
   display: flex;
   align-items: center;
@@ -9888,7 +9889,7 @@ const CFG_ITEMS = [
     desc:'Only for kernels with a separate switch for high-precision timers. Standard kernels, including 6.12 GKI, do not have one: then this card only shows the Timer migration value and writes nothing.\n\n🔋 Battery life / ⚡ Performance: set Timer migration instead\n✋ Not sure: Auto' },
   { key:'kernel_lpm_prediction', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'Idle Prediction (LPM)', cat:'system',
-    desc:'Snapdragon CPU idle driver: tries to predict how long a core will sleep and picks a deeper sleep state sooner. Deeper sleep saves power, but waking up from it takes a little longer. On newer kernels the switch is called prediction_disabled; the card still shows 1 = prediction on.\n\n🔋 Battery life: On or Auto\n⚡ Performance: Off\n✋ Not sure: Auto' },
+    desc:'Snapdragon CPU idle driver: besides the next timer, it uses the recent history of wake-ups to guess how long a core will really sleep. When interrupts keep waking a core early, it then picks a lighter sleep state instead of a deep one that would be left again at once; entering and leaving deep sleep costs energy and time. On newer kernels the switch is called prediction_disabled; the card still shows 1 = prediction on.\n\n🔋 Battery life: On or Auto\n⚡ Performance: On or Auto\n✋ Not sure: Auto' },
   { key:'kernel_sched_nr_migrate', type:'seg', def:'auto', stock:'stock',
     opts:['stock','auto','1','2','4','8','16'], name:'Scheduler Migration Batch', cat:'system',
     desc:'How many tasks the scheduler may move between CPU cores in one balancing step. Small numbers: short, light steps, but load evens out more slowly. Large numbers: load spreads faster, with more moving around.\n\n🔋 Battery life: 2 or Auto\n⚡ Performance: 8 or Auto\n✋ Not sure: Auto' },
@@ -11097,6 +11098,26 @@ function kernelUnavailableWhy(key) {
   };
   return Object.prototype.hasOwnProperty.call(fb, key) ? T('kc_why_' + key, fb[key]) : '';
 }
+/* dev58: a control the running kernel cannot have and that would not act on Android apps
+ * even where it exists is hidden instead of shown as a dead card; the help card names it. */
+const KERNEL_HIDE_WHEN_ABSENT = ['kernel_sched_autogroup'];
+function kernelHiddenAbsent() {
+  return KERNEL_HIDE_WHEN_ABSENT.filter(function (k) {
+    const c = _kernelPanel.controls[k];
+    return !!(c && c.state === 'not_exposed');
+  });
+}
+/* dev58: what the kernel itself ships, from the captured baseline or (without one) the live
+ * value, so a switch that cannot change anything on this phone says so. */
+function kernelDefaultFact(key) {
+  if (key !== 'kernel_lpm_prediction') return '';
+  const c = _kernelPanel.controls[key];
+  if (!c) return '';
+  const base = c.baseline && c.baseline !== 'none' && c.baseline !== 'invalid' ? c.baseline : c.live;
+  if (base === '1') return T('kc_lpm_default_on', 'This kernel ships prediction on: Stock, Auto and On give the same result here; only Off changes something.');
+  if (base === '0') return T('kc_lpm_default_off', 'This kernel ships prediction off: On, and Auto in the Battery profile, turn it on.');
+  return '';
+}
 function kernelDecorateControlRow(row, key) {
   if (!row) return;
   const a = kernelControlAvailability(key);
@@ -11107,8 +11128,14 @@ function kernelDecorateControlRow(row, key) {
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
+  if (a.state === 'not_exposed' && KERNEL_HIDE_WHEN_ABSENT.indexOf(key) >= 0 && row.classList) {
+    row.classList.add('kernel-absent-hidden');
+    return;
+  }
   const why = a.state === 'not_exposed' ? kernelUnavailableWhy(key) : '';
   if (why && row.appendChild && !(row.querySelector && row.querySelector('.kernel-why'))) row.appendChild(bfxEl('div', 'kernel-why', why));
+  const fact = a.state === 'available' ? kernelDefaultFact(key) : '';
+  if (fact && row.appendChild && !(row.querySelector && row.querySelector('.kernel-fact'))) row.appendChild(bfxEl('div', 'kernel-why kernel-fact', fact));
   if (['not_exposed','not_readable','read_only','disabled','covered_by_timer_migration'].indexOf(a.state) >= 0) {
     row.classList.add('kernel-unavailable');
     row.querySelectorAll('.cfg-seg button,.cfg-sel-btn,.cfg-sel-pop button').forEach(function (b) {
@@ -11125,6 +11152,9 @@ function kernelStateBadge(state) {
 function cfgRenderKernelControlsHelp(list) {
   const card = bfxEl('div', 'cfg-row kernel-card cat-kernel'); card.id = 'kernelControlsHelp';
   card.appendChild(bfxEl('div', 'kernel-note', T('kernel_controls_help', 'Each switch below writes only its named standard kernel interface. Stock restores the value captured before ASB first wrote it. Missing or read-only interfaces are disabled; a different readback is reported as a mismatch, not as success.')));
+  if (kernelHiddenAbsent().indexOf('kernel_sched_autogroup') >= 0) {
+    card.appendChild(bfxEl('div', 'kernel-why kernel-absent-note', T('kernel_absent_autogroup', 'Scheduler Autogroup is hidden: this kernel has no such switch (GKI kernels are built without it), and on Android it would not touch apps anyway, because they run in Android\'s own CPU groups.')));
+  }
   const actions = bfxEl('div', 'bfx-actions');
   const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_refresh', 'Refresh status'));
   refresh.type = 'button'; refresh.id = 'kernelControlsRefresh'; refresh.disabled = _kernelPanel.loading;
@@ -17016,6 +17046,7 @@ const DEVICE_SECTION_ORDER = [
   ['root', 'dev_sec_root', 'Root implementation', 'root', ['manager', 'variant', 'version', 'variant_evidence', 'version_evidence']],
   ['susfs', 'dev_sec_susfs', 'SuSFS interface', 'root'],
   ['metamodule', 'dev_sec_metamodule', 'Metamodule', 'root'],
+  ['companion_modules', 'dev_sec_companion_modules', 'Kernel companion modules', 'root'],
   ['zygisk_observer', 'dev_sec_zygisk_observer', 'Zygisk observer', 'root'],
   ['lsposed_hooks', 'dev_sec_lsposed_hooks', 'LSPosed hooks: problems and battery evidence', 'root'],
   ['asb', 'dev_sec_asb', 'ASB runtime', 'asb'],
@@ -17687,6 +17718,7 @@ function zygiskHeaderPublish(d) {
   const old = card ? card.querySelector('.dev-zygisk-link') : null;
   if (old) card.replaceChild(deviceZygiskLink(d), old);
 }
+let _asbModuleDescSynced = false;
 async function zygiskHeaderRefresh() {
   const seq = ++_zygiskHeaderSeq;
   if (_zygiskHeaderRunning) { _zygiskHeaderQueued = true; return; }
@@ -17698,7 +17730,15 @@ async function zygiskHeaderRefresh() {
     /* A failed read is not negative evidence. Keep the last validated snapshot; before the
      * first successful read the header remains honestly unknown. Sequence checking prevents
      * an older response from replacing evidence requested by a newer page/setting action. */
-    if (seq === _zygiskHeaderSeq && r && r.errno === 0 && d.count) zygiskHeaderPublish(d);
+    if (seq === _zygiskHeaderSeq && r && r.errno === 0 && d.count) {
+      zygiskHeaderPublish(d);
+      /* dev58: bring the root manager's module card up to date once per WebUI session, so a
+       * card still saying "waiting" from before the first app start does not outlive this. */
+      if (!_asbModuleDescSynced) {
+        _asbModuleDescSynced = true;
+        try { run('MODDIR=' + shQuote(MD) + ' sh ' + shQuote(MD + '/runtime/asb_module_desc.sh') + ' refresh >/dev/null 2>&1'); } catch (e2) {}
+      }
+    }
   } catch (e) {
     /* No connection claim is inferred from a collector error. */
   } finally {
