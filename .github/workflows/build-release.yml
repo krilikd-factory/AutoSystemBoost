@@ -674,6 +674,7 @@ jobs:
             "runtime/asb_camera_grade.sh" \
             "runtime/asb_system_tweaks.sh" \
             "runtime/asb_anim_apply.sh" \
+            "runtime/asb_display_ui_apply.sh" \
             "runtime/asb_gms_trim.sh" \
             "runtime/asb_gms_freeze.sh" \
             "runtime/asb_wakelock_watch.sh" \
