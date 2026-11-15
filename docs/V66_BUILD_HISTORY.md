@@ -4,6 +4,38 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev58 - module card format, kernel companion modules, LPM and Autogroup cards
+
+Input: the owner's dev57 phone export and asbdiag on the dev57-fix1 kernel, and four requests.
+No native source or release binary changed.
+
+- **Module card in the owner's format:** `[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]`.
+  `runtime/asb_module_desc.sh` writes the whole line from `current_profile` (an old-format line
+  is replaced, not parsed); every profile writer, the installer and the template use the same
+  words. The install-time line has only the profile part.
+- **"waiting" no longer lingers:** after boot the card was first re-checked after two minutes;
+  it is now re-checked every 10 s while the state is `waiting` (at most 10 minutes), then 5, 20
+  and 50 minutes later, and the WebUI refreshes it once per session. A root manager can still
+  show the old text until it reloads its module list.
+- **Kernel companion modules:** the Device page (Root and modules) and asbdiag list NoMount and
+  the VPN Hide built-in module with version (no repeated versionCode), enabled/disabled/removal
+  state, a pending update and the kernel side (`nomount` driver version, `/proc/vpnhide_ctl`).
+  3 strings in 13 languages.
+- **Idle Prediction (LPM):** the export shows `prediction_disabled=0`: the kernel ships prediction
+  on, so Stock, Auto and On cannot change anything there. The card now says what the kernel
+  ships (from the captured baseline or the live value), and its text no longer claims that
+  prediction picks deeper sleep sooner: it avoids deep sleeps that would be left at once. Off
+  is for diagnosis. 13 languages.
+- **Scheduler Autogroup:** GKI has no `CONFIG_SCHED_AUTOGROUP` (it changes `signal_struct`, a
+  KMI structure), and autogroup only regroups tasks in the root CPU cgroup, which Android apps
+  are never in. The dead card is hidden when the kernel does not expose the switch; the Kernel
+  management help card says why. 1 string in 13 languages.
+- **Tests:** `t_webui_companion_lpm_autogroup_dev58`; `t_module_desc_zygisk_dev57` rewritten for
+  the new format and the 10 s settle; install and Stock description cases updated.
+- **Kernel repository (paired):** the VPN Hide job writes the module version, versionCode,
+  commit and id into the run summary (a mismatch is a warning, never a failure); the NoMount
+  summary line names its commit too.
+
 ## V66 dev57 - kernel controls follow the profile, an RT boost floor, SOTER after the first unlock
 
 Input: the dev56 source and the owner's six requests (clearer kernel texts, a larger header
