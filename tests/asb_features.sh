@@ -5880,6 +5880,56 @@ _direct="$(grep -RInE '> */proc/sys/kernel/hrtimer_migration|> */sys/module/(lpm
 echo 'PASS kernel power/USB controls: Battery Auto, exact profile release, manual override, signed USB values, stable baselines, failure states, safe config and one owner'
 )
 
+
+t_kernel_lpm_qcom_prediction_dev56() (
+# dev56: Snapdragon kernels with the qcom-cpu-lpm cpuidle governor have no lpm_levels
+# lpm_prediction switch, but the governor exposes the same choice inverted as
+# /sys/devices/system/cpu/qcom_lpm/parameters/prediction_disabled (same file on the 5.15 and
+# 6.6 vendor trees). The card now drives that node; status, readback and the baseline are
+# reported in the card's own terms (1 = prediction on), and Stock writes back the raw value.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL qcom LPM prediction: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state" "$T/qcom"
+N="$T/qcom/prediction_disabled"
+printf '0\n' > "$N"
+run() { MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_KC_KERNEL_ID=k1 ASB_LPM_LEVELS_NODE="$T/absent" ASB_QCOM_LPM_PREDICTION_NODE="$N" sh "$K" "$@"; }
+cfg() { printf 'kernel_lpm_prediction=%s\n' "$1" > "$T/mod/config/governor.conf"; }
+cfg stock
+out="$(run status kernel_lpm_prediction)"
+[ "$out" = 'kernel_lpm_prediction|writable|stock|1|none' ] || fail "status in card terms: $out"
+cfg off
+out="$(run apply kernel_lpm_prediction '' balanced)"
+[ "$out" = 'kernel_lpm_prediction|applied|off|0|1' ] || fail "Off: $out"
+[ "$(cat "$N")" = 1 ] && [ "$(cat "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'Off must write prediction_disabled=1 and keep the raw baseline'
+cfg on
+out="$(run apply kernel_lpm_prediction '' balanced)"
+[ "$out" = 'kernel_lpm_prediction|applied|on|1|1' ] && [ "$(cat "$N")" = 0 ] || fail "On: $out / $(cat "$N")"
+cfg auto
+out="$(run apply kernel_lpm_prediction '' battery)"
+[ "$out" = 'kernel_lpm_prediction|applied|auto|1|1' ] && [ "$(cat "$N")" = 0 ] || fail "Battery Auto: $out"
+cfg off; run apply kernel_lpm_prediction '' balanced >/dev/null
+cfg stock
+out="$(run apply kernel_lpm_prediction)"
+[ "$out" = 'kernel_lpm_prediction|restored|stock|1|none' ] && [ "$(cat "$N")" = 0 ] || fail "Stock restore: $out / $(cat "$N")"
+[ ! -e "$T/state/kernel_lpm_prediction.prev" ] || fail 'baseline kept after restore'
+printf '1\n' > "$T/levels"
+out="$(MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_LPM_LEVELS_NODE="$T/levels" ASB_QCOM_LPM_PREDICTION_NODE="$N" sh "$K" status kernel_lpm_prediction)"
+[ "$out" = 'kernel_lpm_prediction|writable|stock|1|none' ] || fail "lpm_levels must win when present: $out"
+printf '0\n' > "$T/levels"
+out="$(MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_LPM_LEVELS_NODE="$T/levels" ASB_QCOM_LPM_PREDICTION_NODE="$N" sh "$K" status kernel_lpm_prediction)"
+[ "$out" = 'kernel_lpm_prediction|writable|stock|0|none' ] || fail "lpm_levels is not inverted: $out"
+rm -f "$N"
+out="$(run status kernel_lpm_prediction)"
+[ "$out" = 'kernel_lpm_prediction|not_exposed|stock|unknown|none' ] || fail "absent governor node: $out"
+grep -q '/sys/devices/system/cpu/qcom_lpm/parameters/prediction_disabled' "$K" || fail 'default qcom node path'
+grep -q 'qcom_lpm/parameters' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag does not list the governor parameters'
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'asbdiag copies differ'
+echo 'PASS qcom LPM prediction: qcom-cpu-lpm prediction_disabled driven inverted, card-terms status/readback/baseline, exact Stock restore, lpm_levels preferred, honest absence'
+)
+
 t_kernel_nr_migrate_debugfs_runtime() (
 # dev49, from the owner's export: his kernel is built with CONFIG_DEBUG_FS=y and
 # CONFIG_SCHED_DEBUG=y, yet "Scheduler migration batch" read "not exposed" - Android does not
