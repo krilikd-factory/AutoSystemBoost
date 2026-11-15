@@ -16,7 +16,7 @@ tree_list() {
   ( cd "$ROOT" && find . -type f \
       ! -path './.git/*' ! -path './.github/*' ! -path './src/DSP_AIDL/prebuilt/*' \
       ! -path '*/__pycache__/*' ! -name 'update.json' ! -name 'module.prop' \
-      ! -path './tools/asb_tree.sha256' 2>/dev/null | sed 's|^\./||' | LC_ALL=C sort )
+      ! -name 'RELEASE_MANIFEST.json' ! -path './tools/asb_tree.sha256' 2>/dev/null | sed 's|^\./||' | LC_ALL=C sort )
 }
 
 tree_hash() {
