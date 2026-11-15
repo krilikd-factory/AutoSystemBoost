@@ -4534,7 +4534,7 @@ done
 P ""
 P "  SCHED / WALT globals:"
 for _s in /proc/sys/kernel/sched_util_clamp_min /proc/sys/kernel/sched_util_clamp_max \
-          /proc/sys/kernel/sched_schedstats; do
+          /proc/sys/kernel/sched_util_clamp_min_rt_default /proc/sys/kernel/sched_schedstats; do
   [ -r "$_s" ] && P "    $(basename $_s) = $(cat $_s 2>/dev/null)"
 done
 for _wp in /sys/devices/system/cpu/walt/sched_boost \
