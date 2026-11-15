@@ -737,6 +737,7 @@ for _spec in \
   'usb_autosuspend:/sys/module/usbcore/parameters/autosuspend' \
   'sched_clamp_min:/proc/sys/kernel/sched_util_clamp_min' \
   'sched_clamp_max:/proc/sys/kernel/sched_util_clamp_max' \
+  'sched_clamp_min_rt_default:/proc/sys/kernel/sched_util_clamp_min_rt_default' \
   'swappiness:/proc/sys/vm/swappiness' \
   'tcp_congestion:/proc/sys/net/ipv4/tcp_congestion_control' \
   'tcp_available_congestion:/proc/sys/net/ipv4/tcp_available_congestion_control' \
