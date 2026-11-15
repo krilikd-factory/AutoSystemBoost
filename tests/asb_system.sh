@@ -802,6 +802,78 @@ done
 echo 'PASS config ownership registry contract (245 keys; 49 user, 64 advanced, 132 internal)'
 )
 
+t_config_metadata_coherence_buildfix1() (
+# CI buildfix1: a checkout mixed the dev64 WebUI cards with the older 237-key
+# config/registry metadata. Pin the coherent dev64+ state and prove that the exact
+# stale mixture is rejected while the three corrective files make lint green.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+CONF="$ROOT/config/governor.conf"
+SHIPPED="$ROOT/config/governor.conf.shipped"
+REG="$ROOT/config/key_ownership.tsv"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+fail() { echo "FAIL config metadata coherence buildfix1: $*" >&2; exit 1; }
+need() { grep -Fq -- "$2" "$1" || fail "$3"; }
+keys='ui_recents_memory ui_recents_corner_radius ui_smooth_corners ui_nav_handle_autohide feel_pointer_speed feel_gesture_mistouch feel_game_memc feel_dc_dimming'
+
+for key in $keys; do
+  grep -Fqx "$key|user|webui_standard|shell" "$REG" || fail "$key is not a public user row"
+  grep -Fqx "$key=stock" "$CONF" || fail "$key default missing from governor.conf"
+  grep -Fqx "$key=stock" "$SHIPPED" || fail "$key default missing from governor.conf.shipped"
+done
+cmp -s "$CONF" "$SHIPPED" || fail 'active and shipped config copies differ'
+shape="$(cd "$ROOT" && grep -oE "key:'[a-zA-Z0-9_]+'[^}]*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
+  | sed -E "s/.*key:'([a-zA-Z0-9_]+)'.*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)/\1=\2/" \
+  | sort | md5sum | cut -c1-12)"
+[ "$shape" = d672ad7af963 ] || fail "unexpected computed WebUI shape: $shape"
+grep -Fqx "# CONFIG_SHAPE=$shape" "$CONF" || fail 'governor.conf shape is stale'
+grep -Fqx "# CONFIG_SHAPE=$shape" "$SHIPPED" || fail 'shipped config shape is stale'
+schema="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' "$ROOT/common/install.sh" \
+  | grep -oE 'echo [0-9]+' | grep -oE '[0-9]+')"
+[ "$schema" = 4 ] || fail "config schema changed unexpectedly: $schema"
+
+mkdir "$TMP/stale"
+cp -R "$ROOT/." "$TMP/stale/"
+python3 - "$TMP/stale" <<'PY' || fail 'could not construct stale metadata fixture'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+keys = {'ui_recents_memory', 'ui_recents_corner_radius', 'ui_smooth_corners',
+        'ui_nav_handle_autohide', 'feel_pointer_speed', 'feel_gesture_mistouch',
+        'feel_game_memc', 'feel_dc_dimming'}
+for rel in ('config/governor.conf', 'config/governor.conf.shipped', 'config/key_ownership.tsv'):
+    path = root / rel
+    kept = []
+    for line in path.read_text(encoding='utf-8').splitlines(keepends=True):
+        separator = '|' if rel.endswith('.tsv') else '='
+        if line.split(separator, 1)[0] not in keys:
+            kept.append(line)
+    text = ''.join(kept)
+    if separator == '=':
+        text = text.replace('# CONFIG_SHAPE=d672ad7af963',
+                            '# CONFIG_SHAPE=928eea600217', 1)
+    path.write_text(text, encoding='utf-8')
+PY
+if (cd "$TMP/stale" && MODE=RELEASE_STRICT bash tools/asb_lint.sh) > "$TMP/before.log" 2>&1; then
+  fail 'stale 237-key metadata with dev64 WebUI cards passed lint'
+fi
+need "$TMP/before.log" 'internal-or-unregistered-cards=[feel_dc_dimming feel_game_memc feel_gesture_mistouch feel_pointer_speed ui_nav_handle_autohide ui_recents_corner_radius ui_recents_memory ui_smooth_corners ] stale-public-keys=[]' 'ownership drift no longer reproduces the CI failure'
+need "$TMP/before.log" 'config shape changed (928eea600217 -> d672ad7af963) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
+need "$TMP/before.log" 'Lint: ❌ 2 errors  ⚠️  0 warnings' 'stale fixture has unexpected additional lint findings'
+
+cp "$CONF" "$TMP/stale/config/governor.conf"
+cp "$SHIPPED" "$TMP/stale/config/governor.conf.shipped"
+cp "$REG" "$TMP/stale/config/key_ownership.tsv"
+(cd "$TMP/stale" && MODE=RELEASE_STRICT bash tools/asb_lint.sh) > "$TMP/after.log" 2>&1 || {
+  cat "$TMP/after.log" >&2
+  fail 'three coherent metadata files did not repair the stale fixture'
+}
+need "$TMP/after.log" 'config shape matches the recorded fingerprint (schema 4)' 'schema 4 coherence was not reported'
+need "$TMP/after.log" 'Lint: ❌ 0 errors  ⚠️  0 warnings' 'corrected fixture is not lint-clean'
+echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 245-key configs, shape d672ad7af963/schema 4, exact stale-CI failure and three-file repair'
+)
+
 t_config_restore_outcome_runtime() (
 # Runtime (fix142): applying a saved configuration reports what it did - how many settings the
 # file carries and how many it changed - and the WebUI turns save/apply into an outcome panel
