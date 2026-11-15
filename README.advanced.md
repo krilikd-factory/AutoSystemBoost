@@ -728,6 +728,8 @@ A missing denominator must hide a normalised scale rather than produce an arbitr
 
 A vendor clamp can be protective and expected. An ASB cap can be deliberate because of Battery or a user ceiling. The correct response depends on the source and current scenario, not on always removing the lowest visible limit.
 
+*Vendor ↑* (since dev61) means the vendor raised the ceiling above ASB's for a moment — a launch or touch boost. It is shown in the neutral colour, does not mark the status chip as an issue and is not counted as a firmware limit; only a vendor clamp below ASB's value is. A clamp or thermal overlay on either cluster is shown before a boost on the other.
+
 ### 💾 11.4. Named configurations and backup
 
 Named configurations are useful for repeatable testing, but they are not universal device images. Before importing a setup on different hardware or firmware:
@@ -1073,7 +1075,17 @@ Device schema 5 adds an on-demand pressure heuristic. It reads procfs/sysfs only
 | Load | 35 | `load_per_core = loadavg_1m / online_cpu_count`; `load_component = clamp(load_per_core × 50, 0, 100)` |
 | Memory | 30 | `memory_used_pct = clamp((MemTotal − MemAvailable) × 100 / MemTotal, 0, 100)`; `memory_component = clamp((memory_used_pct − 40) × 2, 0, 100)` |
 | CPU | 25 | Two `/proc/stat` reads around a 0.20-second sample; `busy = (Δtotal − Δ(idle+iowait)) × 100 / Δtotal` |
-| GPU | 10 | A valid 0–100 percentage or numerator/denominator from a supported readable `gpu_busy` interface |
+| GPU | 10 | A valid 0–100 percentage or numerator/denominator from a supported readable `gpu_busy` interface. Since dev61, where the current clock and the frequency table are readable (kgsl devfreq or `/sys/kernel/gpu`), the component is `gpu_work_pct = busy × min(clock, top) / top`: 60 % busy at the lowest clock is light work |
+
+Since dev61, when the kernel exposes pressure stall information (`/proc/pressure/cpu` and `/proc/pressure/memory` with a readable `some avg10`), Load and Memory get weight zero and these components are used instead (`basis = pressure stall information (PSI)`):
+
+| Component | Base weight | Component calculation |
+|:---|:---:|:---|
+| CPU wait | 30 | `clamp(psi_cpu_some_avg10 × 2, 0, 100)` |
+| Memory stall | 25 | `clamp(psi_memory_some_avg10 × 5, 0, 100)` |
+| Storage stall | 10 | `clamp(psi_io_some_avg10 × 4, 0, 100)`, when `/proc/pressure/io` is readable |
+
+Load average counts tasks asleep on storage and Android keeps apps cached in memory on purpose, so both read *moderate* on a phone doing nothing; PSI is the time tasks actually waited. Without PSI, or with a partial one, the formula above is unchanged (`basis = loadavg and memory share`) and the Load sheet says so.
 
 For available components only:
 
