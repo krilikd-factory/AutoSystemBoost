@@ -4,6 +4,53 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev60 - compact kernel cards, honest hub counts, goal lines for battery/performance settings, SOTER after ten minutes
+
+Input: the dev59 source, the owner's dev59 phone export (asbdiag, device page, report, one
+day of logs) and six requests: the kernel help and wakeup-rules cards were too long, Refresh
+status felt dead, *High-resolution Timer Migration* could not be changed while the tile said
+9 / 11, the Camera tile said 6 / 6 although eight cards were shown and the new Camera Tools
+cards were green, the kernel cards' per-goal explanations wanted for the other battery and
+performance settings, and improvements from the logs. No native source or release binary changed.
+
+- **Kernel cards:** the help card and *Wakeup rules with exact names* keep a one-line summary;
+  the long text, limits and warning fold behind *Details*, which keeps its state across
+  re-renders. *Refresh status* plays a sound and shows *Checking…* at once and ends with a
+  toast (*Kernel status read: n of m controls can be changed*, or an error); *Open Device
+  Diagnostics* scrolls to the Kernel group of the Device page.
+- **HR timers:** this kernel has no separate high-resolution timer switch (Timer Migration
+  moves those timers too, `covered_by_timer_migration`), so the row is hidden like a missing
+  Autogroup and the help card says why; a hidden row is still disabled. Search no longer finds
+  hidden kernel rows, and kernel rows it does find carry their state badge and are disabled when
+  unavailable (before, search showed them as ordinary controls).
+- **Hub counts:** a tile counts what the category screen shows. Kernel controls the running
+  kernel hides are left out; cards that are not settings rows count (Camera: *USB Webcam*,
+  *Fast Camera Start*; Kernel: wakeup rules; Battery: notification fix), on when in use. The hub
+  repaints once the kernel status or the new `asb_camera_tools.sh flags` answer arrives
+  (state files only, no probes).
+- **Camera Tools** use the Camera hue (emblem, buttons, chips) and a short summary with the
+  long text under *Details*; Camera tile description *Processing, webcam, fast start*.
+- **Kernel facts:** a card says when the shipped kernel value makes several options equal
+  (*This kernel ships 1: Stock, On give the same result here*). MGLRU: the dev59 export read
+  `0x0001` after Smart and `0x0003` after On; the card explains that the kernel drops the
+  `0x0004` flag (non-leaf young), so this is not a failed write.
+- **Explanations:** 53 battery, performance, display, network and system settings now follow
+  the kernel cards: a short description, three goal lines (battery / performance or the
+  relevant trade-off / not sure) and a per-option table, switches included (*On* / *Off*
+  rows). 13 languages.
+- **SOTER:** in the dev59 export the boot repair ran 69 s after the unlock and the SOTER
+  server generated keys again within three minutes; payments still failed until the owner
+  pressed the button 12 minutes after boot. One data point: keys created in the first minutes
+  after a reboot appear unusable on this phone. The boot repair now waits 600 s after the
+  unlock (`ASB_SOTER_SETTLE`), texts in 13 languages.
+- **Tests:** `t_webui_dev60_cards_hub_explanations`, `t_camera_tools_flags_dev60`; the SOTER
+  boot, Camera Tools, kernel panel, kernel why, dev58, fix328 and fix138 tests follow the new
+  layout (the fix137 wakelock rule now lives in the *Act* line of the option table).
+  `t_camera_tools_dev59` waits for the finished compile worker to drop its lock before it
+  creates one itself (a loaded runner failed with `mkdir: File exists`); `t_lte_bulk_runtime`
+  uses a 4 s transfer hold, because its waits could use up a 2 s hold before the in-hold check.
+- **Kernel repository:** no change; nothing in the export needs a kernel source change.
+
 ## V66 dev59 - SOTER boot evidence, Camera Tools (USB webcam, fast camera start), CI fixes
 
 Input: the dev58 source, the owner's failed CI run and four requests (fix the module build,
