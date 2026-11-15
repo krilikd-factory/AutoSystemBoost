@@ -4,6 +4,32 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev65 buildfix1 - coherent WebUI/config metadata for CI
+
+Input: the three failed GitHub Actions shards from the owner's build log. Every shard stopped in
+`tools/asb_lint.sh` before its test selection ran. The failing checkout contained the eight dev64
+WebUI cards together with the older 237-key configuration/registry state and shape
+`928eea600217`; the coherent dev65 source archive already contained the matching 245-key state.
+
+- **Root cause and repair boundary:** this was mixed source metadata, not a BORE, profile, thermal,
+  Settings-writer or WebUI-runtime failure. The complete corrective set for the stale checkout is
+  `config/governor.conf`, `config/governor.conf.shipped` and `config/key_ownership.tsv`. All eight
+  affected cards are public `user` rows, both configuration copies are synchronized and record the
+  actually computed `d672ad7af963` shape. No stored value changed meaning, so schema 4 and every
+  shipped default remain unchanged; there is deliberately no artificial schema bump or runtime edit.
+- **Targeted regression:** `t_config_metadata_coherence_buildfix1` checks all eight public rows,
+  both 245-key configuration copies, the exact line-oriented lint fingerprint and schema 4. It then
+  constructs the logged stale mixture in an isolated tree, requires the same two ownership/shape
+  lint failures, restores only the three metadata files and requires zero lint errors. A future
+  partial upload or mixed checkout therefore fails in the source gate rather than reaching a module
+  package with incoherent metadata.
+- **Reproduction and full host regression:** the isolated stale fixture returned lint status 1 with
+  exactly two errors; after the three-file repair it returned status 0, zero errors and zero
+  warnings. The complete source-only regression passed 554 `PASS` lines with zero failed tests,
+  zero `I/O error` and only the established optional DSP-reference staging `SKIP`; no replacement
+  binaries were created. Clean-unpack verification is recorded in `RELEASE_MANIFEST.json`. These
+  are host/source results, not a physical OnePlus 15 or ColorOS WebView validation.
+
 ## V66 dev65 - conservative BORE Auto and measured-only scheduler A/B evidence
 
 Input: the dev64 source and the owner's GKI 6.12/6.18 compatibility and scheduler-policy audit.
