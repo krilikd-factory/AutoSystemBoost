@@ -525,7 +525,8 @@ asb_migrate_governor_conf
 (
   [ -f "$MODDIR/runtime/asb_module_desc.sh" ] || exit 0
   until [ "$(getprop sys.boot_completed)" = "1" ]; do sleep 5; done
-  for _mdw in 120 180 600 900 1800; do
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_module_desc.sh" settle >/dev/null 2>&1
+  for _mdw in 300 900 1800; do
     sleep "$_mdw"
     MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_module_desc.sh" refresh >/dev/null 2>&1
   done

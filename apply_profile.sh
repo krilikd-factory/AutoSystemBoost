@@ -148,11 +148,11 @@ kill_prev_worker() {
 
 asb_update_desc_fallback() {
   case "$1" in
-    performance) _s='description=status: Performance 🔥 | active ✅' ;;
-    battery) _s='description=status: Battery 🔋 | active ✅' ;;
-    smart) _s='description=status: Smart Mode 🤖 | active ✅' ;;
-    stock) _s='description=status: Stock 👶🏻 | active ✅' ;;
-    *) _s='description=status: Balanced ⚖️ | active ✅' ;;
+    performance) _s='description=[Performance 🔥 active ✅]' ;;
+    battery) _s='description=[Battery 🔋 active ✅]' ;;
+    smart) _s='description=[Smart Mode 🤖 active ✅]' ;;
+    stock) _s='description=[Stock 👶🏻 active ✅]' ;;
+    *) _s='description=[Balanced ⚖️ active ✅]' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
