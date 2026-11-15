@@ -105,12 +105,12 @@ asb_update_desc() {
   # with no profile fell through to *) so the module card said "Balanced" while the
   # WebUI correctly said "not selected". Same shape as the duplicate install.sh.
   case "$_p" in
-    performance) _s='description=status: Performance 🔥 | active ✅' ;;
-    battery)     _s='description=status: Battery 🔋 | active ✅' ;;
-    smart)       _s='description=status: Smart Mode 🤖 | active ✅' ;;
-    stock)       _s='description=status: Stock 👶🏻 | active ✅' ;;
-    ''|none)     _s='description=status: no profile selected — open the WebUI to choose one' ;;
-    *)           _s='description=status: Balanced ⚖️ | active ✅' ;;
+    performance) _s='description=[Performance 🔥 active ✅]' ;;
+    battery)     _s='description=[Battery 🔋 active ✅]' ;;
+    smart)       _s='description=[Smart Mode 🤖 active ✅]' ;;
+    stock)       _s='description=[Stock 👶🏻 active ✅]' ;;
+    ''|none)     _s='description=[no profile selected — open the WebUI to choose one]' ;;
+    *)           _s='description=[Balanced ⚖️ active ✅]' ;;
   esac
   _z=''
   case "$_p" in
@@ -118,7 +118,7 @@ asb_update_desc() {
     *) [ -f "$MODDIR/runtime/asb_module_desc.sh" ] && _z="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_module_desc.sh" suffix 2>/dev/null)" ;;
   esac
   case "$_z" in *[/\&\\]*) _z='' ;; esac
-  _s="$_s$_z"
+  [ -n "$_z" ] && _s="$_s   $_z"
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
   rm -f "$MODDIR/module.prop.tmp"
