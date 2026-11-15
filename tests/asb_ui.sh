@@ -5564,7 +5564,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
 fail() { echo "FAIL webui monitor binding tiles: $*" >&2; exit 1; }
-grep -q "const capSrc = (_csForeign(_cs1) && !_csForeign(_cs0)) ? _cs1 : (_cs0 || _cs1);" "$H" || fail "the owner tile reads only the main cluster"
+grep -q "const capSrc = _csRank(_cs1) > _csRank(_cs0) ? _cs1 : (_cs0 || _cs1);" "$H" || fail "the owner tile reads only the main cluster"
 grep -q "T('cap_tip_clusters'" "$H" || fail "the owner tile does not name both clusters"
 grep -q "clampEl.offsetHeight > _lh \* 1.5" "$H" || fail "the clamp counts still break onto two lines"
 grep -q 'bEl.scrollWidth > bEl.clientWidth + 1) sub.remove();' "$H" || fail "the slot pill still cuts the slot name"
@@ -9980,7 +9980,8 @@ for cls, colour in (('cap-asb', 'var(--accent)'), ('cap-shell', 'var(--owner-she
 assert '--owner-shell: #7dd3fc;' in s and '--owner-shell:#0b5f86;' in s
 assert 'html[data-asb-theme="light"] :is(.live-cell-value,.live-info-val).cap-asb { color:var(--accent) !important; }' in s
 assert "vendor_clamp') asbMetricPaint('liveCapSrc', 'metric-bad')" in s
-assert "vendor_raised') asbMetricPaint('liveCapSrc', 'metric-hot')" in s
+# dev61: a vendor boost above ASB's ceiling is not a limit; it is painted neutral (info).
+assert "vendor_raised') asbMetricPaint('liveCapSrc', 'metric-info')" in s
 # Stock reuses this element for battery temperature: it must still clear owner classes first.
 assert "cls('liveCapSrc', '');" in s and "asbMetricPaint('liveCapSrc', asbThermalMetric(batT, 'battery'));" in s
 # No timeline border or indentation rail through the action numbers.
@@ -10054,7 +10055,7 @@ function run(src) {
 const cases = {
   asb: ['cap-asb', 'metric-normal'], asb_dynamic: ['cap-asb', 'metric-normal'],
   shell_applied: ['cap-shell', 'metric-normal'], shell_overridden_down: ['cap-shell', 'metric-normal'],
-  vendor_clamp: ['metric-bad'], vendor_raised: ['metric-hot'],
+  vendor_clamp: ['metric-bad'], vendor_raised: ['metric-info'],
   thermal_overlay: ['metric-hot'], policy_unknown: ['metric-neutral']
 };
 for (const [src, wanted] of Object.entries(cases)) {
@@ -10066,7 +10067,7 @@ console.log('ok');
 JS
 [ "$(node "$T/test.js" "$T/metric.js" "$T/owner.js")" = ok ] || fail "owner painter classes"
 fi
-echo "PASS WebUI fix254 visual states: ASB green, Shell blue, Vendor orange/red, rail-free actions and neutral OFF glass in both palettes"
+echo "PASS WebUI fix254 visual states: ASB green, Shell blue, Vendor clamp red, Vendor ↑ neutral, rail-free actions and neutral OFF glass in both palettes"
 )
 
 t_webui_fix256_inactive_profile_glass() (
@@ -13943,6 +13944,226 @@ JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS webui dev60: kernel help and wakeup cards fold into Details (state kept), Refresh gives instant feedback and a counted toast, Diagnostics scrolls to Kernel, covered HR timers hidden, not counted and not found by search (found kernel rows decorated), Camera Tools in Camera hue and counted with the other extra cards, kernel facts (shipped value, MGLRU 0x0004), 53 battery/performance cards with goal lines and per-option tables incl. switches, 13 locales'
+)
+
+t_webui_dev61_ambient_gpu_pressure() (
+# dev61, from the owner's short log and four screenshots (dev60):
+#  - with every app closed the Monitor said GPU 60-70 % and the Load sheet said "moderate
+#    40/100". The GPU figure was this page drawing its own header at the lowest clock
+#    (160 MHz): with the WebUI closed the log's GPU busy median was 4 %. The tile now shows
+#    the clock beside the busy share and colours busy x clock / top clock;
+#  - the idle header kept drawing 60 frames a second (dev17 kept it moving so the page does
+#    not look hung). Calm now pauses those loops in CSS and steps them from one 100 ms timer:
+#    still moving, a tenth of the frames (a browser trace: 60 -> 10 DrawFrame/s);
+#  - the pressure sheet scored loadavg (it counts tasks asleep on storage) and the share of
+#    memory in use (Android keeps apps cached on purpose), which read "moderate" on a phone
+#    doing nothing. With /proc/pressure it now scores stall time, and says which basis it used;
+#  - "Who set the limit: Vendor" next to "firmware limits 0" read as a contradiction: that
+#    owner was a vendor boost above ASB's ceiling, not a clamp. It is "Vendor ↑", neutral.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui dev61 ambient/gpu/pressure: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'P' || fail 'static contract and locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+i = h.index('/* dev61: ambient motion while idle.')
+blk = h[i:h.index('}', i) + 1]
+blk = blk[blk.index('*/') + 2:]
+for need in ('html.asb-calm .logo-sphere-a', 'html.asb-calm .logo-sphere-b', 'html.asb-calm .logo-inner',
+             'html.asb-calm .dot', 'html.asb-calm .dot::after', 'html.asb-calm .zygisk-header-dot',
+             'html.asb-calm .dev-zygisk-link-dot', 'html.asb-calm .pico-smart .ai-glow'):
+    assert need in blk, need
+assert 'animation-play-state: paused !important;' in blk
+for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'stock-restoring', 'is-recording'):
+    assert spinner not in blk, 'a progress indicator would stop: ' + spinner
+names = re.search(r"const ASB_AMBIENT_NAMES = \[([^\]]*)\];", h).group(1)
+for kf in re.findall(r"'([^']+)'", names):
+    assert '@keyframes ' + kf + ' ' in h or '@keyframes ' + kf + '{' in h, 'ambient name without keyframes: ' + kf
+assert '.live-cell-value .lv-sub {' in h and '-webkit-text-fill-color: currentColor;' in h[h.index('.live-cell-value .lv-sub {'):][:300]
+assert "'vendor_raised': 'Vendor \\u2191'" in h
+assert "else if (capSrc === 'vendor_raised') asbMetricPaint('liveCapSrc', 'metric-info');" in h
+assert "if (capSrc === 'vendor_clamp' || capSrc === 'vendor_raised') asbMetricPaint" not in h
+chip = h[h.index('if (chip) {', h.index('const _csRank')):h.index('/* Keep collecting for the ROM banner')]
+assert "else if (capSrc === 'vendor_clamp' || capSrc === 'thermal_overlay') chip.classList.add('has-issue');" in chip
+assert 'vendor_raised' not in chip, 'a vendor boost still marks the status chip as an issue'
+assert '.live-info-pressure .lvp-note {' in h
+L = 'en ru uk de fr es it pt tr id zh ar hy'.split()
+D = {l: json.loads((root / f'webroot/i18n/{l}.json').read_text(encoding='utf-8')) for l in L}
+new = ['unit_mhz', 'lv_gpu_work_tip', 'lvp_basis_psi', 'lvp_basis_load', 'lvp_vs_class']
+labels = ['gpu_clock_mhz', 'gpu_work_pct', 'basis'] + [f'psi_{r}_{k}' for r in ('cpu', 'memory', 'io') for k in ('some_avg10', 'component', 'weight')]
+src = (root / 'runtime/asb_pressure.sh').read_text(encoding='utf-8')
+for k in labels:
+    assert f'_emit system_load {k} ' in src, k
+for l in L:
+    for k in new + ['dev_system_load_' + x for x in labels]:
+        assert D[l].get(k), (l, k)
+    for ph in ('{busy}', '{mhz}', '{max}', '{work}'):
+        assert ph in D[l]['lv_gpu_work_tip'], (l, ph)
+    assert 'PSI' in D[l]['dev_guide_system_load'] and 'Vendor ↑' in D[l]['lvi_capsrc'], l
+    if l != 'en':
+        for k in ('lv_gpu_work_tip', 'lvp_basis_psi', 'lvp_basis_load', 'lvp_vs_class', 'cap_tip_raised', 'dev_system_load_gpu_clock_mhz'):
+            assert D[l][k] != D['en'][k], (l, k)
+for k in new + ['cap_tip_raised', 'lvi_gpu', 'lvi_capsrc']:
+    m = re.search(r"T\('" + k + r"', '((?:[^'\\]|\\.)*)'\)", h) or re.search(r"\['" + k + r"', '((?:[^'\\]|\\.)*)'\]", h)
+    assert m, 'no fallback for ' + k
+    assert m.group(1).replace("\\'", "'") == D['en'][k], 'fallback differs: ' + k
+P
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui dev61: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const slice = (a, b) => { const i = h.indexOf(a); const j = h.indexOf(b, i); if (i < 0 || j < 0) throw Error('marker ' + a); return h.slice(i, j); };
+/* 1. calm + ambient ticker over fake timers */
+(function () {
+  let now = 0; const timers = []; const listeners = {}; const docl = {};
+  const setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn, live: true }); return timers.length; };
+  const clearTimeout = id => { if (timers[id - 1]) timers[id - 1].live = false; };
+  const performance = { now: () => now };
+  const cls = new Set();
+  const el = (top, opts) => Object.assign({ getBoundingClientRect: () => ({ top, bottom: top + 40, left: 10, right: 50, width: 40 }),
+    closest: () => null, checkVisibility: () => true }, opts || {});
+  const A = [
+    { animationName: 'asbBootSpin', currentTime: 0, effect: { target: el(10) } },
+    { animationName: 'pulse', currentTime: 500, effect: { target: el(20) } },
+    { animationName: 'asbBootSpin', currentTime: 0, effect: { target: el(5000) } },
+    { animationName: 'asbBootPulse', currentTime: 0, effect: { target: el(10, { checkVisibility: () => false }) } },
+    { animationName: 'asbBootSpin', currentTime: 0, effect: { target: el(10, { closest: s => s === '.asb-boot-intro' ? {} : null }) } },
+    { animationName: 'asbSweep', currentTime: 0, effect: { target: el(10) } },
+    { animationName: 'spin', currentTime: 0, effect: { target: el(10) } }
+  ];
+  let anims = A;
+  const document = { hidden: false, getAnimations: () => anims,
+    documentElement: { classList: { add: c => cls.add(c), remove: c => cls.delete(c) } },
+    addEventListener: (t, fn) => { docl[t] = fn; } };
+  const window = { innerWidth: 400, innerHeight: 900, addEventListener: (t, fn) => { listeners[t] = fn; } };
+  function advance(ms) {
+    const end = now + ms;
+    for (;;) {
+      const due = timers.filter(t => t.live && t.at <= end).sort((a, b) => a.at - b.at)[0];
+      if (!due) break;
+      now = due.at; due.live = false; due.fn();
+    }
+    now = end;
+  }
+  const live = () => timers.filter(t => t.live).length;
+  eval(slice('let _asbInputAt = -1e9;', '\n/* dev4: a job never runs while another page is open or opening.'));
+  chk(typeof docl.visibilitychange === 'function', 'no visibility listener');
+  advance(9900); chk(!cls.has('asb-calm') && A[0].currentTime === 0, 'stepped before calm');
+  advance(100); chk(cls.has('asb-calm'), 'not calm after ten seconds');
+  chk(A[0].currentTime === 100 && A[1].currentTime === 600, 'first ambient step: ' + A[0].currentTime + '/' + A[1].currentTime);
+  chk(live() === 1, 'one ambient timer, got ' + live());
+  advance(1000);
+  chk(A[0].currentTime === 1100, 'ten steps a second: ' + A[0].currentTime);
+  chk(A[2].currentTime === 0 && A[3].currentTime === 0 && A[4].currentTime === 0, 'off-screen, invisible or boot-intro loops were stepped');
+  chk(A[5].currentTime === 0 && A[6].currentTime === 0, 'the wordmark sweep or a spinner was stepped');
+  document.hidden = true; advance(500);
+  const frozen = A[0].currentTime;
+  chk(live() === 0 && frozen <= 1200, 'a hidden page kept stepping');
+  document.hidden = false; docl.visibilitychange();
+  chk(A[0].currentTime === frozen + 100 && live() === 1, 'showing the page did not resume the steps');
+  docl.visibilitychange(); chk(live() === 1, 'a second visibility event doubled the ticker');
+  listeners.touchstart();
+  chk(!cls.has('asb-calm') && live() === 1, 'a touch left the ticker running or did not re-arm calm (' + live() + ')');
+  const atWake = A[0].currentTime; advance(5000); chk(A[0].currentTime === atWake, 'stepped while awake');
+  anims = []; advance(6000);
+  chk(cls.has('asb-calm') && live() === 0, 'nothing on screen still left a timer (' + live() + ')');
+  document.getAnimations = undefined; listeners.touchstart(); advance(10100);
+  chk(cls.has('asb-calm') && live() === 0, 'no Web Animations API still left a timer');
+})();
+/* 1b. a clamp or thermal overlay on either cluster outranks a boost on the other */
+(function () {
+  const pick = (a, b) => { let st = { cap_source_p0: a, cap_source_p6: b };
+    return eval(slice('const _cs0 = (st && st.cap_source_p0)', '\n    const advActive') + '\ncapSrc'); };
+  chk(pick('vendor_raised', 'vendor_clamp') === 'vendor_clamp', 'a boost hid the clamp on the other cluster');
+  chk(pick('vendor_clamp', 'vendor_raised') === 'vendor_clamp', 'clamp on the main cluster');
+  chk(pick('asb', 'vendor_raised') === 'vendor_raised' && pick('asb', 'thermal_overlay') === 'thermal_overlay', 'foreign owner on the prime');
+  chk(pick('asb', 'asb') === 'asb' && pick('', 'asb') === 'asb' && pick('shell_applied', '') === 'shell_applied', 'ordinary owners');
+})();
+/* 2. GPU clock reads and work share */
+(function () {
+  const _lvMeter = { at: Date.now() }; let _selectedProfile = 'smart', _batCapFullMah = 4000;
+  const _stockTelemetryLastMs = 0, _stockSettingsAtMs = 0, STOCK_TELEMETRY_MIN_INTERVAL_MS = 1e9, MD = '/m';
+  const LV_METER_CMD = 'meter'; const stockTelemetryCmd = () => 'rom';
+  const gpu = eval(slice('function liveBatchParts(', 'async function pollLive(') + ';\n({ get clk() { return _lvGpuClkHz; }, get max() { return _lvGpuMaxHz; }, get min() { return _lvGpuMinHz; } })');
+  const keys = v => liveBatchParts(v, false).map(p => p[0]);
+  chk(keys(true).includes('gpuclk') && keys(true).includes('gpufreqs'), 'visible pass does not read the GPU clock');
+  chk(!keys(false).includes('gpuclk') && !keys(false).includes('gpufreqs'), 'background pass reads the GPU clock');
+  chk(liveBatchParts(true, false).find(p => p[0] === 'gpuclk')[1] === 'cat /sys/class/kgsl/kgsl-3d0/devfreq/cur_freq', 'clock path');
+  chk(lvGpuWork(62) === null, 'work without a clock');
+  lvGpuClockRead({ gpuclk: { stdout: '160000000\n' }, gpufreqs: { stdout: '1200000000 900000000 500000000 160000000\n' } });
+  chk(gpu.clk === 160000000 && gpu.max === 1200000000 && gpu.min === 160000000, 'clock table');
+  chk(!keys(true).includes('gpufreqs') && keys(true).includes('gpuclk'), 'the frequency table is read every pass');
+  chk(lvGpuWork(62) === 8 && lvGpuWork(0) === 0, '62 % at 160 of 1200 MHz: ' + lvGpuWork(62));
+  lvGpuClockRead({ gpuclk: { stdout: '1200000000' } }); chk(lvGpuWork(62) === 62, 'top clock counts in full');
+  lvGpuClockRead({ gpuclk: { stdout: '' } }); chk(lvGpuWork(62) === null && gpu.max === 1200000000, 'an empty clock read left a stale clock');
+})();
+/* 3. pressure sheet: PSI rows, GPU clock, basis note */
+(function () {
+  const T = (k, f) => f;
+  function mk(tag) { const e = { tag, children: [], className: '', style: {}, hidden: true, _t: '', appendChild(c) { this.children.push(c); return c; },
+    get textContent() { return this._t + this.children.map(c => c.textContent).join('|'); }, set textContent(v) { this._t = String(v); this.children = []; } };
+    return e; }
+  const document = { createElement: mk };
+  const deviceVal = (d, s, k) => (d[k] === undefined ? '—' : d[k]);
+  const deviceLabel = (s, k) => k;
+  const devicePressureScale = () => mk('div');
+  eval(slice('const LVI_PRESSURE_KEYS', 'async function lviPressureLoad('));
+  const rows = b => b.children.find(c => c.className === 'lvp-parts').children.map(r => r.children[0].textContent + '=' + r.children[2].textContent);
+  const note = b => b.children.find(c => c.className === 'lvp-note').textContent;
+  const psi = { psi_cpu_some_avg10: '3.00', psi_cpu_component: '6.0', psi_memory_some_avg10: '0.50', psi_memory_component: '2.5',
+    psi_io_some_avg10: '1.25', psi_io_component: '5.0', cpu_busy_pct: '12.0', gpu_busy_pct: '62.0', gpu_component: '11.0', gpu_clock_mhz: '160',
+    load_per_core: '0.6', load_component: '30.0', memory_used_pct: '61.0' };
+  let b = mk('div'); lviPressureRender(b, psi, 'apphint');
+  const r = rows(b);
+  chk(r[0] === 'psi_cpu_some_avg10=3.00 %' && r[1] === 'psi_memory_some_avg10=0.50 %' && r[2] === 'psi_io_some_avg10=1.25 %', 'PSI rows: ' + r);
+  chk(r[4] === 'gpu_busy_pct=62.0 % · 160 MHz', 'GPU row: ' + r[4]);
+  chk(!r.some(x => /^load_per_core|^memory_used_pct/.test(x)), 'loadavg rows next to PSI');
+  const gpuFill = b.children.find(c => c.className === 'lvp-parts').children[4].children[1].children[0];
+  chk(gpuFill && gpuFill.style.width === '11%', 'GPU bar is not busy x clock: ' + (gpuFill && gpuFill.style.width));
+  chk(/waited for the CPU, memory and storage/.test(note(b)) && /the load class above/.test(note(b)), 'PSI note: ' + note(b));
+  const old = Object.assign({}, psi); delete old.psi_cpu_some_avg10; delete old.gpu_clock_mhz;
+  b = mk('div'); lviPressureRender(b, old, 'sload');
+  const r2 = rows(b);
+  chk(r2[0] === 'load_per_core=0.6' && r2[1] === 'memory_used_pct=61.0 %' && r2[3] === 'gpu_busy_pct=62.0 %', 'no-PSI rows: ' + r2);
+  chk(/no pressure stall information/.test(note(b)) && !/the load class above/.test(note(b)), 'no-PSI note: ' + note(b));
+})();
+/* 4. device page values and the Monitor snapshot of the GPU tile */
+(function () {
+  const T = (k, f) => f; const ASB_LANG = 'en';
+  const fns = ['deviceNum', 'deviceFallbackLabel', 'deviceSizeKb', 'deviceDisplayValue'];
+  const deviceFill = (k, f, o) => f; const deviceDuration = s => s + 's'; const deviceCpuCount = () => 8; const deviceVal = () => '—';
+  eval(fns.map(f => { const i = h.indexOf('\nfunction ' + f + '('); return h.slice(i, h.indexOf('\n}\n', i) + 3); }).join('\n'));
+  const nb = s => String(s).replace(/ /g, ' ');
+  chk(deviceDisplayValue('system_load', 'psi_memory_some_avg10', '0.50') === '0.50%', 'PSI value');
+  chk(nb(deviceDisplayValue('system_load', 'gpu_clock_mhz', '160')) === '160 MHz', 'clock value');
+  chk(deviceDisplayValue('system_load', 'gpu_work_pct', '11.0') === '11.0%', 'work value');
+  chk(deviceDisplayValue('system_load', 'gpu_clock_mhz', 'not exposed') === 'not exposed', 'missing clock');
+})();
+(function () {
+  const ids = {};
+  function mkEl(id) { const e = { id, className: 'live-cell-value', title: '', children: [], _t: '',
+    get textContent() { return this._t + this.children.map(c => c.textContent).join(''); }, set textContent(v) { this._t = String(v); this.children = []; },
+    appendChild(c) { this.children.push(c); return c; }, querySelector(sel) { return sel === '.lv-sub' ? (this.children.find(c => c.className === 'lv-sub') || null) : null; },
+    parentElement: { querySelector: () => ({ textContent: 'GPU' }) } };
+    ids[id] = e; return e; }
+  const document = { createElement: () => ({ className: '', textContent: '' }) };
+  const _el = id => ids[id] || mkEl(id);
+  const _lvMonCache = { tiles: null }; let _selectedProfile = 'balanced'; const ASB_LANG = 'en'; const LV_MON_CACHE_MAX_MS = 1800000;
+  const lvMonSmartCapture = () => {}; const lvMonCacheSave = () => {};
+  eval(slice('const LV_MON_TILE_IDS', '/* The Smart card is part of the same display snapshot.'));
+  const g = _el('liveGpu'); g.textContent = '62%'; g.appendChild({ className: 'lv-sub', textContent: '160 MHz' });
+  lvMonTilesCapture('balanced');
+  chk(_lvMonCache.tiles.values.liveGpu.v === '62%' && _lvMonCache.tiles.values.liveGpu.s === '160 MHz', 'GPU tile snapshot: ' + JSON.stringify(_lvMonCache.tiles.values.liveGpu));
+  g.textContent = '—'; lvMonTilesRestore();
+  chk(g._t === '62%' && g.children.length === 1 && g.children[0].className === 'lv-sub' && g.children[0].textContent === '160 MHz', 'GPU tile restored glued: ' + g.textContent);
+})();
+console.log(bad ? 'bad ' + bad : 'ok');
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS webui dev61: calm header loops paused in CSS and stepped at 10 fps only on screen (stops hidden, on touch, with nothing to step), GPU tile shows the clock and colours busy x clock (snapshot keeps the clock apart), pressure sheet on PSI with a basis note, Vendor ↑ is a boost not a clamp (neutral, not a chip issue, outranked by a clamp on the other cluster), 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -1071,7 +1071,41 @@ SH
   PATH="$T/bin:$PATH" PROC="$T/proc" SYS="$T/sys" OUT="$T/out" ASB_PRESSURE_CPU_SAMPLE_S=0.20 ASB_PRESSURE_GPU_BUSY="$T/gpu" "$T/run.sh" "$ROOT" "$T/out"
   grep -q $'^system_load\tgpu_busy_pct\t0.0$' "$T/out" || fail 'idle Adreno 0 0 was not read as 0 %'
   grep -q $'^system_load\tgpu_weight\t10$' "$T/out" || fail 'idle GPU dropped its weight'
-  echo 'PASS pressure score: renormalized weights, insufficient/malformed coverage, CPU delta, GPU and unscored swap'
+  grep -q $'^system_load\tbasis\tloadavg and memory share$' "$T/out" || fail 'no-PSI basis label'
+  grep -q $'^system_load\tpsi_cpu_weight\t0$' "$T/out" && grep -q $'^system_load\tgpu_clock_mhz\tnot exposed$' "$T/out" || fail 'absent PSI/clock invented values'
+  # dev61: with PSI the score uses stall time instead of loadavg + memory share,
+  # and the GPU counts busy share x clock / max clock (62 % at 160 of 900 MHz = 11 %).
+  mkdir -p "$T/proc/pressure" "$T/sys/class/kgsl/kgsl-3d0/devfreq"
+  printf 'some avg10=3.00 avg60=2.00 avg300=1.00 total=1\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n' > "$T/proc/pressure/cpu"
+  printf 'some avg10=0.50 avg60=0.10 avg300=0.00 total=1\nfull avg10=0.20 avg60=0.00 avg300=0.00 total=0\n' > "$T/proc/pressure/memory"
+  printf 'some avg10=1.25 avg60=0.10 avg300=0.00 total=1\nfull avg10=0.40 avg60=0.00 avg300=0.00 total=0\n' > "$T/proc/pressure/io"
+  printf '620 1000\n' > "$T/sys/class/kgsl/kgsl-3d0/gpu_busy"
+  printf '160000000\n' > "$T/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq"
+  printf '900000000 700000000 500000000 160000000\n' > "$T/sys/class/kgsl/kgsl-3d0/devfreq/available_frequencies"
+  printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"; : > "$T/out"
+  PATH="$T/bin:$PATH" PROC="$T/proc" SYS="$T/sys" OUT="$T/out" ASB_PRESSURE_CPU_SAMPLE_S=0.20 "$T/run.sh" "$ROOT" "$T/out"
+  grep -q $'^system_load\tbasis\tpressure stall information (PSI)$' "$T/out" || fail "PSI basis: $(grep basis "$T/out")"
+  grep -q $'^system_load\tload_weight\t0$' "$T/out" && grep -q $'^system_load\tmemory_weight\t0$' "$T/out" || fail 'loadavg/memory share still weighted next to PSI'
+  grep -q $'^system_load\tpsi_cpu_component\t6.0$' "$T/out" && grep -q $'^system_load\tpsi_cpu_weight\t30$' "$T/out" || fail 'PSI cpu component'
+  grep -q $'^system_load\tpsi_memory_component\t2.5$' "$T/out" && grep -q $'^system_load\tpsi_memory_weight\t25$' "$T/out" || fail 'PSI memory component'
+  grep -q $'^system_load\tpsi_io_component\t5.0$' "$T/out" && grep -q $'^system_load\tpsi_io_weight\t10$' "$T/out" || fail 'PSI io component'
+  grep -q $'^system_load\tgpu_busy_pct\t62.0$' "$T/out" && grep -q $'^system_load\tgpu_clock_mhz\t160$' "$T/out" || fail 'kgsl busy/clock'
+  grep -q $'^system_load\tgpu_work_pct\t11.0$' "$T/out" && grep -q $'^system_load\tgpu_component\t11.0$' "$T/out" || fail "GPU work did not replace busy share: $(grep gpu_ "$T/out")"
+  grep -q $'^system_load\tcoverage_pct\t100$' "$T/out" && grep -q $'^system_load\tscore\t17$' "$T/out" && grep -q $'^system_load\tband\tlight$' "$T/out" || fail "PSI score: $(grep -E 'score|coverage' "$T/out")"
+  rm -rf "$T/sys/class/kgsl"; mkdir -p "$T/sys/kernel/gpu"
+  printf '62 %%\n' > "$T/sys/kernel/gpu/gpu_busy"; printf '160\n' > "$T/sys/kernel/gpu/gpu_clock"; printf '160 500 900\n' > "$T/sys/kernel/gpu/gpu_freq_table"
+  printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"; : > "$T/out"
+  PATH="$T/bin:$PATH" PROC="$T/proc" SYS="$T/sys" OUT="$T/out" ASB_PRESSURE_CPU_SAMPLE_S=0.20 "$T/run.sh" "$ROOT" "$T/out"
+  grep -q $'^system_load\tgpu_clock_mhz\t160$' "$T/out" && grep -q $'^system_load\tgpu_work_pct\t11.0$' "$T/out" || fail 'MHz clock table was not read'
+  printf '900\n' > "$T/gpu.clk"; printf '160 900\n' > "$T/gpu.tab"; : > "$T/out"
+  printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"
+  PATH="$T/bin:$PATH" PROC="$T/proc" SYS="$T/sys" OUT="$T/out" ASB_PRESSURE_CPU_SAMPLE_S=0.20 ASB_PRESSURE_GPU_CLK="$T/gpu.clk" ASB_PRESSURE_GPU_FREQS="$T/gpu.tab" "$T/run.sh" "$ROOT" "$T/out"
+  grep -q $'^system_load\tgpu_work_pct\t62.0$' "$T/out" && grep -q $'^system_load\tgpu_component\t62.0$' "$T/out" || fail 'busy at the top clock must count in full'
+  printf 'garbage\n' > "$T/proc/pressure/memory"; : > "$T/out"
+  printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"
+  PATH="$T/bin:$PATH" PROC="$T/proc" SYS="$T/sys" OUT="$T/out" ASB_PRESSURE_CPU_SAMPLE_S=0.20 "$T/run.sh" "$ROOT" "$T/out"
+  grep -q $'^system_load\tbasis\tloadavg and memory share$' "$T/out" && grep -q $'^system_load\tload_weight\t35$' "$T/out" && grep -q $'^system_load\tpsi_cpu_weight\t0$' "$T/out" || fail 'partial PSI must fall back to loadavg + memory share'
+  echo 'PASS pressure score: renormalized weights, insufficient/malformed coverage, CPU delta, GPU and unscored swap; dev61 PSI basis, GPU busy x clock (kgsl, MHz table, override), partial-PSI fallback'
 )
 
 t_zygisk_info_runtime() (
