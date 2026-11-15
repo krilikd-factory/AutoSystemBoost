@@ -9734,7 +9734,7 @@ for token in (
 ):
     assert token in h, token
 sections = h[h.index('  kernel: ['):h.index('  zygisk: [', h.index('  kernel: ['))]
-keys = ('mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend')
+keys = ('mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost')
 for key in keys:
     assert key in sections and re.search(key + r":'kernel'", h)
 assert "card:'wakeup'" in sections and 'capabilities' not in sections
@@ -9777,14 +9777,16 @@ for p in (root / 'webroot/i18n').glob('*.json'):
     for key in keys:
         card = d['cfg'][key]
         min_desc = (45 if p.stem == 'zh' else 100) if key in ('kernel_hrtimer_migration','kernel_lpm_prediction','kernel_usb_autosuspend') else (120 if p.stem == 'zh' else 240)
-        assert card['name'] and len(card['desc']) >= min_desc, (p.name, key, 'missing mechanism/trade-off explanation')
+        # dev57: the trade-offs moved from one paragraph into the per-option lines.
+        assert card['name'] and len(card['desc'] + ''.join(card.get('descOpt', {}).values())) >= min_desc, (p.name, key, 'missing mechanism/trade-off explanation')
         assert '/proc/sys/kernel/sched_stats' not in card['desc'], (p.name, key, 'obsolete stats path')
         assert '/proc/sys/kernel/sched_nr_migrate' not in card['desc'], (p.name, key, 'obsolete migration path')
-        if key in ('kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'):
-            if 'descOpt' in card: assert set(card['descOpt']) == ({'stock','off'} if key == 'kernel_sched_stats' else {'stock','off','on'})
+        _opts = re.search(r"\{ key:'%s', type:'seg'[^}]*?opts:\[([^\]]*)\]" % key, h)
+        if 'descOpt' in card: assert _opts and set(card['descOpt']) == {o.strip().strip("'") for o in _opts.group(1).split(',')}, (p.name, key)
         if p.stem != 'en': assert card != en['cfg'][key], (p.name, key, 'untranslated')
-    assert '/sys/kernel/debug/sched/nr_migrate' in d['cfg']['kernel_sched_nr_migrate']['desc']
-    assert '/proc/sys/kernel/sched_schedstats' in d['cfg']['kernel_sched_stats']['desc']
+for _doc in ('README.advanced.md', 'README.advanced.ru.md'):
+    _t = (root / _doc).read_text(encoding='utf-8')
+    assert '/sys/kernel/debug/sched/nr_migrate' in _t and '/proc/sys/kernel/sched_schedstats' in _t, _doc
 P
 command -v node >/dev/null 2>&1 || { echo 'SKIP webui kernel panel runtime: no node'; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
@@ -9837,7 +9839,7 @@ if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS webui kernel panel: symmetric nine-category hub, ten owned controls under Kernel, no duplicate diagnostics probe, compact wakeup summary plus searchable/filterable/sortable bounded dialog, exact-name set/clear and translated strings in 13 locales'
+echo 'PASS webui kernel panel: symmetric nine-category hub, eleven owned controls under Kernel, no duplicate diagnostics probe, compact wakeup summary plus searchable/filterable/sortable bounded dialog, exact-name set/clear and translated strings in 13 locales'
 )
 
 t_webui_card_i18n_coverage_runtime() (
@@ -12301,7 +12303,7 @@ for n in sorted(os.listdir(sys.argv[2])):
     assert '{v}' in loc.get('kc_live', ''), n
 i = h.rindex("ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0")
 seg = h[i:i + 1800]
-assert 'asbKernelControlVerdict(kp[1], kp[3])' in seg
+assert 'asbKernelControlVerdict(kp[1], kp[3], kp[2])' in seg
 assert "' · live '" not in seg and "toast(key + ': '" not in seg
 P
 rm -f "${TMPDIR:-/tmp}/kc_st.$$"
@@ -13174,7 +13176,7 @@ import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
 b = h[h.index('function kernelUnavailableWhy('):h.index('function kernelDecorateControlRow(')]
 fb = dict(re.findall(r"\n    (kernel_[a-z_]+): '([^']*)'", b))
-assert set(fb) == {'kernel_sched_nr_migrate', 'kernel_sched_autogroup', 'kernel_lpm_prediction'}, fb
+assert set(fb) == {'kernel_sched_nr_migrate', 'kernel_sched_autogroup', 'kernel_lpm_prediction', 'kernel_rt_boost'}, fb
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 for k, v in fb.items(): assert en['kc_why_' + k] == v, k
 for p in sorted((root / 'webroot/i18n').glob('*.json')):
@@ -13432,6 +13434,94 @@ for src, want in (('html[data-x] :is(.a, .b.c)::after', ['html[data-x] .a.a::aft
 assert b.specificity(':is(.a, #b)') == (1, 0, 0) and b.specificity(':where(.a) .b') == (0, 1, 0)
 PY
 echo 'PASS webui render cost: no root-level custom property writes on page switches, no wasted overlay measurement, early UI scale, scroll reset before class changes, bounded list layout with option lists intact, bucketable selectors (tool check) and coalesced search'
+)
+
+t_webui_kernel_cards_header_dev57() (
+# dev57: every kernel card says in plain words what it does and which value to pick for
+# battery life, for performance and when unsure, and explains every option in its own line
+# (descOpt, shown as the per-option table with the current choice highlighted) in all 13
+# languages, with the button labels the card really shows. Timer migration and the
+# migration batch gained Auto; the new real-time boost card is wired like the other kernel
+# controls. An Auto control that leaves the kernel's value says so instead of "already stock".
+# The header saucer is larger: the emblem takes the extra height from the top gap, and the
+# boot core's saucer keeps the same proportions so the hand-off still lands exactly.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL webui kernel cards/header dev57: $*" >&2; exit 1; }
+python3 - "$ROOT/webroot" <<'PY' || fail 'contract'
+import json, re, sys, pathlib
+W = pathlib.Path(sys.argv[1]); h = (W / 'index.html').read_text(encoding='utf-8')
+LOC = ['en','ru','uk','de','fr','es','it','pt','tr','id','zh','ar','hy']
+K = ['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction',
+     'kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first',
+     'kernel_usb_autosuspend','kernel_rt_boost']
+items = {}
+for k in K:
+    m = re.search(r"\{ key:'%s', type:'seg', def:'([^']*)', stock:'stock',\s*opts:\[([^\]]*)\]" % k, h)
+    assert m, k
+    items[k] = (m.group(1), [o.strip().strip("'") for o in m.group(2).split(',')])
+assert items['kernel_timer_migration'] == ('auto', ['stock','auto','off','on'])
+assert items['kernel_sched_nr_migrate'] == ('auto', ['stock','auto','1','2','4','8','16'])
+assert items['kernel_rt_boost'] == ('auto', ['stock','auto','0','128','256','512'])
+en = json.loads((W / 'i18n/en.json').read_text(encoding='utf-8'))
+def jsdesc(k):
+    i = h.index("{ key:'%s', type:'seg'" % k); j = h.index("desc:'", i) + 6; e = j
+    while h[e] != "'":
+        e += 2 if h[e] == '\\' else 1
+    return h[j:e].encode().decode('unicode_escape').encode('latin-1').decode('utf-8')
+for l in LOC:
+    d = json.loads((W / f'i18n/{l}.json').read_text(encoding='utf-8'))
+    for k in K:
+        c = d['cfg'][k]
+        assert set(c['descOpt']) == set(items[k][1]), (l, k, set(c['descOpt']) ^ set(items[k][1]))
+        assert all(isinstance(v, str) and v.strip() for v in c['descOpt'].values()), (l, k)
+        assert c['desc'].count('\n🔋 ') == 1 and c['desc'].count('⚡ ') == 1 and c['desc'].count('\n✋ ') == 1, (l, k)
+        assert set(items[k][1]) <= set(d['optFor'][k]), (l, k)
+        if l != 'en':
+            assert c['desc'] != en['cfg'][k]['desc'], (l, k)
+        guide = c['desc'][c['desc'].index('\n🔋 '):]
+        labels = {d['optFor'][k][o] for o in items[k][1]}
+        assert any(lab in guide for lab in labels), (l, k, 'guide names no visible option')
+    for key in ('kc_why_kernel_rt_boost', 'kc_verdict_deferred', 'kc_verdict_auto_kernel', 'dev_kernel_runtime_sched_clamp_min_rt_default'):
+        assert d.get(key), (l, key)
+for k in K:
+    assert jsdesc(k) == en['cfg'][k]['desc'], (k, 'JS fallback differs from en.json')
+assert "name:'%s'" % en['cfg']['kernel_rt_boost']['name'] in h
+for token in ("  'kernel_rt_boost',\n  'cool_gaming',", "kernel_rt_boost:'system',", "kernel_rt_boost:'kernel',",
+              "'kernel_usb_autosuspend','kernel_rt_boost'], card:'wakeup' }", "kernel_rt_boost:'rt_boost',",
+              "kernel_rt_boost: APPLY_LIVE,", "  rt_boost: '<path"):
+    assert token in h, token
+assert re.search(r"const ASB_KERNEL_STATUS_KEYS = \[[^\]]*'kernel_rt_boost'\]", h)
+assert "kernel_rt_boost: '%s'" % en['kc_why_kernel_rt_boost'] in h
+assert "deferred: '%s'" % en['kc_verdict_deferred'].replace("'", "\\'") in h and "auto_kernel: '%s'" % en['kc_verdict_auto_kernel'].replace("'", "\\'") in h
+assert "asbKernelControlVerdict(kp[1], kp[3], kp[2])" in h and "kp[1] === 'deferred'" in h
+# Header emblem: the same saucer proportions in the header and in the boot core.
+assert '.logo-glyph { display:flex; align-items:center; justify-content:center; width:calc(106px * var(--k, .6)); height:calc(80px * var(--k, .6));' in h
+assert '.logo-glyph .asb-ufo-art { display:block; width:calc(106px * var(--k, .6)); height:calc(80px * var(--k, .6));' in h
+assert '.asb-boot-ufo svg { width:calc(106px * var(--k)); height:calc(80px * var(--k));' in h
+assert '94px * var(--k' not in h
+base = h[h.index('.logo-c {\n  --k: '):h.index('}', h.index('.logo-c {\n  --k: '))]
+k = float(re.search(r'--k: ([.\d]+);', base).group(1)); mt = float(re.search(r'margin-top: (-?\d+)px;', base).group(1))
+assert k == .6163 and round(172 * (k - .5349)) == -mt, (k, mt)
+for sel in ('html.asb-fit-c1 .logo-c {', 'html.asb-fit-c2 .logo-c {'):
+    i = h.index(sel); assert 'margin-top: 0;' in h[i:h.index('}', i)], sel
+i = h.index('@media (max-height: 500px) and (orientation: landscape)'); j = h.index('.logo-c {', i)
+assert 'margin-top: 0;' in h[j:h.index('}', j)]
+i = h.index('@media (min-width: 768px)'); j = h.index('.logo-c {', i)
+assert '--k: .75; margin-top: -17px;' in h[j:h.index('}', j)]
+PY
+node - "$ROOT/webroot/index.html" <<'JS' || fail 'verdict wording'
+const h = require('fs').readFileSync(process.argv[2], 'utf8');
+const a = h.indexOf('const ASB_KC_VERDICTS = {'), b = h.indexOf('\n}\n', h.indexOf('function asbKernelControlVerdict(')) + 2;
+const T = (k, fb) => fb;
+const f = new Function('T', h.slice(a, b) + '\nreturn asbKernelControlVerdict;')(T);
+const auto = f('restored', '1', 'auto'), stock = f('restored', '1', 'stock'), un = f('stock_unowned', '', 'auto');
+if (!/kernel value kept for this profile/.test(auto) || !/kernel: 1/.test(auto)) throw new Error('auto: ' + auto);
+if (!/stock value restored/.test(stock)) throw new Error('stock: ' + stock);
+if (!/^Auto:/.test(un)) throw new Error('unowned auto: ' + un);
+if (!/next pass/.test(f('deferred', '1024', 'auto'))) throw new Error('deferred');
+JS
+echo 'PASS webui kernel cards/header dev57: plain guide (battery / performance / unsure) and per-option lines on all eleven kernel cards in 13 languages with the visible labels, Auto on timer migration and the migration batch, RT boost card wired everywhere, Auto release worded as the kernel value, larger header saucer with unchanged layout below and matching boot core'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

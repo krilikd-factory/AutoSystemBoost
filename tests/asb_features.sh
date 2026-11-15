@@ -5751,7 +5751,7 @@ done
 # Both opt-in switches must survive a reboot through the same bounded owner, in Smart and
 # non-Smart profiles; a successful live WebUI write alone is not persistence evidence.
 _kc_block="$(sed -n '/^_kc_helper=/,/^# --- MGLRU working-set protection/p' "$ROOT/runtime/asb_system_tweaks.sh")"
-for key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
+for key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost; do
   printf '%s\n' "$_kc_block" | grep -Fq "$key" || fail "$key not routed through profile/boot reapply"
 done
 printf '%s\n' "$_kc_block" | grep -Fq 'smart:smart|:smart) _kc_keys=' || fail 'Smart ownership branch missing'
@@ -5764,6 +5764,8 @@ echo 'PASS scheduler policy controls: stock defaults, off/on, stable baselines, 
 t_kernel_power_usb_controls_runtime() (
 # dev41: Battery Auto requests two bounded low-power values; every other profile releases
 # them exactly. USB autosuspend is independent, opt-in and supports the signed -1 value.
+# dev57: the separate hrtimer switch follows Timer migration's Auto rule (0 only in
+# Performance); a release under Auto reports the auto mode, not stock.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 K="$ROOT/runtime/asb_kernel_controls.sh"
@@ -5778,18 +5780,18 @@ run() {
 }
 mode() { printf 'kernel_hrtimer_migration=%s\nkernel_lpm_prediction=%s\nkernel_usb_autosuspend=%s\n' "$1" "$2" "$3" > "$T/mod/config/governor.conf"; }
 mode auto auto stock
-out="$(run apply kernel_hrtimer_migration '' battery; run apply kernel_lpm_prediction '' battery)"
-printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|applied|auto|0|1$' || fail "Battery hrtimer Auto: $out"
+out="$(run apply kernel_hrtimer_migration '' performance; run apply kernel_lpm_prediction '' battery)"
+printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|applied|auto|0|1$' || fail "Performance hrtimer Auto: $out"
 printf '%s\n' "$out" | grep -q '^kernel_lpm_prediction|applied|auto|1|0$' || fail "Battery LPM Auto: $out"
-[ "$(cat "$T/hrtimer")" = 0 ] && [ "$(cat "$T/lpm")" = 1 ] && [ "$(cat "$T/usb")" = -1 ] || fail 'Battery Auto wrote an unintended value'
-run apply kernel_hrtimer_migration '' battery >/dev/null; run apply kernel_lpm_prediction '' battery >/dev/null
+[ "$(cat "$T/hrtimer")" = 0 ] && [ "$(cat "$T/lpm")" = 1 ] && [ "$(cat "$T/usb")" = -1 ] || fail 'Auto wrote an unintended value'
+run apply kernel_hrtimer_migration '' performance >/dev/null; run apply kernel_lpm_prediction '' battery >/dev/null
 [ "$(cat "$T/state/kernel_hrtimer_migration.prev")" = 1 ] && [ "$(cat "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'repeat Auto apply replaced a baseline'
-out="$(run apply kernel_hrtimer_migration '' performance; run apply kernel_lpm_prediction '' balanced)"
-printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|restored|stock|1|none$' || fail "non-Battery hrtimer release: $out"
-printf '%s\n' "$out" | grep -q '^kernel_lpm_prediction|restored|stock|0|none$' || fail "non-Battery LPM release: $out"
+out="$(run apply kernel_hrtimer_migration '' battery; run apply kernel_lpm_prediction '' balanced)"
+printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|restored|auto|1|none$' || fail "non-Performance hrtimer release: $out"
+printf '%s\n' "$out" | grep -q '^kernel_lpm_prediction|restored|auto|0|none$' || fail "non-Battery LPM release: $out"
 [ ! -e "$T/state/kernel_hrtimer_migration.prev" ] && [ ! -e "$T/state/kernel_lpm_prediction.prev" ] || fail 'Auto release retained ownership'
-out="$(run apply kernel_hrtimer_migration '' performance; run apply kernel_lpm_prediction '' balanced)"
-printf '%s\n' "$out" | grep -q 'stock_unowned' || fail "unowned Auto was not inert: $out"
+out="$(run apply kernel_hrtimer_migration '' battery; run apply kernel_lpm_prediction '' balanced)"
+printf '%s\n' "$out" | grep -q 'stock_unowned|auto' || fail "unowned Auto was not inert: $out"
 # Manual values override Auto/profile policy, while Stock still returns to the original values.
 mode off on stock
 run apply kernel_hrtimer_migration '' performance >/dev/null; run apply kernel_lpm_prediction '' performance >/dev/null
@@ -11389,6 +11391,191 @@ printf '%s\n' "$OUT" | grep -qx 'kernel_control: kernel_usb_autosuspend = on  ·
 ! printf '%s\n' "$OUT" | grep -q '|' || fail "raw pipe records still printed: $OUT"
 grep -Fq 'not in force on this phone: the governor loaded ${_dba} device-adaptive value(s) at start' "$D" || fail 'shipped rails are still presented as the live caps'
 echo "PASS diag kernel controls: one readable line per control, hrtimer explained as the same mechanism, shipped rails marked as fallback when device bounds are live"
+)
+
+t_soter_boot_waits_for_unlock_dev57() (
+# dev57: the opted-in boot repair ran 45 s after boot_completed, which on a phone that has
+# not been unlocked yet is before the SOTER server app (not direct-boot aware) and the
+# user's credential-encrypted storage are available - the manual button, pressed later,
+# worked. The boot run now waits for sys.user.0.ce_available (after 10 minutes also the
+# activity manager's RUNNING_UNLOCKED state), gives up after 6 hours without an unlock,
+# settles 60 s, and retries once after 120 s when the first result is not a final one.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL soter boot unlock wait: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+python3 - "$ROOT/service.sh" "$T/block.sh" "$T" <<'PY' || fail 'boot block not found'
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+start = s.index('(\n  [ -f /data/adb/asb/soter_fix/auto ]')
+end = s.index('\n) &\n', start)
+block = s[start + 1:end].replace('/data/adb/asb', sys.argv[3] + '/state')
+assert 'sleep 45' not in block and 'sys.user.0.ce_available' in block and 'RUNNING_UNLOCKED' in block
+open(sys.argv[2], 'w', encoding='utf-8').write(block + '\n')
+PY
+mkdir -p "$T/m/runtime" "$T/state/soter_fix"
+cat > "$T/m/runtime/asb_soter_fix.sh" <<'EOF'
+q="$QDIR/results"
+r="$(head -n 1 "$q")"; sed -i 1d "$q"
+echo "run $1" >> "$QDIR/log"
+printf 'soter|result|state=%s|cleared=1|passes=2|services=vendor.soter:running\n' "$r"
+EOF
+run_case() {
+  : > "$T/log"; printf '0\n' > "$T/n"; printf '%s\n' $2 > "$T/results"
+  {
+    echo 'getprop() { case "$1" in sys.boot_completed) echo 1 ;; sys.user.0.ce_available) n=$(cat "$QDIR/n"); n=$((n + 1)); echo "$n" > "$QDIR/n"; [ "$UNLOCK_AT" -gt 0 ] && [ "$n" -ge "$UNLOCK_AT" ] && echo true ;; esac; return 0; }'
+    echo 'am() { [ "$AM_UNLOCKED" = 1 ] && echo "RUNNING_UNLOCKED"; return 0; }'
+    echo 'sleep() { echo "sleep $1" >> "$QDIR/log"; }'
+    echo 'asb_log() { echo "LOG $*" >> "$QDIR/log"; }'
+    cat "$T/block.sh"
+  } > "$T/run.sh"
+  QDIR="$T" UNLOCK_AT="$1" AM_UNLOCKED="${3:-0}" MODDIR="$T/m" bash "$T/run.sh" || fail "block exited non-zero for case $1"
+}
+: > "$T/state/soter_fix/auto"
+run_case 4 'done'
+[ "$(grep -c '^sleep 10$' "$T/log")" = 3 ] || fail "polls before unlock: $(cat "$T/log")"
+grep -n '' "$T/log" | grep -q 'sleep 60' || fail 'no settle after unlock'
+[ "$(grep -c '^run boot$' "$T/log")" = 1 ] || fail "runs: $(cat "$T/log")"
+awk '/^sleep 60$/{s=NR} /^run boot$/{r=NR} END{exit !(s && r && s < r)}' "$T/log" || fail 'repair ran before the settle'
+grep -qx 'LOG soter_fix: boot repair done - unlocked 30s after boot_completed' "$T/log" || fail "log: $(cat "$T/log")"
+run_case 1 'service_down done'
+[ "$(grep -c '^run boot$' "$T/log")" = 2 ] && grep -qx 'sleep 120' "$T/log" || fail "no retry: $(cat "$T/log")"
+grep -qx 'LOG soter_fix: boot repair done (first try service_down, retried) - unlocked 0s after boot_completed' "$T/log" || fail "retry log: $(cat "$T/log")"
+run_case 1 'busy clear_failed'
+[ "$(grep -c '^run boot$' "$T/log")" = 2 ] || fail 'retry is bounded to one'
+grep -qx 'LOG soter_fix: boot repair clear_failed (first try busy, retried) - unlocked 0s after boot_completed' "$T/log" || fail "second failure log: $(cat "$T/log")"
+run_case 0 'done'
+! grep -q '^run' "$T/log" || fail 'repaired while the phone stayed locked'
+grep -qx 'LOG soter_fix: boot repair skipped - the phone was not unlocked within 21600s of boot' "$T/log" || fail "give-up log: $(tail -2 "$T/log")"
+[ "$(grep -c '^sleep 10$' "$T/log")" = 60 ] && [ "$(grep -c '^sleep 60$' "$T/log")" = 350 ] || fail 'poll cadence is not 10 s for 10 minutes, then 60 s'
+run_case 0 'done' 1
+[ "$(grep -c '^run boot$' "$T/log")" = 1 ] && grep -q 'unlocked 600s after boot_completed' "$T/log" || fail "activity-manager fallback: $(tail -2 "$T/log")"
+rm -f "$T/state/soter_fix/auto"
+run_case 4 'done'
+[ ! -s "$T/log" ] || fail 'ran without the opt-in'
+grep -q 'soter_auto_note' "$ROOT/webroot/index.html" || fail 'UI note key missing'
+python3 - "$ROOT/webroot/i18n" <<'PY' || fail 'note does not say the repair waits for the unlock'
+import json, sys, pathlib
+en = json.load(open(pathlib.Path(sys.argv[1]) / 'en.json', encoding='utf-8'))
+assert 'unlock' in en['soter_auto_note'], en['soter_auto_note']
+ru = json.load(open(pathlib.Path(sys.argv[1]) / 'ru.json', encoding='utf-8'))
+assert 'разблокир' in ru['soter_auto_note'], ru['soter_auto_note']
+PY
+echo 'PASS soter boot unlock wait: waits for the first unlock (ce_available, then RUNNING_UNLOCKED after 10 min), 10 s then 60 s polls, gives up after 6 h, settles 60 s, one bounded retry, opt-in only'
+)
+
+t_kernel_profile_follow_dev57() (
+# dev57: kernel controls follow the power profile. Auto values: Timer migration 0 only in
+# Performance; scheduler migration batch Battery 2 / Balanced and Smart 4 / Performance 8;
+# real-time boost floor (sched_util_clamp_min_rt_default) Battery 0 / Performance 256; every
+# other profile, and Stock, gets the exact captured baseline back. A profile switch re-applies
+# them through apply_profile.sh (`follow`), so a change no longer waits for the next boot,
+# and leaving Stock puts every control back. The RT baseline is never captured while the
+# vendor post-boot script that lowers 1024 to 0 may still be running.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel profile follow: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state"
+printf '1\n' > "$T/timer"; printf '32\n' > "$T/nr"; printf '0\n' > "$T/rt"; printf '0\n' > "$T/lpm"
+cat > "$T/mod/config/governor.conf" <<'EOF'
+mglru_mode=smart
+kernel_timer_migration=auto
+kernel_sched_nr_migrate=auto
+kernel_rt_boost=auto
+kernel_lpm_prediction=auto
+kernel_hrtimer_migration=auto
+EOF
+run() {
+  MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_KC_KERNEL_ID=k57 ASB_KC_RT_READY="${RTREADY:-1}" \
+    ASB_TIMER_MIGRATION_NODE="$T/timer" ASB_SCHED_NR_MIGRATE_NODE="$T/nr" ASB_RT_BOOST_NODE="$T/rt" \
+    ASB_LPM_PREDICTION_NODE="$T/lpm" ASB_HRTIMER_MIGRATION_NODE="$T/no-hrtimer" \
+    ASB_MGLRU_ENABLED_NODE="$T/no-mglru" ASB_MGLRU_MIN_TTL_NODE="$T/no-ttl" ASB_SCHED_STATS_NODE="$T/no-stats" \
+    ASB_SCHED_AUTOGROUP_NODE="$T/no-ag" ASB_SCHED_CHILD_RUNS_FIRST_NODE="$T/no-crf" ASB_USB_AUTOSUSPEND_NODE="$T/no-usb" \
+    sh "$K" "$@"
+}
+nodes() { printf '%s %s %s %s' "$(cat "$T/timer")" "$(cat "$T/nr")" "$(cat "$T/rt")" "$(cat "$T/lpm")"; }
+out="$(run follow performance || true)"
+[ "$(nodes)" = '0 8 256 0' ] || fail "Performance: $(nodes) / $out"
+printf '%s\n' "$out" | grep -qx 'kernel_rt_boost|applied|auto|256|0' || fail "RT Performance verdict: $out"
+printf '%s\n' "$out" | grep -q '^mglru_mode|' || fail 'non-Smart profile skipped the MGLRU mode'
+out="$(run follow smart || true)"
+[ "$(nodes)" = '1 4 0 0' ] || fail "Smart: $(nodes)"
+printf '%s\n' "$out" | grep -qx 'kernel_timer_migration|restored|auto|1|none' || fail "Auto release reports auto: $out"
+! printf '%s\n' "$out" | grep -q '^mglru_mode|' || fail 'Smart profile with Smart MGLRU must leave the mode to the governor'
+run follow battery >/dev/null || true
+[ "$(nodes)" = '1 2 0 1' ] || fail "Battery: $(nodes)"
+run follow balanced >/dev/null || true
+[ "$(nodes)" = '1 4 0 0' ] || fail "Balanced: $(nodes)"
+out="$(run follow stock; echo "rc=$?")"
+[ "$out" = 'rc=0' ] || fail "follow must be inert for Stock: $out"
+for k in kernel_timer_migration kernel_sched_nr_migrate kernel_rt_boost; do
+  run apply "$k" '' stock >/dev/null
+done
+[ "$(nodes)" = '1 32 0 0' ] || fail "Auto under Stock must restore: $(nodes)"
+ls "$T/state" | grep -q '\.prev$' && fail "Stock left a baseline: $(ls "$T/state")"
+# The kernel boots with 1024; a Snapdragon post-boot script lowers it to 0. Before that has
+# finished nothing is captured or written, and the next pass applies normally.
+printf '1024\n' > "$T/rt"
+out="$(RTREADY=0 run apply kernel_rt_boost '' performance)"
+[ "$out" = 'kernel_rt_boost|deferred|auto|1024|none' ] && [ ! -e "$T/state/kernel_rt_boost.prev" ] && [ "$(cat "$T/rt")" = 1024 ] || fail "early capture: $out"
+printf '0\n' > "$T/rt"
+out="$(run apply kernel_rt_boost '' performance)"
+[ "$out" = 'kernel_rt_boost|applied|auto|256|0' ] || fail "after post-boot: $out"
+out="$(RTREADY=0 run apply kernel_rt_boost '' battery)"
+[ "$out" = 'kernel_rt_boost|applied|auto|0|0' ] || fail "an existing baseline does not wait: $out"
+for v in 0 128 256 512; do
+  sed -i "s/^kernel_rt_boost=.*/kernel_rt_boost=$v/" "$T/mod/config/governor.conf"
+  run apply kernel_rt_boost '' smart >/dev/null
+  [ "$(cat "$T/rt")" = "$v" ] || fail "manual $v"
+done
+for bad in 1024 2000 -1 abc; do
+  sed -i "s/^kernel_rt_boost=.*/kernel_rt_boost=$bad/" "$T/mod/config/governor.conf"
+  out="$(run apply kernel_rt_boost '' performance)"
+  printf '%s\n' "$out" | grep -Eq '^kernel_rt_boost\|(restored|stock_unowned)\|stock\|' && [ "$(cat "$T/rt")" = 0 ] || fail "invalid $bad is not treated as Stock: $out"
+done
+printf '9999\n' > "$T/state/kernel_rt_boost.prev"; printf 'k57\n' > "$T/state/kernel_rt_boost.prev.kid"
+set +e; out="$(run restore kernel_rt_boost)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_rt_boost|baseline_invalid|' || fail "out-of-range baseline restored: $out"
+rm -f "$T/state/kernel_rt_boost.prev" "$T/state/kernel_rt_boost.prev.kid"
+# The safe config writer accepts exactly the card's options.
+mkdir -p "$T/cmod/config" "$T/cmod/runtime"
+cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
+cp "$ROOT/config/governor.conf" "$T/cmod/config/governor.conf"
+for kv in kernel_rt_boost:stock kernel_rt_boost:auto kernel_rt_boost:0 kernel_rt_boost:512 kernel_timer_migration:auto kernel_sched_nr_migrate:auto; do
+  MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set "${kv%%:*}" "${kv#*:}" >/dev/null || fail "safe writer refused $kv"
+done
+for kv in kernel_rt_boost:1024 kernel_rt_boost:64 kernel_timer_migration:smart kernel_sched_nr_migrate:32; do
+  set +e; MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set "${kv%%:*}" "${kv#*:}" >/dev/null 2>&1; rc=$?; set -e
+  [ "$rc" -ne 0 ] || fail "safe writer accepted $kv"
+done
+# Defaults, ownership, persistence lists and every caller.
+for f in governor.conf governor.conf.shipped; do
+  for kv in kernel_timer_migration=auto kernel_sched_nr_migrate=auto kernel_rt_boost=auto; do
+    grep -qx "$kv" "$ROOT/config/$f" || fail "$f lacks $kv"
+  done
+done
+grep -qx 'kernel_rt_boost|advanced|webui_sensitive|shell' "$ROOT/config/key_ownership.tsv" || fail 'ownership row'
+[ "$(grep -c 'kernel_usb_autosuspend kernel_rt_boost' "$ROOT/common/install.sh")" = 2 ] || fail 'install carry-over/snapshot lists'
+grep -Fq 'kernel_usb_autosuspend kernel_rt_boost" ;;' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'post-boot owner list'
+[ "$(grep -c 'apply kernel_rt_boost "" "$ASB_PROFILE"' "$ROOT/service.sh")" = 3 ] || fail 'service.sh reinforce passes'
+[ "$(grep -c 'sys.boot_completed 2>/dev/null)" = "1" ] && sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_rt_boost' "$ROOT/service.sh")" = 3 ] || fail 'RT apply is not gated on boot completion'
+python3 - "$ROOT/apply_profile.sh" <<'PY' || fail 'profile worker does not re-apply the kernel controls'
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+w = s[s.index('run_worker() {'):s.index('\n}\n', s.index('run_worker() {'))]
+i = w.index('asb_kernel_controls.sh" follow "$PROFILE"')
+assert w.index('profile_epoch_current', w.rindex('_passes', 0, i)) < i
+assert 'asb_feature_enabled KERNEL' in w[w.rindex('if ', 0, i):i]
+assert '"$PROFILE" != "stock"' in w[w.rindex('if ', 0, i):i]
+assert w.index('done\n') < i < w.index('exit $_rc')
+PY
+# The schema-4 migration turns only the former shipped defaults into Auto.
+sed -n '/^asb_preserve_user_config() {/,/^}/p' "$ROOT/common/install.sh" | sed "s|/data/adb/asb|$T/mig|g" > "$T/fn.sh"
+grep -q 'kernel_timer_migration:off|kernel_sched_nr_migrate:4)' "$T/fn.sh" || fail 'migration case missing'
+grep -q 'echo 4 > ' "$T/fn.sh" || fail 'schema not bumped to 4'
+echo 'PASS kernel profile follow: Auto values per profile, exact release elsewhere and under Stock, one-process follow on profile switches, Smart MGLRU left to the governor, RT baseline deferred until post-boot, bounded RT values, safe writer, defaults, lists and schema-4 migration'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

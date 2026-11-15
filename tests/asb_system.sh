@@ -731,12 +731,12 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "234" ] || fail "expected 234 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "234" ] || fail "expected 234 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "235" ] || fail "expected 235 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "235" ] || fail "expected 235 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
-for _kc_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
+for _kc_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost; do
   grep -qx "$_kc_key|advanced|webui_sensitive|shell" "$REG" || fail "$_kc_key consumer is not pinned to shell"
 done
 grep -qx 'net_mtu_probing|advanced|webui_sensitive|shell' "$REG" || fail 'net_mtu_probing consumer is not pinned to shell'
@@ -755,7 +755,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "102" ] || fail "expected 102 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "103" ] || fail "expected 103 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -7783,7 +7783,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_wakeup_blocker.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh runtime/asb_junk_cleanup.sh runtime/asb_pressure_snapshot.sh runtime/asb_soter_fix.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
+_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_wakeup_blocker.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh runtime/asb_junk_cleanup.sh runtime/asb_pressure_snapshot.sh runtime/asb_soter_fix.sh runtime/asb_module_desc.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
 fail() { echo "FAIL workflow executable modes: $*" >&2; exit 1; }
 
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
@@ -9596,6 +9596,81 @@ case_run stock stock stock
 [ ! -s "$TMP/ui.log" ] || ! grep -q 'MGLRU' "$TMP/ui.log" || fail 'reported a carry-over that did not happen'
 case_run stock 1000 1000
 echo 'PASS mglru ttl migration: Hold -> 1000 ms, Aggressive -> 2000 ms, 5000 -> 2000, explicit TTL kept, legacy key reset, one line, reported once'
+)
+
+t_module_desc_zygisk_dev57() (
+# dev57: the root manager's module card shows the Zygisk state next to the profile:
+# "status: Smart Mode 🤖 | active ✅ | Zygisk ✅ connected". Off, not installed, safe mode,
+# connected (the companion wrote its state file this boot), idle (nothing selected) and
+# waiting are told apart. The profile writer appends it; a bounded refresh after boot and
+# after a Zygisk change rewrites only the suffix. Install-time lines stay as they were.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/runtime/asb_module_desc.sh"
+fail() { echo "FAIL module desc zygisk: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+M="$T/mod"; Z="$T/zdir"; R="$T/run"
+mkdir -p "$M/config" "$M/zygisk" "$M/runtime" "$Z" "$R"
+cfg() { printf 'zygisk_enabled=%s\nzygisk_launch=%s\nzygisk_ledger=0\n' "$1" "${2:-0}" > "$M/config/governor.conf"; }
+suf() { MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" sh "$H" suffix; }
+cfg 0
+[ "$(suf)" = ' | Zygisk ⏸️ off' ] || fail "off: $(suf)"
+cfg 1
+[ "$(suf)" = ' | Zygisk ⛔ not installed' ] || fail "not installed: $(suf)"
+: > "$M/zygisk/arm64-v8a.so"
+[ "$(suf)" = ' | Zygisk 💤 idle' ] || fail "idle: $(suf)"
+cfg 1 1
+[ "$(suf)" = ' | Zygisk ⏳ waiting' ] || fail "waiting (cold-start lift on): $(suf)"
+cfg 1 0; printf 'com.example.app\n' > "$Z/packages.list"
+[ "$(suf)" = ' | Zygisk ⏳ waiting' ] || fail "waiting (allowlist): $(suf)"
+: > "$R/state.arm64-v8a.tsv"
+[ "$(suf)" = ' | Zygisk ⏳ waiting' ] || fail 'an empty state file is not evidence'
+printf 'Z\tevents_total\t3\n' > "$R/state.arm64-v8a.tsv"
+[ "$(suf)" = ' | Zygisk ✅ connected' ] || fail "connected: $(suf)"
+: > "$Z/disable"
+[ "$(suf)" = ' | Zygisk 🛟 safe mode' ] || fail "safe mode outranks state: $(suf)"
+rm -f "$Z/disable"
+printf 'id=AutoSystemBoost\nname=ASB\ndescription=status: Smart Mode 🤖 | active ✅\nversion=V66\n' > "$M/module.prop"
+ref() { MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" sh "$H" refresh; }
+ref
+grep -qxF 'description=status: Smart Mode 🤖 | active ✅ | Zygisk ✅ connected' "$M/module.prop" || fail "refresh: $(cat "$M/module.prop")"
+[ "$(wc -l < "$M/module.prop")" = 4 ] && grep -qx 'version=V66' "$M/module.prop" && grep -qx 'id=AutoSystemBoost' "$M/module.prop" || fail 'other lines changed'
+cp "$M/module.prop" "$T/before"; touch -d '2001-01-01' "$M/module.prop"
+ref
+[ "$(stat -c %Y "$M/module.prop")" = "$(stat -c %Y "$T/before" 2>/dev/null || echo x)" ] || cmp -s "$M/module.prop" "$T/before" || fail 'unchanged refresh rewrote the file'
+[ "$(date -r "$M/module.prop" +%Y)" = 2001 ] || fail 'unchanged refresh touched module.prop'
+cfg 0; ref
+grep -qxF 'description=status: Smart Mode 🤖 | active ✅ | Zygisk ⏸️ off' "$M/module.prop" || fail "suffix not replaced: $(grep description "$M/module.prop")"
+[ "$(grep -o 'Zygisk' "$M/module.prop" | wc -l)" = 1 ] || fail 'suffix duplicated'
+sed -i 's/^description=.*/description=status: no profile selected — open the WebUI to choose one/' "$M/module.prop"; ref
+grep -qxF 'description=status: no profile selected — open the WebUI to choose one' "$M/module.prop" || fail 'no-profile line got a suffix'
+# The profile writer (runtime/profile_core.sh) appends the same suffix; install-time stays plain.
+cp "$H" "$M/runtime/asb_module_desc.sh"
+printf 'description=old\n' > "$M/module.prop"
+{ echo 'MODDIR="$1"'; sed -n '/^asb_update_desc() {/,/^}/p' "$ROOT/runtime/profile_core.sh"; echo 'asb_update_desc'; } > "$T/desc.sh"
+cfg 1 0
+printf 'battery\n' > "$M/current_profile"
+ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" bash "$T/desc.sh" "$M"
+grep -qxF 'description=status: Battery 🔋 | active ✅ | Zygisk ✅ connected' "$M/module.prop" || fail "profile writer: $(cat "$M/module.prop")"
+printf 'none\n' > "$M/current_profile"
+ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" bash "$T/desc.sh" "$M"
+grep -qxF 'description=status: no profile selected — open the WebUI to choose one' "$M/module.prop" || fail 'profile writer added a suffix to the no-profile line'
+rm -f "$M/runtime/asb_module_desc.sh"; printf 'smart\n' > "$M/current_profile"
+ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" bash "$T/desc.sh" "$M"
+grep -qxF 'description=status: Smart Mode 🤖 | active ✅' "$M/module.prop" || fail 'missing helper must leave the plain line'
+grep -q 'asb_module_desc' "$ROOT/common/install.sh" && fail 'install-time description must stay helper-free'
+python3 - "$ROOT/service.sh" "$ROOT/webroot/index.html" <<'PY' || fail 'refresh callers'
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+i = s.index('for _mdw in 120 180 600 900 1800; do')
+blk = s[s.rindex('(\n', 0, i):s.index(') &', i)]
+assert 'until [ "$(getprop sys.boot_completed)" = "1" ]' in blk and 'asb_module_desc.sh" refresh' in blk and 'while' not in blk
+h = open(sys.argv[2], encoding='utf-8').read()
+z = h[h.index("if (/^zygisk_/.test(key)) {"):h.index("return;", h.index("if (/^zygisk_/.test(key)) {"))]
+assert "asb_module_desc.sh') + ' refresh" in z
+PY
+grep -nE '^[[:space:]]*#|[[:space:]]#[[:space:]]' "$H" | grep -v '^1:#!' && fail 'comments in module shell code'
+echo 'PASS module desc zygisk: off / not installed / safe mode / connected / idle / waiting, suffix replaced not duplicated, unchanged refresh writes nothing, no-profile line untouched, profile writer appends it, bounded boot refresh and Zygisk-change refresh'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
