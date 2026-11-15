@@ -727,6 +727,24 @@
         "256": "Um piso notório, para jogos e gravação de vídeo. Mais consumo enquanto esses threads correm.",
         "512": "Um piso forte. Só se os estalos ou engasgos continuarem; o maior consumo destas opções."
       }
+    },
+    "kernel_bore": {
+      "name": "Agendador BORE",
+      "desc": "O BORE muda como o agendador do kernel avalia tarefas interativas e intensivas em CPU. Ligado ativa a política, Desligado a desativa. Padrão restaura o valor exato anterior à primeira alteração do ASB. A gravação só aparece quando /proc/sys/kernel/sched_bore expõe 0 ou 1 e permite escrita root; cada alteração é relida. Não há promessa de ganho de resposta, fluidez ou bateria.\n\n🔋 Bateria: Padrão até medir neste kernel\n⚡ Resposta: teste Ligado; volte a Padrão se piorar\n✋ Em dúvida: Padrão",
+      "descOpt": {
+        "stock": "Restaura o 0 ou 1 salvo antes da primeira alteração do ASB; sem valor-base do ASB, nada é gravado.",
+        "off": "Grava 0 para desativar o BORE e verifica o valor relido do kernel.",
+        "on": "Grava 1 para ativar o BORE e verifica o valor relido. É um experimento, não uma melhoria garantida."
+      }
+    },
+    "ltpo_idle_speed": {
+      "name": "Velocidade de redução LTPO em repouso",
+      "desc": "Rapidez com que o controlador por eventos existente reduz após o último toque. Rápida: 1 segundo antes do primeiro passo e 1 entre modos. Equilibrada: 2 / 1 segundos. Suave: 5 / 3 segundos. Um toque restaura imediatamente o máximo do painel. Somente modos anunciados pelo painel são usados; reduzir para perto de 1 Hz abaixo do mínimo anunciado pelo Android depende da tabela ADFR do aparelho e não é garantido. Requer Forçar atualização LTPO; sem tabela estrangeira nem polling persistente.\n\n🔋 Bateria: Rápida pode reduzir atualizações em repouso; meça neste aparelho\n⚡ Fluidez: Suave mantém taxas maiores em pausas curtas\n✋ Em dúvida: Equilibrada",
+      "descOpt": {
+        "fast": "Alcança antes o mínimo de repouso anunciado e pode reduzir em pausas curtas; o consumo real depende do aparelho.",
+        "balanced": "Mantém a temporização anterior do ASB: dois segundos antes do primeiro passo e um entre modos anunciados.",
+        "gentle": "Espera mais e reduz mais devagar, preservando uma taxa maior durante pausas curtas."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -990,6 +1008,16 @@
       "128": "128",
       "256": "256",
       "512": "512"
+    },
+    "kernel_bore": {
+      "stock": "Padrão",
+      "off": "Desligado",
+      "on": "Ligado"
+    },
+    "ltpo_idle_speed": {
+      "fast": "Rápida",
+      "balanced": "Equilibrada",
+      "gentle": "Suave"
     }
   },
   "prof_none": "não selecionado",
@@ -3558,8 +3586,8 @@
   "soter_chip_absent": "Não instalado",
   "soter_chip_down": "Serviço parado",
   "soter_chip_ready": "Pronto",
-  "soter_res_done": "Dados do SOTER redefinidos; o serviço voltou a funcionar",
-  "soter_res_done_no_service": "Dados do servidor SOTER redefinidos; esta ROM não declara um serviço SOTER separado",
+  "soter_res_done": "Dados do servidor SOTER apagados; o serviço init está em execução. A funcionalidade das aplicações e dos pagamentos não foi testada",
+  "soter_res_done_no_service": "Dados do servidor SOTER apagados; esta ROM não declara um serviço SOTER separado. A funcionalidade das aplicações não foi testada",
   "soter_res_service_down": "Dados do SOTER redefinidos, mas o serviço não voltou a iniciar - reinicie o telefone",
   "soter_res_clear_failed": "O Android recusou apagar os dados do servidor SOTER; o serviço foi apenas reiniciado",
   "soter_res_not_installed": "O servidor SOTER não está instalado nesta ROM - nada a reparar",
@@ -3625,6 +3653,16 @@
   "kernel_wb_new_short": "fonte nova",
   "kernel_wb_shared_short": "nome partilhado ×{n}",
   "kernel_wb_critical_short": "fonte do sistema",
+  "kc_why_kernel_bore": "Este kernel não expõe o controle /proc/sys/kernel/sched_bore. CONFIG_SCHED_BORE ou uma linha no registro de instalação, por si só, não comprova uma interface de execução. O ASB não grava nada.",
+  "dev_sec_kernel_bore": "BORE scheduler",
+  "dev_guide_kernel_bore": "CONFIG_SCHED_BORE é evidência de compilação; /proc/sys/kernel/sched_bore é a interface de execução. Este diagnóstico é somente leitura. A configuração separada do kernel aceita apenas Padrão, Desligado e Ligado; a aplicação só é bem-sucedida após a releitura.",
+  "dev_kernel_bore_config": "CONFIG_SCHED_BORE",
+  "dev_kernel_bore_node": "Nó de controle em execução",
+  "dev_kernel_bore_runtime_interface": "Runtime interface",
+  "dev_kernel_bore_state": "BORE state",
+  "dev_kernel_bore_write_access": "Acesso root de gravação",
+  "dev_kernel_bore_toggle": "ASB toggle availability",
+  "dev_kernel_bore_control_policy": "ASB control policy",
   "kc_why_kernel_rt_boost": "Este kernel não tem sched_util_clamp_min_rt_default: foi compilado sem CONFIG_UCLAMP_TASK. O ASB não escreve nada.",
   "kc_verdict_deferred": "os scripts de arranque ainda estão a definir este valor; aplicado na próxima passagem",
   "kc_verdict_auto_kernel": "Auto: o valor próprio do kernel para este perfil",
@@ -3644,7 +3682,7 @@
   "soter_boot_unlock_after": "desbloqueado {s} s após a inicialização",
   "soter_boot_retried": "na segunda tentativa",
   "soter_notify_title": "Reparo do SOTER",
-  "soter_notify_done": "O SOTER foi reparado após o reinício. Ative de novo o pagamento por impressão digital nos seus apps de pagamento.",
+  "soter_notify_done": "Os dados do servidor SOTER foram apagados após a reinicialização; a funcionalidade das aplicações não foi testada. Ative novamente o pagamento por impressão digital nas suas aplicações de pagamento.",
   "soter_notify_failed": "O reparo automático do SOTER não terminou. Abra ASB, Enfermaria, Reparo do SOTER.",
   "ct_wc_row_app": "Serviço de webcam (ROM)",
   "ct_read_failed": "Não foi possível ler o estado",
@@ -3753,5 +3791,30 @@
   "dev_system_load_psi_memory_weight": "Peso bloqueio de memória",
   "dev_system_load_psi_io_some_avg10": "Bloqueio de armazenamento (PSI, 10 s)",
   "dev_system_load_psi_io_component": "Componente bloqueio de armazenamento · 0–100",
-  "dev_system_load_psi_io_weight": "Peso bloqueio de armazenamento"
+  "dev_system_load_psi_io_weight": "Peso bloqueio de armazenamento",
+  "bfx_art_binder": "A chamada Binder do PackageManager do Android falhou ({fail} de {done} tentativas); o fallback pm também não funcionou. Nenhum app foi recompilado. A redefinição das estatísticas da bateria continua agendada. Resposta do Android: {err}",
+  "soter_boot_recent_manual": "não é necessário - uma reparação manual já foi concluída neste arranque",
+  "soter_boot_auto_off": "cancelado - a reparação automática foi desativada",
+  "st_ltpo_idle_active": "temporização por eventos ativa",
+  "lvi_app_class_now": "Classe do app em primeiro plano · agora",
+  "lvp_app_pressure_title": "Whole-system load · PSI and CPU/GPU",
+  "dev_sec_zygisk_provider": "Fornecedor Zygisk",
+  "dev_guide_zygisk_provider": "O fornecedor é identificado pelo nome e versão nos metadados do módulo instalado. Ativado, desativado e pendente de remoção são estados distintos. Os metadados não provam qual fornecedor está ativo no Zygote em execução; eventos do companion também não identificam um fornecedor.",
+  "dev_zygisk_provider_provider": "Fornecedor detetado",
+  "dev_zygisk_provider_version": "Versão do fornecedor",
+  "dev_zygisk_provider_install_state": "Estado da instalação",
+  "dev_zygisk_provider_installed_providers": "Instalações reconhecidas",
+  "dev_zygisk_provider_enabled_count": "Número de fornecedores ativados",
+  "dev_zygisk_provider_runtime_state": "Evidência do fornecedor em execução",
+  "dev_zygisk_provider_active_evidence": "Evidência de injeção ativa",
+  "dev_zygisk_provider_conflict": "Conflito de fornecedores",
+  "dev_zygisk_provider_evidence": "Evidência da deteção",
+  "dev_zygisk_provider_unknown": "Desconhecido",
+  "dev_zygisk_provider_conflict_value": "Conflito",
+  "dev_zygisk_provider_install_enabled": "Ativado",
+  "dev_zygisk_provider_install_disabled": "Desativado",
+  "dev_zygisk_provider_install_pending_removal": "Remoção pendente",
+  "dev_zygisk_provider_install_not_detected": "Não detetado nos metadados dos módulos",
+  "dev_zygisk_provider_install_multiple_enabled": "Vários fornecedores ativados",
+  "dev_zygisk_provider_install_multiple_inactive": "Várias instalações; nenhuma ativada"
 }

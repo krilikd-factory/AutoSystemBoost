@@ -727,6 +727,24 @@
         "256": "Belirgin bir taban; oyunlar ve video kaydı için. Bu iş parçacıkları çalıştıkça daha fazla tüketim.",
         "512": "Güçlü bir taban. Yalnızca cızırtı veya takılma sürerse; bu seçenekler arasında en yüksek tüketim."
       }
+    },
+    "kernel_bore": {
+      "name": "BORE Zamanlayıcı",
+      "desc": "BORE, çekirdek zamanlayıcısının etkileşimli ve CPU yoğun görevleri değerlendirmesini değiştirir. Açık ilkeyi etkinleştirir, Kapalı devre dışı bırakır. Varsayılan, ASB’nin ilk değişikliğinden önceki tam değeri geri yükler. Yazma yalnızca /proc/sys/kernel/sched_bore 0 veya 1 sunup root yazımına izin verdiğinde kullanılabilir; her değişiklik geri okunur. Yanıt, akıcılık veya pil kazancı vaat edilmez.\n\n🔋 Pil: Bu çekirdekte ölçülene kadar Varsayılan\n⚡ Yanıt: Açık denenebilir; kötüleşirse Varsayılan’a dönün\n✋ Emin değilseniz: Varsayılan",
+      "descOpt": {
+        "stock": "ASB’nin ilk değişikliğinden önce kaydedilen 0 veya 1 değerini geri yükler; ASB taban değeri yoksa hiçbir şey yazmaz.",
+        "off": "BORE’yi kapatmak için 0 yazar ve çekirdekten geri okunan değeri doğrular.",
+        "on": "BORE’yi açmak için 1 yazar ve geri okunan değeri doğrular. Bu bir denemedir, garantili iyileştirme değildir."
+      }
+    },
+    "ltpo_idle_speed": {
+      "name": "Boştayken LTPO düşüş hızı",
+      "desc": "Mevcut olay tabanlı denetleyicinin son dokunuştan sonra ne hızla düşeceği. Hızlı: ilk adımdan önce 1 saniye ve modlar arasında 1 saniye. Dengeli: 2 / 1 saniye. Yumuşak: 5 / 3 saniye. Dokunuş panelin en yüksek değerini anında geri getirir. Yalnızca panelin bildirdiği modlar kullanılır; Android’in bildirdiği tabanın altında 1 Hz’e yaklaşmak cihazın kendi ADFR tablosuna bağlıdır ve garanti edilmez. LTPO Yenilemeyi Zorla gerekir; yabancı tablo veya kalıcı yoklama işçisi yoktur.\n\n🔋 Pil: Hızlı boştaki yenilemeleri azaltabilir; bu cihazda ölçün\n⚡ Akıcılık: Yumuşak kısa duraklamalarda yüksek hızı korur\n✋ Emin değilseniz: Dengeli",
+      "descOpt": {
+        "fast": "Bildirilen boşta tabanına daha erken ulaşır ve kısa duraklamalarda düşebilir; gerçek güç kullanımı cihaza bağlıdır.",
+        "balanced": "Önceki ASB zamanlamasını korur: ilk adımdan önce iki saniye ve bildirilen modlar arasında bir saniye.",
+        "gentle": "Daha uzun bekler ve daha yavaş düşerek kısa duraklamalarda daha yüksek yenileme hızını korur."
+      }
     }
   },
   "nav_live": "İzleme",
@@ -990,6 +1008,16 @@
       "128": "128",
       "256": "256",
       "512": "512"
+    },
+    "kernel_bore": {
+      "stock": "Varsayılan",
+      "off": "Kapalı",
+      "on": "Açık"
+    },
+    "ltpo_idle_speed": {
+      "fast": "Hızlı",
+      "balanced": "Dengeli",
+      "gentle": "Yumuşak"
     }
   },
   "prof_none": "seçilmedi",
@@ -3558,8 +3586,8 @@
   "soter_chip_absent": "Kurulu değil",
   "soter_chip_down": "Hizmet durdu",
   "soter_chip_ready": "Hazır",
-  "soter_res_done": "SOTER verileri sıfırlandı; hizmet yeniden çalışıyor",
-  "soter_res_done_no_service": "SOTER sunucu verileri sıfırlandı; bu ROM ayrı bir SOTER hizmeti bildirmiyor",
+  "soter_res_done": "SOTER sunucu verileri temizlendi; init hizmeti çalışıyor. Uygulama ve ödeme işlevi test edilmedi",
+  "soter_res_done_no_service": "SOTER sunucu verileri temizlendi; bu ROM ayrı bir SOTER hizmeti bildirmiyor. Uygulama işlevi test edilmedi",
   "soter_res_service_down": "SOTER verileri sıfırlandı ancak hizmet yeniden başlamadı - telefonu yeniden başlatın",
   "soter_res_clear_failed": "Android SOTER sunucu verilerinin silinmesini reddetti; hizmet yalnızca yeniden başlatıldı",
   "soter_res_not_installed": "SOTER sunucusu bu ROM’da kurulu değil - onarılacak bir şey yok",
@@ -3625,6 +3653,16 @@
   "kernel_wb_new_short": "yeni kaynak",
   "kernel_wb_shared_short": "ortak ad ×{n}",
   "kernel_wb_critical_short": "sistem kaynağı",
+  "kc_why_kernel_bore": "Bu çekirdek /proc/sys/kernel/sched_bore denetimini sunmuyor. CONFIG_SCHED_BORE veya kurulum günlüğündeki bir satır tek başına çalışma zamanı arayüzünü kanıtlamaz. ASB hiçbir şey yazmaz.",
+  "dev_sec_kernel_bore": "BORE scheduler",
+  "dev_guide_kernel_bore": "CONFIG_SCHED_BORE derleme kanıtıdır; /proc/sys/kernel/sched_bore çalışma zamanı arayüzüdür. Bu tanılama yalnızca okur. Ayrı çekirdek ayarı yalnızca Varsayılan, Kapalı ve Açık değerlerini kabul eder; uygulama ancak geri okumadan sonra başarılı sayılır.",
+  "dev_kernel_bore_config": "CONFIG_SCHED_BORE",
+  "dev_kernel_bore_node": "Çalışma zamanı denetim düğümü",
+  "dev_kernel_bore_runtime_interface": "Runtime interface",
+  "dev_kernel_bore_state": "BORE state",
+  "dev_kernel_bore_write_access": "Root yazma erişimi",
+  "dev_kernel_bore_toggle": "ASB toggle availability",
+  "dev_kernel_bore_control_policy": "ASB control policy",
   "kc_why_kernel_rt_boost": "Bu çekirdekte sched_util_clamp_min_rt_default yok: CONFIG_UCLAMP_TASK olmadan derlenmiş. ASB hiçbir şey yazmaz.",
   "kc_verdict_deferred": "açılış betikleri bu değeri hâlâ ayarlıyor; sonraki geçişte uygulanır",
   "kc_verdict_auto_kernel": "Otomatik: bu profil için çekirdeğin kendi değeri",
@@ -3644,7 +3682,7 @@
   "soter_boot_unlock_after": "açılıştan {s} sn sonra kilit açıldı",
   "soter_boot_retried": "ikinci denemede",
   "soter_notify_title": "SOTER Onarımı",
-  "soter_notify_done": "SOTER yeniden başlatmadan sonra onarıldı. Ödeme uygulamalarında parmak iziyle ödemeyi yeniden açın.",
+  "soter_notify_done": "Yeniden başlatmanın ardından SOTER sunucu verileri temizlendi; uygulama işlevi test edilmedi. Ödeme uygulamalarınızda parmak iziyle ödemeyi yeniden etkinleştirin.",
   "soter_notify_failed": "Otomatik SOTER onarımı tamamlanmadı. ASB, Revir, SOTER Onarımı bölümünü açın.",
   "ct_wc_row_app": "Web kamerası hizmeti (ROM)",
   "ct_read_failed": "Durum okunamadı",
@@ -3753,5 +3791,30 @@
   "dev_system_load_psi_memory_weight": "Bellek tıkanması ağırlığı",
   "dev_system_load_psi_io_some_avg10": "Depolama tıkanması (PSI, 10 sn)",
   "dev_system_load_psi_io_component": "Depolama tıkanması bileşeni · 0–100",
-  "dev_system_load_psi_io_weight": "Depolama tıkanması ağırlığı"
+  "dev_system_load_psi_io_weight": "Depolama tıkanması ağırlığı",
+  "bfx_art_binder": "Android PackageManager Binder çağrısı başarısız oldu ({done} denemenin {fail} tanesi); pm yedeği de işe yaramadı. Hiçbir uygulama yeniden derlenmedi. Pil istatistiği sıfırlaması yine zamanlandı. Android yanıtı: {err}",
+  "soter_boot_recent_manual": "gerekli değil - bu açılışta manuel onarım zaten tamamlandı",
+  "soter_boot_auto_off": "iptal edildi - otomatik onarım kapatıldı",
+  "st_ltpo_idle_active": "olay tabanlı zamanlama etkin",
+  "lvi_app_class_now": "Ön plan uygulama sınıfı · şimdi",
+  "lvp_app_pressure_title": "Whole-system load · PSI and CPU/GPU",
+  "dev_sec_zygisk_provider": "Zygisk sağlayıcısı",
+  "dev_guide_zygisk_provider": "Sağlayıcı, kurulu modülün meta verilerindeki ad ve sürümden belirlenir. Etkin, devre dışı ve kaldırma bekliyor ayrı durumlardır. Meta veriler çalışan Zygote içinde hangi sağlayıcının etkin olduğunu kanıtlamaz; companion olayları da sağlayıcıyı tanımlamaz.",
+  "dev_zygisk_provider_provider": "Algılanan sağlayıcı",
+  "dev_zygisk_provider_version": "Sağlayıcı sürümü",
+  "dev_zygisk_provider_install_state": "Kurulum durumu",
+  "dev_zygisk_provider_installed_providers": "Tanınan kurulumlar",
+  "dev_zygisk_provider_enabled_count": "Etkin sağlayıcı sayısı",
+  "dev_zygisk_provider_runtime_state": "Çalışan sağlayıcı kanıtı",
+  "dev_zygisk_provider_active_evidence": "Etkin enjeksiyon kanıtı",
+  "dev_zygisk_provider_conflict": "Sağlayıcı çakışması",
+  "dev_zygisk_provider_evidence": "Algılama kanıtı",
+  "dev_zygisk_provider_unknown": "Bilinmiyor",
+  "dev_zygisk_provider_conflict_value": "Çakışma",
+  "dev_zygisk_provider_install_enabled": "Etkin",
+  "dev_zygisk_provider_install_disabled": "Devre dışı",
+  "dev_zygisk_provider_install_pending_removal": "Kaldırma bekliyor",
+  "dev_zygisk_provider_install_not_detected": "Modül meta verilerinde algılanmadı",
+  "dev_zygisk_provider_install_multiple_enabled": "Birden fazla etkin sağlayıcı",
+  "dev_zygisk_provider_install_multiple_inactive": "Birden fazla kurulum; hiçbiri etkin değil"
 }

@@ -757,6 +757,24 @@
         "256": "明显的下限，适合游戏和录像。这些线程运行时更耗电。",
         "512": "很强的下限。仅在爆音或卡顿仍然存在时使用；这些选项中耗电最高。"
       }
+    },
+    "kernel_bore": {
+      "name": "BORE 调度器",
+      "desc": "BORE 会改变内核调度器对交互型和 CPU 密集型任务的评分。“开启”启用该策略，“关闭”将其禁用。“原厂”恢复 ASB 首次修改前的准确值。只有 /proc/sys/kernel/sched_bore 提供 0 或 1 且允许 root 写入时才可修改；每次更改都会回读验证。不承诺提升响应、流畅度或续航。\n\n🔋 续航：在此内核上实测前使用“原厂”\n⚡ 响应：可尝试“开启”；若变差请恢复“原厂”\n✋ 不确定：原厂",
+      "descOpt": {
+        "stock": "恢复 ASB 首次修改前保存的 0 或 1；没有 ASB 基准值时不写入任何内容。",
+        "off": "写入 0 以禁用 BORE，然后验证从内核回读的值。",
+        "on": "写入 1 以启用 BORE，然后验证回读值。这是一次实验，并非保证有所改善。"
+      }
+    },
+    "ltpo_idle_speed": {
+      "name": "LTPO 空闲降频速度",
+      "desc": "现有事件驱动控制器在最后触摸后降频的速度。“快速”：第一步前等待 1 秒，模式间间隔 1 秒。“均衡”：2 / 1 秒。“缓和”：5 / 3 秒。触摸会立即恢复面板最高刷新率。仅使用面板声明的模式；在 Android 声明下限以下向 1 Hz 降低仍取决于设备自身的 ADFR 表，不能保证实现。需要“强制 LTPO 刷新”；不使用外来表，也不运行持续轮询任务。\n\n🔋 续航：“快速”可能减少空闲刷新；请在此设备上实测\n⚡ 流畅度：“缓和”在短暂停顿时保持较高刷新率\n✋ 不确定：均衡",
+      "descOpt": {
+        "fast": "更快达到声明的空闲下限，并可在短暂停顿时降频；实际功耗取决于设备。",
+        "balanced": "保留 ASB 先前的计时：第一步前等待两秒，声明的模式之间间隔一秒。",
+        "gentle": "等待更久、降频更慢，在短暂停顿期间保持更高刷新率。"
+      }
     }
   },
   "optFor": {
@@ -990,6 +1008,16 @@
       "128": "128",
       "256": "256",
       "512": "512"
+    },
+    "kernel_bore": {
+      "stock": "原厂",
+      "off": "关闭",
+      "on": "开启"
+    },
+    "ltpo_idle_speed": {
+      "fast": "快速",
+      "balanced": "均衡",
+      "gentle": "缓和"
     }
   },
   "prof_none": "未选择",
@@ -3558,8 +3586,8 @@
   "soter_chip_absent": "未安装",
   "soter_chip_down": "服务已停止",
   "soter_chip_ready": "就绪",
-  "soter_res_done": "SOTER 数据已重置，服务已重新运行",
-  "soter_res_done_no_service": "SOTER 服务器数据已重置；此 ROM 未声明独立的 SOTER 服务",
+  "soter_res_done": "SOTER 服务器数据已清除；init 服务正在运行。尚未测试应用和支付功能",
+  "soter_res_done_no_service": "SOTER 服务器数据已清除；此 ROM 未声明独立的 SOTER 服务。尚未测试应用功能",
   "soter_res_service_down": "SOTER 数据已重置，但服务未能重新启动——请重启手机",
   "soter_res_clear_failed": "Android 拒绝清除 SOTER 服务器数据；服务仅被重新启动",
   "soter_res_not_installed": "此 ROM 未安装 SOTER 服务器——无需修复",
@@ -3625,6 +3653,16 @@
   "kernel_wb_new_short": "新来源",
   "kernel_wb_shared_short": "同名 ×{n}",
   "kernel_wb_critical_short": "系统来源",
+  "kc_why_kernel_bore": "此内核未提供 /proc/sys/kernel/sched_bore 控件。仅有 CONFIG_SCHED_BORE 或安装日志中的一行，并不能证明存在运行时接口。ASB 不会写入任何内容。",
+  "dev_sec_kernel_bore": "BORE scheduler",
+  "dev_guide_kernel_bore": "CONFIG_SCHED_BORE 是构建证据；/proc/sys/kernel/sched_bore 才是运行时接口。此诊断仅读取，绝不写入。单独的内核设置仅接受“原厂”“关闭”和“开启”，只有回读成功才视为应用成功。",
+  "dev_kernel_bore_config": "CONFIG_SCHED_BORE",
+  "dev_kernel_bore_node": "运行时控制节点",
+  "dev_kernel_bore_runtime_interface": "Runtime interface",
+  "dev_kernel_bore_state": "BORE state",
+  "dev_kernel_bore_write_access": "Root 写入权限",
+  "dev_kernel_bore_toggle": "ASB toggle availability",
+  "dev_kernel_bore_control_policy": "ASB control policy",
   "kc_why_kernel_rt_boost": "此内核没有 sched_util_clamp_min_rt_default：编译时未启用 CONFIG_UCLAMP_TASK。ASB 不写入任何内容。",
   "kc_verdict_deferred": "开机脚本仍在设置此值；将在下一轮应用",
   "kc_verdict_auto_kernel": "自动：此配置使用内核自己的值",
@@ -3644,7 +3682,7 @@
   "soter_boot_unlock_after": "开机后 {s} 秒解锁",
   "soter_boot_retried": "第二次尝试",
   "soter_notify_title": "SOTER 修复",
-  "soter_notify_done": "重启后 SOTER 已修复。请在支付应用中重新开启指纹支付。",
+  "soter_notify_done": "重启后 SOTER 服务器数据已清除；尚未测试应用功能。请在支付应用中重新开启指纹支付。",
   "soter_notify_failed": "SOTER 自动修复未完成。请打开 ASB → 疗养室 → SOTER 修复。",
   "ct_wc_row_app": "网络摄像头服务（ROM）",
   "ct_read_failed": "无法读取状态",
@@ -3753,5 +3791,30 @@
   "dev_system_load_psi_memory_weight": "内存停滞权重",
   "dev_system_load_psi_io_some_avg10": "存储停滞（PSI，10 秒）",
   "dev_system_load_psi_io_component": "存储停滞分量 · 0–100",
-  "dev_system_load_psi_io_weight": "存储停滞权重"
+  "dev_system_load_psi_io_weight": "存储停滞权重",
+  "bfx_art_binder": "Android 的 PackageManager Binder 调用失败（{done} 次尝试中失败 {fail} 次）；pm 后备调用也未成功。没有重新编译任何应用。电池统计重置仍已安排。Android 返回：{err}",
+  "soter_boot_recent_manual": "无需处理——本次启动已成功完成手动修复",
+  "soter_boot_auto_off": "已取消——自动修复已关闭",
+  "st_ltpo_idle_active": "事件驱动计时已启用",
+  "lvi_app_class_now": "前台应用类别 · 当前",
+  "lvp_app_pressure_title": "Whole-system load · PSI and CPU/GPU",
+  "dev_sec_zygisk_provider": "Zygisk 提供程序",
+  "dev_guide_zygisk_provider": "提供程序身份读取自已安装模块的名称和版本元数据。已启用、已禁用和待删除是不同状态。元数据不能证明哪个提供程序正在运行中的 Zygote 内活动；companion 事件也不能识别提供程序。",
+  "dev_zygisk_provider_provider": "检测到的提供程序",
+  "dev_zygisk_provider_version": "提供程序版本",
+  "dev_zygisk_provider_install_state": "安装状态",
+  "dev_zygisk_provider_installed_providers": "已识别的安装",
+  "dev_zygisk_provider_enabled_count": "已启用提供程序数量",
+  "dev_zygisk_provider_runtime_state": "运行中提供程序证据",
+  "dev_zygisk_provider_active_evidence": "活动注入证据",
+  "dev_zygisk_provider_conflict": "提供程序冲突",
+  "dev_zygisk_provider_evidence": "检测证据",
+  "dev_zygisk_provider_unknown": "未知",
+  "dev_zygisk_provider_conflict_value": "冲突",
+  "dev_zygisk_provider_install_enabled": "已启用",
+  "dev_zygisk_provider_install_disabled": "已禁用",
+  "dev_zygisk_provider_install_pending_removal": "待删除",
+  "dev_zygisk_provider_install_not_detected": "未在模块元数据中检测到",
+  "dev_zygisk_provider_install_multiple_enabled": "多个已启用的提供程序",
+  "dev_zygisk_provider_install_multiple_inactive": "多个安装；均未启用"
 }

@@ -727,6 +727,24 @@
         "256": "Batas bawah yang terasa, untuk game dan perekaman video. Lebih boros selama thread itu berjalan.",
         "512": "Batas bawah kuat. Hanya jika derak atau patah-patah tetap ada; konsumsi tertinggi dari pilihan ini."
       }
+    },
+    "kernel_bore": {
+      "name": "Penjadwal BORE",
+      "desc": "BORE mengubah cara penjadwal kernel menilai tugas interaktif dan berat CPU. Nyala mengaktifkan kebijakan, Mati menonaktifkannya. Bawaan memulihkan nilai persis sebelum perubahan pertama ASB. Penulisan hanya tersedia jika /proc/sys/kernel/sched_bore mengekspos 0 atau 1 dan mengizinkan tulis root; setiap perubahan dibaca kembali. Tidak ada janji peningkatan respons, kelancaran, atau baterai.\n\n🔋 Baterai: Bawaan sampai diukur pada kernel ini\n⚡ Respons: coba Nyala; kembali ke Bawaan jika memburuk\n✋ Tidak yakin: Bawaan",
+      "descOpt": {
+        "stock": "Memulihkan 0 atau 1 yang disimpan sebelum perubahan pertama ASB; tanpa nilai dasar ASB, tidak ada yang ditulis.",
+        "off": "Menulis 0 untuk menonaktifkan BORE lalu memverifikasi nilai yang dibaca kembali dari kernel.",
+        "on": "Menulis 1 untuk mengaktifkan BORE lalu memverifikasi nilai yang dibaca kembali. Ini percobaan, bukan peningkatan yang dijamin."
+      }
+    },
+    "ltpo_idle_speed": {
+      "name": "Kecepatan penurunan LTPO saat idle",
+      "desc": "Seberapa cepat pengontrol berbasis peristiwa yang ada turun setelah sentuhan terakhir. Cepat: 1 detik sebelum langkah pertama dan 1 detik antarmode. Seimbang: 2 / 1 detik. Lembut: 5 / 3 detik. Sentuhan langsung memulihkan maksimum panel. Hanya mode yang diumumkan panel yang digunakan; penurunan menuju 1 Hz di bawah batas Android bergantung pada tabel ADFR perangkat dan tidak dijamin. Memerlukan Paksa Refresh LTPO; tanpa tabel asing atau pekerja polling permanen.\n\n🔋 Baterai: Cepat dapat mengurangi refresh idle; ukur pada perangkat ini\n⚡ Kelancaran: Lembut mempertahankan frekuensi tinggi saat jeda singkat\n✋ Tidak yakin: Seimbang",
+      "descOpt": {
+        "fast": "Mencapai batas idle yang diumumkan lebih cepat dan dapat turun saat jeda singkat; konsumsi daya nyata bergantung pada perangkat.",
+        "balanced": "Mempertahankan pewaktuan ASB sebelumnya: dua detik sebelum langkah pertama dan satu detik antarmode yang diumumkan.",
+        "gentle": "Menunggu lebih lama dan turun lebih lambat untuk mempertahankan refresh lebih tinggi selama jeda singkat."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -990,6 +1008,16 @@
       "128": "128",
       "256": "256",
       "512": "512"
+    },
+    "kernel_bore": {
+      "stock": "Bawaan",
+      "off": "Mati",
+      "on": "Nyala"
+    },
+    "ltpo_idle_speed": {
+      "fast": "Cepat",
+      "balanced": "Seimbang",
+      "gentle": "Lembut"
     }
   },
   "prof_none": "belum dipilih",
@@ -3558,8 +3586,8 @@
   "soter_chip_absent": "Tidak terpasang",
   "soter_chip_down": "Layanan berhenti",
   "soter_chip_ready": "Siap",
-  "soter_res_done": "Data SOTER direset; layanannya berjalan lagi",
-  "soter_res_done_no_service": "Data server SOTER direset; ROM ini tidak mendeklarasikan layanan SOTER terpisah",
+  "soter_res_done": "Data server SOTER dihapus; layanan init berjalan. Fungsi aplikasi dan pembayaran tidak diuji",
+  "soter_res_done_no_service": "Data server SOTER dihapus; ROM ini tidak mendeklarasikan layanan SOTER terpisah. Fungsi aplikasi tidak diuji",
   "soter_res_service_down": "Data SOTER direset, tetapi layanannya tidak berjalan lagi - mulai ulang ponsel",
   "soter_res_clear_failed": "Android menolak menghapus data server SOTER; layanannya hanya dimulai ulang",
   "soter_res_not_installed": "Server SOTER tidak terpasang di ROM ini - tidak ada yang perlu diperbaiki",
@@ -3625,6 +3653,16 @@
   "kernel_wb_new_short": "sumber baru",
   "kernel_wb_shared_short": "nama bersama ×{n}",
   "kernel_wb_critical_short": "sumber sistem",
+  "kc_why_kernel_bore": "Kernel ini tidak mengekspos kontrol /proc/sys/kernel/sched_bore. CONFIG_SCHED_BORE atau baris log pemasangan saja tidak membuktikan adanya antarmuka runtime. ASB tidak menulis apa pun.",
+  "dev_sec_kernel_bore": "BORE scheduler",
+  "dev_guide_kernel_bore": "CONFIG_SCHED_BORE adalah bukti build; /proc/sys/kernel/sched_bore adalah antarmuka runtime. Diagnostik ini hanya membaca. Pengaturan kernel terpisah hanya menerima Bawaan, Mati, dan Nyala; penerapan baru berhasil setelah nilai dibaca kembali.",
+  "dev_kernel_bore_config": "CONFIG_SCHED_BORE",
+  "dev_kernel_bore_node": "Node kontrol runtime",
+  "dev_kernel_bore_runtime_interface": "Runtime interface",
+  "dev_kernel_bore_state": "BORE state",
+  "dev_kernel_bore_write_access": "Akses tulis root",
+  "dev_kernel_bore_toggle": "ASB toggle availability",
+  "dev_kernel_bore_control_policy": "ASB control policy",
   "kc_why_kernel_rt_boost": "Kernel ini tidak punya sched_util_clamp_min_rt_default: dibuat tanpa CONFIG_UCLAMP_TASK. ASB tidak menulis apa pun.",
   "kc_verdict_deferred": "skrip boot masih menyetel nilai ini; diterapkan pada putaran berikutnya",
   "kc_verdict_auto_kernel": "Otomatis: nilai kernel sendiri untuk profil ini",
@@ -3644,7 +3682,7 @@
   "soter_boot_unlock_after": "dibuka {s} dtk setelah boot",
   "soter_boot_retried": "pada percobaan kedua",
   "soter_notify_title": "Perbaikan SOTER",
-  "soter_notify_done": "SOTER sudah diperbaiki setelah mulai ulang. Aktifkan lagi pembayaran sidik jari di aplikasi pembayaran Anda.",
+  "soter_notify_done": "Data server SOTER dihapus setelah reboot; fungsi aplikasi tidak diuji. Aktifkan kembali pembayaran sidik jari di aplikasi pembayaran Anda.",
   "soter_notify_failed": "Perbaikan SOTER otomatis tidak selesai. Buka ASB, Klinik, Perbaikan SOTER.",
   "ct_wc_row_app": "Layanan webcam (ROM)",
   "ct_read_failed": "Status tidak dapat dibaca",
@@ -3753,5 +3791,30 @@
   "dev_system_load_psi_memory_weight": "Bobot hambatan memori",
   "dev_system_load_psi_io_some_avg10": "Hambatan penyimpanan (PSI, 10 dtk)",
   "dev_system_load_psi_io_component": "Komponen hambatan penyimpanan · 0–100",
-  "dev_system_load_psi_io_weight": "Bobot hambatan penyimpanan"
+  "dev_system_load_psi_io_weight": "Bobot hambatan penyimpanan",
+  "bfx_art_binder": "Panggilan Binder PackageManager Android gagal ({fail} dari {done} percobaan); fallback pm juga tidak berhasil. Tidak ada aplikasi yang dikompilasi ulang. Reset statistik baterai tetap dijadwalkan. Jawaban Android: {err}",
+  "soter_boot_recent_manual": "tidak perlu - perbaikan manual sudah selesai pada boot ini",
+  "soter_boot_auto_off": "dibatalkan - perbaikan otomatis dimatikan",
+  "st_ltpo_idle_active": "pewaktuan berbasis peristiwa aktif",
+  "lvi_app_class_now": "Kelas aplikasi latar depan · sekarang",
+  "lvp_app_pressure_title": "Whole-system load · PSI and CPU/GPU",
+  "dev_sec_zygisk_provider": "Penyedia Zygisk",
+  "dev_guide_zygisk_provider": "Penyedia dikenali dari nama dan versi pada metadata modul terpasang. Aktif, nonaktif, dan menunggu penghapusan adalah status berbeda. Metadata tidak membuktikan penyedia yang aktif di Zygote berjalan; peristiwa companion juga tidak mengidentifikasi penyedia.",
+  "dev_zygisk_provider_provider": "Penyedia terdeteksi",
+  "dev_zygisk_provider_version": "Versi penyedia",
+  "dev_zygisk_provider_install_state": "Status pemasangan",
+  "dev_zygisk_provider_installed_providers": "Pemasangan dikenali",
+  "dev_zygisk_provider_enabled_count": "Jumlah penyedia aktif",
+  "dev_zygisk_provider_runtime_state": "Bukti penyedia berjalan",
+  "dev_zygisk_provider_active_evidence": "Bukti injeksi aktif",
+  "dev_zygisk_provider_conflict": "Konflik penyedia",
+  "dev_zygisk_provider_evidence": "Bukti deteksi",
+  "dev_zygisk_provider_unknown": "Tidak diketahui",
+  "dev_zygisk_provider_conflict_value": "Konflik",
+  "dev_zygisk_provider_install_enabled": "Aktif",
+  "dev_zygisk_provider_install_disabled": "Nonaktif",
+  "dev_zygisk_provider_install_pending_removal": "Menunggu penghapusan",
+  "dev_zygisk_provider_install_not_detected": "Tidak terdeteksi dalam metadata modul",
+  "dev_zygisk_provider_install_multiple_enabled": "Beberapa penyedia aktif",
+  "dev_zygisk_provider_install_multiple_inactive": "Beberapa pemasangan; tidak ada yang aktif"
 }

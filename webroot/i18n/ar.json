@@ -757,6 +757,24 @@
         "256": "حد أدنى ملحوظ، للألعاب وتسجيل الفيديو. استهلاك أكبر ما دامت هذه الخيوط تعمل.",
         "512": "حد أدنى قوي. فقط إذا استمرت الطقطقة أو التقطّع؛ أعلى استهلاك بين هذه الخيارات."
       }
+    },
+    "kernel_bore": {
+      "name": "مُجدوِل BORE",
+      "desc": "يغيّر BORE طريقة تقييم مُجدوِل النواة للمهام التفاعلية والكثيفة الاستهلاك للمعالج. «تشغيل» يفعّل السياسة، و«إيقاف» يعطّلها، و«افتراضي» يعيد القيمة الدقيقة قبل أول تعديل من ASB. تظهر الكتابة فقط عندما يعرض /proc/sys/kernel/sched_bore القيمة 0 أو 1 ويسمح بكتابة root، مع إعادة قراءة كل تغيير. لا يُوعد بأي تحسن في الاستجابة أو السلاسة أو البطارية.\n\n🔋 البطارية: افتراضي حتى قياسها على هذه النواة\n⚡ الاستجابة: جرّب «تشغيل» وعد إلى «افتراضي» عند التراجع\n✋ غير متأكد: افتراضي",
+      "descOpt": {
+        "stock": "يعيد القيمة 0 أو 1 المحفوظة قبل أول تعديل من ASB؛ ومن دون قيمة أساسية لا يكتب شيئاً.",
+        "off": "يكتب 0 لتعطيل BORE ثم يتحقق من القيمة المقروءة من النواة.",
+        "on": "يكتب 1 لتفعيل BORE ثم يتحقق من القيمة المقروءة. هذا اختبار وليس تحسناً مضموناً."
+      }
+    },
+    "ltpo_idle_speed": {
+      "name": "سرعة خفض LTPO عند الخمول",
+      "desc": "سرعة انتقال المتحكم الحالي المعتمد على الأحداث بعد آخر لمسة. «سريع»: ثانية قبل أول خطوة وثانية بين الأوضاع. «متوازن»: ثانيتان / ثانية. «لطيف»: 5 / 3 ثوانٍ. تعيد اللمسة أقصى تردد فوراً. تُستخدم الأوضاع التي تعلنها اللوحة فقط؛ ولا يُضمن النزول نحو 1 هرتز تحت حد Android لأنه يعتمد على جدول ADFR الخاص بالجهاز. يتطلب «فرض تحديث LTPO»، بلا جدول أجنبي أو عامل استطلاع دائم.\n\n🔋 البطارية: قد يقلل «سريع» التحديثات أثناء الخمول؛ قِس على جهازك\n⚡ السلاسة: يحافظ «لطيف» على تردد أعلى في التوقفات القصيرة\n✋ غير متأكد: متوازن",
+      "descOpt": {
+        "fast": "يبلغ حد الخمول المعلن أسرع وقد يخفض التردد أثناء التوقفات القصيرة؛ واستهلاك الطاقة الفعلي يعتمد على الجهاز.",
+        "balanced": "يحافظ على التوقيت السابق: ثانيتان قبل أول خطوة وثانية بين الأوضاع المعلنة.",
+        "gentle": "ينتظر أطول وينتقل أبطأ للحفاظ على تردد أعلى أثناء التوقفات القصيرة."
+      }
     }
   },
   "optFor": {
@@ -990,6 +1008,16 @@
       "128": "128",
       "256": "256",
       "512": "512"
+    },
+    "kernel_bore": {
+      "stock": "افتراضي",
+      "off": "إيقاف",
+      "on": "تشغيل"
+    },
+    "ltpo_idle_speed": {
+      "fast": "سريع",
+      "balanced": "متوازن",
+      "gentle": "لطيف"
     }
   },
   "prof_none": "لم يتم الاختيار",
@@ -3558,8 +3586,8 @@
   "soter_chip_absent": "غير مثبّت",
   "soter_chip_down": "الخدمة متوقفة",
   "soter_chip_ready": "جاهز",
-  "soter_res_done": "أُعيد تعيين بيانات SOTER؛ الخدمة تعمل من جديد",
-  "soter_res_done_no_service": "أُعيد تعيين بيانات خادم SOTER؛ هذا الـROM لا يعلن عن خدمة SOTER منفصلة",
+  "soter_res_done": "تم مسح بيانات خادم SOTER؛ وخدمة init قيد التشغيل. لم يتم اختبار وظائف التطبيقات أو الدفع",
+  "soter_res_done_no_service": "تم مسح بيانات خادم SOTER؛ لا يعلن هذا ROM عن خدمة SOTER منفصلة. لم يتم اختبار وظائف التطبيقات",
   "soter_res_service_down": "أُعيد تعيين بيانات SOTER لكن الخدمة لم تعمل من جديد - أعد تشغيل الهاتف",
   "soter_res_clear_failed": "رفض Android مسح بيانات خادم SOTER؛ أُعيد تشغيل الخدمة فقط",
   "soter_res_not_installed": "خادم SOTER غير مثبّت في هذا الـROM - لا شيء لإصلاحه",
@@ -3625,6 +3653,16 @@
   "kernel_wb_new_short": "مصدر جديد",
   "kernel_wb_shared_short": "اسم مشترك ×{n}",
   "kernel_wb_critical_short": "مصدر نظام",
+  "kc_why_kernel_bore": "لا يوفّر هذا النواة عنصر التحكم /proc/sys/kernel/sched_bore. لا يثبت CONFIG_SCHED_BORE أو سطر في سجل التثبيت وحده وجود واجهة وقت تشغيل. لا يكتب ASB أي شيء.",
+  "dev_sec_kernel_bore": "BORE scheduler",
+  "dev_guide_kernel_bore": "CONFIG_SCHED_BORE دليل على إعدادات البناء؛ أما /proc/sys/kernel/sched_bore فهو واجهة وقت التشغيل. هذا التشخيص للقراءة فقط ولا يكتب فيها. يقبل إعداد النواة المنفصل «افتراضي» و«إيقاف» و«تشغيل» فقط، ولا يُعد التطبيق ناجحاً إلا بعد إعادة القراءة.",
+  "dev_kernel_bore_config": "CONFIG_SCHED_BORE",
+  "dev_kernel_bore_node": "عقدة التحكم أثناء التشغيل",
+  "dev_kernel_bore_runtime_interface": "Runtime interface",
+  "dev_kernel_bore_state": "BORE state",
+  "dev_kernel_bore_write_access": "صلاحية الكتابة بامتياز root",
+  "dev_kernel_bore_toggle": "ASB toggle availability",
+  "dev_kernel_bore_control_policy": "ASB control policy",
   "kc_why_kernel_rt_boost": "لا تحتوي هذه النواة على sched_util_clamp_min_rt_default: بُنيت بدون CONFIG_UCLAMP_TASK. لا يكتب ASB شيئًا.",
   "kc_verdict_deferred": "ما زالت سكربتات الإقلاع تضبط هذه القيمة؛ ستُطبَّق في الجولة التالية",
   "kc_verdict_auto_kernel": "تلقائي: قيمة النواة الخاصة لهذا الملف",
@@ -3644,7 +3682,7 @@
   "soter_boot_unlock_after": "فُتح القفل بعد {s} ث من الإقلاع",
   "soter_boot_retried": "في المحاولة الثانية",
   "soter_notify_title": "إصلاح SOTER",
-  "soter_notify_done": "تم إصلاح SOTER بعد إعادة التشغيل. فعّل الدفع بالبصمة من جديد في تطبيقات الدفع.",
+  "soter_notify_done": "تم مسح بيانات خادم SOTER بعد إعادة التشغيل؛ لم يتم اختبار وظائف التطبيقات. أعد تفعيل الدفع ببصمة الإصبع في تطبيقات الدفع.",
   "soter_notify_failed": "لم يكتمل الإصلاح التلقائي لـ SOTER. افتح ASB ثم العيادة ثم إصلاح SOTER.",
   "ct_wc_row_app": "خدمة كاميرا الويب (ROM)",
   "ct_read_failed": "تعذّرت قراءة الحالة",
@@ -3753,5 +3791,30 @@
   "dev_system_load_psi_memory_weight": "وزن تعطل الذاكرة",
   "dev_system_load_psi_io_some_avg10": "تعطل التخزين (PSI، 10 ث)",
   "dev_system_load_psi_io_component": "مكوّن تعطل التخزين · 0–100",
-  "dev_system_load_psi_io_weight": "وزن تعطل التخزين"
+  "dev_system_load_psi_io_weight": "وزن تعطل التخزين",
+  "bfx_art_binder": "فشل استدعاء PackageManager عبر Binder في Android ({fail} من {done} محاولة)؛ ولم ينجح خيار pm الاحتياطي أيضاً. لم تُعَد ترجمة أي تطبيق. ما زال تصفير إحصاءات البطارية مجدولاً. ردّ Android: {err}",
+  "soter_boot_recent_manual": "غير مطلوب - اكتمل إصلاح يدوي بالفعل خلال هذا التشغيل",
+  "soter_boot_auto_off": "أُلغي - تم إيقاف الإصلاح التلقائي",
+  "st_ltpo_idle_active": "توقيت الأحداث نشط",
+  "lvi_app_class_now": "فئة التطبيق في المقدمة · الآن",
+  "lvp_app_pressure_title": "Whole-system load · PSI and CPU/GPU",
+  "dev_sec_zygisk_provider": "موفّر Zygisk",
+  "dev_guide_zygisk_provider": "تُقرأ هوية الموفر من اسم وإصدار بيانات الوحدة المثبتة. المفعّل والمعطّل وبانتظار الإزالة حالات منفصلة. لا تثبت البيانات الوصفية أي موفر نشط في Zygote الجاري؛ ولا تحدد أحداث companion الموفر.",
+  "dev_zygisk_provider_provider": "الموفر المكتشف",
+  "dev_zygisk_provider_version": "إصدار الموفر",
+  "dev_zygisk_provider_install_state": "حالة التثبيت",
+  "dev_zygisk_provider_installed_providers": "التثبيتات المعروفة",
+  "dev_zygisk_provider_enabled_count": "عدد الموفرين المفعّلين",
+  "dev_zygisk_provider_runtime_state": "دليل الموفر العامل",
+  "dev_zygisk_provider_active_evidence": "دليل الحقن النشط",
+  "dev_zygisk_provider_conflict": "تعارض الموفرين",
+  "dev_zygisk_provider_evidence": "دليل الاكتشاف",
+  "dev_zygisk_provider_unknown": "غير معروف",
+  "dev_zygisk_provider_conflict_value": "تعارض",
+  "dev_zygisk_provider_install_enabled": "مفعّل",
+  "dev_zygisk_provider_install_disabled": "معطّل",
+  "dev_zygisk_provider_install_pending_removal": "بانتظار الإزالة",
+  "dev_zygisk_provider_install_not_detected": "لم يُكتشف في بيانات الوحدات",
+  "dev_zygisk_provider_install_multiple_enabled": "عدة موفرين مفعّلين",
+  "dev_zygisk_provider_install_multiple_inactive": "عدة تثبيتات؛ لا يوجد مفعّل"
 }

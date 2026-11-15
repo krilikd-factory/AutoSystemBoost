@@ -265,6 +265,16 @@
       "128": "128",
       "256": "256",
       "512": "512"
+    },
+    "kernel_bore": {
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
+    },
+    "ltpo_idle_speed": {
+      "fast": "Fast",
+      "balanced": "Balanced",
+      "gentle": "Gentle"
     }
   },
   "prof_none": "not selected",
@@ -477,7 +487,7 @@
     },
     "ltpo_force": {
       "name": "Force LTPO Refresh",
-      "desc": "Lets the panel drop its refresh rate when nothing moves (60 Hz after two quiet seconds) and return to its top rate on touch, using a patched copy of the device's own refresh table. Needs a reboot; the stock file is not changed.\n\n🔋 Battery life: On\n⚡ Smoothness: Off\n✋ Not sure: Off",
+      "desc": "Lets the panel drop its refresh rate when nothing moves and return to its top rate on touch, using a patched copy of the device's own refresh table and the selected idle-drop speed. Needs a reboot; the stock file is not changed. Rates below Android's advertised floor depend on the panel's own ADFR support.\n\n🔋 Battery life: On; actual savings are device-dependent\n⚡ Smoothness: Off\n✋ Not sure: Off",
       "descOpt": {
         "1": "The panel idles lower and returns to its maximum on touch; savings depend on the panel and ROM. Another module that owns the same table is left alone.",
         "0": "The ROM's refresh behaviour stays as shipped."
@@ -807,6 +817,15 @@
         "512": "A strong floor. Only if crackling or stutter remains; the highest power use of these options."
       }
     },
+    "kernel_bore": {
+      "name": "BORE Scheduler",
+      "desc": "BORE (Burst-Oriented Response Enhancer) changes how the kernel scheduler scores interactive and CPU-intensive tasks. On requests the BORE policy; Off disables it. Stock restores the exact value this kernel had before ASB first changed it. This card appears as writable only when /proc/sys/kernel/sched_bore exposes 0 or 1 and permits root writes; every change requires read-back. No responsiveness, smoothness or battery gain is promised.\n\n🔋 Battery life: Stock until measured on this kernel\n⚡ Responsiveness: On can be tried; return to Stock if it is worse\n✋ Not sure: Stock",
+      "descOpt": {
+        "stock": "Restores the exact 0 or 1 captured before ASB first changed this kernel; without an ASB baseline, writes nothing.",
+        "off": "Writes 0 to disable BORE, then verifies the value read back from the kernel.",
+        "on": "Writes 1 to enable BORE, then verifies the value read back from the kernel. This is an experiment, not a guaranteed improvement."
+      }
+    },
     "bat_suppress_gaming": {
       "desc": "In the Battery profile a game counts as ordinary heavy load instead of switching to the gaming state with its higher limits. Other profiles are not affected.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: On",
       "descOpt": {
@@ -876,6 +895,15 @@
         "fq": "Fair queue with flow pacing; pairs well with bbr.",
         "fq_codel": "Keeps queues short under load: lower delay for games and calls.",
         "cake": "The most queue management; costs a little more CPU."
+      }
+    },
+    "ltpo_idle_speed": {
+      "name": "LTPO Idle Drop Speed",
+      "desc": "How quickly the existing event-driven controller steps down after the last touch. Fast: 1 second before the first step and 1 second between modes. Balanced: 2 / 1 seconds. Gentle: 5 / 3 seconds. Touch immediately restores the panel maximum. Only modes advertised by this panel are used; a drop toward 1 Hz below Android's advertised floor remains dependent on the device's own ADFR table and is not guaranteed. Requires Force LTPO Refresh; no foreign table and no persistent polling worker.\n\n🔋 Battery life: Fast may reduce idle refreshes; measure on this device\n⚡ Smoothness: Gentle keeps higher rates through short pauses\n✋ Not sure: Balanced",
+      "descOpt": {
+        "fast": "Reaches the advertised idle floor sooner and can step down during short pauses; actual power use is device-dependent.",
+        "balanced": "Keeps the previous ASB timing: two seconds before the first step and one second between advertised modes.",
+        "gentle": "Waits longer and steps down more slowly, preserving a higher refresh rate through short pauses."
       }
     }
   },
@@ -3452,8 +3480,8 @@
   "soter_chip_absent": "Not installed",
   "soter_chip_down": "Service stopped",
   "soter_chip_ready": "Ready",
-  "soter_res_done": "SOTER data reset; its service is running again",
-  "soter_res_done_no_service": "SOTER server data reset; this ROM declares no separate SOTER service",
+  "soter_res_done": "SOTER server data cleared; the init service is running. App and payment functionality was not tested",
+  "soter_res_done_no_service": "SOTER server data cleared; this ROM declares no separate SOTER service. App functionality was not tested",
   "soter_res_service_down": "SOTER data reset, but its service did not start again - restart the phone",
   "soter_res_clear_failed": "Android refused to clear the SOTER server data; its service was only restarted",
   "soter_res_not_installed": "The SOTER server is not installed on this ROM - nothing to repair",
@@ -3519,6 +3547,16 @@
   "kernel_wb_new_short": "new source",
   "kernel_wb_shared_short": "shared name ×{n}",
   "kernel_wb_critical_short": "system source",
+  "kc_why_kernel_bore": "This kernel exposes no /proc/sys/kernel/sched_bore control. CONFIG_SCHED_BORE or an install-log line alone does not prove a runtime interface. ASB writes nothing.",
+  "dev_sec_kernel_bore": "BORE scheduler",
+  "dev_guide_kernel_bore": "CONFIG_SCHED_BORE is build evidence; /proc/sys/kernel/sched_bore is the runtime interface. This read-only diagnostic never writes it. The separate Kernel setting accepts only Stock, Off and On, and an apply is successful only after read-back.",
+  "dev_kernel_bore_config": "CONFIG_SCHED_BORE",
+  "dev_kernel_bore_node": "Runtime control node",
+  "dev_kernel_bore_runtime_interface": "Runtime interface",
+  "dev_kernel_bore_state": "BORE state",
+  "dev_kernel_bore_write_access": "Root write access",
+  "dev_kernel_bore_toggle": "ASB toggle availability",
+  "dev_kernel_bore_control_policy": "ASB control policy",
   "kc_why_kernel_rt_boost": "This kernel has no sched_util_clamp_min_rt_default: it is built without CONFIG_UCLAMP_TASK. ASB writes nothing.",
   "kc_verdict_deferred": "boot scripts are still setting this value; applied on the next pass",
   "kc_verdict_auto_kernel": "Auto: kernel value kept for this profile",
@@ -3538,7 +3576,7 @@
   "soter_boot_unlock_after": "unlocked {s} s after boot",
   "soter_boot_retried": "second try",
   "soter_notify_title": "SOTER Repair",
-  "soter_notify_done": "SOTER was repaired after the reboot. Switch fingerprint payment on again in your payment apps.",
+  "soter_notify_done": "SOTER server data were cleared after the reboot; app functionality was not tested. Switch fingerprint payment on again in your payment apps.",
   "soter_notify_failed": "The automatic SOTER repair did not finish. Open ASB, Infirmary, SOTER Repair.",
   "ct_wc_row_app": "Webcam service (ROM)",
   "ct_read_failed": "Could not read the state",
@@ -3647,5 +3685,30 @@
   "dev_system_load_psi_memory_weight": "Memory stall weight used",
   "dev_system_load_psi_io_some_avg10": "Storage stall (PSI, 10 s)",
   "dev_system_load_psi_io_component": "Storage stall component · 0–100",
-  "dev_system_load_psi_io_weight": "Storage stall weight used"
+  "dev_system_load_psi_io_weight": "Storage stall weight used",
+  "bfx_art_binder": "Android’s PackageManager Binder call failed ({fail} of {done} attempts); the pm fallback did not succeed either. No app was recompiled. The battery reset is still scheduled. Android said: {err}",
+  "soter_boot_recent_manual": "not needed - a manual repair already completed in this boot",
+  "soter_boot_auto_off": "cancelled - automatic repair was switched off",
+  "st_ltpo_idle_active": "event timing active",
+  "lvi_app_class_now": "Foreground app class · now",
+  "lvp_app_pressure_title": "Whole-system load · PSI and CPU/GPU",
+  "dev_sec_zygisk_provider": "Zygisk provider",
+  "dev_guide_zygisk_provider": "Provider identity is read from installed module name/version metadata. Enabled, disabled and pending-removal states are separate. Module metadata does not prove which provider is active in the running Zygote; companion events do not identify a provider.",
+  "dev_zygisk_provider_provider": "Detected provider",
+  "dev_zygisk_provider_version": "Provider version",
+  "dev_zygisk_provider_install_state": "Installation state",
+  "dev_zygisk_provider_installed_providers": "Recognized installations",
+  "dev_zygisk_provider_enabled_count": "Enabled provider count",
+  "dev_zygisk_provider_runtime_state": "Running provider evidence",
+  "dev_zygisk_provider_active_evidence": "Active injection evidence",
+  "dev_zygisk_provider_conflict": "Provider conflict",
+  "dev_zygisk_provider_evidence": "Detection evidence",
+  "dev_zygisk_provider_unknown": "Unknown",
+  "dev_zygisk_provider_conflict_value": "Conflict",
+  "dev_zygisk_provider_install_enabled": "Enabled",
+  "dev_zygisk_provider_install_disabled": "Disabled",
+  "dev_zygisk_provider_install_pending_removal": "Pending removal",
+  "dev_zygisk_provider_install_not_detected": "Not detected in module metadata",
+  "dev_zygisk_provider_install_multiple_enabled": "Multiple enabled providers",
+  "dev_zygisk_provider_install_multiple_inactive": "Multiple installations; none enabled"
 }
