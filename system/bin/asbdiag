@@ -3948,6 +3948,24 @@ else
 fi
 [ -n "${_ct_init:-}" ] && rm -f "$_ct_init" 2>/dev/null
 
+SEC "6a. CAMERA TOOLS  (USB webcam readiness, camera app compilation, measured launches)"
+_ctx="$MODDIR/runtime/asb_camera_tools.sh"
+if [ -f "$_ctx" ]; then
+  sh "$_ctx" status 2>/dev/null | while IFS= read -r _ctl; do P "  $_ctl"; done
+  P "  USB gadget HAL        : $(svc usb getGadgetHalVersion 2>/dev/null | head -n 1 | tr -cd 'A-Za-z0-9_.')"
+  P "  USB gadget functions  : $(ls -d /config/usb_gadget/*/functions/* 2>/dev/null | sed 's|.*/||' | tr '\n' ' ' | cut -c1-300)"
+  P "  ro.usb.uvc.enabled    : $(gp ro.usb.uvc.enabled)"
+  P "  webcam service app    : $(pm list packages 2>/dev/null | grep -c 'package:com.android.DeviceAsWebcam$') installed, $(pm list packages -d 2>/dev/null | grep -c 'package:com.android.DeviceAsWebcam$') disabled"
+  if [ -s /data/adb/asb/camera_tools/log ]; then
+    P "  camera tools log (last 20 lines):"
+    tail -n 20 /data/adb/asb/camera_tools/log 2>/dev/null | while IFS= read -r _ctl; do P "    $_ctl"; done
+  fi
+  _ctc="$(dumpsys media.camera.proxy 2>/dev/null | grep -iE 'latency|open|close' | tail -n 8)"
+  [ -n "$_ctc" ] && { P "  camera service proxy (open/close events):"; printf '%s\n' "$_ctc" | cut -c1-200 | while IFS= read -r _ctl; do P "    $_ctl"; done; }
+else
+  NOTE "camera tools helper not installed"
+fi
+
 # =====================================================================
 SEC "7. PERFORMANCE / CPU / GPU"
 P "  CPU policies (scaling max vs hardware max — shows how hard each cluster is capped):"
@@ -4387,6 +4405,43 @@ case "$_vdb" in
 esac
 [ -f /data/adb/asb/prop_blocks_disabled ] \
   && NOTE "BOOT SAFETY FIRED: $(cat /data/adb/asb/prop_blocks_disabled 2>/dev/null | tr '\n' ' ')"
+
+SEC "8c. SOTER REPAIR  (automatic repair after reboot: what happened in this boot)"
+_sfx="$MODDIR/runtime/asb_soter_fix.sh"
+_sfd=/data/adb/asb/soter_fix
+if [ -f "$_sfx" ]; then
+  _sfs="$(sh "$_sfx" status 2>/dev/null | head -n 1)"
+  P "  status                : ${_sfs:-no answer}"
+  P "  automatic repair      : $([ -f "$_sfd/auto" ] && echo on || echo off)"
+  P "  this boot id          : $(tr -cd 'A-Za-z0-9-' < /proc/sys/kernel/random/boot_id 2>/dev/null | cut -c1-40)"
+  if [ -f "$_sfd/boot" ]; then
+    P "  boot record           : $(tr '\n' ' ' < "$_sfd/boot" 2>/dev/null)"
+  else
+    P "  boot record           : none"
+  fi
+  [ -f "$_sfd/last" ] && P "  last repair           : $(tr '\n' ' ' < "$_sfd/last" 2>/dev/null)"
+  P "  unlock signals now    : ce_available=$(gp sys.user.0.ce_available) user0=$(am get-started-user-state 0 2>/dev/null | head -n 1 | tr -cd 'A-Z_')"
+  P "  SOTER props           : $(getprop 2>/dev/null | grep -i soter | tr -d '[]' | tr '\n' ' ' | cut -c1-300)"
+  P "  SOTER server process  : $(pidof com.tencent.soter.soterserver 2>/dev/null || echo not running)"
+  [ -d "$_sfd/run.lock" ] && P "  run.lock              : present since $(stat -c %y "$_sfd/run.lock" 2>/dev/null | cut -c1-19)"
+  if [ -s "$_sfd/log" ]; then
+    P "  repair log (last 40 lines):"
+    tail -n 40 "$_sfd/log" 2>/dev/null | while IFS= read -r _sfl; do P "    $_sfl"; done
+  else
+    P "  repair log            : empty"
+  fi
+  _sfr="$(grep 'soter_' "${ASB_STATE_LOG:-/dev/.asb_profile_state/runtime_apply.log}" 2>/dev/null | tail -n 6)"
+  [ -n "$_sfr" ] && { P "  runtime log lines:"; printf '%s\n' "$_sfr" | while IFS= read -r _sfl; do P "    $_sfl"; done; }
+  _sfc="$(logcat -d -t 4000 2>/dev/null | grep -i soter | tail -n 20)"
+  if [ -n "$_sfc" ]; then
+    P "  logcat SOTER lines (last 20):"
+    printf '%s\n' "$_sfc" | cut -c1-220 | while IFS= read -r _sfl; do P "    $_sfl"; done
+  else
+    P "  logcat SOTER lines    : none in the current buffer"
+  fi
+else
+  NOTE "SOTER repair helper not installed"
+fi
 
 # =====================================================================
 SEC "9. WEBUI CONFIG  (governor.conf — what the user selected)"
