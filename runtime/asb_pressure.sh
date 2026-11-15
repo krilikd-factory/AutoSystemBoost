@@ -8,6 +8,14 @@ _asb_cpu_online_count() {
   awk -F, '{ n=0; for (i=1;i<=NF;i++) { split($i,a,"-"); if (a[1] ~ /^[0-9]+$/ && (a[2] == "" || a[2] ~ /^[0-9]+$/)) n += (a[2] == "" ? 1 : a[2]-a[1]+1) } print n }' 2>/dev/null
 }
 
+_asb_psi_some10() {
+  sed -n 's/^some avg10=\([0-9][0-9.]*\) .*/\1/p' "$1" 2>/dev/null | head -n 1
+}
+
+_asb_hz() {
+  awk '{ for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+$/ && $i > 0) { v=$i; if (v < 100000) v=v*1000000; printf "%.0f\n", v } }' 2>/dev/null
+}
+
 _asb_cpu_times() {
   awk 'NR==1 && $1=="cpu" { total=0; for(i=2;i<=9;i++) total += $i; idle=$5+$6; print total, idle; exit }' "$PROC/stat" 2>/dev/null
 }
@@ -59,11 +67,53 @@ _asb_pressure_collect() {
     if _asb_num "$_pl_gpu_busy"; then _pl_gpu_part="$_pl_gpu_busy"; _pl_gpu_weight=10; _pl_gpu_source="$_pl_gpu_path"; fi
   fi
 
-  _pl_weight=$((_pl_load_weight + _pl_mem_weight + _pl_cpu_weight + _pl_gpu_weight))
+  _pl_gpu_clock='not exposed'; _pl_gpu_work='not exposed'
+  _pl_clk_file="${ASB_PRESSURE_GPU_CLK:-}"; _pl_tab_file="${ASB_PRESSURE_GPU_FREQS:-}"
+  if [ -z "$_pl_clk_file" ]; then
+    if [ -r "$SYS/class/kgsl/kgsl-3d0/devfreq/cur_freq" ]; then
+      _pl_clk_file="$SYS/class/kgsl/kgsl-3d0/devfreq/cur_freq"; _pl_tab_file="$SYS/class/kgsl/kgsl-3d0/devfreq/available_frequencies"
+    elif [ -r "$SYS/kernel/gpu/gpu_clock" ]; then
+      _pl_clk_file="$SYS/kernel/gpu/gpu_clock"; _pl_tab_file="$SYS/kernel/gpu/gpu_freq_table"
+    fi
+  fi
+  if _asb_num "$_pl_gpu_busy" && [ -n "$_pl_clk_file" ] && [ -r "$_pl_clk_file" ] && [ -r "$_pl_tab_file" ]; then
+    _pl_clk_hz="$(_read "$_pl_clk_file" | _asb_hz | head -n 1)"
+    _pl_max_hz="$(_read "$_pl_tab_file" | _asb_hz | sort -n | tail -n 1)"
+    if _asb_num "$_pl_clk_hz" && _asb_num "$_pl_max_hz" && [ "$_pl_max_hz" -gt 0 ] 2>/dev/null; then
+      _pl_gpu_clock="$(awk -v c="$_pl_clk_hz" 'BEGIN { printf "%d", c/1000000 }')"
+      _pl_gpu_work="$(awk -v b="$_pl_gpu_busy" -v c="$_pl_clk_hz" -v m="$_pl_max_hz" 'BEGIN { if (c>m) c=m; printf "%.1f", b*c/m }')"
+      _pl_gpu_part="$_pl_gpu_work"
+    fi
+  fi
+
+  _pl_basis='loadavg and memory share'
+  _pl_psi_cpu='not exposed'; _pl_psi_cpu_part='not exposed'; _pl_psi_cpu_weight=0
+  _pl_psi_mem='not exposed'; _pl_psi_mem_part='not exposed'; _pl_psi_mem_weight=0
+  _pl_psi_io='not exposed'; _pl_psi_io_part='not exposed'; _pl_psi_io_weight=0
+  _pl_psi_dir="${ASB_PRESSURE_PSI:-$PROC/pressure}"
+  if [ -r "$_pl_psi_dir/cpu" ] && [ -r "$_pl_psi_dir/memory" ]; then
+    _pl_psi_cpu="$(_asb_psi_some10 "$_pl_psi_dir/cpu")"
+    _pl_psi_mem="$(_asb_psi_some10 "$_pl_psi_dir/memory")"
+    [ -r "$_pl_psi_dir/io" ] && _pl_psi_io="$(_asb_psi_some10 "$_pl_psi_dir/io")"
+    _asb_num "$_pl_psi_cpu" || _pl_psi_cpu='not exposed'
+    _asb_num "$_pl_psi_mem" || _pl_psi_mem='not exposed'
+    _asb_num "$_pl_psi_io" || _pl_psi_io='not exposed'
+  fi
+  if _asb_num "$_pl_psi_cpu" && _asb_num "$_pl_psi_mem"; then
+    _pl_basis='pressure stall information (PSI)'
+    _pl_psi_cpu_part="$(awk -v v="$_pl_psi_cpu" 'BEGIN { p=v*2; if(p>100)p=100; printf "%.1f",p }')"; _pl_psi_cpu_weight=30
+    _pl_psi_mem_part="$(awk -v v="$_pl_psi_mem" 'BEGIN { p=v*5; if(p>100)p=100; printf "%.1f",p }')"; _pl_psi_mem_weight=25
+    if _asb_num "$_pl_psi_io"; then
+      _pl_psi_io_part="$(awk -v v="$_pl_psi_io" 'BEGIN { p=v*4; if(p>100)p=100; printf "%.1f",p }')"; _pl_psi_io_weight=10
+    fi
+    _pl_load_weight=0; _pl_mem_weight=0
+  fi
+
+  _pl_weight=$((_pl_load_weight + _pl_mem_weight + _pl_cpu_weight + _pl_gpu_weight + _pl_psi_cpu_weight + _pl_psi_mem_weight + _pl_psi_io_weight))
   _pl_coverage="$_pl_weight"
   _pl_score='unknown'; _pl_band='unknown'; _pl_formula='insufficient measured coverage (minimum 40%)'
   if [ "$_pl_weight" -ge 40 ]; then
-    _pl_score="$(awk -v w="$_pl_weight" -v lw="$_pl_load_weight" -v lp="$_pl_load_part" -v mw="$_pl_mem_weight" -v mp="$_pl_mem_part" -v cw="$_pl_cpu_weight" -v cp="$_pl_cpu_part" -v gw="$_pl_gpu_weight" -v gp="$_pl_gpu_part" 'BEGIN { s=0;if(lw)s+=lw*lp;if(mw)s+=mw*mp;if(cw)s+=cw*cp;if(gw)s+=gw*gp;printf "%.0f",s/w }')"
+    _pl_score="$(awk -v w="$_pl_weight" -v lw="$_pl_load_weight" -v lp="$_pl_load_part" -v mw="$_pl_mem_weight" -v mp="$_pl_mem_part" -v cw="$_pl_cpu_weight" -v cp="$_pl_cpu_part" -v gw="$_pl_gpu_weight" -v gp="$_pl_gpu_part" -v pcw="$_pl_psi_cpu_weight" -v pcp="$_pl_psi_cpu_part" -v pmw="$_pl_psi_mem_weight" -v pmp="$_pl_psi_mem_part" -v piw="$_pl_psi_io_weight" -v pip="$_pl_psi_io_part" 'BEGIN { s=0;if(lw)s+=lw*lp;if(mw)s+=mw*mp;if(cw)s+=cw*cp;if(gw)s+=gw*gp;if(pcw)s+=pcw*pcp;if(pmw)s+=pmw*pmp;if(piw)s+=piw*pip;printf "%.0f",s/w }')"
     case "$_pl_score" in
       ''|*[!0-9]*) _pl_score='unknown' ;;
       *) if [ "$_pl_score" -lt 25 ]; then _pl_band=light; elif [ "$_pl_score" -lt 50 ]; then _pl_band=moderate; elif [ "$_pl_score" -lt 75 ]; then _pl_band=high; else _pl_band=very_high; fi ;;
@@ -102,6 +152,18 @@ _asb_pressure_collect() {
   _emit system_load gpu_component "$_pl_gpu_part"
   _emit system_load gpu_weight "$_pl_gpu_weight"
   _emit system_load gpu_source "$_pl_gpu_source"
+  _emit system_load gpu_clock_mhz "$_pl_gpu_clock"
+  _emit system_load gpu_work_pct "$_pl_gpu_work"
+  _emit system_load basis "$_pl_basis"
+  _emit system_load psi_cpu_some_avg10 "$_pl_psi_cpu"
+  _emit system_load psi_cpu_component "$_pl_psi_cpu_part"
+  _emit system_load psi_cpu_weight "$_pl_psi_cpu_weight"
+  _emit system_load psi_memory_some_avg10 "$_pl_psi_mem"
+  _emit system_load psi_memory_component "$_pl_psi_mem_part"
+  _emit system_load psi_memory_weight "$_pl_psi_mem_weight"
+  _emit system_load psi_io_some_avg10 "$_pl_psi_io"
+  _emit system_load psi_io_component "$_pl_psi_io_part"
+  _emit system_load psi_io_weight "$_pl_psi_io_weight"
   _emit system_load swap_total_kb "${_pl_swap_total:-not exposed}"
   _emit system_load swap_used_pct "$_pl_swap_used"
   _emit system_load swap_role 'supporting signal only; occupancy is not scored and does not prove a problem'
