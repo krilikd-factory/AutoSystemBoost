@@ -559,6 +559,24 @@ if [ "$_cfg_lines" -eq 0 ]; then _emit kernel_features usb_arsenal unknown
 elif [ -z "$_ua_miss" ]; then _emit kernel_features usb_arsenal "gadget options in exposed config: $_ua; runtime not verified"
 elif [ -n "$_ua" ]; then _emit kernel_features usb_arsenal "exposed config partial: $_ua; not set there: $_ua_miss"
 else _emit kernel_features usb_arsenal 'not observed; exposed config lacks the requested gadget options'; fi
+_uvc_state='not tested yet; Camera, Camera Tools tests it'
+for _uvc_f in /config/usb_gadget/*/functions/uvc.*; do
+  [ -d "$_uvc_f" ] && { _uvc_state="available; UVC function ${_uvc_f##*/} present"; break; }
+done
+case "$_uvc_state" in
+  available*) ;;
+  *)
+    case "$(cat /dev/.asb/camera_tools/kernel_uvc 2>/dev/null)" in
+      ok) _uvc_state='available; a UVC function was created and removed in this boot' ;;
+      absent) _uvc_state='not available; the kernel refused a UVC function in this boot' ;;
+      *) [ -d "$SYS/module/usb_f_uvc" ] && _uvc_state='driver loaded; function not tested yet' ;;
+    esac
+    ;;
+esac
+_emit kernel_features usb_webcam_uvc "$_uvc_state"
+_uvc_app=absent
+grep -q '^com.android.DeviceAsWebcam ' /data/system/packages.list 2>/dev/null && _uvc_app=installed
+_emit kernel_features usb_webcam_service "$_uvc_app; ro.usb.uvc.enabled=$(getprop ro.usb.uvc.enabled 2>/dev/null | tr -cd 'a-z01')"
 
 _fs_list=" $(_read "$PROC/filesystems" | tr '\t\n' '  ') "
 _wg="$(_cfg_state CONFIG_WIREGUARD "$SYS/module/wireguard")"
