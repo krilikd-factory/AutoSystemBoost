@@ -5957,9 +5957,16 @@ static void persistent_stats_save_ex(const asb_fsm_t *fsm, int learn) {
             asb_log("pstats: battery trust=partial, learning with weight=0.25");
         }
     }
-    if (pidx == PROFILE_PERFORMANCE && fsm->ses_intent == INTENT_BENCHMARK) {
+    /* Benchmark thermal bursts are not representative of everyday profile memory.
+     * Smart shares the Balanced per-profile store (pidx is normalized above), so the
+     * old Performance-only guard let a Smart benchmark teach that store its heat and
+     * sustained-load timings. Battery has its own idle-trust path and is never assigned
+     * INTENT_BENCHMARK by the classifier below; do not infer Battery behaviour from a
+     * Performance benchmark run. */
+    if (fsm->ses_intent == INTENT_BENCHMARK) {
         skip_per_profile = 1;
-        asb_log("pstats: benchmark session, skipping per-profile memory update");
+        asb_log("pstats: benchmark session (profile=%d), skipping per-profile memory update",
+                fsm->profile_idx);
     }
     /* quarantine -- don't learn from user-switch storm */
     if (fsm->plan.quarantine) {

@@ -1730,6 +1730,14 @@ if (m->gpu.load_pct >= _gpu_gate) {
      *
      * Same test as the gate below, applied before this shortcut rather than after it. */
     if (gpu_says_heavy) {
+        /* A saturated GPU is not a quiet compositor, even when the CPU is at its learned
+         * resting level. Returning LIGHT_IDLE here lowered the very ceiling the renderer
+         * needed: the dev63 OP15 report had Telegram at 76.9% late frames in LIGHT_IDLE,
+         * mostly GPU-side, against 2.0% in MODERATE. Give the first saturated ticks the
+         * MODERATE envelope; the established GPU-bound latch above may still promote a
+         * genuinely sustained 3D workload to GAMING, and all thermal exits remain downstream. */
+        if (m->gpu.load_valid && m->gpu.load_pct >= ASB_GPU_BOUND_PCT)
+            return ASB_STATE_MODERATE;
         float qf_g = asb_ui_quiet_floor(m);
         if (qf_g > 0.0f &&
             m->cpu.load1 < qf_g * (1.0f + (float)ASB_UI_BURST_MARGIN_PCT / 100.0f))
