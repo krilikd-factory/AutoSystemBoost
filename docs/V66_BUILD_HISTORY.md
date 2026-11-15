@@ -4,6 +4,55 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev57 - kernel controls follow the profile, an RT boost floor, SOTER after the first unlock
+
+Input: the dev56 source and the owner's six requests (clearer kernel texts, a larger header
+saucer, Zygisk in the module card, SOTER repair after reboot, kernel/ASB integration, a camera
+and audio tweak). No native source or release binary changed.
+
+- **Kernel controls follow the profile.** Before, Auto (LPM prediction, hrtimer) was resolved
+  only at boot, and leaving Stock left every control at its restored value until the next boot.
+  - `asb_kernel_controls.sh follow <profile>` re-applies every registered control in one process;
+    `apply_profile.sh` calls it after a profile switch (also the automatic low-battery switch and
+    leaving Stock). Smart with Smart MGLRU leaves the MGLRU mode to the governor.
+  - New Auto values: Timer migration 0 only in Performance (1, the kernel default, elsewhere);
+    the migration batch Battery 2 / Balanced and Smart 4 / Performance 8. The separate hrtimer
+    switch (kernels that have one) follows the Timer migration rule instead of the old
+    Battery-only 0. Under Stock, Auto restores. A release under Auto reports the `auto` mode.
+  - Fresh installs default to Auto; an upgrade from schema 3 turns only the former shipped
+    defaults (`off`, `4`) into Auto. `config_schema` is 4.
+- **New control: real-time boost floor** (`kernel_rt_boost`,
+  `/proc/sys/kernel/sched_util_clamp_min_rt_default`). The minimum utilisation every real-time
+  thread requests: audio mixers and HAL threads, display composition, some camera HAL threads,
+  threaded interrupts. Options stock/auto/0/128/256/512; Auto: Battery 0, Performance 256,
+  the kernel's value in Balanced/Smart.
+  - The kernel boots with 1024 and the Snapdragon post-boot script lowers it to 0 at
+    `boot_completed`. A baseline captured before that would later restore 1024, so the capture
+    waits for `boot_completed`, the vendor post-boot service and 60 s of uptime (`deferred`).
+  - Device page and asbdiag show the live value. No audio, camera or battery gain is measured.
+- **Kernel card texts.** Every kernel card now says what it does in plain words, which value to
+  pick for battery life, for performance and when unsure, and explains each option in its own
+  line (the per-option table with the current choice highlighted). The cards use one set of
+  button labels per language. 13 languages.
+- **SOTER repair after a reboot.** The opt-in boot run started 45 s after `boot_completed`,
+  usually before the first unlock, when the SOTER server app (not direct-boot aware) and the
+  credential-encrypted storage are not available; the manual button, pressed later, worked.
+  It now waits for `sys.user.0.ce_available` (after 10 minutes also `RUNNING_UNLOCKED`; at most
+  6 hours), settles 60 s and retries once after 120 s when the first result is not final. The
+  log line says how long after boot the unlock came. Not verified on the phone yet.
+- **Module card shows Zygisk:** `status: Smart Mode 🤖 | active ✅ | Zygisk ✅ connected` (off,
+  not installed, safe mode, connected, idle, waiting). `runtime/asb_module_desc.sh` computes the
+  suffix; it is refreshed 2, 5, 15, 30 and 60 minutes after boot and after a Zygisk change. The
+  install-time line is unchanged.
+- **Header:** the emblem is 106 px instead of 92 and the saucer 30 % larger; the extra height
+  comes from the top gap, so the layout below does not move. The boot core keeps the same
+  proportions for the hand-off.
+- **Tests:** `t_kernel_profile_follow_dev57`, `t_soter_boot_waits_for_unlock_dev57`,
+  `t_module_desc_zygisk_dev57`, `t_webui_kernel_cards_header_dev57`; updated hrtimer Auto cases.
+- **Kernel repository (paired):** the capability report and the build summary describe the
+  profile-linked Auto values and the new RT boost control (CONFIG_UCLAMP_TASK); the 5000 ms
+  MGLRU request that ASB no longer writes is gone from the contract.
+
 ## V66 dev56 - LPM prediction on qcom-cpu-lpm kernels
 
 Input: the dev55 source, the owner's device export and asbdiag on the KRILIKD kernel built from
