@@ -7108,6 +7108,14 @@ const TECH_ICON_PATHS = {
   panel: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9h17"/><circle cx="6.3" cy="6.7" r=".55" fill="currentColor" stroke="none"/><path d="M7 12.5h6M7 15.8h8.5"/>',
   network: '<circle cx="12" cy="10" r="1.7"/><path d="M12 21v-9.3"/><path d="M8 5.6a5.7 5.7 0 0 0 0 8.8M16 5.6a5.7 5.7 0 0 1 0 8.8M5 3a9.4 9.4 0 0 0 0 14M19 3a9.4 9.4 0 0 1 0 14"/>',
   switches: '<path d="M4 7h2.8M11.6 7H20M4 12h8.8M17.6 12H20M4 17h5.8M14.6 17H20"/><circle cx="9.4" cy="7" r="2.2"/><circle cx="15.4" cy="12" r="2.2"/><circle cx="12.4" cy="17" r="2.2"/>',
+  recents_memory: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 15V9M10.5 15V6.5M14 15v-3.5M17.5 15V8"/>',
+  recents_radius: '<path d="M4 10V6a2 2 0 0 1 2-2h4M14 4h4a2 2 0 0 1 2 2v4M20 14v4a2 2 0 0 1-2 2h-4M10 20H6a2 2 0 0 1-2-2v-4"/><path d="M8 16V9a1 1 0 0 1 1-1h7"/>',
+  smooth_corners: '<rect x="3" y="3" width="18" height="18" rx="6"/><path d="M7 10c2-2 8-2 10 0M7 14c2-2 8-2 10 0"/>',
+  nav_handle_hide: '<path d="M7 18h10M4 14l4-4 4 4M16 14l4-4 4 4" transform="translate(-2 0)"/><path d="M12 4v7M9.5 6.5 12 4l2.5 2.5"/>',
+  pointer_speed: '<path d="m6 3 11 10-5 .5L9.5 18z"/><path d="M15 5h5M17.5 2.5v5M3 20h7"/>',
+  gesture_mistouch: '<path d="M12 21V10M12 10c0-2 1.5-3 3-3s3 1 3 3v3M12 13c0-2-1.5-3-3-3S6 11 6 13v3"/><path d="M3 4l18 17M18 4 3 21"/>',
+  game_memc: '<rect x="3" y="5" width="18" height="13" rx="2"/><path d="M7 12h3l1.5-3 2 6 1.5-3h3M8 21h8"/>',
+  dc_dimming: '<rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 15V8h2.5a3.5 3.5 0 0 1 0 7zM15 9v5M13.5 11.5h3"/>',
   /* ltpo: a phone display whose refresh waveform visibly steps DOWN - the panel dropping
      to its low rates at idle is the whole point of the tweak. Not a lightning bolt
      (that is performance) and not a gauge: this is a waveform settling, not rising. */
@@ -9967,6 +9975,14 @@ const SNAP_KEYS = [
   'region_allow_locale',
   'disable_blur',
   'ui_effects_level',
+  'ui_recents_memory',
+  'ui_recents_corner_radius',
+  'ui_smooth_corners',
+  'ui_nav_handle_autohide',
+  'feel_pointer_speed',
+  'feel_gesture_mistouch',
+  'feel_game_memc',
+  'feel_dc_dimming',
   'haptic_strength',
   'net_congestion',
   'net_qdisc',
@@ -10084,6 +10100,22 @@ const CFG_ITEMS = [
     desc:'Turns off window blur in the shade, notifications, the volume panel and transitions; backgrounds become solid.\n\n🔋 Battery life: On\n⚡ Performance: On\n✋ Not sure: Off' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
     desc:'How rich system transitions and the Recents effects are.\n\n🔋 Battery life: Simplified\n⚡ Performance: Simplified\n✋ Not sure: Auto' },
+  { key:'ui_recents_memory', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Recents Memory Indicator',
+    desc:'Controls the ColorOS memory readout in Recents through display_memory_information_recent_task. Stock leaves the ROM/user setting alone; after an ASB override it restores the exact previous value. Applies live only when Settings read-back confirms the write.' },
+  { key:'ui_recents_corner_radius', type:'seg', def:'stock', stock:'stock', opts:['stock','0','8','12','16','20','24','28','32'], name:'Recents Corner Radius',
+    desc:'Sets the ColorOS Recents card radius in dp and its matching oost_recent_task_radius master. Both values are captured and restored together. A ROM or launcher that ignores these keys can still retain its own appearance; ASB reports only verified Settings writes, not a visual guarantee.' },
+  { key:'ui_smooth_corners', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Smooth Screen Corners',
+    desc:'Controls the ColorOS smooth_corner_enabled setting for rounded interface geometry. This is not a display-panel overclock or a rendering bypass. Stock preserves the existing value; unsupported visual behaviour is not claimed merely because the setting was stored.' },
+  { key:'ui_nav_handle_autohide', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Auto-hide Navigation Handle',
+    desc:'Controls oost_navigation_handle_auto_hide for the gesture navigation handle. It does not switch navigation mode or hide the handle permanently. The original setting is restored when returned to Stock.' },
+  { key:'feel_pointer_speed', type:'range', def:'stock', stock:'stock', stockAt:-8, min:-8, max:7, step:1, name:'Pointer Speed',
+    desc:'Sets Android pointer_speed from -7 to 7 for a mouse, trackpad or other pointer; it is not a touchscreen sensitivity or polling-rate hack. Stock leaves the current value untouched and restores the exact pre-ASB value after an override.' },
+  { key:'feel_gesture_mistouch', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Gesture Mistouch Prevention',
+    desc:'Controls the ColorOS gesture_mistouch_prevention_enable switch. On may reject some edge touches; Off deliberately disables that protection. Game-specific OEM rules can still apply. No touch sampling-rate change is claimed.' },
+  { key:'feel_game_memc', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Game MEMC',
+    desc:'Controls display_memc_game_enable, the ColorOS game motion-interpolation setting. Actual interpolation depends on the panel, supported games and OEM display service; it can add latency or power use. ASB verifies the setting write, not MEMC activation in every game.' },
+  { key:'feel_dc_dimming', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'DC Dimming System Switch',
+    desc:'Controls display_dc_settings_switch where ColorOS exposes DC dimming. Panel and brightness restrictions still belong to the OEM; this does not force an unsupported panel mode or bypass thermal/display drivers. Stock restores the exact previous setting.' },
   // ---- Network ----------------------------------------------------------------,
   // The explicit radio master belongs first: every ASB modem/handover choice below depends on it.
   { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls',
@@ -10211,8 +10243,8 @@ const CFG_ITEMS = [
     opts:['stock','auto','0','128','256','512'], name:'Real-time Boost (Audio · Camera · Display)', cat:'system',
     desc:'The minimum CPU speed that real-time threads ask for: sound playback and recording, screen composition, some camera threads and interrupt handlers. A higher floor gives them a faster start, which may help against crackling sound or dropped frames when the CPU runs slow, but costs power whenever these threads run. 1024 means full speed, 0 means only as fast as the load needs. Snapdragon phones usually set 0 at boot; ASB\'s CPU limits per app group still apply on top.\n\n🔋 Battery life: 0 or Auto\n⚡ Performance: 256 or Auto\n✋ Not sure: Auto' },
   { key:'kernel_bore', type:'seg', def:'stock', stock:'stock',
-    opts:['stock','off','on'], name:'BORE Scheduler', cat:'system',
-    desc:'BORE (Burst-Oriented Response Enhancer) changes how the kernel scheduler scores interactive and CPU-intensive tasks. On requests the BORE policy; Off disables it. Stock restores the exact value this kernel had before ASB first changed it. This card appears as writable only when /proc/sys/kernel/sched_bore exposes 0 or 1 and permits root writes; every change requires read-back. No responsiveness, smoothness or battery gain is promised.\n\n🔋 Battery life: Stock until measured on this kernel\n⚡ Responsiveness: On can be tried; return to Stock if it is worse\n✋ Not sure: Stock' },
+    opts:['stock','auto','off','on'], name:'BORE Scheduler', cat:'system',
+    desc:'BORE (Burst-Oriented Response Enhancer) changes how the kernel scheduler scores interactive and CPU-intensive tasks. On requests the BORE policy; Off disables it. Conservative Auto enables it only in Performance with fresh native thermal evidence and a normal active state, and otherwise restores the exact baseline. Stock restores the exact value this kernel had before ASB first changed it. This card appears as writable only when /proc/sys/kernel/sched_bore exposes 0 or 1 and permits root writes; every change requires read-back. No responsiveness, smoothness or battery gain is promised.\n\n🔋 Battery life: Stock until measured on this kernel\n⚡ Responsiveness: Auto or On can be tried; return to Stock if worse\n✋ Not sure: Stock' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces Google Play services background work without turning components off.\n\n🔋 Battery life: Strict\n🔔 Notifications on time: Stock or Light\n✋ Not sure: Light' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -10361,7 +10393,9 @@ const CFG_CAT = {
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net', net_mtu_probing:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
-  disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'system', haptic_touch_strength:'system'
+  disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'system', haptic_touch_strength:'system',
+  ui_recents_memory:'iface', ui_recents_corner_radius:'iface', ui_smooth_corners:'iface', ui_nav_handle_autohide:'iface',
+  feel_pointer_speed:'system', feel_gesture_mistouch:'system', feel_game_memc:'system', feel_dc_dimming:'system'
 };
 // Four groups, one screen each.
 // These are the four things a user actually comes here to change; the internal CFG_CAT stays
@@ -10446,7 +10480,9 @@ const CFG_GROUP_OF = {
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net', net_mtu_probing:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
-  disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'feel', haptic_touch_strength:'feel'
+  disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'feel', haptic_touch_strength:'feel',
+  ui_recents_memory:'iface', ui_recents_corner_radius:'iface', ui_smooth_corners:'iface', ui_nav_handle_autohide:'iface',
+  feel_pointer_speed:'feel', feel_gesture_mistouch:'feel', feel_game_memc:'feel', feel_dc_dimming:'feel'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
 
@@ -10527,7 +10563,8 @@ const CFG_GROUP_SECTIONS = {
     { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
       title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
       hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
-      keys:['ltpo_force','ltpo_idle_speed','ltpo_peak_force','ltpo_video','haptic_strength','haptic_touch_strength'] }
+      keys:['ltpo_force','ltpo_idle_speed','ltpo_peak_force','ltpo_video','haptic_strength','haptic_touch_strength',
+        'feel_pointer_speed','feel_gesture_mistouch','feel_game_memc','feel_dc_dimming'] }
   ],
   ui: [
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
@@ -10561,7 +10598,8 @@ const CFG_GROUP_SECTIONS = {
     { id:'effects', icon:'effects', titleKey:'cfg_iface_section_effects',
       title:'Visual Effects', hintKey:'cfg_iface_section_effects_hint',
       hint:'Blur and system animation effects.',
-      keys:['disable_blur','ui_effects_level'] }
+      keys:['disable_blur','ui_effects_level','ui_recents_memory','ui_recents_corner_radius',
+        'ui_smooth_corners','ui_nav_handle_autohide'] }
   ],
   infirmary: [
     { id:'cleanup', icon:'cleaner', titleKey:'cfg_inf_section_cleanup',
@@ -12304,6 +12342,8 @@ const CFG_ICONS = {
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
+  ui_recents_memory:'recents_memory', ui_recents_corner_radius:'recents_radius', ui_smooth_corners:'smooth_corners', ui_nav_handle_autohide:'nav_handle_hide',
+  feel_pointer_speed:'pointer_speed', feel_gesture_mistouch:'gesture_mistouch', feel_game_memc:'game_memc', feel_dc_dimming:'dc_dimming',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
   net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', net_mtu_probing:'mtu_probe', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', smart_lab:'smart', smart_lab_mem:'membus_cap', profile_class_auto:'kind_profile', smart_records_balanced:'balance_spark', ltpo_peak_force:'refresh_peak', charge_aware_enable:'charge_aware', night_charge_enable:'night_charge', night_charge_start:'night_charge_start', night_charge_end:'night_charge_end', doze_level:'doze', doze_trim_whitelist:'whitelist',
@@ -13082,6 +13122,8 @@ const APPLY_MODE = {
 
   // Next: the value is live but only consulted when something new starts.
   anim_speed:APPLY_LIVE,
+  ui_recents_memory:APPLY_LIVE, ui_recents_corner_radius:APPLY_LIVE, ui_smooth_corners:APPLY_LIVE, ui_nav_handle_autohide:APPLY_LIVE,
+  feel_pointer_speed:APPLY_LIVE, feel_gesture_mistouch:APPLY_LIVE, feel_game_memc:APPLY_LIVE, feel_dc_dimming:APPLY_LIVE,
   gms_trim:APPLY_LIVE,
   gms_freeze:APPLY_NEXT,
   perf_ceiling_pct:APPLY_LIVE,
@@ -14053,6 +14095,8 @@ async function cfgSet(key, val, ctl) {
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
     // Read by the governor from governor.conf, so a reload is all they need.
     var ANIM_KEYS = ['anim_speed'];
+    var DISPLAY_UI_KEYS = ['ui_recents_memory','ui_recents_corner_radius','ui_smooth_corners','ui_nav_handle_autohide',
+      'feel_pointer_speed','feel_gesture_mistouch','feel_game_memc','feel_dc_dimming'];
     var GMS_KEYS = ['gms_trim'];
     var GOV_KEYS = ['auto_battery_enable','smart_battery_bias','charge_aware_enable',
                     'cool_gaming','bat_suppress_gaming','night_quiet_enable','night_modem_idle',
@@ -14490,6 +14534,28 @@ async function cfgSet(key, val, ctl) {
         toast(cfgToastText(key, val).replace(/^✓\s*/, '') + ' · ' + (kp[1] ? kst : T('t_cfg_err', 'apply failed')), 'err');
       }
       await kernelPanelLoad(true);
+    } else if (DISPLAY_UI_KEYS.indexOf(key) >= 0) {
+      /* Settings persistence is not the same as an accepted write. The owner returns one
+       * scalar verdict after read-back, including exact-baseline restore and stock-unowned. */
+      let dr = null;
+      try { dr = await run('sh ' + shQuote(MD + '/runtime/asb_display_ui_apply.sh') + ' apply ' + shQuote(key)); } catch (e) {}
+      const dl = String((dr && dr.stdout) || '').trim().split('\n').filter(function(line) {
+        return line.indexOf(key + '|') === 0;
+      }).pop() || '';
+      const dp = dl.split('|');
+      const ds = dp[1] || '';
+      if (dr && dr.errno === 0 && ds === 'applied') {
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' · applied'), 'good');
+      } else if (dr && dr.errno === 0 && ds === 'restored') {
+        toast(cfgToastText(key, val) + T('t_cfg_restored', ' · original value restored'), 'good');
+      } else if (dr && dr.errno === 0 && ds === 'stock_unowned') {
+        toast(cfgToastText(key, val) + T('t_cfg_stock_unowned', ' · stock value left untouched'), 'good');
+      } else {
+        uiSound('error');
+        toast(cfgToastText(key, val).replace(/^✓\s*/, '') + ' · ' +
+          (ds === 'restore_failed' ? T('t_cfg_restore_failed', 'original value could not be restored') :
+           T('t_cfg_write_rejected', 'the ROM did not confirm the setting')), 'err');
+      }
     } else if (BLUR_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_blur', ' \u00b7 shade now, rest after reboot'), cfgToastType(key));
@@ -17846,7 +17912,7 @@ const DEVICE_SECTION_GUIDES = {
   zygisk_observer: ['dev_guide_zygisk_observer', 'Process telemetry plus an optional bounded request for fresh governor evidence. Configuration, injection evidence, hint acknowledgement and overhead are separate facts. Missing crash/ANR attribution and app activity sources remain unknown or not exposed.'],
   lsposed_hooks: ['dev_guide_lsposed_hooks', 'LSPosed does not count individual hook calls or their energy, and ASB adds no hook of its own to measure them. This card joins evidence per hooked app: enabled modules and their scope, LSPosed log volume and errors, crash and ANR records whose stack passes through a hook, CPU time of hooked apps and restart loops from the Zygisk start ledger. A finding is a correlation to check by disabling one module for one app, not a proven cause.'],
   kernel_origin: ['dev_guide_kernel_origin', 'Stock-like and custom-like describe exposed indicators, not a guaranteed builder or provenance. Capability decisions still use each exposed control node.'],
-  kernel_bore: ['dev_guide_kernel_bore', 'CONFIG_SCHED_BORE is build evidence; /proc/sys/kernel/sched_bore is the runtime interface. This read-only diagnostic never writes it. The separate Kernel setting accepts only Stock, Off and On, and an apply is successful only after read-back.'],
+  kernel_bore: ['dev_guide_kernel_bore', 'CONFIG_SCHED_BORE is build evidence; /proc/sys/kernel/sched_bore is the runtime interface. This read-only diagnostic never writes it. The separate Kernel setting accepts Stock, conservative Auto, Off and On; an apply is successful only after read-back.'], 
   kernel_btf: ['dev_guide_kernel_btf', 'BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.'],
   kernel_ebpf: ['dev_guide_kernel_ebpf', 'Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.'],
   kernel_fuse_bpf: ['dev_guide_kernel_fuse_bpf', 'FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.'],
