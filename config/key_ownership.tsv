@@ -120,6 +120,7 @@ kernel_hrtimer_migration|advanced|webui_sensitive|shell
 kernel_lpm_prediction|advanced|webui_sensitive|shell
 kernel_usb_autosuspend|advanced|webui_sensitive|shell
 kernel_rt_boost|advanced|webui_sensitive|shell
+kernel_bore|advanced|webui_sensitive|shell
 gms_trim|advanced|webui_sensitive|shell
 gms_freeze|advanced|webui_sensitive|shell
 UX_ANIM_FORCE_RESTART|user|webui_standard|shell
@@ -225,6 +226,7 @@ device_bounds_override|internal|engine_or_derived|both
 ltpo_force|user|webui_standard|shell
 ltpo_video|user|webui_standard|shell
 ltpo_peak_force|user|webui_standard|shell
+ltpo_idle_speed|user|webui_standard|shell
 mmfeed_off|user|webui_standard|shell
 battery_jank_guard|internal|engine_or_derived|native
 battery_hold_learn|internal|engine_or_derived|native
