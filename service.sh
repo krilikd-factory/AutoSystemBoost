@@ -491,35 +491,14 @@ asb_migrate_governor_conf
 
 (
   [ -f /data/adb/asb/soter_fix/auto ] && [ -f "$MODDIR/runtime/asb_soter_fix.sh" ] || exit 0
-  until [ "$(getprop sys.boot_completed)" = "1" ]; do sleep 5; done
-  _sfw=0
-  _sfu=0
-  while [ "$_sfw" -lt 21600 ]; do
-    [ "$(getprop sys.user.0.ce_available 2>/dev/null)" = "true" ] && { _sfu=1; break; }
-    if [ "$_sfw" -ge 600 ]; then
-      am get-started-user-state 0 2>/dev/null | grep -q RUNNING_UNLOCKED && { _sfu=1; break; }
-      sleep 60
-      _sfw=$((_sfw + 60))
-    else
-      sleep 10
-      _sfw=$((_sfw + 10))
-    fi
-  done
-  if [ "$_sfu" != 1 ]; then
-    asb_log "soter_fix: boot repair skipped - the phone was not unlocked within ${_sfw}s of boot"
-    exit 0
-  fi
-  sleep 60
-  _sfo="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_soter_fix.sh" boot 2>/dev/null | sed -n 's/^soter|result|state=\([a-z_]*\)|.*/\1/p' | head -n 1)"
-  case "$_sfo" in
-    done|done_no_service|not_installed|auto_off) _sfr='' ;;
-    *)
-      sleep 120
-      _sfr="$_sfo"
-      _sfo="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_soter_fix.sh" boot 2>/dev/null | sed -n 's/^soter|result|state=\([a-z_]*\)|.*/\1/p' | head -n 1)"
-      ;;
-  esac
-  asb_log "soter_fix: boot repair ${_sfo:-no_result}${_sfr:+ (first try ${_sfr}, retried)} - unlocked ${_sfw}s after boot_completed"
+  _sfo="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_soter_fix.sh" boot 2>/dev/null | sed -n 's/^soter|result|state=\([a-z_]*\)|.*/\1/p' | tail -n 1)"
+  asb_log "soter_fix: boot repair ${_sfo:-no_result} - details in /data/adb/asb/soter_fix/log"
+) &
+
+(
+  [ -f /data/adb/asb/camera_tools/webcam ] || [ -f /data/adb/asb/camera_tools/launch ] || exit 0
+  [ -f "$MODDIR/runtime/asb_camera_tools.sh" ] || exit 0
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_camera_tools.sh" boot >/dev/null 2>&1
 ) &
 
 (

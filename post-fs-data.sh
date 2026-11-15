@@ -399,6 +399,10 @@ if asb_feature_enabled AUDIO \
   esac
 fi
 
+if [ -f /data/adb/asb/camera_tools/webcam ] && [ -f "$MODDIR/runtime/asb_camera_tools.sh" ]; then
+  sh "$MODDIR/runtime/asb_camera_tools.sh" webcam prop >/dev/null 2>&1
+fi
+
 [ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
   ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark postfs_complete >/dev/null 2>&1 || true
 exit 0

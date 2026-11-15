@@ -731,6 +731,9 @@ if [ -f /data/adb/asb/heytap_mcs/baseline.conf ] || [ -f /data/adb/asb/documents
     ) &
   fi
 fi
+[ -f /data/adb/asb/camera_tools/webcam.app_enabled_by_asb ] && _fw pm disable-user --user 0 com.android.DeviceAsWebcam
+_ctp="$(tr -cd 'A-Za-z0-9_.' < /data/adb/asb/camera_tools/launch.pkg 2>/dev/null)"
+[ -n "$_ctp" ] && _fw cmd package compile --reset "$_ctp"
 rm -rf /data/adb/asb 2>/dev/null
 
 # Remove the module's own persistent properties.
