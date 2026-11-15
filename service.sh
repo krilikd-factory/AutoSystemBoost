@@ -4257,6 +4257,12 @@ esac
   asb_timeline_mark post_boot_tweaks_complete
 ) >/dev/null 2>&1 &
 
+# Re-assert only explicit ColorOS interface/display overrides. Stock keys are skipped by
+# the owner, so a normal boot neither captures nor rewrites unrelated user Settings.
+if [ -f "$MODDIR/runtime/asb_display_ui_apply.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_display_ui_apply.sh" boot >/dev/null 2>&1 || true
+fi
+
 if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
   _asb_hap_conf="$MODDIR/config/governor.conf"
   _asb_hap_run=0
