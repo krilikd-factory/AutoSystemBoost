@@ -791,7 +791,7 @@
     },
     "feel_pointer_speed": {
       "name": "Kecepatan pointer",
-      "desc": "Kecepatan pointer: mengontrol system/pointer_speed. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi."
+      "desc": "Kecepatan pointer: mengontrol system/pointer_speed. «Stock» mempertahankan nilai saat ini; setelah perubahan, ASB memulihkan nilai sebelumnya secara persis. Keberhasilan hanya dilaporkan setelah read-back Settings terkonfirmasi; efek visual bergantung pada ColorOS, panel, dan aplikasi. Nilai awal yang disimpan adalah nilai saat ASB pertama kali menerapkan perubahan, bukan selalu nilai bawaan pabrik."
     },
     "feel_gesture_mistouch": {
       "name": "Pencegahan sentuhan tak sengaja",
@@ -1189,6 +1189,7 @@
   "kc_verdict_state_cleanup_failed": "dipulihkan; berkas status tidak dihapus",
   "kc_verdict_covered_by_timer_migration": "dicakup oleh kontrol Migrasi Timer umum; tanpa penulisan terpisah",
   "kc_verdict_invalid_request": "permintaan tidak valid",
+  "kc_verdict_invalid_value": "nilai setelan tidak valid; tidak ada yang ditulis",
   "kc_live": "di kernel: {v}",
   "t_reboot_confirm": "Ketuk lagi",
   "t_rebooting": "Memulai ulang…",

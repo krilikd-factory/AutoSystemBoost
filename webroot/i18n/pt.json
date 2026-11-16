@@ -791,7 +791,7 @@
     },
     "feel_pointer_speed": {
       "name": "Velocidade do ponteiro",
-      "desc": "Velocidade do ponteiro: controla system/pointer_speed. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação."
+      "desc": "Velocidade do ponteiro: controla system/pointer_speed. «Stock» mantém o valor atual; após uma alteração, o ASB restaura exatamente o valor anterior. O sucesso exige leitura Settings confirmada; o efeito visível depende do ColorOS, do painel e da aplicação. O valor base guardado é o capturado quando o ASB aplicou a primeira alteração, não necessariamente o valor de fábrica."
     },
     "feel_gesture_mistouch": {
       "name": "Proteção contra toques acidentais",
@@ -1189,6 +1189,7 @@
   "kc_verdict_state_cleanup_failed": "restaurado; arquivo de estado não removido",
   "kc_verdict_covered_by_timer_migration": "coberto pela migração geral de temporizadores; sem gravação separada",
   "kc_verdict_invalid_request": "pedido inválido",
+  "kc_verdict_invalid_value": "valor de definição inválido; nada foi escrito",
   "kc_live": "kernel: {v}",
   "t_reboot_confirm": "Toque novamente",
   "t_rebooting": "Reiniciando…",

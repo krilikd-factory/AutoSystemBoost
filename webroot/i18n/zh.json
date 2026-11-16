@@ -821,7 +821,7 @@
     },
     "feel_pointer_speed": {
       "name": "指针速度",
-      "desc": "指针速度：控制 system/pointer_speed。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。"
+      "desc": "指针速度：控制 system/pointer_speed。“Stock”不修改当前值；明确更改后，ASB 会恢复修改前的精确值。只有 Settings 回读确认后才报告成功；实际效果取决于 ColorOS、面板和应用。 保存的基准值是 ASB 首次应用修改时读取的值，不一定是出厂默认值。"
     },
     "feel_gesture_mistouch": {
       "name": "防误触手势",
@@ -1189,6 +1189,7 @@
   "kc_verdict_state_cleanup_failed": "已恢复；状态文件未删除",
   "kc_verdict_covered_by_timer_migration": "已由通用定时器迁移控制覆盖；不单独写入",
   "kc_verdict_invalid_request": "无效请求",
+  "kc_verdict_invalid_value": "设置值无效；未写入任何内容",
   "kc_live": "内核值：{v}",
   "t_reboot_confirm": "再次点击",
   "t_rebooting": "正在重启…",

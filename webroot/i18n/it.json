@@ -821,7 +821,7 @@
     },
     "feel_pointer_speed": {
       "name": "Velocità del puntatore",
-      "desc": "Velocità del puntatore: controlla system/pointer_speed. «Stock» lascia invariato il valore; dopo una modifica ASB ripristina esattamente quello precedente. Il successo richiede una rilettura Settings confermata; l’effetto visibile dipende da ColorOS, pannello e app."
+      "desc": "Velocità del puntatore: controlla system/pointer_speed. «Stock» lascia invariato il valore; dopo una modifica ASB ripristina esattamente quello precedente. Il successo richiede una rilettura Settings confermata; l’effetto visibile dipende da ColorOS, pannello e app. Il valore iniziale salvato è quello rilevato quando ASB ha applicato la prima modifica, non necessariamente il valore di fabbrica."
     },
     "feel_gesture_mistouch": {
       "name": "Protezione tocchi accidentali",
@@ -1189,6 +1189,7 @@
   "kc_verdict_state_cleanup_failed": "ripristinato; file di stato non rimosso",
   "kc_verdict_covered_by_timer_migration": "coperto dalla migrazione generale dei timer; nessuna scrittura separata",
   "kc_verdict_invalid_request": "richiesta non valida",
+  "kc_verdict_invalid_value": "valore dell’impostazione non valido; nessuna scrittura",
   "kc_live": "kernel: {v}",
   "t_reboot_confirm": "Tocca di nuovo",
   "t_rebooting": "Riavvio…",

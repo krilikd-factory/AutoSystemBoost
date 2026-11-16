@@ -791,7 +791,7 @@
     },
     "feel_pointer_speed": {
       "name": "İşaretçi hızı",
-      "desc": "İşaretçi hızı: system/pointer_speed ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır."
+      "desc": "İşaretçi hızı: system/pointer_speed ayarını yönetir. «Stock» geçerli değeri değiştirmez; bir değişiklikten sonra ASB önceki değeri aynen geri yükler. Başarı yalnızca doğrulanan Settings okumasıyla bildirilir; görünür etki ColorOS’a, panele ve uygulamaya bağlıdır. Kaydedilen başlangıç değeri, ASB ilk değişikliği uyguladığında alınan değerdir; fabrika varsayılanı olmak zorunda değildir."
     },
     "feel_gesture_mistouch": {
       "name": "Yanlışlıkla dokunma koruması",
@@ -1189,6 +1189,7 @@
   "kc_verdict_state_cleanup_failed": "geri yüklendi; durum dosyası silinmedi",
   "kc_verdict_covered_by_timer_migration": "genel Zamanlayıcı taşıma tarafından kapsanıyor; ayrı yazma yok",
   "kc_verdict_invalid_request": "geçersiz istek",
+  "kc_verdict_invalid_value": "geçersiz ayar değeri; hiçbir şey yazılmadı",
   "kc_live": "çekirdekte: {v}",
   "t_reboot_confirm": "Tekrar dokun",
   "t_rebooting": "Yeniden başlatılıyor…",

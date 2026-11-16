@@ -209,8 +209,7 @@
     "kernel_mglru_min_ttl": {
       "stock": "Stock",
       "1000": "1000 ms",
-      "2000": "2000 ms",
-      "5000": "5000 ms"
+      "2000": "2000 ms"
     },
     "kernel_timer_migration": {
       "stock": "Stock",
@@ -963,7 +962,7 @@
     },
     "feel_pointer_speed": {
       "name": "Pointer Speed",
-      "desc": "Sets Android pointer_speed from -7 to 7 for a mouse, trackpad or other pointer; it is not a touchscreen sensitivity or polling-rate hack. Stock leaves the current value untouched and restores the exact pre-ASB value after an override."
+      "desc": "Sets Android pointer_speed from -7 to 7 for a mouse, trackpad or other pointer; it is not a touchscreen sensitivity or polling-rate hack. Stock leaves the current value untouched and restores the exact pre-ASB value after an override. The saved baseline is the value captured when ASB first applied an override, not necessarily the factory default."
     },
     "feel_gesture_mistouch": {
       "name": "Gesture Mistouch Prevention",
@@ -1089,6 +1088,7 @@
   "kc_verdict_state_cleanup_failed": "restored; state file not removed",
   "kc_verdict_covered_by_timer_migration": "covered by the general Timer migration control; no separate write",
   "kc_verdict_invalid_request": "invalid request",
+  "kc_verdict_invalid_value": "invalid setting value; nothing written",
   "kc_live": "kernel: {v}",
   "t_cfg_live": " · applied",
   "t_wlf_ignored": " · this ROM ignores the limit",

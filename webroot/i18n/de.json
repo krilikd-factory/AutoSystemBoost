@@ -791,7 +791,7 @@
     },
     "feel_pointer_speed": {
       "name": "Zeigergeschwindigkeit",
-      "desc": "Zeigergeschwindigkeit: steuert system/pointer_speed. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab."
+      "desc": "Zeigergeschwindigkeit: steuert system/pointer_speed. „Stock“ lässt den aktuellen Wert unangetastet und stellt nach einer Änderung den exakten Ausgangswert wieder her. Erfolg wird nur nach bestätigtem Settings-Read-back gemeldet; die sichtbare Wirkung hängt von ColorOS, Panel und App ab. Der gespeicherte Ausgangswert ist der Wert bei der ersten ASB-Anwendung, nicht unbedingt der Werksstandard."
     },
     "feel_gesture_mistouch": {
       "name": "Schutz vor versehentlichen Gesten",
@@ -1189,6 +1189,7 @@
   "kc_verdict_state_cleanup_failed": "wiederhergestellt; Statusdatei nicht entfernt",
   "kc_verdict_covered_by_timer_migration": "durch die allgemeine Timer-Migration abgedeckt; kein separates Schreiben",
   "kc_verdict_invalid_request": "ungültige Anfrage",
+  "kc_verdict_invalid_value": "ungültiger Einstellungswert; nichts geschrieben",
   "kc_live": "Kernel: {v}",
   "t_reboot_confirm": "Nochmal tippen",
   "t_rebooting": "Neustart…",
