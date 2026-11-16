@@ -33,9 +33,12 @@ _changed=""
 
 _kc_helper="$MODDIR/runtime/asb_kernel_controls.sh"
 if [ -f "$_kc_helper" ]; then
-  case "$(_cfg mglru_mode):$(cat "$MODDIR/current_profile" 2>/dev/null)" in
-    smart:smart|:smart) _kc_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_mglru_min_ttl kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore" ;;
-    *) _kc_keys="mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_mglru_min_ttl kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore" ;;
+  # Smart owns MGLRU only for the explicit smart value. A manual on/off/stock choice
+  # must still reach the bounded helper in the Smart profile: saving a toggle while
+  # silently dropping it from this list made the UI and the live kernel disagree.
+  case "$(_cfg mglru_mode):$(cat "$MODDIR/current_profile" 2>/dev/null | tr -d ' \t\r\n')" in
+    smart:smart) _kc_keys="io_scheduler kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_mglru_min_ttl kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore" ;;
+    *) _kc_keys="mglru_mode io_scheduler kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_mglru_min_ttl kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore" ;;
   esac
   for _kc_key in $_kc_keys; do
     MODDIR="$MODDIR" ASB_CONF="$CONF" sh "$_kc_helper" apply "$_kc_key" >/dev/null 2>&1 || true

@@ -104,12 +104,13 @@ if [ "$_mode" = "mirror" ]; then
   case "$_mdsp" in
     ''|off|0|*[!0-9]*) : ;;
     *)
-      if [ "$_mdsp" -ge 1 ] 2>/dev/null && [ "$_mdsp" -le 25 ] 2>/dev/null; then
+      if [ "$_mdsp" -ge 1 ] 2>/dev/null && [ "$_mdsp" -le 30 ] 2>/dev/null; then
         _mrequested="$(( _mdsp * 100 ))"
         _mapplied="$_mrequested"
-        # Both legacy and AIDL DSP cores use the same +25 dB ceiling. The effect still
-        # protects output with its true-peak limiter and final hard sample clamp.
-        [ "$_mapplied" -gt 2500 ] && _mapplied=2500
+        # Current legacy and AIDL DSP sources use the same +30 dB ceiling. The effect still
+        # protects output with its sample-peak limiter and final hard sample clamp. Previously
+        # shipped prebuilt libraries remain capped at +25 dB until the user rebuilds them.
+        [ "$_mapplied" -gt 3000 ] && _mapplied=3000
         # Back the gain off while the phone is hot - on the loudspeaker only, from the battery
         # temperature, with hysteresis (asb_dsp_thermal.sh; fix135).
         #
@@ -286,8 +287,8 @@ _persist persist.vendor.bluetooth.disableabsvol "$_dp"
 changed="${changed}bt_absvol=${_bt} "
 
 # ---- dsp_loudness (gain only) ---------------------------------------------------- Slider
-# UI accepts 0..25 dB. The same +25 dB ceiling is compiled into both AIDL and legacy
-# DSP cores; their true-peak limiter and final sample clamp remain active at every value.
+# UI accepts 0..30 dB. The same +30 dB ceiling is compiled into current AIDL and legacy
+# DSP cores; their sample-peak limiter and final sample clamp remain active at every value.
 # The DSP effect re-reads persist.asb.dsp.* on ENABLE, and the audioserver restart below
 # triggers that ENABLE - which is why gain changes here apply live, no reboot.
 _dsp="$(_cfg dsp_loudness)"
@@ -295,7 +296,7 @@ _dsp_ok=0
 case "$_dsp" in
   ''|off|0) _dsp_ok=0 ;;
   *[!0-9]*) _dsp_ok=0 ;;
-  *) [ "$_dsp" -ge 1 ] 2>/dev/null && [ "$_dsp" -le 25 ] 2>/dev/null && _dsp_ok=1 ;;
+  *) [ "$_dsp" -ge 1 ] 2>/dev/null && [ "$_dsp" -le 30 ] 2>/dev/null && _dsp_ok=1 ;;
 esac
 # The eq_compat profile exists to hand the stream to an external engine (ViPER and friends).
 # Our own effect sits on the same output and the external driver then does not see the stream
@@ -314,7 +315,7 @@ if [ "$_dsp_ok" = "1" ]; then
     if [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; then
       _dsp_requested_mb="$((_dsp * 100))"
       _dsp_applied_mb="$_dsp_requested_mb"
-      [ "$_dsp_applied_mb" -gt 2500 ] && _dsp_applied_mb=2500
+      [ "$_dsp_applied_mb" -gt 3000 ] && _dsp_applied_mb=3000
       _persist persist.asb.dsp.gain_requested_mb "$_dsp_requested_mb"
       _dspp enable 1
       # Output routing. The library reads this and skips the effect on any sink whose

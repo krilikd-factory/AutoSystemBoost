@@ -59,7 +59,7 @@ asb_dsp_th_step() {
 asb_dsp_th_cap() {
   _tc_g="$1"; _tc_s="$2"; _tc_r="$3"
   case "$_tc_g" in ''|*[!0-9]*) _tc_g=0 ;; esac
-  [ "$_tc_g" -gt 2500 ] && _tc_g=2500
+  [ "$_tc_g" -gt 3000 ] && _tc_g=3000
   case "$_tc_r" in bt|wired|call) echo "$_tc_g"; return 0 ;; esac
   case "$_tc_s" in
     2) [ "$_tc_g" -gt 800 ] && _tc_g=800 ;;
@@ -107,7 +107,7 @@ asb_dsp_thermal_decide() {
   _td_step="$(asb_dsp_th_step "$_td_t" "$(asb_dsp_th_prev_step)")"
   if [ "$_td_step" != 0 ] && [ -z "$_td_route" ]; then _td_route="$(asb_dsp_th_route)"; fi
   _td_app="$(asb_dsp_th_cap "$_td_req" "$_td_step" "${_td_route:-unknown}")"
-  _td_cap="$_td_req"; [ "$_td_cap" -gt 2500 ] && _td_cap=2500
+  _td_cap="$_td_req"; [ "$_td_cap" -gt 3000 ] && _td_cap=3000
   if [ "$_td_step" = 0 ]; then
     _td_why=cool
   elif [ "$_td_app" -lt "$_td_cap" ]; then

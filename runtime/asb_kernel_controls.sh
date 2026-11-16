@@ -482,11 +482,34 @@ asb_kc_follow() {
 case "${0##*/}" in
   asb_kernel_controls.sh)
     _akc_cmd="${1:-status}" _akc_one="${2:-}"
+    _akc_io="$ASB_KC_MODDIR/runtime/asb_io_scheduler.sh"
     case "$_akc_cmd" in
-      apply) if [ -z "$_akc_one" ]; then asb_kc_each apply; else asb_kc_run apply "$_akc_one" "${3:-}" "${4:-}"; fi ;;
-      restore) if [ -z "$_akc_one" ]; then asb_kc_each restore; else asb_kc_run restore "$_akc_one"; fi ;;
-      status) if [ -z "$_akc_one" ]; then asb_kc_each status; else asb_kc_run status "$_akc_one"; fi ;;
-      follow) asb_kc_follow "$_akc_one" ;;
+      apply)
+        if [ "$_akc_one" = io_scheduler ]; then
+          [ -f "$_akc_io" ] && MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" apply
+        elif [ -z "$_akc_one" ]; then
+          asb_kc_each apply
+          [ ! -f "$_akc_io" ] || MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" apply
+        else asb_kc_run apply "$_akc_one" "${3:-}" "${4:-}"; fi ;;
+      restore)
+        if [ "$_akc_one" = io_scheduler ]; then
+          [ -f "$_akc_io" ] && MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" restore
+        elif [ -z "$_akc_one" ]; then
+          asb_kc_each restore
+          [ ! -f "$_akc_io" ] || MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" restore
+        else asb_kc_run restore "$_akc_one"; fi ;;
+      status)
+        if [ "$_akc_one" = io_scheduler ]; then
+          [ -f "$_akc_io" ] && MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" status
+        elif [ -z "$_akc_one" ]; then
+          asb_kc_each status
+          [ ! -f "$_akc_io" ] || MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" status
+        else asb_kc_run status "$_akc_one"; fi ;;
+      follow)
+        asb_kc_follow "$_akc_one" || exit $?
+        if [ -f "$_akc_io" ]; then
+          MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" ASB_PROFILE="$_akc_one" sh "$_akc_io" apply
+        fi ;;
       *) printf 'usage: asb_kernel_controls.sh apply|restore|status [registered_key] | follow <profile>\n' >&2; exit 2 ;;
     esac
     ;;
