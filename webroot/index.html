@@ -742,7 +742,8 @@ html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translate
   background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
   cursor: pointer;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform .18s cubic-bezier(.2,.7,.25,1), opacity .18s ease,
+              border-color .18s ease, background .18s ease, box-shadow .18s ease;
   user-select: none;
 }
 @media (max-height: 780px), (max-width: 400px) {
@@ -963,7 +964,8 @@ html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translate
   flex-shrink: 0;
   background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
   border: 1px solid rgba(255,255,255,0.06);
-  transition: all 0.3s ease;
+  transition: transform .18s cubic-bezier(.2,.7,.25,1), border-color .18s ease,
+              background .18s ease, box-shadow .18s ease;
   position: relative;
   z-index: 1;
 }
@@ -989,7 +991,7 @@ html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translate
   font-weight: 700;
   letter-spacing: 0.3px;
   color: var(--text-secondary);
-  transition: all 0.3s ease;
+  transition: color .18s ease;
   line-height: 1;
 }
 
@@ -1008,7 +1010,8 @@ html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translate
   display: flex; 
   align-items: center; 
   justify-content: center;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); 
+  transition: transform .18s cubic-bezier(.2,.7,.25,1), border-color .18s ease,
+              background .18s ease, box-shadow .18s ease;
   flex-shrink: 0;
   position: relative; 
   z-index: 1;
@@ -1026,7 +1029,7 @@ html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translate
   height: 12px; 
   fill: #000; 
   opacity: 0; 
-  transition: all 0.2s ease; 
+  transition: transform .16s cubic-bezier(.2,.7,.25,1), opacity .16s ease;
   transform: scale(0.5);
 }
 
@@ -1937,13 +1940,8 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .cfg-zygisk-preset strong { color:var(--text); }
 .zygisk-page .zy-fine { margin-top: 10px; }
 .cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 0 !important; }
-.cfg-zygisk-card > .cfg-row + .cfg-row::before {
-  content:''; display:block; height:1px; margin:-4px 0 7px;
-  background:color-mix(in srgb,var(--border) 52%,transparent);
-}
-html[data-asb-glass="1"]:not([data-asb-theme="light"]) .cfg-zygisk-card > .cfg-row + .cfg-row::before {
-  background:rgba(255,255,255,.055);
-}
+/* The four switches share one continuous card. No pseudo-element hairlines between rows:
+ * state colour and spacing already separate the controls without looking like stray rules. */
 body.config-category-active #configPage.cfg-short-fit .cfg-list { padding-bottom:0; }
 #configPage.cfg-short-fit > *:last-child {
   padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
@@ -8514,16 +8512,12 @@ function openLivePage() {
   uiSound('nav');
   const p = _el('livePage');
   if (!p) return;
-  /* dev55: reset the scroll before the classes change, like every other page opener does.
-   * Written after them, scrollTop forced a full style and layout pass in the tap's task. */
+  /* Reset scroll before any class change. Restore the last complete display snapshot while
+   * the page is still hidden, then give that finished layer one rendered frame before motion. */
   p.scrollTop = 0;
-  asbNavAnimMark();
-  p.classList.add('open');
-  document.body.classList.add('live-active');
-  asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'false');
   _liveOpen = true;
-  _livePageSeq++;
+  const openSeq = ++_livePageSeq;
   liveBackgroundSchedule();
   liveHeaderSync();
   if (lvMonTilesRestore()) lvStale(true);
@@ -8534,18 +8528,28 @@ function openLivePage() {
       lvStale(true);
     } else paintStockLive(_stockTelemetryKv);
   }
-  /* Slide in first, read after (fix177). The root call blocks the page while it runs, and on
-   * Stock it ran here, before the slide had a frame - "Monitor opens slowly on Stock". The
-   * last ROM sample is painted at once; the fresh read starts once the page has moved. */
-  /* The first read still waits for the slide. Later reads back off only while the complete
-   * visible snapshot is unchanged; a changed snapshot returns to the original three seconds. */
-  liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);
-  /* fix202: Monitor is the tall page - once it is up, measure it and compact the chrome
-     if it runs past the screen (the page is full-height from its first frame; the slide
-     is a transform and does not change the measurement). */
+  asbNavAnimMark();
+  document.body.classList.add('live-active');
+  asbTabbarVisibility();
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      if (_liveOpen && openSeq === _livePageSeq) p.classList.add('open');
+    });
+  });
+  /* No root call on the tap. A just-completed splash/background pass is reused briefly;
+   * the next mandatory live read is still bounded and never replaced by the snapshot. */
+  liveMonitorSchedule(liveOpenRefreshDelay());
   asbUiFrame.request(asbFitPages);
 }
 const LIVE_OPEN_SETTLE_MS = 320;
+const LIVE_OPEN_REUSE_MS = 1200;
+function liveOpenRefreshDelay() {
+  const last = _livePollMeta.lastSuccess;
+  const age = last > 0 ? Date.now() - last : -1;
+  if (age >= 0 && age < LIVE_OPEN_REUSE_MS)
+    return Math.max(LIVE_OPEN_SETTLE_MS, LIVE_OPEN_REUSE_MS - age);
+  return LIVE_OPEN_SETTLE_MS;
+}
 
 function closeLivePage() {
   uiSound('nav');
@@ -10721,15 +10725,32 @@ const CFG_GROUP_SECTIONS = {
  * reached by several routes. The read is one cat of a small file and only happens while
  * ASB_CAPS is still empty. */
 let _capsLoaded = false;
+/* Root bridges can block the WebView's JS thread even behind an async function. A category
+ * must finish its first paint and entrance before optional evidence starts reading. This is
+ * a one-shot navigation deferral, not a poller; explicit Refresh and write read-back stay live. */
+function cfgAfterEnter(fn, onSkip) {
+  const until = typeof _cfgEnterUntil === 'number' ? _cfgEnterUntil : 0;
+  const wait = Math.max(0, until - performance.now()) + 16;
+  setTimeout(function () {
+    if (_cfgOpen && !document.hidden) fn();
+    else if (onSkip) onSkip();
+  }, wait);
+}
 function cfgEnsureCaps() {
   if (_capsLoaded) return;
   _capsLoaded = true;
-  cfgLoadCaps().then(function () { try { cfgRender(); } catch (e) {} });
+  cfgAfterEnter(function () {
+    cfgLoadCaps().then(function () { try { cfgRender(); } catch (e) {} });
+  }, function () { _capsLoaded = false; });
 }
 
 function cfgRenderSection(list, section, catKey, groupId) {
   cfgEnsureCaps();
-  if (ASB_GRADE === null) { ASB_GRADE = {}; cfgLoadGrade().then(function(){ try { cfgRender(); } catch(e){} }); }
+  if (ASB_GRADE === null) {
+    ASB_GRADE = {};
+    cfgAfterEnter(function () { cfgLoadGrade().then(function(){ try { cfgRender(); } catch(e){} }); },
+      function () { ASB_GRADE = null; });
+  }
   const head = document.createElement('div');
   /* The section header takes the colour of the cards under it.
    *
@@ -11834,7 +11855,9 @@ function cfgRenderCameraToolsCards(list) {
   const ln = bfxEl('div', 'bfx-note'); ln.id = 'ctLaNote'; la.appendChild(ln);
   list.appendChild(la);
   list.appendChild(wc);
-  ctLoad(false);
+  /* Draw both cards and their disabled/unknown controls first. The status shell starts only
+   * after the category entrance, so opening Camera never waits for USB/ART evidence. */
+  cfgAfterEnter(function () { if (_el('ctWcCard')) ctLoad(false); });
 }
 
 // null = the hub is showing; a group id = that group's screen is.
@@ -14178,9 +14201,9 @@ function cfgRender() {
   const list = _el('cfgList');
   if (!list) return;
   /* A repaint of the same screen while its entrance is still running waits for it to end
-   * (fix145). Opening a category for the first time starts two reads (capabilities, camera
-   * grade) that repaint when they return - 50-300 ms in, mid-entrance - and every row
-   * vanished and rose again. Coalesced into one paint once the motion is done. */
+   * (fix145). Camera evidence is deferred until after the entrance; any other asynchronous
+   * same-screen repaint is likewise coalesced instead of making every row vanish and rise
+   * again in the middle of the motion. */
   if (!_cfgSearch && (_cfgGroup || 'hub') === _cfgShownScreen && performance.now() < _cfgEnterUntil) {
     if (!_cfgRepaintTimer) _cfgRepaintTimer = setTimeout(function () {
       _cfgRepaintTimer = 0; try { cfgRender(); } catch (e) {}
@@ -24818,7 +24841,9 @@ function lvGpuWork(busy) {
   if (!(busy >= 0) || !(_lvGpuClkHz > 0) || !(_lvGpuMaxHz > 0)) return null;
   return Math.round(busy * Math.min(_lvGpuClkHz, _lvGpuMaxHz) / _lvGpuMaxHz);
 }
-async function pollLive(visible) {
+async function pollLive(visible, prefetch) {
+  /* prefetch is used only by the bounded splash pass: it collects the complete Monitor
+   * snapshot while the page is closed. Ordinary visible reads still fail stale when closed. */
   /* Nothing to draw for nobody. The manager keeps this WebView alive in the background,
    * and its timers keep firing there: the Live page polled every 3 s and the home screen
    * every 30 s, each pass spawning root shells, while the user was in another app with the
@@ -24828,7 +24853,7 @@ async function pollLive(visible) {
     if (!visible || (_livePollVisible && _livePollSeq === _livePageSeq)) return _livePollRun;
     if (!_livePollFollow) {
       _livePollFollow = _livePollRun.then(function () {
-        if (!document.hidden) return pollLive(true);
+        if (!document.hidden) return pollLive(true, prefetch);
       }).then(function (v) { _livePollFollow = null; return v; }, function (e) {
         _livePollFollow = null; throw e;
       });
@@ -24847,7 +24872,7 @@ async function pollLive(visible) {
       // and mixing them into a ROM snapshot was the source of stale 95°C/cap/forecast cards.
       if (visible) await pollStockTelemetry(true);
       else await pollStockTelemetry(false);
-      if (visible && (pollSeq !== _livePageSeq || !_liveOpen || document.hidden)) return;
+      if (visible && (pollSeq !== _livePageSeq || (!prefetch && !_liveOpen) || document.hidden)) return;
       const stockSignature = JSON.stringify(Object.keys(_stockTelemetryKv).filter(function (k) {
         return k !== 'tsms';
       }).sort().map(function (k) { return [k, _stockTelemetryKv[k]]; }));
@@ -24861,9 +24886,9 @@ async function pollLive(visible) {
     /* fix278: every read of this pass shares one root shell (was five, every 3 s). */
     const _lb = await runBatch(liveBatchParts(visible, prime));
     /* A page change invalidates only this read-only paint. The shell was never a dangerous
-     * system operation and is allowed to finish; its stale result cannot repaint a closed or
-     * newly reopened Monitor. A fresh visible request joins through the follow-up above. */
-    if (visible && (pollSeq !== _livePageSeq || !_liveOpen || document.hidden)) return;
+     * system operation and is allowed to finish; its stale result cannot repaint a newly
+     * reopened Monitor. Only the explicit splash prefetch may paint a still-closed page. */
+    if (visible && (pollSeq !== _livePageSeq || (!prefetch && !_liveOpen) || document.hidden)) return;
     const snapshot = Object.keys(_lb).sort().map(function (k) {
       return k + ':' + _lb[k].errno + ':' + (_lb[k].stdout || '');
     }).join('\n');
@@ -25798,7 +25823,7 @@ async function asbBootIntroStart() {
   document.body.setAttribute('aria-busy', 'true');
   if (status) status.textContent = T('boot_intro_warm', 'Preloading ASB metrics…');
   const jobs = [
-    ['live', function () { return Promise.resolve(pollLive(true)).then(function () { homeMeterPaint(); }); }],
+    ['live', function () { return Promise.resolve(pollLive(true, true)).then(function () { homeMeterPaint(); }); }],
     ['config', function () { return cfgLoad(); }],
     ['device', function () { return Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)]); }],
     ['log', function () { return asbLogReportLoad(true); }],
