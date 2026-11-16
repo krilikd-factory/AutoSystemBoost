@@ -127,7 +127,7 @@ _jc_file_size() {
   fi
 }
 
-# A single exact file, instead of ever treating all of /data/local/tmp as disposable.
+# A single exact file, never a directory-wide cleanup.
 _jc_file() {
   _jf_path="$1"
   _jf_before="$(_jc_file_size "$_jf_path")"
@@ -230,14 +230,6 @@ _jc_run_all() {
 
   # A recent backup journal may belong to an active operation. +0 means more than 24 hours.
   _jc_tree backup "$R/data/backup/pending" backup
-
-  # Deliberately exact: module flags, controller scripts, settings and unknown files survive.
-  _jc_file_group_begin local
-  for _jc_name in asb_diag_report.txt asb_full_day.out uninstall.log soterfix.log webui_info.txt google_shelf_ui.html; do
-    _jc_file "$R/data/local/tmp/$_jc_name"
-  done
-  _jc_file "$R/data/local/tmp/google_shelf_controller/controller.log"
-  _jc_file_group_end local
 
   _jc_tree trash "$R/storage/emulated/0/.trash-storage" all
   _jc_tree screenshots "$R/storage/emulated/0/Pictures/Screenshots" screenshots

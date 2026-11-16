@@ -219,6 +219,7 @@ _validate() {
   _cam_contrast="$(_require_num CAMERA_CONTRAST "$_f")"
   _cam_portrait="$(_require_num CAMERA_PORTRAIT "$_f")"
   _cam_lowlight="$(_require_num CAMERA_LOWLIGHT "$_f")"
+  _cam_preview="$(awk -F= '$1 ~ "^[[:space:]]*CAMERA_PREVIEW_TNR[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _cam_busy="$(_require_num camera_busy_pct "$_f")"
   _cam_grace="$(_require_num camera_hold_grace_s "$_f")"
   _cam_max="$(_require_num camera_hold_max_s "$_f")"
@@ -244,6 +245,7 @@ _validate() {
   _mglru_mode="$(awk -F= '$1 ~ "^[[:space:]]*mglru_mode[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _mglru_min_ttl="$(awk -F= '$1 ~ "^[[:space:]]*kernel_mglru_min_ttl[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _timer_migration="$(awk -F= '$1 ~ "^[[:space:]]*kernel_timer_migration[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _sched_stats="$(awk -F= '$1 ~ "^[[:space:]]*kernel_sched_stats[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _nr_migrate="$(awk -F= '$1 ~ "^[[:space:]]*kernel_sched_nr_migrate[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _sched_autogroup="$(awk -F= '$1 ~ "^[[:space:]]*kernel_sched_autogroup[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _sched_child_runs_first="$(awk -F= '$1 ~ "^[[:space:]]*kernel_sched_child_runs_first[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
@@ -294,6 +296,7 @@ _validate() {
   _between "$_cam_contrast" 0 10 || _die "CAMERA_CONTRAST must be 0..10"
   _between "$_cam_portrait" 0 6 || _die "CAMERA_PORTRAIT must be 0..6"
   _between "$_cam_lowlight" 0 10 || _die "CAMERA_LOWLIGHT must be 0..10"
+  case "$_cam_preview" in ''|stock|off|on) : ;; *) _die "CAMERA_PREVIEW_TNR must be stock, off or on" ;; esac
   _between "$_cam_busy" 1 100 || _die "camera_busy_pct must be 1..100"
   _between "$_cam_grace" 0 600 || _die "camera_hold_grace_s must be 0..600"
   _between "$_cam_max" 0 7200 || _die "camera_hold_max_s must be 0..7200"
@@ -318,6 +321,7 @@ _validate() {
   case "$_mglru_mode" in ''|stock|off|on|smart) : ;; *) _die "mglru_mode must be stock, off, on or smart" ;; esac
   case "$_mglru_min_ttl" in ''|stock|1000|2000) : ;; *) _die "kernel_mglru_min_ttl must be stock, 1000 or 2000" ;; esac
   case "$_timer_migration" in ''|stock|auto|off|on) : ;; *) _die "kernel_timer_migration must be stock, auto, off or on" ;; esac
+  case "$_sched_stats" in ''|stock|auto|off) : ;; *) _die "kernel_sched_stats must be stock, auto or off" ;; esac
   case "$_nr_migrate" in ''|stock|auto|1|2|4|8|16) : ;; *) _die "kernel_sched_nr_migrate must be stock, auto, 1, 2, 4, 8 or 16" ;; esac
   case "$_sched_autogroup" in ''|stock|off|on) : ;; *) _die "kernel_sched_autogroup must be stock, off or on" ;; esac
   case "$_sched_child_runs_first" in ''|stock|off|on) : ;; *) _die "kernel_sched_child_runs_first must be stock, off or on" ;; esac

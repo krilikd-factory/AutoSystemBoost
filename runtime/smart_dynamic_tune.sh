@@ -66,6 +66,11 @@ if [ "$MODE" != manual ] && [ "$(_cfg mglru_mode)" = smart ]; then
   fi
 fi
 
+if [ "$MODE" != manual ] && [ -r "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_kernel_controls.sh" ]; then
+  MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}" ASB_CONF="${ASB_CONF:-${MODDIR:-/data/adb/modules/AutoSystemBoost}/config/governor.conf}" \
+    sh "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_kernel_controls.sh" smart "$HINT" "$THERM" "$SCREEN" >/dev/null 2>&1
+fi
+
 # The camera guard owns the VM knobs while a capture is streaming: it lowers swappiness for the
 # duration and restores exactly what it found.
 _cam_guard=0

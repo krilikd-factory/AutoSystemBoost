@@ -4,6 +4,7 @@ STATE="${ASB_CAMTOOLS_STATE:-/data/adb/asb/camera_tools}"
 RUNDIR="${ASB_CAMTOOLS_RUN:-/dev/.asb/camera_tools}"
 GADGET_ROOT="${ASB_CAMTOOLS_GADGET_ROOT:-/config/usb_gadget}"
 PKGLIST="${ASB_CAMTOOLS_PACKAGES_LIST:-/data/system/packages.list}"
+CONF="${ASB_CONF:-${MODDIR:-/data/adb/modules/AutoSystemBoost}/config/governor.conf}"
 WC_PKG=com.android.DeviceAsWebcam
 WC_PROP=ro.usb.uvc.enabled
 COMPILE_TIMEOUT="${ASB_CAMTOOLS_COMPILE_TIMEOUT:-900}"
@@ -315,6 +316,66 @@ _ct_la_measure() {
   printf 'camtools|measure|state=done|ms=%s|launch=%s|filter=%s\n' "$_ms" "${_st:-UNKNOWN}" "$_f"
 }
 
+_ct_preview_mode() {
+  _pm="$(awk -F= '$1 ~ "^[[:space:]]*CAMERA_PREVIEW_TNR[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$CONF" 2>/dev/null)"
+  printf '%s' "${_pm:-stock}"
+}
+_ct_preview_base() { printf '%s/preview.%s.base' "$STATE" "$(printf '%s' "$1" | tr '.' '_')"; }
+_ct_preview_value() { _pv="$(getprop "$1" 2>/dev/null)"; printf '%s' "${_pv:-unset}"; }
+_ct_preview_run() {
+  _pr_mode="$1"
+  case "$_pr_mode" in stock|off|on) ;; *) printf 'camtools|preview|mode=invalid|state=config_invalid\n'; return 0 ;; esac
+  _pr_state=stock_unowned
+  [ "$_pr_mode" = stock ] || _pr_state=applied
+  _pr_failed=0
+  for _pr_prop in persist.camera.tnr.preview persist.vendor.camera.tnr.preview; do
+    _pr_base="$(_ct_preview_base "$_pr_prop")"
+    _pr_cur="$(getprop "$_pr_prop" 2>/dev/null)"
+    if [ "$_pr_mode" = stock ]; then
+      [ -f "$_pr_base" ] || continue
+      _pr_old="$(cat "$_pr_base" 2>/dev/null)"
+      command -v resetprop >/dev/null 2>&1 || { _pr_failed=1; continue; }
+      if [ "$_pr_old" = __ASB_UNSET__ ]; then
+        resetprop --delete "$_pr_prop" >/dev/null 2>&1 || { _pr_failed=1; continue; }
+        _pr_now="$(getprop "$_pr_prop" 2>/dev/null)"
+        [ -z "$_pr_now" ] || { _pr_failed=1; continue; }
+      else
+        resetprop -n "$_pr_prop" "$_pr_old" >/dev/null 2>&1 || { _pr_failed=1; continue; }
+        _pr_now="$(getprop "$_pr_prop" 2>/dev/null)"
+        [ "$_pr_now" = "$_pr_old" ] || { _pr_failed=1; continue; }
+      fi
+      rm -f "$_pr_base" 2>/dev/null || { _pr_failed=1; continue; }
+      _pr_state=restored
+    else
+      [ "$_pr_mode" = on ] && _pr_want=1 || _pr_want=0
+      if [ ! -f "$_pr_base" ]; then
+        mkdir -p "$STATE" 2>/dev/null || { _pr_failed=1; continue; }
+        if [ -z "$_pr_cur" ]; then printf '__ASB_UNSET__\n' > "$_pr_base.tmp" 2>/dev/null; else printf '%s\n' "$_pr_cur" > "$_pr_base.tmp" 2>/dev/null; fi
+        mv -f "$_pr_base.tmp" "$_pr_base" 2>/dev/null || { rm -f "$_pr_base.tmp" 2>/dev/null; _pr_failed=1; continue; }
+      fi
+      command -v resetprop >/dev/null 2>&1 || { _pr_failed=1; continue; }
+      resetprop -n "$_pr_prop" "$_pr_want" >/dev/null 2>&1 || { _pr_failed=1; continue; }
+      _pr_now="$(getprop "$_pr_prop" 2>/dev/null)"
+      [ "$_pr_now" = "$_pr_want" ] || { _pr_failed=1; continue; }
+    fi
+  done
+  if [ "$_pr_failed" != 0 ]; then
+    [ "$_pr_mode" = stock ] && _pr_state=restore_failed || _pr_state=write_failed
+  fi
+  printf 'camtools|preview|mode=%s|state=%s|camera=%s|vendor=%s\n' \
+    "$_pr_mode" "$_pr_state" "$(_ct_preview_value persist.camera.tnr.preview)" "$(_ct_preview_value persist.vendor.camera.tnr.preview)"
+}
+_ct_preview_status() {
+  _ps_mode="$(_ct_preview_mode)"
+  case "$_ps_mode" in stock|off|on) _ps_state=ready ;; *) _ps_state=config_invalid ;; esac
+  _ps_owned=0
+  for _ps_prop in persist.camera.tnr.preview persist.vendor.camera.tnr.preview; do
+    [ -f "$(_ct_preview_base "$_ps_prop")" ] && _ps_owned=$((_ps_owned + 1))
+  done
+  printf 'camtools|preview|mode=%s|state=%s|owned=%s|camera=%s|vendor=%s\n' \
+    "$_ps_mode" "$_ps_state" "$_ps_owned" "$(_ct_preview_value persist.camera.tnr.preview)" "$(_ct_preview_value persist.vendor.camera.tnr.preview)"
+}
+
 _ct_boot() {
   until [ "$(getprop sys.boot_completed 2>/dev/null)" = 1 ]; do sleep 5; done
   if [ -f "$STATE/webcam" ]; then
@@ -338,6 +399,7 @@ case "$MODE" in
   status)
     _ct_wc_status
     _ct_la_status
+    _ct_preview_status
     ;;
   webcam)
     case "$SUB" in
@@ -353,6 +415,14 @@ case "$MODE" in
     case "$SUB" in
       on|off) _ct_la_set "$SUB" ;;
       measure) _ct_la_measure ;;
+      *) printf 'camtools|error|unknown_command\n'; exit 2 ;;
+    esac
+    ;;
+  preview)
+    case "$SUB" in
+      status) _ct_preview_status ;;
+      apply) _ct_preview_run "$(_ct_preview_mode)" ;;
+      restore) _ct_preview_run stock ;;
       *) printf 'camtools|error|unknown_command\n'; exit 2 ;;
     esac
     ;;

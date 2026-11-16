@@ -142,12 +142,10 @@ vendor.audio.compress_capture.enabled=false
 vendor.audio.feature.record_play_concurency.enable=true
 # ASB:AUDIO:END
 # ASB:CAMERA:BEGIN
-persist.camera.tnr.preview=1
 persist.camera.tnr.video=1
 persist.camera.tnr_cds=0
 persist.vendor.camera.mfnr.enable=1
 persist.vendor.camera.tnr.enable=1
-persist.vendor.camera.tnr.preview=1
 persist.vendor.camera.tnr.video=1
 persist.vendor.camera.tnr_cds=0
 persist.camera.mfnr.enable=1

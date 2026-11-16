@@ -80,7 +80,7 @@ asb_kc_mode() {
     kernel_timer_migration:*) _akm_v=off ;;
     kernel_sched_nr_migrate:stock|kernel_sched_nr_migrate:auto|kernel_sched_nr_migrate:1|kernel_sched_nr_migrate:2|kernel_sched_nr_migrate:4|kernel_sched_nr_migrate:8|kernel_sched_nr_migrate:16) ;;
     kernel_sched_nr_migrate:*) _akm_v=4 ;;
-    kernel_sched_stats:stock|kernel_sched_stats:off) ;;
+    kernel_sched_stats:stock|kernel_sched_stats:auto|kernel_sched_stats:off) ;;
     kernel_sched_stats:*) _akm_v=stock ;;
     kernel_sched_autogroup:stock|kernel_sched_autogroup:off|kernel_sched_autogroup:on) ;;
     kernel_sched_autogroup:*) _akm_v=stock ;;
@@ -341,6 +341,56 @@ asb_kc_bore_auto_hold() {
   return 1
 }
 
+asb_kc_smart_value() {
+  case "$2" in idle|light|heavy|conserve) ;; *) return 1 ;; esac
+  case "$1:$2" in
+    kernel_timer_migration:heavy|kernel_hrtimer_migration:heavy) printf '0\n' ;;
+    kernel_timer_migration:*|kernel_hrtimer_migration:*) printf '1\n' ;;
+    kernel_sched_nr_migrate:heavy) printf '8\n' ;;
+    kernel_sched_nr_migrate:light) printf '4\n' ;;
+    kernel_sched_nr_migrate:idle|kernel_sched_nr_migrate:conserve) printf '2\n' ;;
+    kernel_lpm_prediction:heavy) printf '0\n' ;;
+    kernel_lpm_prediction:idle|kernel_lpm_prediction:light|kernel_lpm_prediction:conserve) printf '1\n' ;;
+    kernel_rt_boost:heavy) printf '256\n' ;;
+    kernel_rt_boost:light) printf '128\n' ;;
+    kernel_rt_boost:idle|kernel_rt_boost:conserve) printf '0\n' ;;
+    kernel_sched_stats:idle|kernel_sched_stats:light|kernel_sched_stats:heavy|kernel_sched_stats:conserve) printf '0\n' ;;
+    *) return 1 ;;
+  esac
+}
+asb_kc_smart_plan() { printf '%s\n' "$ASB_KC_STATE/smart.plan"; }
+asb_kc_smart() {
+  _aksm_hint="$1" _aksm_therm="$2" _aksm_screen="$3"
+  case "$_aksm_hint" in 0|1|2|3|4) ;; *) printf 'smart_kernel|state=invalid\n'; return 2 ;; esac
+  case "$_aksm_therm" in 0|1|2) ;; *) printf 'smart_kernel|state=invalid\n'; return 2 ;; esac
+  case "$_aksm_screen" in 0|1) ;; *) printf 'smart_kernel|state=invalid\n'; return 2 ;; esac
+  if [ -e "${ASB_SAFE_MODE_FILE:-/dev/.asb/safe_mode}" ] || [ -e "${ASB_RECOVERY_DISABLED_FILE:-/data/adb/asb/recovery_disabled}" ]; then
+    printf 'smart_kernel|state=safe_mode\n'
+    return 0
+  fi
+  if [ "$_aksm_screen" = 0 ] || [ "$_aksm_therm" = 2 ]; then
+    _aksm_scenario=conserve
+  else
+    case "$_aksm_hint" in
+      3|4) [ "$_aksm_therm" = 1 ] && _aksm_scenario=light || _aksm_scenario=heavy ;;
+      1|2) _aksm_scenario=light ;;
+      *) _aksm_scenario=idle ;;
+    esac
+  fi
+  _aksm_plan="$(asb_kc_smart_plan)"
+  mkdir -p "$ASB_KC_STATE" 2>/dev/null || { printf 'smart_kernel|state=state_failed\n'; return 1; }
+  _aksm_tmp="$_aksm_plan.tmp.$$"
+  (umask 077; printf '%s\n' "$_aksm_scenario" > "$_aksm_tmp" 2>/dev/null) && mv -f "$_aksm_tmp" "$_aksm_plan" 2>/dev/null || { rm -f "$_aksm_tmp" 2>/dev/null; printf 'smart_kernel|state=state_failed\n'; return 1; }
+  _aksm_rc=0
+  for _aksm_key in kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost; do
+    [ "$(asb_kc_mode "$_aksm_key")" = auto ] || continue
+    asb_kc_run apply "$_aksm_key" "$_aksm_scenario" smart || _aksm_rc=1
+  done
+  [ "$_aksm_rc" = 0 ] && _aksm_state=applied || _aksm_state=degraded
+  printf 'smart_kernel|scenario=%s|state=%s\n' "$_aksm_scenario" "$_aksm_state"
+  return "$_aksm_rc"
+}
+
 asb_kc_apply() {
   _aka_key="$1" _aka_smart="${2:-}" _aka_profile="${3:-${ASB_PROFILE:-}}"
   _aka_node="$(asb_kc_node "$_aka_key")" || return 1
@@ -359,6 +409,18 @@ asb_kc_apply() {
   if [ -z "$_aka_profile" ]; then
     _aka_profile="$(cat "$ASB_KC_MODDIR/current_profile" 2>/dev/null | tr -d ' \t\r\n')"
   fi
+  _aka_dynamic=""
+  if [ "$_aka_mode" = auto ] && [ "$_aka_profile" = smart ]; then
+    case "$_aka_key" in
+      kernel_timer_migration|kernel_sched_nr_migrate|kernel_sched_stats|kernel_hrtimer_migration|kernel_lpm_prediction|kernel_rt_boost)
+        _aka_scenario="$_aka_smart"
+        case "$_aka_scenario" in idle|light|heavy|conserve) ;; *) _aka_scenario="$(cat "$(asb_kc_smart_plan)" 2>/dev/null)" ;; esac
+        _aka_dynamic="$(asb_kc_smart_value "$_aka_key" "$_aka_scenario" 2>/dev/null)" ;;
+    esac
+  fi
+  if [ -n "$_aka_dynamic" ]; then
+    :
+  else
   case "$_aka_key:$_aka_mode:$_aka_profile" in
     kernel_bore:auto:*)
       if [ "$_aka_profile" != performance ] || asb_kc_bore_auto_hold; then
@@ -371,12 +433,16 @@ asb_kc_apply() {
     kernel_rt_boost:auto:battery|kernel_rt_boost:auto:performance|kernel_sched_nr_migrate:auto:*) ;;
     *:auto:*) asb_kc_restore "$_aka_key" auto; return $? ;;
   esac
+  fi
   _aka_prev="$(asb_kc_prev "$_aka_key")"
   _aka_saved=none
   [ -f "$_aka_prev" ] && asb_kc_kid_ok "$_aka_prev" && _aka_saved="$(asb_kc_clean "$(cat "$_aka_prev" 2>/dev/null)")"
   [ -e "$_aka_node" ] || { asb_kc_emit "$_aka_key" not_exposed "$_aka_mode" "" "$_aka_saved"; return 1; }
   [ -r "$_aka_node" ] || { asb_kc_emit "$_aka_key" not_readable "$_aka_mode" "" "$_aka_saved"; return 1; }
   [ -w "$_aka_node" ] || { asb_kc_emit "$_aka_key" not_writable "$_aka_mode" "" "$_aka_saved"; return 1; }
+  if [ -n "$_aka_dynamic" ]; then
+    _aka_want="$_aka_dynamic"
+  else
   case "$_aka_key:$_aka_mode" in
     mglru_mode:off) _aka_want=0 ;;
     mglru_mode:on) _aka_want=7 ;;
@@ -404,6 +470,7 @@ asb_kc_apply() {
     kernel_bore:auto|kernel_bore:on) _aka_want=1 ;;
     *) asb_kc_emit "$_aka_key" invalid_request "$_aka_mode" "" "$_aka_saved"; return 1 ;;
   esac
+  fi
   if [ "$_aka_key" = kernel_lpm_prediction ] && asb_kc_lpm_inverted; then
     _aka_want="$(asb_kc_flip "$_aka_want")"
   fi
@@ -469,6 +536,7 @@ asb_kc_follow() {
   _akf_profile="$1" _akf_rc=0
   case "$_akf_profile" in ''|stock) return 0 ;; esac
   _akf_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost kernel_mglru_min_ttl kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_usb_autosuspend kernel_bore"
+  rm -f "$(asb_kc_smart_plan)" 2>/dev/null
   case "$(asb_kc_mode mglru_mode):$_akf_profile" in
     smart:smart) ;;
     *) _akf_keys="mglru_mode $_akf_keys" ;;
@@ -495,6 +563,7 @@ case "${0##*/}" in
         if [ "$_akc_one" = io_scheduler ]; then
           [ -f "$_akc_io" ] && MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" restore
         elif [ -z "$_akc_one" ]; then
+          rm -f "$(asb_kc_smart_plan)" 2>/dev/null
           asb_kc_each restore
           [ ! -f "$_akc_io" ] || MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" restore
         else asb_kc_run restore "$_akc_one"; fi ;;
@@ -505,12 +574,15 @@ case "${0##*/}" in
           asb_kc_each status
           [ ! -f "$_akc_io" ] || MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" sh "$_akc_io" status
         else asb_kc_run status "$_akc_one"; fi ;;
+      smart)
+        [ "$#" -eq 4 ] || { printf 'usage: asb_kernel_controls.sh smart HINT THERM SCREEN\n' >&2; exit 2; }
+        asb_kc_smart "$2" "$3" "$4" ;;
       follow)
         asb_kc_follow "$_akc_one" || exit $?
         if [ -f "$_akc_io" ]; then
           MODDIR="$ASB_KC_MODDIR" ASB_CONF="$ASB_KC_CONF" ASB_PROFILE="$_akc_one" sh "$_akc_io" apply
         fi ;;
-      *) printf 'usage: asb_kernel_controls.sh apply|restore|status [registered_key] | follow <profile>\n' >&2; exit 2 ;;
+      *) printf 'usage: asb_kernel_controls.sh apply|restore|status [registered_key] | follow <profile> | smart HINT THERM SCREEN\n' >&2; exit 2 ;;
     esac
     ;;
 esac
