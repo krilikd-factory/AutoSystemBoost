@@ -16,15 +16,18 @@
 #include <stdint.h>
 
 #define ASB_GAIN_MB_MIN    0
-/* 2500 mB = +25 dB. Raised from 2000 on request.
+/* 3000 mB = +30 dB. Raised from 2500 for rebuilt, compatible DSP libraries.
  *
  * Safe to raise because the output stage is bounded by construction, not by this number:
  * with softclip on, tanh saturation is mathematically limited to 1.0 and cannot clip
- * however hard the input is driven; with it off, the brick-wall limiter holds the ceiling.
+ * however hard the input is driven; with it off, the sample-peak limiter holds the ceiling.
  * More gain past this point therefore buys loudness through saturation and compression,
  * never overflow - the extra 5 dB changes how hard the material is squashed, not whether
- * it stays clean. */
-#define ASB_GAIN_MB_MAX    2500
+ * it stays clean. This is not an oversampled true-peak detector. */
+#define ASB_GAIN_MB_MAX    3000
+/* Embedded in both wrappers so build/diagnostic code can distinguish a rebuilt +30 dB
+ * binary from an older prebuilt. A requested property value alone is not capability proof. */
+#define ASB_GAIN_CAP_MARKER "gain_cap_mb=3000"
 #define ASB_MAX_CH         8
 #define ASB_BASS_DB_MAX    10
 #define ASB_BASS_FREQ_HZ   90.0f   /* shelf corner: body of the bass, not sub rumble */

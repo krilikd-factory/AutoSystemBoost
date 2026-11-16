@@ -524,6 +524,7 @@ extern "C" binder_exception_t createEffect(const AudioUuid* uuid,
         LOG(WARNING) << "ASB createEffect: unexpected uuid " << asbUuidStr(*uuid)
                      << ", creating anyway";
     }
+    LOG(INFO) << "ASB capability: " ASB_GAIN_CAP_MARKER;
     *instance = ndk::SharedRefBase::make<AsbLoudnessEffect>();
     return EX_NONE;
 }
