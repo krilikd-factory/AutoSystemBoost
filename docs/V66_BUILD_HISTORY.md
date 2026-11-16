@@ -4,6 +4,42 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix11 - protected ASB reports, preview TNR ownership and scenario-driven Smart kernel controls
+
+Input: the owner's five-item revision covering Junk Cleanup, camera preview processing, Device Diagnostics
+readability and the authority of the Smart profile over existing kernel interfaces.
+
+- **Junk Cleanup:** the ASB temporary-report category and its complete `/data/local/tmp` mapping are
+  removed from both scan and delete scope. None of the seven former report names can be deleted directly
+  or through a parent-directory glob. Ten bounded categories remain; the existing installer-cache,
+  tombstone and DropBox mappings are explicitly pinned to `/data/system/package_cache`,
+  `/data/tombstones` and `/data/system/dropbox`. Preview, per-category counts/results, unreadable and
+  partial states, the run lock and two-stage five-second confirmation are unchanged.
+- **Camera preview:** `CAMERA_PREVIEW_TNR=stock|off|on` owns only the existing
+  `persist.camera.tnr.preview` and `persist.vendor.camera.tnr.preview` properties. Off/On request 0/1,
+  capture each original value once (including an originally unset property), verify read-back and retain
+  baselines after failure. Stock and uninstall restore exactly; competing managed-property/service writes
+  were removed. A successful property write does not prove that every camera HAL mode honours it and is
+  not evidence of recorded-video quality or smoothness.
+- **Device Diagnostics:** cached and newly collected snapshots stay fully readable. Freshness remains in
+  the timestamp/status text, explicit Refresh still performs a live read, and failed refreshes preserve
+  the previous content without dimming it.
+- **Smart kernel scenarios:** the existing bounded Smart tuner now calls the single registered kernel
+  owner once per scenario pass. In Smart, Auto values of timer migration, hrtimer migration, scheduler
+  migration batch, scheduler debug accounting, LPM prediction and RT boost follow closed
+  idle/light/heavy/conserve mappings. Warm heavy work is derated to light; hot or screen-off work selects
+  conserve. Manual values are excluded. The saved scenario plan supports later reinforcement without
+  restoring static Smart defaults; profile handoff and full restore remove it. Kernel-bound baselines,
+  exact restoration, read-back, missing-node/degraded reporting, the hrtimer coverage rule, RT readiness,
+  Safe mode and recovery gates remain authoritative. No arbitrary path/value writer or polling worker was
+  added. Config schema remains 4: the camera key is additive, and existing Stock/Off values for
+  scheduler debug accounting retain their meaning; only the shipped default and option set changed.
+- **Verification:** targeted host fixtures cover cleanup scope and report survival, camera property
+  baselines/failures/boot/uninstall, snapshot readability and locale coverage, plus Smart scenario
+  transitions, thermal derating, manual exclusions, plan reinforcement and exact restore. Full
+  working-tree and clean-source-ZIP regressions are release gates. These are not physical OnePlus 15 or
+  ColorOS WebView/HAL results; no performance, battery, preview-FPS or recorded-video gain is claimed.
+
 ## V66 dev66 buildfix10 - paint-first Camera, continuous Zygisk controls and faster Monitor navigation
 
 Input: the owner's four-item WebUI revision covering slow Camera category opening, unwanted
