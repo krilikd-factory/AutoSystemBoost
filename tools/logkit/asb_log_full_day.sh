@@ -17,7 +17,7 @@ if [ -t 0 ]; then
 fi
 
 LK_SCENARIO="full_day"
-LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
+LK_OUT_DIR="$(lk_resolve_outbase)/ASB/logs/asb_log_${LK_SCENARIO}_$$"
 LK_HOURS="${1:-0}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 LK_RESUME=0

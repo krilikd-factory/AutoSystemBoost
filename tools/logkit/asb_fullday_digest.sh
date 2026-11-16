@@ -71,7 +71,7 @@
 # Capture directory resolution, first match wins:
 #   1. $1 / $ASB_LK_DIGEST_DIR       (explicit, used by tests)
 #   2. the dir published in the WebUI launch lock (the RUNNING capture)
-#   3. the newest asb_log_full_day_* under /sdcard, /storage/emulated/0, /data/local/tmp
+#   3. the newest capture under each base's ASB/logs, then legacy root-level captures
 # The lock wins over "newest dir" so a finished capture made AFTER a failed/aborted one
 # never shadows the capture the user is actually running.
 
@@ -86,7 +86,7 @@ if [ -z "$_DIR" ] && [ -f "$_LOCK/output_dir" ]; then
   if [ -n "$_c" ] && [ -d "$_c" ]; then _DIR="$_c"; fi
 fi
 if [ -z "$_DIR" ]; then
-  for _b in /sdcard /storage/emulated/0 /data/local/tmp; do
+  for _b in /sdcard/ASB/logs /storage/emulated/0/ASB/logs /data/local/tmp/ASB/logs /sdcard /storage/emulated/0 /data/local/tmp; do
     [ -d "$_b" ] || continue
     _c="$(ls -dt "$_b"/asb_log_full_day_* 2>/dev/null | head -n 1)"
     if [ -n "$_c" ]; then _DIR="$_c"; break; fi
