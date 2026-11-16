@@ -4,6 +4,34 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix2 - bounded Battery Fix ART recovery after Binder refusal
+
+Input: the owner's Battery Fix screenshots from dev66 buildfix1. All twelve initial per-package
+ART attempts returned `Failed transaction (2147483646)`, the per-package `pm` fallback did not
+recover them, and no application was reported as recompiled. The separate battery-statistics reset
+worked and remains unchanged.
+
+- **Binder-specific aggregate recovery:** the first per-package Binder refusal now triggers one
+  aggregate `cmd package compile -m speed-profile -f -a` operation, followed by aggregate `pm`
+  only when `cmd` did not explicitly return `Success`. Ordinary per-package failures keep their
+  existing path; there is no direct `dex2oat`, SELinux bypass or root-context switch.
+- **Fail-closed reporting:** aggregate success is accepted only after Android's explicit
+  `Success`. If both aggregate owners also fail, the worker enters `refused` after the first
+  package instead of repeating twelve equivalent failures. It preserves Android's error text and
+  does not infer that any application was recompiled. The existing final background-dexopt handoff
+  and the one-shot reset of exactly the three battery-statistics files are unchanged.
+- **Coherent WebUI:** the line-oriented protocol adds only the `bulk` phase. A dedicated running
+  message and final refusal text describe all three rejected paths without claiming verified ART
+  recovery; all 13 locale JSON files are synchronized.
+- **Clean test pipelines:** the logkit capture-quality and jank-trace assertions consume their
+  complete producer output rather than letting an early `grep -q`/`head` match close the pipe.
+  The diagnostic helpers and their reports are unchanged.
+- **Host-only evidence:** targeted fixtures cover aggregate `cmd` success, aggregate `pm` success,
+  complete Binder refusal, exact call counts, cleared stale errors on success and preserved error
+  provenance on refusal. These tests validate control flow and reporting, not physical ART or
+  PackageManager recovery on the owner's OnePlus 15; field validation still requires rerunning
+  Battery Fix on that device.
+
 ## V66 dev66 buildfix1 - deterministic module-card settle CI
 
 Input: the owner's three host-regression shards. `system-smart` stopped in
