@@ -10873,7 +10873,10 @@ function bfxPaintFrom(f) {
   const started = bfxNum(f.started), finished = bfxNum(f.finished), tnow = bfxNum(f.now);
   const running = cs === 'running';
   let artText = T('bfx_art_idle', 'Not run yet'), artState = 'off', ratio = -1, nowText = '';
-  if (running && f.phase === 'finishing') {
+  if (running && f.phase === 'bulk') {
+    artState = 'run'; ratio = total ? done / total : 0;
+    artText = T('bfx_art_bulk', 'Android is compiling all apps in one system operation…');
+  } else if (running && f.phase === 'finishing') {
     artState = 'run'; ratio = 1;
     artText = T('bfx_art_finishing', 'Final background optimisation…');
   } else if (running) {
@@ -10900,7 +10903,7 @@ function bfxPaintFrom(f) {
     artState = 'fail';
     const artErr = f.err_text || T('bfx_art_refused_none', 'no reason given');
     artText = /Failed transaction/i.test(artErr)
-      ? bfxT('bfx_art_binder', 'Android’s PackageManager Binder call failed ({fail} of {done} attempts); the pm fallback did not succeed either. No app was recompiled. The battery reset is still scheduled. Android said: {err}', { fail: fail, done: done, err: artErr })
+      ? bfxT('bfx_art_binder', 'Android rejected the per-package Binder call, its pm fallback and the all-package compile fallback. No verified recompilation was completed. The battery reset is still scheduled. Android said: {err}', { err: artErr })
       : bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: artErr });
   }
   bfxSetStep('bfxStepArt', artState, artText);
