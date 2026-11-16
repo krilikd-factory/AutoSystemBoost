@@ -757,6 +757,12 @@ KernelSU-family managers run `ksu.exec` synchronously on the WebView's JavaScrip
 
 Browser bench with the bridge modelled as blocking (60 ms per call), before → after: Home → Monitor 7 → 1 root calls, Monitor → Settings 16 → 2, Home → Settings 11 → 0, Settings → Home 1 → 0, Zygisk pill 13 → 1, Monitor open for 9 s 19 → 3. These are call counts on a desktop host; the time each call costs depends on the phone and the manager.
 
+The once-per-boot WebUI splash collects the complete Device, Infinite Log and Zygisk snapshots in
+addition to Live and Config. Those three pages reuse the snapshot on navigation and label it as such;
+only their explicit Refresh buttons collect again. Device and Infinite Log can also use their bounded
+persistent cache. A missing usable snapshot still triggers one bounded collector. Live/Monitor retain
+their fresh-read rules, and no persistent polling worker is involved.
+
 On Device diagnostics the LSPosed hook evidence (logs, crash records, package and process lists) is collected from its own card on request (`asb_device_info.sh --lsposed`); asbdiag still collects it in full.
 
 ### 🔔 11.6. Notification fix and one battery-drain figure
@@ -1073,7 +1079,7 @@ Device check that app processes can read the policy: after enabling a feature an
 
 ### 📊 12.5. System-pressure scale
 
-Device schema 5 adds an on-demand pressure heuristic. It reads procfs/sysfs only when the Device collector or the informational `asbdiag` section is requested; there is no background pressure sampler. Every available component is shown with its measured source value and actual weight:
+Device schema 5 added an on-demand pressure heuristic. Schema 6 separately reports ADIOS config/symbol/queue exposure and actual `[adios]` selection, plus static, validated managed and conditional safe-media ASB properties with configured/live/readback values. Missing ADIOS evidence remains unknown, and no property mismatch is rewritten by this read-only page. It reads procfs/sysfs only when the Device collector or the informational `asbdiag` section is requested; there is no background pressure sampler. Every available component is shown with its measured source value and actual weight:
 
 | Component | Base weight | Component calculation |
 |:---|:---:|:---|
