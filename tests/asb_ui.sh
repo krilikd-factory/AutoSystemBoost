@@ -6345,8 +6345,14 @@ done
   cat <<'EOF'
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
+const CFG_ITEMS = [
+  { key:'night_modem_idle', def:'0' }, { key:'net_screen_off_lte', def:'0' },
+  { key:'doze_level', def:'stock' }, { key:'sustained_temp_mode', def:'stock' },
+  { key:'sustained_temp_enter', def:'65' }, { key:'perf_ceiling_pct', def:'100' }
+];
 EOF
-  for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
+  sed -n '/^const LOG_REPORT_APPLY_WHITELIST = {/,/^};/p' "$H"
+  for fn in Tcfg Topt cfgDefOf logReportRecommendations logReportRecommendationLine parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
     logReportSysuiSteady logReportWakeBad logReportVendorHeld logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportRecorderGap logReportAnalyze logReportHighRefresh logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportTweakEvidence logReportZygiskGovernor logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
@@ -6469,8 +6475,9 @@ dps.profs[2].onMin = 10;
 chk(!logReportTips(dps).some(function (t) { return t.key === 'lr_tip_prof_save'; }), 'the tip stays quiet without enough minutes on the cheap profile');
 const tips = logReportTips(d);
 const keys = tips.map(function (t) { return t.key; });
-chk(keys.join(',') === 'lr_tip_crash,lr_tip_night_modem,lr_tip_awake_who,lr_tip_wl_enable,lr_tip_jank_ok,lr_tip_audio', 'fix200 advice, worst first, six cards max, the awake tip names its holder (fix206): ' + keys.join(','));
-chk(tips[2].vars.who === 'com.amurcanov.tgwsproxy' && tips[2].vars.awake === '25', 'the awake tip names the top live holder: ' + JSON.stringify(tips[2].vars));
+chk(keys.join(',') === 'lr_tip_crash,lr_tip_night_modem,lr_tip_night_doze,lr_tip_awake_who,lr_tip_wl_enable,lr_tip_jank_ok', 'fix200 advice, worst first, six cards max, the awake tip names its holder (fix206): ' + keys.join(','));
+const awakeTip = tips.find(function (t) { return t.key === 'lr_tip_awake_who'; });
+chk(awakeTip && awakeTip.vars.who === 'com.amurcanov.tgwsproxy' && awakeTip.vars.awake === '25', 'the awake tip names the top live holder: ' + JSON.stringify(awakeTip && awakeTip.vars));
 /* without live holders the awake tip names the counted causes (fix210): the loudest
    alarm first, then the loudest holder, then the generic wording */
 d.wlive = [];
@@ -6495,8 +6502,10 @@ chk(logReportTips(d).map(function (t) { return t.key; }).indexOf('lr_tip_awake')
 d.wlt = [{ tag: '*alarm*', n: 54 }, { tag: '*launch*', n: 28 }];
 d.wla = [{ tag: 'com.android.systemui.aod.HIDE_TIME', n: 18 }, { tag: 'android.app.backup.FullBackupJob', n: 6 }];
 d.wlive = [{ tag: 'TgWsProxy::ServiceWakeLock', pct: 78, min: 24, pkg: 'com.amurcanov.tgwsproxy' }];
-chk(tips[1].vars.set === I18N.ru.cfg.night_modem_idle.name, 'the night-modem tip names the setting as Settings names it: ' + tips[1].vars.set);
-chk(tips[3].vars.set === I18N.ru.cfg.wakelock_action.name, 'the wakelock tip names its setting too: ' + tips[3].vars.set);
+const nightModemTip = tips.find(function (t) { return t.key === 'lr_tip_night_modem'; });
+const wakelockTip = tips.find(function (t) { return t.key === 'lr_tip_wl_enable'; });
+chk(nightModemTip && nightModemTip.vars.set === I18N.ru.cfg.night_modem_idle.name, 'the night-modem tip names the setting as Settings names it: ' + (nightModemTip && nightModemTip.vars.set));
+chk(wakelockTip && wakelockTip.vars.set === I18N.ru.cfg.wakelock_action.name, 'the wakelock tip names its setting too: ' + (wakelockTip && wakelockTip.vars.set));
 d.cfg.wakelock_action = '1';
 const keys2 = logReportTips(d).map(function (t) { return t.key; });
 chk(keys2.indexOf('lr_tip_app') >= 0 && keys2.indexOf('lr_tip_wl_enable') < 0, 'with the setting already on, the tip just reports the app: ' + keys2.join(','));
@@ -6640,7 +6649,7 @@ const sortFixture = parseLogReport([
   'heat\tpeak_phase=active\twarm_min=47\tskin_min=12', 'thermal\tcpu=52', 'throttle\tclamps=3',
   'asbcost\tcpu_msh=9000\twrites_h=52\twakes_h=300', 'crash\tcount=3\tasb=0', ''].join('\n'));
 const sortKeys = logReportAnalyze(sortFixture).observations.map(t => t.key).join(',');
-chk(sortKeys === 'lr_tip_awake_who,lr_tip_sradio,lr_tip_night,lr_tip_audio',
+chk(sortKeys === 'lr_tip_awake_who,lr_tip_sradio,lr_tip_night_doze,lr_tip_night,lr_tip_audio',
   'observations use the same stable priority order as actions: ' + sortKeys);
 chk(analysis.chains.some(c => c.kind === 'hypothesis' && c.key === 'lr_chain_holder'), 'holder causality remains a hypothesis');
 chk(analysis.chains.some(c => c.kind === 'fact' && c.key === 'lr_chain_asb_crash'), 'an ASB crash remains a fact');
@@ -7300,6 +7309,32 @@ dataDay.sections.lte = { en: '1', light: '1', applies: '6', lte_min: '41', watch
 const ranDx = logReportDiagnose(dataDay);
 chk(!ranDx.some(x => x.area === 'lte') && ranDx.find(x => x.area === 'net').also.some(a => a.key === 'lr_dx_lte_ran' && a.v.n === '6'), 'a switch that ran is reported as working, not as a fault');
 chk(!logReportTips(dataDay, true).some(t => t.key === 'lr_tip_lte_idle'), 'no fault action once the switch ran');
+/* buildfix9: concrete values come only from the evidence rules and the closed whitelist. */
+const applyDay = parseLogReport([
+  'meta\telapsed_min=400\tprofile=balanced',
+  'night\tdur_min=240\tdrop=4\tpctph=1.0\tawake=8',
+  'sradio\tmib=80', 'cfg\tkey=net_screen_off_lte\tvalue=0',
+  'jank\tpct=8.0\tjps=3.0\tframes=100000',
+  'jcap_main\tyes=8.0\tyes_f=20000\tyes_jps=3.0\tno=5.0\tno_f=80000\tno_jps=2.0',
+  'heat\tpeak_phase=active\tpeak_c=49\twarm_min=45\tskin_min=0',
+  'thermal\tcpu=49\tsurf=35',
+  'cfg\tkey=night_modem_idle\tvalue=0', 'cfg\tkey=doze_level\tvalue=stock',
+  'cfg\tkey=perf_ceiling_pct\tvalue=85', 'cfg\tkey=sustained_temp_mode\tvalue=stock'
+].join('\n'));
+const applyRecs = logReportRecommendations(applyDay);
+const applyMap = {}; applyRecs.forEach(r => { applyMap[r.key] = r.value; });
+const applyExpected = { night_modem_idle:'1', doze_level:'night', net_screen_off_lte:'1', perf_ceiling_pct:'100', sustained_temp_mode:'smart' };
+chk(Object.keys(applyMap).length === Object.keys(applyExpected).length && Object.keys(applyExpected).every(k => applyMap[k] === applyExpected[k]),
+  'evidence-backed current→target operations are incomplete or unbounded: ' + JSON.stringify(applyRecs));
+chk(applyRecs.every(r => r.from !== r.value && LOG_REPORT_APPLY_WHITELIST[r.key].indexOf(r.value) >= 0), 'a recommendation escaped the value whitelist');
+chk(logReportRecommendationLine(logReportTips(applyDay, true).find(t => t.op && t.op.key === 'perf_ceiling_pct'), applyDay).indexOf('85') >= 0,
+  'the report does not show the current value beside the recommended ceiling');
+const trafficOnly = parseLogReport('meta\telapsed_min=200\nsradio\tmib=800\ncfg\tkey=net_screen_off_lte\tvalue=0\n');
+chk(!logReportRecommendations(trafficOnly).some(r => r.key === 'net_screen_off_lte'), 'traffic volume alone became an apply-worthy energy verdict');
+const manualHeat = parseLogReport('meta\telapsed_min=200\nheat\tpeak_phase=active\tpeak_c=50\twarm_min=40\tskin_min=0\nthermal\tcpu=50\tsurf=35\ncfg\tkey=sustained_temp_mode\tvalue=manual\ncfg\tkey=sustained_temp_enter\tvalue=70\n');
+chk(logReportRecommendations(manualHeat).some(r => r.key === 'sustained_temp_enter' && r.value === '65'), 'sustained manual heat did not recommend the bounded 65 °C value');
+const alreadySet = parseLogReport('meta\telapsed_min=200\nnight\tdur_min=240\tdrop=4\tpctph=1.0\tawake=8\ncfg\tkey=night_modem_idle\tvalue=1\ncfg\tkey=doze_level\tvalue=night\n');
+chk(!logReportRecommendations(alreadySet).length, 'already matching values were offered as changes');
 let exportCommands = [], exportErrno = 0; const exportToasts = [];
 function toast(msg, kind) { exportToasts.push({msg:msg, kind:kind}); }
 async function run(cmd) { exportCommands.push(cmd); return { errno:exportErrno, stderr:'write failed' }; }
@@ -7377,7 +7412,8 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
         'lr_th_jps','lr_th_state','lr_jwake','lr_jwake_fmt','lr_jwake_top',
         'lr_jphase_head','lr_jstate_head','lr_gauge_note','lr_nd_verdict_short',
         'lr_tip_jank_wake','lr_tip_jank_wake_wh',
-        'lr_sec_nightd_short','lr_nd_spent_short','lr_tip_awake_aod','lr_tip_sradio']
+        'lr_sec_nightd_short','lr_nd_spent_short','lr_tip_awake_aod','lr_tip_sradio',
+        'lr_tip_night_doze','lr_tip_jank_cap_set','lr_tip_heat_manual_set','lr_recommend_value']
 KEYS += ['lr_sec_summary','lr_sec_causes','lr_sec_actions','lr_sec_observations',
          'lr_sum_drain','lr_sum_thermal','lr_sum_smooth','lr_sum_sleep','lr_sum_asb',
          'lr_state_good','lr_state_normal','lr_state_problem','lr_state_unknown',
@@ -7419,6 +7455,8 @@ PH = {'lr_running': ['{min}', '{h}'], 'lr_running_open': ['{min}'], 'lr_crash_n'
       'lr_tip_prof_save': ['{cheap}', '{x}', '{busy}', '{y}'],
       'lr_times': ['{n}'],
       'lr_tip_awake_alarm': ['{awake}', '{who}'], 'lr_tip_awake_hold': ['{awake}', '{who}'],
+      'lr_tip_night_doze': ['{pct}', '{set}'], 'lr_tip_jank_cap_set': ['{pct}', '{yes}', '{no}', '{set}', '{from}'],
+      'lr_tip_heat_manual_set': ['{min}', '{set}', '{from}'], 'lr_recommend_value': ['{set}', '{from}', '{to}'],
       'lr_tip_heat_warm': ['{min}', '{phase}'], 'lr_tip_heat_warm_set': ['{min}', '{phase}', '{set}'],
       'lr_tip_heat_calm': ['{cpu}'], 'lr_mwake_fmt': ['{n}', '{per}', '{sec}'],
       'lr_trend_night': ['{was}', '{now}'], 'lr_trend_day': ['{was}', '{now}'],
@@ -8297,9 +8335,9 @@ assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','rekern
 # fix252: five groups in reading order - hardware, firmware and system, kernel, root, ASB.
 order = re.search(r'const DEVICE_SECTION_ORDER = \[(.*?)\n\];', h, re.S).group(1)
 specs = re.findall(r"\['([a-z_]+)', '(dev_sec_[a-z_]+)', '[^']*', '([a-z]+)'", order)
-assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','system_load','kernel','kernel_origin','kernel_bore',
+assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','system_load','kernel','kernel_origin','kernel_bore','adios',
                                  'kernel_btf','kernel_ebpf','kernel_fuse_bpf','kernel_features','kernel_runtime','kernel_external','kernel_config',
-                                 'root','susfs','metamodule','companion_modules','zygisk_provider','zygisk_observer','lsposed_hooks','asb','asb_caps','meta'], specs
+                                 'root','susfs','metamodule','companion_modules','zygisk_provider','zygisk_observer','lsposed_hooks','asb','asb_properties','asb_caps','meta'], specs
 groups = [x[2] for x in specs]
 assert groups == sorted(groups, key=['hw','sw','kernel','root','asb'].index), 'a group is split: ' + str(groups)
 assert specs[0][1] == 'dev_sec_device' and specs[6][1] == 'dev_sec_firmware', 'the phone identity opens the hardware group'
@@ -8781,6 +8819,25 @@ for fn in ('function cfgRenderBatteryFixCard(', 'function bfxPaintFrom(', 'async
     assert fn in h, 'missing ' + fn
 assert "cfgShowGroup('infirmary')" in h
 assert '!sectionItems.length && !section.card' in h
+import json
+from pathlib import Path
+keys = {
+ 'inf_advice_title':(), 'inf_advice_desc':(), 'inf_advice_note':(), 'inf_advice_apply':(),
+ 'inf_advice_applying':(), 'inf_advice_confirm':(), 'inf_advice_refresh':(),
+ 'inf_advice_count':('{n}',), 'inf_advice_loading':(), 'inf_advice_loading_chip':(),
+ 'inf_advice_none':(), 'inf_advice_no_data':(), 'inf_advice_no_changes':(),
+ 'inf_advice_no_changes_chip':(), 'inf_advice_read_failed':(),
+ 'inf_advice_finished':('{applied}','{failed}','{skipped}'),
+ 'inf_advice_result_applied':(), 'inf_advice_result_failed':(),
+ 'inf_advice_result_changed':(), 'inf_advice_result_pending':(),
+ 'bfx_art_partial':('{ok}','{fail}','{left}'), 'bfx_art_binder':('{err}',)
+}
+for p in sorted((Path(sys.argv[1]).parent/'i18n').glob('*.json')):
+ d=json.loads(p.read_text(encoding='utf-8'))
+ assert 'bfx_art_bulk' not in d, p.name + ': obsolete aggregate compile phase remains'
+ for k, ph in keys.items():
+  assert isinstance(d.get(k),str) and d[k], (p.name,k)
+  for token in ph: assert token in d[k], (p.name,k,token)
 assert "if (groupId === 'infirmary') cfgRenderInfirmaryHero(list);" in h
 PY
 command -v node >/dev/null 2>&1 || { echo "SKIP webui infirmary runtime: no node"; exit 0; }
@@ -8821,7 +8878,43 @@ async function run(cmd) {
 }
 EOF
   sed -n '/^const BATTERY_FIX_SCRIPT = MD/,/^function cfgOpenInfirmary() {/p' "$H" | sed '/^function cfgOpenInfirmary() {/d'
+  for fn in infAdviceValue infAdviceReadConfig infAdvicePaint infAdviceApply; do
+    sed -n "/^async function $fn(/,/^}/p; /^function $fn(/,/^}/p" "$H"
+  done
   cat <<'EOF'
+const CFG_FILE = '/data/adb/asb/governor.conf';
+const CFG_ITEMS = [
+  { key:'night_modem_idle', def:'0' }, { key:'doze_level', def:'stock' },
+  { key:'perf_ceiling_pct', def:'100' }
+];
+let _cfgVals = {}, _infAdviceData = null, _infAdviceLoading = false, _infAdviceBusy = false;
+let _infAdviceArmed = 0, _infAdviceResults = [], _infAdviceError = '';
+let adviceRecs = [], adviceSaved = {}, adviceFinalErrno = 0, adviceWrites = [], adviceCfgLoads = 0;
+let adviceRepaintOnWrite = false, adviceOptimisticOnly = false;
+function Tcfg(k, f, d) { return k; }
+function Topt(v) { return String(v); }
+function logReportRecommendations() { return adviceRecs; }
+function logReportTipText() { return ''; }
+async function cfgLoad() { adviceCfgLoads++; return false; }
+function adviceNodes() {
+  ['infAdviceRows','infAdviceApply','infAdviceRefresh','infAdviceChip'].forEach(function (id) {
+    const e = mk(id === 'infAdviceRows' ? 'div' : (id === 'infAdviceChip' ? 'span' : 'button')); e.id = id;
+  });
+}
+async function cfgSet(key, value) {
+  adviceWrites.push(key + '=' + value);
+  if (adviceOptimisticOnly) _cfgVals[key] = value;
+  else adviceSaved[key] = value;
+  if (adviceRepaintOnWrite) { adviceNodes(); infAdvicePaint(); }
+}
+function adviceResult(key) { return _infAdviceResults.filter(function (r) { return r.key === key; })[0]; }
+function adviceReset(recs, saved) {
+  adviceRecs = recs; adviceSaved = Object.assign({}, saved || {}); adviceFinalErrno = 0;
+  adviceWrites = []; adviceCfgLoads = 0; adviceRepaintOnWrite = false; adviceOptimisticOnly = false;
+  _infAdviceData = { cfg:{} }; _infAdviceLoading = false; _infAdviceBusy = false;
+  _infAdviceArmed = 0; _infAdviceResults = []; _infAdviceError = ''; _cfgVals = {};
+  adviceNodes(); infAdvicePaint();
+}
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const B = 'eligible=1 reason=- level=100 charging=1 ';
 const tail = ' now=2000 last_reset=- removed= missing= fresh=-';
@@ -8870,8 +8963,8 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
 
   await paint(B + 'reset=pending compile=running phase=finishing total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=-' + tail);
   chk(step('bfxStepArt').text === 'Final background optimisation…' && reg.bfxBar.style.transform === 'scaleX(1.0000)', 'finishing phase not shown');
-  await paint(B + 'reset=pending compile=running phase=bulk total=300 done=0 ok=0 fail=0 cur=- started=1000 finished=-' + tail);
-  chk(step('bfxStepArt').text === 'Android is compiling all apps in one system operation…' && reg.bfxArtNow.textContent === '', 'aggregate Binder recovery phase not shown');
+  await paint(B + 'reset=pending compile=partial phase=partial total=560 done=4 ok=1 fail=3 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
+  chk(step('bfxStepArt').cls === 'bfx-step is-wait' && /1 succeeded, 3 failed, 556 not attempted/.test(step('bfxStepArt').text) && /no aggregate success is inferred/.test(step('bfxStepArt').text), 'partial Binder recovery hid failures or fabricated unprocessed apps: ' + step('bfxStepArt').text);
 
   await paint(B + 'reset=pending compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-ok' && step('bfxStepArt').text === 'Done: 297 succeeded, failed: 3 · 10 min', 'compile result wrong: ' + step('bfxStepArt').text);
@@ -8900,7 +8993,7 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
   await paint('eligible=1 reason=- level=100 charging=1 reset=none compile=refused phase=refused total=560 done=12 ok=0 fail=12 cur=- started=1000 finished=1010' + tail);
   chk(/Android said: no reason given$/.test(step('bfxStepArt').text), 'a refusal without output has no fallback');
   await paint(B + 'reset=pending compile=refused phase=refused total=560 done=1 ok=0 fail=1 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
-  chk(/per-package Binder call, its pm fallback and the all-package compile fallback/.test(step('bfxStepArt').text) && /No verified recompilation/.test(step('bfxStepArt').text), 'total Binder refusal still describes the old twelve-attempt path: ' + step('bfxStepArt').text);
+  chk(/repeatedly rejected both package-scoped compile calls/.test(step('bfxStepArt').text) && /no all-package fallback or ART\/Dalvik cleanup was used/.test(step('bfxStepArt').text) && /unprocessed apps were not counted as compiled/.test(step('bfxStepArt').text), 'Binder refusal does not describe the bounded package-scoped path: ' + step('bfxStepArt').text);
 
   await paint(B + 'reset=pending compile=scheduled phase=scheduled total=560 done=1 ok=0 fail=0 cur=- started=1000 finished=1002' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-wait' && /background optimisation job was started/.test(step('bfxStepArt').text) && /does not confirm speed-profile/.test(step('bfxStepArt').text), 'background scheduling was presented as verified compilation: ' + step('bfxStepArt').text);
@@ -8924,6 +9017,53 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
 
   await paint('');
   chk(reg.bfxRun.disabled && step('bfxStepCond').text === '—% · not on charge', 'an unreadable status enabled the fix');
+
+  /* buildfix9: recommendation application is a transaction preview, not an optimistic badge.
+   * The direct governor.conf reads are scripted independently of cfgSet()'s memory update. */
+  const recNight = { key:'night_modem_idle', from:'0', value:'1', tip:{} };
+  const recDoze = { key:'doze_level', from:'stock', value:'night', tip:{} };
+  run = async function (cmd) {
+    if (cmd === 'cat ' + CFG_FILE) {
+      if (adviceFinalErrno) return { errno:adviceFinalErrno, stdout:'', stderr:'read failed' };
+      return { errno:0, stdout:Object.keys(adviceSaved).map(k => k + '=' + adviceSaved[k]).join('\n') };
+    }
+    return { errno:0, stdout:'' };
+  };
+  adviceReset([recNight], { night_modem_idle:'0' });
+  await infAdviceApply();
+  chk(!adviceWrites.length && _infAdviceArmed > 0 && /Confirm the listed changes/.test(reg.infAdviceApply.textContent), 'the first recommendation tap wrote without confirmation');
+  await infAdviceApply();
+  chk(adviceWrites.join(',') === 'night_modem_idle=1' && adviceResult('night_modem_idle').state === 'applied', 'confirmed recommendation was not saved and read back: ' + JSON.stringify(_infAdviceResults));
+  chk(adviceCfgLoads === 2, 'related config state was not refreshed around the write');
+
+  adviceReset([recNight, recDoze], { night_modem_idle:'1', doze_level:'night' });
+  await infAdviceApply(); await infAdviceApply();
+  chk(adviceResult('night_modem_idle').state === 'changed' && adviceResult('doze_level').state === 'changed' && !adviceWrites.length,
+    'a value changed since preview was written or mislabeled: ' + JSON.stringify(_infAdviceResults));
+
+  adviceReset([recNight, recDoze], { night_modem_idle:'0', doze_level:'stock' });
+  adviceOptimisticOnly = true;
+  await infAdviceApply(); await infAdviceApply();
+  chk(adviceResult('night_modem_idle').state === 'failed' && adviceResult('doze_level').state === 'failed' && _cfgVals.night_modem_idle === '1',
+    'optimistic in-memory values were accepted as read-back: ' + JSON.stringify(_infAdviceResults));
+
+  adviceReset([recNight], { night_modem_idle:'0' }); adviceFinalErrno = 1;
+  await infAdviceApply(); await infAdviceApply();
+  chk(adviceResult('night_modem_idle').state === 'failed', 'a failed final config read became applied');
+
+  adviceReset([recNight, recDoze], { night_modem_idle:'0', doze_level:'stock' });
+  adviceRepaintOnWrite = true;
+  await infAdviceApply(); await infAdviceApply();
+  chk(adviceResult('night_modem_idle').state === 'applied' && adviceResult('doze_level').state === 'applied' &&
+      adviceResult('night_modem_idle').target === '1' && adviceResult('doze_level').target === 'night',
+    'Infirmary repaint or multiple targets corrupted the results: ' + JSON.stringify(_infAdviceResults));
+  chk(reg.infAdviceRows.children.some(function (n) { return /night_modem_idle · applied/.test(n.textContent); }) &&
+      reg.infAdviceRows.children.some(function (n) { return /doze_level · applied/.test(n.textContent); }), 'results were painted into detached nodes');
+
+  adviceReset([recNight, recDoze], null); adviceFinalErrno = 1;
+  await infAdviceApply(); await infAdviceApply();
+  chk(!adviceWrites.length && _infAdviceResults.every(function (r) { return r.state === 'failed'; }), 'an unreadable pre-write config did not fail closed');
+
   onScreen = false;
   timers.forEach(function (t) { t.live = false; });
   await paint(B + idle + tail);
@@ -8935,7 +9075,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui infirmary: designed pharmacy button beside Reset in every theme; Battery Fix is a live three-step checklist (condition, app-by-app ART progress with ETA, verified statistics reset) whose button follows the state: run, stop, reboot to finish; stopped/interrupted/failed are named; polls fast only while compiling and only on screen"
+echo "PASS webui infirmary: Battery Fix states plus evidence-backed recommendations with two-tap confirmation, changed-since-preview guard, independent saved-config read-back and repaint-safe per-setting results"
 )
 
 t_webui_home_fit_after_parse_runtime() (
@@ -9173,6 +9313,13 @@ printf 'pinned\n' > "$T/sys/fs/bpf/prog_fixture"; printf '33\n' > "$T/sys/fs/fus
 mkdir -p "$T/proc/sys/net/core"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_enable"
 printf '0\n' > "$T/proc/sys/net/core/bpf_jit_harden"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_kallsyms"
 cp "$ROOT/tools/asb_kernel_uv_coexist.sh" "$T/mod/tools/"
+cp "$ROOT/system.prop" "$T/mod/system.prop"
+cp "$ROOT/runtime/asb_managed.props" "$ROOT/features.conf" "$T/mod/runtime/"
+# Only the blocks used by the property fixtures are selected; all others stay explicit.
+printf 'DISPLAY=1
+BT=1
+AUDIO=1
+' > "$T/mod/features.conf"
 cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_zygisk.sh" "$ROOT/runtime/asb_zygisk_info.sh" "$ROOT/runtime/asb_lsposed_info.sh" "$T/mod/runtime/"
 printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\n' > "$T/mod/config/governor.conf"
 printf '0\n' > "$T/proc/sys/kernel/hrtimer_migration"
@@ -9229,6 +9376,8 @@ printf '370\n' > "$T/sys/class/power_supply/battery/cycle_count"
 cat > "$T/config" <<'EOF'
 CONFIG_LOCALVERSION="-custom"
 CONFIG_SCHED_BORE=y
+CONFIG_MQ_IOSCHED_ADIOS=y
+CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y
 CONFIG_PREEMPT=y
 CONFIG_HZ=300
 CONFIG_NOMOUNT=y
@@ -9265,6 +9414,12 @@ CONFIG_FUSE_FS=y
 CONFIG_FUSE_BPF=y
 EOF
 gzip -c "$T/config" > "$T/proc/config.gz"
+printf '0000000000000000 t adios_init\n' > "$T/proc/kallsyms"
+for _q in sda nvme0n1 sdb loop0; do mkdir -p "$T/sys/block/$_q/queue"; done
+printf '0\n' > "$T/sys/block/sda/queue/rotational"; printf 'none mq-deadline [adios] kyber\n' > "$T/sys/block/sda/queue/scheduler"
+printf '0\n' > "$T/sys/block/nvme0n1/queue/rotational"; printf '[none] mq-deadline adios kyber\n' > "$T/sys/block/nvme0n1/queue/scheduler"
+printf '1\n' > "$T/sys/block/sdb/queue/rotational"; printf 'none [adios]\n' > "$T/sys/block/sdb/queue/scheduler"
+printf '0\n' > "$T/sys/block/loop0/queue/rotational"; printf 'none [adios]\n' > "$T/sys/block/loop0/queue/scheduler"
 cat > "$T/susfs" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >> "$SUSFS_LOG"
@@ -9315,6 +9470,7 @@ run() {
   ASB_DEVINFO_MODDIR="$T/mod" ASB_DEVINFO_SYS="$T/sys" ASB_DEVINFO_PROC="$T/proc" \
   ASB_DEVINFO_DATA="$T/data" ASB_DEVINFO_PROP_FILE="$T/props" ASB_DEVINFO_SUSFS="$T/susfs" \
   ASB_DEVINFO_STATE="$T/state" ASB_DEVINFO_KSUD="$T/ksud" ASB_DEVINFO_DEV="$T/dev" ASB_DEVINFO_TC="$T/tc" \
+  ASB_DEVINFO_ASB_STATE="$T/data/asb" \
   KSUD_MODE="${KSUD_MODE:-empty}" TC_MODE="${TC_MODE:-none}" TC_LOG="$T/tc.log" \
   KSUD_LOG="$T/ksud.log" SUSFS_LOG="$T/susfs.log" sh "$D" "$@"
 }
@@ -9324,7 +9480,7 @@ want() {
 }
 out="$(run)"
 printf '%s\n' "$out" | awk -F '\t' 'NF < 4 || $1 != "D" || $2 == "" || $3 == "" { bad = 1 } END { exit bad }' || fail "malformed TSV"
-want meta schema 5; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
+want meta schema 6; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
 want lsposed_hooks present 0
 want kernel_origin assessment custom-like; want kernel_origin confidence 'indicative; not a provenance proof'
 want kernel_bore config y; want kernel_bore runtime_interface readable; want kernel_bore state on
@@ -9361,10 +9517,65 @@ want zygisk_observer enabled 0; want zygisk_observer mode observer; want zygisk_
 want zygisk_observer lifecycle_hints 0; want zygisk_observer crash_count unknown; want zygisk_observer anr_count unknown
 want zygisk_observer policy_hints 0; want zygisk_observer foreground_events 'not exposed without global hooks; is_top_app is not tracking'
 want kernel_runtime hrtimer_migration 0; want kernel_runtime lpm_prediction 1; want kernel_runtime usb_autosuspend -1
+# buildfix9: ADIOS build, code, exposure and actual selection are separate evidence.
+want adios config y; want adios default_config y; want adios symbols 'ADIOS scheduler symbols found'
+want adios runtime_interface 'exposed in queue scheduler lists'; want adios exposed_queues 'nvme0n1,sda'
+want adios active_queues sda; want adios inactive_queues nvme0n1
+want adios selection 'active on some exposed queues; mixed selection'; want adios asb_mode stock
+want adios version 'not runtime-discoverable from config, symbols or queue scheduler lists'
+printf '%s\n' "$out" | grep -E '^D\tadios\t(exposed_queues|active_queues).*sdb|loop0' >/dev/null && fail 'rotational or non-target queue entered ADIOS evidence'
+# The shipped static payload is deliberately empty; this is not a collector error.
+want asb_properties static_entries 0
+want asb_properties static_note 'No static assignments by design; optional properties use the validated managed owner'
+want asb_properties managed_status 'not exposed'; want asb_properties managed_selected 0; want asb_properties managed_not_selected 0
 printf '%s\n' "$out" | grep -E '^D	asb_caps	(android_api|kernel|model)	' >/dev/null && fail "ASB capabilities repeat firmware/kernel identity instead of capabilities"
 printf '%s\n' "$out" | grep 'DO_NOT_COLLECT' >/dev/null && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
 grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"
+# Every exposed non-rotational queue active; then exposed but not selected.
+printf 'none mq-deadline [adios] kyber\n' > "$T/sys/block/nvme0n1/queue/scheduler"
+out="$(run --kernel)"; want adios selection 'active on every exposed queue found'; want adios active_queues 'nvme0n1,sda'; want adios inactive_queues none
+printf '[none] mq-deadline adios kyber\n' > "$T/sys/block/sda/queue/scheduler"
+printf '[none] mq-deadline adios kyber\n' > "$T/sys/block/nvme0n1/queue/scheduler"
+out="$(run --kernel)"; want adios selection 'exposed; not selected on the exposed queues found'; want adios active_queues none
+rm -rf "$T/sys/block"; out="$(run --kernel)"
+want adios selection 'code/config evidence; no readable queue exposure found'; want adios runtime_interface 'not exposed in readable targeted queues'
+# Without config or symbols the absence of readable runtime evidence remains unknown.
+sed -i -e '/^CONFIG_MQ_IOSCHED_ADIOS=/d' -e '/^CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=/d' "$T/config"
+gzip -c "$T/config" > "$T/proc/config.gz"; rm -f "$T/proc/kallsyms"
+out="$(run --kernel)"; want adios config unknown; want adios selection 'unknown; not runtime-discoverable'
+want adios symbols 'not readable; no ADIOS symbol observed'
+# Per-property static and managed readback, including mismatch and empty live values.
+printf 'debug.asb.fixture=static\n' >> "$T/mod/system.prop"
+printf '[debug.asb.fixture]: [static]\n[vendor.display.enable_dpps_dynamic_fps]: [1]\n[vendor.display.backlight_smooth]: [0]\n[persist.displayfeature.dc_backlight.enable]: []\n[log.tag.bluetooth]: [ERROR]\n[audio.safemedia.bypass]: [true]\n' >> "$T/props"
+printf 'status=applied\nreason=fixture\napplied=2\nskipped=1\n' > "$T/data/asb/managed_props.state"
+out="$(run)"
+want asb_properties debug.asb.fixture 'source=system.prop; configured=static; live=static; readback=match'; want asb_properties static_entries 1
+want asb_properties managed_status applied; want asb_properties managed_reason fixture
+want asb_properties vendor.display.enable_dpps_dynamic_fps 'source=managed:DISPLAY; configured=1; live=1; readback=match'
+want asb_properties vendor.display.backlight_smooth 'source=managed:DISPLAY; configured=1; live=0; readback=mismatch'
+want asb_properties persist.displayfeature.dc_backlight.enable 'source=managed:DISPLAY; configured=true; live=unavailable_or_empty; readback=unavailable_or_empty'
+printf '%s\n' "$out" | grep '^D\tasb_properties\tlog.tag.bluetooth\t' >/dev/null && fail 'BT property was selected without its separate opt-in marker'
+_bt_n="$(awk -F '\t' 'BEGIN { inbt=0 } /^# ASB:BT:BEGIN/ { inbt=1; next } /^# ASB:BT:END/ { inbt=0 } inbt && /^[A-Za-z0-9_.-]+=/ { n++ } END { print n+0 }' "$T/mod/runtime/asb_managed.props")"
+[ "$_bt_n" -gt 0 ] || fail 'empty BT fixture'
+_without="$(printf '%s\n' "$out" | awk -F '\t' '$2 == "asb_properties" && $3 == "managed_not_selected" { print $4 }')"
+_sel_without="$(printf '%s\n' "$out" | awk -F '\t' '$2 == "asb_properties" && $3 == "managed_selected" { print $4 }')"
+touch "$T/data/asb/enable_bt_policy"; out="$(run)"
+want asb_properties log.tag.bluetooth 'source=managed:BT; configured=ERROR; live=ERROR; readback=match'
+_with="$(printf '%s\n' "$out" | awk -F '\t' '$2 == "asb_properties" && $3 == "managed_not_selected" { print $4 }')"
+_sel_with="$(printf '%s\n' "$out" | awk -F '\t' '$2 == "asb_properties" && $3 == "managed_selected" { print $4 }')"
+[ "$((_with + _bt_n))" = "$_without" ] && [ "$((_sel_without + _bt_n))" = "$_sel_with" ] || fail "BT per-property selection counts are wrong: without=$_without/$_sel_without with=$_with/$_sel_with bt=$_bt_n"
+rm -f "$T/data/asb/enable_bt_policy"
+sed -i 's/^\[debug.asb.fixture\]: \[static\]$/[debug.asb.fixture]: [other]/' "$T/props"
+out="$(run)"; want asb_properties debug.asb.fixture 'source=system.prop; configured=static; live=other; readback=mismatch'
+# Safe Media is emitted only when its exact setting and AUDIO owner select it.
+printf '%s\n' "$out" | grep '^D\tasb_properties\taudio.safemedia.bypass\t' >/dev/null && fail 'safe-media property appeared without its ASB setting'
+printf '\naudio_remove_volume_limit=1\n' >> "$T/mod/config/governor.conf"
+out="$(run)"; want asb_properties audio.safemedia.bypass 'source=runtime:audio_remove_volume_limit; configured=true; live=true; readback=match'
+sed -i 's/^\[audio.safemedia.bypass\]: \[true\]$/[audio.safemedia.bypass]: [false]/' "$T/props"
+out="$(run)"; want asb_properties audio.safemedia.bypass 'source=runtime:audio_remove_volume_limit; configured=true; live=false; readback=mismatch_or_unavailable'
+sed -i -e '/^audio_remove_volume_limit=1$/d' -e '/^debug.asb.fixture=static$/d' "$T/mod/config/governor.conf" "$T/mod/system.prop"
+rm -f "$T/data/asb/managed_props.state"
 # Device Diagnostics runs the real bounded collector mode. It must expose the
 # scheduler node/config verdicts and stop before package, display, battery and thermal work.
 mkdir -p "$T/proc/sys/kernel"; printf '1\n' > "$T/proc/sys/kernel/sched_schedstats"
@@ -9409,7 +9620,7 @@ want kernel_features oplus_sdp_900ma 'node present but unreadable'
 rmdir "$T/proc/sdp900ma"
 sed -i 's/^CONFIG_OPLUS_SDP_900MA=y$/# CONFIG_OPLUS_SDP_900MA is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run --kernel)"; want kernel_features oplus_sdp_900ma 'not observed; exposed config says not set'
-printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_bore|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule|companion_modules)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
+printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_bore|adios|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule|companion_modules)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
 printf '%s\n' "$out" | grep 'DO_NOT_COLLECT' >/dev/null && fail "--kernel collected a sensitive identifier"
 rm -f "$T/proc/sys/kernel/sched_schedstats"
 sed -i 's/^CONFIG_SCHEDSTATS=y$/# CONFIG_SCHEDSTATS is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
@@ -9584,7 +9795,7 @@ if command -v bash >/dev/null 2>&1; then
   printf 'not gzip\n' > "$T/proc/config.gz"
   out="$(run)"; want kernel_config available 'present; not decodable here'; want kernel_features lto unknown
 fi
-echo "PASS device info: read-only TSV, metamodule/root implementation variants, bounded ksud evidence, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics, the bounded --kernel probe with sched_stats config/node states, a 140 KB+ config read with an external printf (Android), VPN Hide / USB gadget / WireGuard / BBRv3 / CAKE / OverlayFS evidence"
+echo "PASS device info: schema 6, ADIOS config/symbol/queue/selection evidence, static/managed/safe-media property readback and BT selection counts; read-only TSV, metamodule/root implementation variants, bounded ksud evidence, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics, the bounded --kernel probe with sched_stats config/node states, a 140 KB+ config read with an external printf (Android), VPN Hide / USB gadget / WireGuard / BBRv3 / CAKE / OverlayFS evidence"
 )
 
 t_webui_tcp_algorithms_runtime() (
@@ -10354,7 +10565,8 @@ assert '#151c18' not in dark
 mark=s[s.index('<div class="asb-boot-intro"'):s.index('<div class="status-bar-scrim"')]
 assert mark.count('id="asbBootIntro"')==1 and 'hidden aria-hidden="true"' in mark
 assert 'role="status"' in mark and 'aria-live="polite"' in mark
-assert mark.count('data-boot-stage=')==4 and 'role="progressbar"' in mark
+assert mark.count('data-boot-stage=')==5 and 'role="progressbar"' in mark
+assert 'id="asbBootIntroCount">0 / 5</div>' in mark and 'data-boot-stage="log"' in mark
 assert '<button' not in mark
 for token in ('@keyframes asbBootSpin','@keyframes asbBootPulse','@keyframes asbBootScan',
               '@keyframes asbBootArrive','@keyframes asbBootHalo','@keyframes asbBootBeacon',
@@ -10377,7 +10589,7 @@ assert 'Promise.race([' in js and '} finally {' in js and 'window._asbBootIntroA
 assert 'setInterval(' not in js and 'setTimeout(() => pollLive' not in js
 for token in ('Promise.resolve(pollLive(true))','return cfgLoad();',
               'Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)])',
-              'return zygiskHeaderRefresh();','asbBootIntroPaint(done, jobs.length)',
+              'return asbLogReportLoad(true);','return zygiskPageLoad(false);','asbBootIntroPaint(done, jobs.length)',
               "T('boot_intro_warm'","T('boot_intro_ready'"):
     assert token in js, token
 for forbidden in ('serial','imei','account','android_id','setInterval('):
@@ -10401,7 +10613,7 @@ const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function E(id){this.id=id;this.hidden=true;this.attrs={};this.style={};this.textContent='';this.set=new Set();this.classList={toggle:(c,v)=>{if(v)this.set.add(c);else this.set.delete(c)},add:c=>this.set.add(c),remove:c=>this.set.delete(c),contains:c=>this.set.has(c)}}
 E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};E.prototype.getAttribute=function(k){return k in this.attrs?this.attrs[k]:null};E.prototype.removeAttribute=function(k){delete this.attrs[k]};
 const overlay=new E('asbBootIntro'),status=new E('asbBootIntroStatus'),bar=new E('asbBootIntroBar'),progress=new E('asbBootIntroProgress'),count=new E('asbBootIntroCount'),body=new E('body');
-const stages=[0,1,2,3].map(()=>new E('stage'));
+const stages=[0,1,2,3,4].map(()=>new E('stage'));
 const els={asbBootIntro:overlay,asbBootIntroStatus:status,asbBootIntroBar:bar,asbBootIntroProgress:progress,asbBootIntroCount:count};
 global.document={body,querySelectorAll:s=>s==='.asb-boot-stage'?stages:[]};global.window={};global._el=id=>els[id]||null;global.T=(k,d)=>d;
 const local={},session={};global.localStorage={getItem:k=>local[k]||null,setItem:(k,v)=>local[k]=String(v)};global.sessionStorage={getItem:k=>session[k]||null,setItem:(k,v)=>session[k]=String(v)};
@@ -10409,7 +10621,8 @@ let boot='11111111-1111-4111-8111-111111111111',failBoot=false,hang=false,calls=
 global.run=async c=>{calls.push('boot-id');return{errno:failBoot?1:0,stdout:failBoot?'':boot,stderr:''}};
 global.asbStartupSnapshot=async()=>({boot:await run('boot-id')});
 global.pollLive=async v=>{calls.push('live:'+v)};global.homeMeterPaint=()=>calls.push('home-paint');global.cfgLoad=()=>{calls.push('config');return hang?new Promise(()=>{}):Promise.resolve()};
-global.loadDeviceInfo=async()=>{calls.push('device-info')};global.asbDeviceInfoLoad=async bg=>{calls.push('device:'+bg)};global.zygiskHeaderRefresh=async()=>{calls.push('zygisk')};
+global.loadDeviceInfo=async()=>{calls.push('device-info')};global.asbDeviceInfoLoad=async bg=>{calls.push('device:'+bg)};
+global.asbLogReportLoad=async bg=>{calls.push('log:'+bg)};global.zygiskPageLoad=async user=>{calls.push('zygisk:'+user)};
 let src=h.slice(h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'"),h.indexOf('let _asbHomeRevealed = false;',h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'")));
 src=src.replace('ASB_BOOT_INTRO_MIN_MS = 1400','ASB_BOOT_INTRO_MIN_MS = 20').replace('ASB_BOOT_INTRO_MAX_MS = 6500','ASB_BOOT_INTRO_MAX_MS = 60').replace('setTimeout(resolve, 360)','setTimeout(resolve, 5)');
 eval(src+`\n(async()=>{
@@ -10417,7 +10630,7 @@ eval(src+`\n(async()=>{
  let p=asbBootIntroStart();await sleep(2);
  if(overlay.hidden||!window._asbBootIntroActive||body.attrs['aria-busy']!=='true')throw Error('first boot did not paint');
  if(!await p||!overlay.hidden||window._asbBootIntroActive||body.getAttribute('aria-busy')!==null)throw Error('first boot did not clean up');
- for(const x of ['live:true','config','device-info','device:true','zygisk','home-paint'])if(!calls.includes(x))throw Error('missing warmer '+x);
+ for(const x of ['live:true','config','device-info','device:true','log:true','zygisk:false','home-paint'])if(!calls.includes(x))throw Error('missing warmer '+x);
  if(progress.attrs['aria-valuenow']!=='100'||local[ASB_BOOT_INTRO_KEY]!==boot)throw Error('progress/marker failed');
  const n=calls.length;if(await asbBootIntroStart()||calls.length!==n+1||!overlay.hidden)throw Error('same boot replayed or started a warmer');
  boot='22222222-2222-4222-8222-222222222222';if(!await asbBootIntroStart())throw Error('new boot skipped');
@@ -10430,7 +10643,7 @@ eval(src+`\n(async()=>{
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix324 intro runtime: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL WebUI fix324 intro runtime: $out" >&2; exit 1; }
-echo "PASS WebUI fix324: black dark Glass, shorter localized once-per-boot preview with active-stage/halo/ready motion, real Live/Config/Device/ZYGISK cache warm, no fake completion, no replay and bounded fail-safe"
+echo "PASS WebUI fix324: black dark Glass, shorter localized once-per-boot preview with active-stage/halo/ready motion, real Live/Config/Device/Infinite Log/full Zygisk cache warm, no fake completion, no replay and bounded fail-safe"
 )
 
 t_webui_fix325_startup_performance() (
@@ -10510,7 +10723,9 @@ for token in ('if (_livePollRun) {','if (!visible || (_livePollVisible && _liveP
 assert 'if (_lb.meter && !visible) homeMeterPaint();' in poll
 assert poll.count('runBatch(liveBatchParts(visible, prime))')==1
 open_dev=body('function openDevicePage() {')
-assert 'asbDeviceInfoLoad();' in open_dev and 'asbDeviceInfoLoad(); }, 50)' not in open_dev
+assert 'if (!deviceInfoPresentSnapshot()) asbDeviceInfoLoad();' in open_dev
+assert 'asbDeviceInfoLoad(); }, 50)' not in open_dev
+assert open_dev.count('asbDeviceInfoLoad();')==1, 'Device navigation must collect only as the no-snapshot fallback'
 intro=s[s.index('async function asbBootIntroStart()'):s.index('// ── localized boot:')]
 assert 'await asbStartupSnapshot()' in intro and "run('cat /proc/sys/kernel/random/boot_id" not in intro
 # No persistent worker was added to make the UI appear faster.
@@ -10587,6 +10802,97 @@ JS
 out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix325 runtime: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL WebUI fix325 runtime: $out" >&2; exit 1; }
 echo "PASS WebUI fix325: shared profile/Smart/boot startup, deduplicated static-device fetch with valid-cache reuse, post-paint warm without intro duplicates, fresh-sample Stock reopen, meter reuse and visibility-safe Live collector sharing"
+)
+
+t_webui_snapshot_navigation_release11() (
+# Splash snapshots make Device, Infinite Log and Zygisk immediately readable on navigation.
+# They never replace the explicit live Refresh path; a missing snapshot still falls back to
+# one bounded collector. The original Device overview helper must remain distinct.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI release11 snapshot navigation: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'source/localization contract'
+import json,sys
+from pathlib import Path
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text(encoding='utf-8')
+assert h.count('function deviceInfoSnapshot(')==1
+assert 'function deviceInfoSnapshot(d) {' in h and 'function deviceInfoReusableSnapshot() {' in h
+assert 'const ov = deviceInfoOverview(d), snapshot = deviceInfoSnapshot(d);' in h
+for token in ('if (!deviceInfoPresentSnapshot()) asbDeviceInfoLoad();',
+              'if (!logReportCachedPaint(logReportCacheGet(), false)) asbLogReportLoad();',
+              'if (!window._asbZygiskLinkData) asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);',
+              'id="devRefresh" type="button" onclick="asbDeviceInfoLoad()"',
+              'id="rpRefresh" type="button" onclick="asbLogReportLoad()"',
+              'id="zyRefresh" type="button" onclick="zygiskPageLoad(true)"'):
+ assert token in h,token
+need=('dev_snapshot_status','lr_snapshot_status','zy_status_snapshot','dev_sec_adios','dev_guide_adios',
+      'dev_sec_asb_properties','dev_guide_asb_properties')
+for p in (r/'webroot/i18n').glob('*.json'):
+ d=json.loads(p.read_text(encoding='utf-8'))
+ for k in need: assert isinstance(d.get(k),str) and d[k],(p.name,k)
+ assert d['dev_snapshot_status'].count('%s')==1 and d['lr_snapshot_status'].count('%s')==1
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI release11 snapshot navigation: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(sig){const i=h.indexOf(sig);if(i<0)throw Error('missing '+sig);const j=h.indexOf('\n}\n',i);if(j<0)throw Error('unterminated '+sig);return h.slice(i,j+2)}
+const chk=(c,m)=>{if(!c)throw Error(m)};
+const nodes={};
+function node(id){if(nodes[id])return nodes[id];const cls=new Set();const n=nodes[id]={id,textContent:'',disabled:false,dataset:{},children:[],scrollTop:0,classList:{add:(...x)=>x.forEach(c=>cls.add(c)),remove:(...x)=>x.forEach(c=>cls.delete(c)),toggle:(c,on)=>{if(on)cls.add(c);else cls.delete(c)},contains:c=>cls.has(c)},setAttribute(){},appendChild(c){this.children.push(c);return c}};return n}
+global._el=node;global.window={};global.ASB_LANG='en';global.T=(k,d)=>d;global.uiSound=()=>{};
+global.asbNavAnimMark=()=>{};global.asbTabbarVisibility=()=>{};global.asbNavSync=()=>{};global.asbFitPages=()=>{};global.zygiskHeaderRefreshLazy=()=>{};
+global.asbUiFrame={request:f=>f()};global.requestAnimationFrame=f=>f();global.setTimeout=f=>{f();return 1};
+global.document={body:node('body')};
+for(const id of ['devicePage','deviceBody','deviceStatus','devSave','devRefresh','deviceLine','socBadge','verBadge','curProfile',
+ 'devDeviceLine','devSocBadge','devVerBadge','devCurProfile','reportPage','reportBody','reportStatus','rpDeviceLine','rpSocBadge','rpVerBadge','rpCurProfile',
+ 'zygiskPage','zygiskStatus','zySave','zyDeviceLine','zySocBadge','zyVerBadge','zyCurProfile'])node(id);
+(async()=>{
+ let persistent=null,deviceLoads=0,deviceRenders=0;
+ global.deviceInfoCacheGet=()=>persistent;
+ global.parseDeviceInfo=raw=>({count:String(raw).startsWith('D\t')?1:0,raw});
+ global.deviceInfoRender=d=>{deviceRenders++;return d.count};
+ global.deviceInfoStamp=()=> 'today';
+ global.asbDeviceInfoLoad=async()=>{deviceLoads++};
+ global._deviceOpen=false;global._zygiskOpen=false;
+ eval(grab('function deviceInfoReusableSnapshot() {')+grab('function deviceInfoPresentSnapshot() {')+grab('function openDevicePage() {'));
+ window._asbDeviceInfoData={count:1};window._asbDeviceInfoRaw='D\tsoc\tsoc_model\tSM8850';window._asbDeviceInfoAt=1000;
+ openDevicePage();
+ chk(deviceLoads===0&&deviceRenders===1,'Device recollected instead of painting its splash snapshot');
+ chk(/Snapshot from today/.test(nodes.deviceStatus.textContent)&&!nodes.devSave.disabled,'Device snapshot status/save state wrong');
+ global._deviceOpen=false;openDevicePage();chk(deviceLoads===0&&deviceRenders===2,'reopening Device repeated the collector');
+ window._asbDeviceInfoData=null;window._asbDeviceInfoRaw='';persistent={t:2000,raw:'D\tsoc\tsoc_model\tSM8850'};global._deviceOpen=false;
+ openDevicePage();chk(deviceLoads===0&&deviceRenders===3,'bounded persistent Device snapshot was not reused');
+ chk(nodes.deviceBody.classList.contains('dev-stale'),'persistent snapshot was not marked as a snapshot');
+ window._asbDeviceInfoData=null;window._asbDeviceInfoRaw='';persistent=null;global._deviceOpen=false;
+ openDevicePage();chk(deviceLoads===1,'Device without any snapshot did not run its one collector fallback');
+
+ let reportCache=null,reportLoads=0,reportRenders=0;
+ global.logReportCacheGet=()=>reportCache;global.parseLogReport=raw=>({ok:!!raw,raw});
+ global.logReportRender=()=>{reportRenders++};global.asbLogReportLoad=async()=>{reportLoads++};global._rpOpen=false;
+ eval(grab('function logReportCachedPaint(cache, refreshing) {')+grab('function openReportPage() {'));
+ reportCache={t:3000,raw:'meta\telapsed_min=200'};openReportPage();
+ chk(reportLoads===0&&reportRenders===1,'Infinite Log recollected instead of using the splash snapshot');
+ chk(/Snapshot from today/.test(nodes.reportStatus.textContent)&&!/refreshing/.test(nodes.reportStatus.textContent),'Infinite Log snapshot was presented as a live refresh');
+ global._rpOpen=false;openReportPage();chk(reportLoads===0,'Infinite Log duplicated a collector on reopening');
+ reportCache=null;global._rpOpen=false;openReportPage();chk(reportLoads===1,'Infinite Log without a snapshot lacked collector fallback');
+
+ let zyLoads=[],zyRenders=0;global._zygiskOpen=false;global._zygiskLoadSeq=0;
+ global.zygiskPageRender=()=>{zyRenders++};global.zygiskPageLoad=async user=>{zyLoads.push(user)};global.asbAfterNavAnim=f=>f();
+ eval(grab('function openZygiskPage() {'));
+ window._asbZygiskLinkData={ok:true};openZygiskPage();
+ chk(zyLoads.length===0&&zyRenders===1,'Zygisk repeated its eight-part read despite the complete splash snapshot');
+ chk(/Last snapshot/.test(nodes.zygiskStatus.textContent),'Zygisk snapshot status missing');
+ global._zygiskOpen=false;openZygiskPage();chk(zyLoads.length===0,'Zygisk recollected on reopening');
+ window._asbZygiskLinkData=null;global._zygiskOpen=false;openZygiskPage();
+ chk(zyLoads.length===1&&zyLoads[0]===false,'Zygisk without a snapshot did not use its bounded fallback');
+ console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI release11 snapshots: Device/Infinite Log/Zygisk open from splash or bounded cache without duplicate collectors, missing snapshots fall back once, and all Refresh buttons retain explicit live reads'
 )
 
 t_webui_fix326_viewport_scale_runtime() (
@@ -11152,7 +11458,8 @@ def const(name):
     assert m, name
     return m.group(0)
 # Opening the page must not await the collector. fix325 invokes the loader immediately so its
-# cached/loading state can paint; the real collector remains behind asbPaintYield (fix287 test).
+# no-snapshot fallback starts the collector immediately; snapshot-first navigation has its own
+# release11 runtime test, and the real collector remains behind asbPaintYield (fix287 test).
 open_src = '\n'.join([
     "const timers = []; let loads = 0, sound = 0;",
     "function El(id) { this.id=id; this.textContent=id; this.scrollTop=9; this.attrs={}; this.classes=new Set();",
@@ -11162,7 +11469,7 @@ open_src = '\n'.join([
     "const document={body:new El('body')}; let _deviceOpen=false; function asbNavAnimMark(){}",
     "function _el(id){return els[id]||null} function uiSound(){sound++} function asbTabbarVisibility(){}",
     "function asbNavSync(){} function asbFitPages(){} function requestAnimationFrame(){} const asbUiFrame={request:f=>f()};",
-    "function setTimeout(f){timers.push(f)} function asbDeviceInfoLoad(){loads++}",
+    "function setTimeout(f){timers.push(f)} function deviceInfoPresentSnapshot(){return false} function asbDeviceInfoLoad(){loads++}",
     fn('openDevicePage'),
     "openDevicePage();",
     "if (!_deviceOpen || !els.devicePage.classes.has('open') || els.devicePage.attrs['aria-hidden'] !== 'false') throw Error('page did not open synchronously');",
