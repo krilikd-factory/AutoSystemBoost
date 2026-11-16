@@ -1379,7 +1379,9 @@ if [ -r "$_state" ]; then
   # asked of the app. Misses above are the dumpsys fallbacks (split screen, unreadable cgroup).
   _pt="$(_rget probe_topapp "$_state")"
   case "$_pt" in ''|*[!0-9]*) : ;; *)
-    P "    foreground app   : $_pt answer(s) from the top-app cgroup (no dumpsys, the app is never asked to dump its views)" ;;
+    _ptg="$(_rget probe_topapp_game_resolved "$_state")"
+    case "$_ptg" in ''|*[!0-9]*) _ptg=0 ;; esac
+    P "    foreground app   : $_pt answer(s) from the top-app cgroup, $_ptg unambiguous game group(s) resolved locally (no dumpsys, the app is never asked to dump its views)" ;;
   esac
     _nt="$(_rget noop_ticks "$_state")"
     case "$_nt" in ''|*[!0-9]*) _nt=0 ;; esac
