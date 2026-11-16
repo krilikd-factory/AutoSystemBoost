@@ -4,6 +4,37 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix5 - WebUI lifecycle, boot repair recovery and clearer diagnostics
+
+Input: the owner's eight-item revision request for the WebUI header and dark canvas, SOTER and
+Battery Fix recovery, Zygisk presentation, full-day capture placement, setting descriptions,
+WebUI cost and wakeup-source explanations.
+
+- **Native WebUI animation ownership:** visible page headers resume their existing CSS timelines
+  when reopened; closed-page and reduced-motion pauses remain intact. The 100 ms
+  `document.getAnimations()` ambient ticker and destructive wordmark animation resets are gone.
+  Dark Liquid Glass now uses the same `var(--bg)` canvas instead of body-level green radial
+  gradients. Calm mode retains one bounded timer and only pauses the Smart glow through CSS.
+- **SOTER boot repair:** the existing opt-in asynchronous `service.sh` launcher is retained.
+  CE-directory existence is no longer treated as first-unlock evidence: repair requires CE
+  availability or `RUNNING_UNLOCKED`, validates it again after the settle delay and skips without
+  clearing SOTER data if readiness was lost.
+- **Battery Fix:** after Binder-specific aggregate compilation refusal, one official
+  `cmd package bg-dexopt-job` is attempted when enabled. An accepted job is reported as
+  `scheduled`, not as verified `speed-profile` compilation. A rejected job still fails closed;
+  the existing 100%-and-charging gate and exact battery-reset file set are unchanged.
+- **Diagnostics and logs:** the five Zygisk activity/cost cards gain decorative emoji without
+  changing values or evidence semantics. New full-day captures live under
+  `ASB/logs/asb_log_full_day_*`; resume and digest discovery still accept legacy root-level
+  captures.
+- **Explanations:** Interface and Screen/Feel descriptions now identify their Settings owner,
+  read-back limits, Stock restoration and feature-specific trade-offs. Every observed wakeup
+  source receives a conservative approximate purpose and graded blocking-risk explanation in all
+  13 locales; unknown names explicitly remain unknown and are not declared safe to block.
+- **Evidence boundary:** host fixtures and the full six-suite regression verify source behavior,
+  lifecycle contracts, localization and recovery states. They do not establish physical OnePlus
+  15/ColorOS WebView animation smoothness, SOTER repair, ART recovery or battery improvement.
+
 ## V66 dev66 buildfix4 - audit-driven strict TTL input and explicit pointer baseline semantics
 
 Input: the owner's Russian diff-audit of buildfix2, re-checked item by item against the buildfix3
