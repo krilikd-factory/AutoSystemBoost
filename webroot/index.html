@@ -417,20 +417,12 @@ body.live-active .page:not(.live-page) .dot::after {
   animation: none !important;
 }
 
-/* dev61: ambient motion while idle.
- *
- * dev17 kept the header sphere and the status dots turning on the page in front, because a
- * frozen header read as a hung interface. A CSS loop, though, makes the browser compose a new
- * frame on every vsync for as long as the page is open: on the owner's OP15 the Monitor then
- * showed the GPU 60-70 % busy at its lowest clock with every app closed - the page measuring
- * itself - and an adaptive-refresh panel gets no still screen to slow down on. Ten seconds
- * after the last touch these loops now stand still in CSS and a 10 fps ticker steps them
- * (asbAmbientTick), so the header keeps moving at a tenth of the frames; the next touch hands
- * them back to the full-rate CSS animation from where they are. */
-html.asb-calm .logo-sphere-a, html.asb-calm .logo-sphere-b, html.asb-calm .logo-inner,
-html.asb-calm .dot, html.asb-calm .dot::after, html.asb-calm .zygisk-header-dot,
-html.asb-calm .zygisk-header-dot::after, html.asb-calm .dev-zygisk-link-dot,
-html.asb-calm .dev-zygisk-link-dot::after, html.asb-calm .pico-smart .ai-glow {
+/* dev66: calm never changes the visible header's animation clock. The dev61 ticker made
+ * the UFO and status dots visibly judder after exactly ten seconds and could leave them
+ * frozen when WebView did not resume a paused CSS animation cleanly. Only the Smart card's
+ * decorative glow still uses the ambient ticker. Header loops remain governed by the native
+ * CSS clock, and are stopped by the closed-page, reduced-effects and reduced-motion rules. */
+html.asb-calm .pico-smart .ai-glow {
   animation-play-state: paused !important;
 }
 
@@ -1841,6 +1833,13 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
 .lvh-spark { display: block; width: 100%; height: 38px; margin-top: 8px; overflow: visible; }
 .lvh-spark polyline { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .lvh-spark .lvh-fill { stroke: none; opacity: .14; }
+.lvt-chart { display: block; width: 100%; height: 116px; margin-top: 8px; overflow: visible; }
+.lvt-chart .lvt-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; }
+.lvt-chart .lvt-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.lvt-chart .lvt-fill { stroke: none; opacity: .12; }
+.lvt-chart .lvt-overall { fill: none; stroke-width: 1.5; stroke-dasharray: 6 4; opacity: .85; vector-effect: non-scaling-stroke; }
+.lvt-chart .lvt-end { stroke: var(--bg); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.lvt-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; color: var(--text-tertiary); font: 600 10px/1.3 var(--mono); }
 .lvh-extra { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--text); white-space: pre-line; }
 html[data-asb-theme="light"] .live-info-hist { background: #fbfcfc; }
 html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 8px currentColor; }
@@ -5492,7 +5491,7 @@ html:root[data-asb-glass="1"] {
     radial-gradient(ellipse 70% 30% at 62% 46%,rgba(64,76,88,.05),transparent 70%),#000;
   --glass-surface:rgba(12,18,15,.52);
   --glass-surface-quiet:rgba(8,13,10,.42);
-  --glass-surface-strong:rgba(10,15,13,.74);
+  --glass-surface-strong:rgba(10,15,13,.90);
   /* Navigation is seen against black and scrolling cards, so the shared floating wash
    * made it look lighter than the header capsules. Keep its geometry and blur intact,
    * but give only the navigation docks a quieter highlight and a darker base. */
@@ -5524,7 +5523,7 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] {
     linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%);
   --glass-surface:rgba(255,255,255,.42);
   --glass-surface-quiet:rgba(255,255,255,.32);
-  --glass-surface-strong:rgba(250,252,251,.70);
+  --glass-surface-strong:rgba(250,252,251,.90);
   --glass-nav-surface:var(--glass-surface-strong);
   --glass-nav-wash:var(--glass-wash);
   --glass-control:rgba(255,255,255,.36);
@@ -7303,17 +7302,14 @@ function asbFirstFrameMark() {
   try { requestAnimationFrame(function () { setTimeout(_asbFirstFrameDone, 0); }); } catch (e) { _asbFirstFrameDone(); }
 }
 let _asbInputAt = -1e9;
-/* V66 dev6: the decorative loops stop ten seconds after the last touch (html.asb-calm, see the
- * CSS) and start again at the next one. One timer, re-armed only when it has fired, so a scroll
- * does not set a timer per event. */
+/* V66 dev6/dev66: the wordmark sweep and Smart glow calm ten seconds after the last touch.
+ * One timer, re-armed only when it has fired, so a scroll does not set a timer per event. */
 const ASB_CALM_MS = 10000;
 let _asbCalmTimer = 0;
-/* dev61: while calm, the header loops stand still in CSS and this ticker steps them at 10 fps
- * (see the html.asb-calm rule): the sphere and the dots keep moving, the page draws a tenth of
- * the frames. Only loops on screen are stepped; with none (reduced motion, header scrolled
- * away, page hidden) no timer runs. */
+/* Only non-header ambient decoration is manually stepped. Visible UFO/orbit/status loops are
+ * deliberately absent: native CSS animation is smooth, while 100 ms currentTime steps are not. */
 const ASB_AMBIENT_STEP_MS = 100;
-const ASB_AMBIENT_NAMES = ['asbBootSpin', 'asbBootPulse', 'pulse', 'pulseRing', 'zyLivePulse', 'zyLiveRing', 'ai-spin'];
+const ASB_AMBIENT_NAMES = ['ai-spin'];
 let _asbCalmOn = false, _asbAmbientTimer = 0;
 function asbAmbientAnims() {
   if (typeof document.getAnimations !== 'function') return [];
@@ -7322,7 +7318,7 @@ function asbAmbientAnims() {
     if (ASB_AMBIENT_NAMES.indexOf(a.animationName) < 0) return false;
     const el = a.effect && a.effect.target;
     if (!el || typeof el.getBoundingClientRect !== 'function') return false;
-    if (el.closest && el.closest('.asb-boot-intro')) return false;
+    if (el.closest && el.closest('.asb-boot-intro, .header')) return false;
     if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
@@ -7387,6 +7383,8 @@ function asbLaterPump() {
   asbFirstFrame.then(function () {
     const job = _asbLater.shift();
     const go = function () {
+      const navWait = asbNavReadDelay();
+      if (navWait > 0) { setTimeout(go, navWait); return; }
       const quiet = performance.now() - _asbInputAt;
       if (quiet < ASB_LATER_QUIET_MS) { setTimeout(go, ASB_LATER_QUIET_MS - quiet + 16); return; }
       if (job.prio > 0 && asbPageBusy()) { setTimeout(go, 1000); return; }
@@ -8453,13 +8451,24 @@ const _livePollMeta = {
   nextDelay: 3000,
   snapshots: { visible: '', home: '', prime: '' }
 };
+/* Root bridges are synchronous in the manager WebView. A timer that becomes due halfway
+ * through a slide can therefore freeze every page switch, even though the first read was
+ * correctly deferred. Reuse the existing transition deadline at both scheduling and firing
+ * time; no additional polling owner or worker is introduced. */
+function asbNavReadDelay() {
+  const left = (typeof _asbNavAnimUntil === 'number' ? _asbNavAnimUntil : 0) - performance.now();
+  return left > 0 ? Math.ceil(left) + 32 : 0;
+}
 function liveMonitorSchedule(delay) {
   if (_liveTimer) { clearTimeout(_liveTimer); _liveTimer = null; }
   if (!_liveOpen || document.hidden) return;
-  const wait = typeof delay === 'number' ? Math.max(0, delay) : _livePollMeta.nextDelay;
+  const requested = typeof delay === 'number' ? Math.max(0, delay) : _livePollMeta.nextDelay;
+  const wait = Math.max(requested, asbNavReadDelay());
   _liveTimer = setTimeout(function () {
     _liveTimer = null;
     if (!_liveOpen || document.hidden) return;
+    const navWait = asbNavReadDelay();
+    if (navWait > 0) { liveMonitorSchedule(navWait); return; }
     /* Stock keeps its existing ten-second ROM cache; this additional call reuses that sample
      * instead of forcing another shell. */
     if (_selectedProfile === 'stock') pollStockTelemetry(true);
@@ -8470,13 +8479,17 @@ function liveMonitorSchedule(delay) {
     });
   }, wait);
 }
-function liveBackgroundSchedule() {
+function liveBackgroundSchedule(delay) {
   if (_liveBgTimer) { clearTimeout(_liveBgTimer); _liveBgTimer = null; }
   if (document.hidden || _liveOpen) return;
+  const requested = typeof delay === 'number' ? Math.max(0, delay) : 30000;
   _liveBgTimer = setTimeout(function () {
     _liveBgTimer = null;
-    if (!document.hidden && !_liveOpen) Promise.resolve(pollLive(false)).then(liveBackgroundSchedule, liveBackgroundSchedule);
-  }, 30000);
+    if (document.hidden || _liveOpen) return;
+    const navWait = asbNavReadDelay();
+    if (navWait > 0) { liveBackgroundSchedule(navWait); return; }
+    Promise.resolve(pollLive(false)).then(liveBackgroundSchedule, liveBackgroundSchedule);
+  }, Math.max(requested, asbNavReadDelay()));
 }
 function livePollTrack(signature, visible, prime, success) {
   const now = Date.now();
@@ -9338,7 +9351,7 @@ function lviPressureRender(box, d, key) {
     ? T('lvp_app_pressure_title', 'Whole-system load · PSI and CPU/GPU')
     : T('dev_sec_system_load', 'Current system pressure');
   box.appendChild(cap);
-  box.appendChild(devicePressureScale(d));
+  box.appendChild(devicePressureScale(d, key === 'apphint' ? 'system' : ''));
   const parts = document.createElement('div'); parts.className = 'lvp-parts';
   const psi = /^\d+(\.\d+)?$/.test(deviceVal(d, 'system_load', 'psi_cpu_some_avg10'));
   (psi ? LVI_PRESSURE_PARTS_PSI : LVI_PRESSURE_PARTS).forEach(function (p) {
@@ -9679,6 +9692,77 @@ function lviFmt(n) {
   const a = Math.abs(n);
   return (a >= 100 || Number.isInteger(n)) ? String(Math.round(n)) : a >= 10 ? n.toFixed(1) : n.toFixed(2);
 }
+/* The Trend sheet needs a direction over the whole window, not a categorical histogram of
+ * the words “warming / steady / cooling”. Reuse the temperature samples already collected by
+ * Monitor: Stock's persisted trend series, or Smart's ordinary CPU-tile history. The solid
+ * line is the measured series; the dashed line is its least-squares overall direction. */
+function lviTrendData(key) {
+  const src = key === 'strend' ? (_stockTrendSamples || []) : ((_lviHist[_selectedProfile + ':cpu'] || []));
+  return src.map(function (x) {
+    return { t: Number(x.t), n: Number(key === 'strend' ? x.c : x.n) };
+  }).filter(function (x) { return x.t > 0 && Number.isFinite(x.n); }).sort(function (a, b) { return a.t - b.t; });
+}
+function lviTrendRender(box, key, color) {
+  box.textContent = '';
+  const h = lviTrendData(key);
+  const t0 = h.length ? h[0].t : 0, t1 = h.length ? h[h.length - 1].t : 0;
+  if (h.length < 2 || t1 <= t0) {
+    const wait = document.createElement('div'); wait.className = 'lvh-line';
+    wait.textContent = T('lvi_trend_chart_wait', 'The diagram appears after two temperature readings in the same window.');
+    box.appendChild(wait); box.hidden = false; return;
+  }
+  const mt = h.reduce(function (p, x) { return p + x.t; }, 0) / h.length;
+  const mv = h.reduce(function (p, x) { return p + x.n; }, 0) / h.length;
+  let num = 0, den = 0;
+  h.forEach(function (x) { num += (x.t - mt) * (x.n - mv); den += (x.t - mt) * (x.t - mt); });
+  const slope = den > 0 ? num / den : 0;
+  const fit0 = mv + (t0 - mt) * slope, fit1 = mv + (t1 - mt) * slope;
+  const values = h.map(function (x) { return x.n; }).concat([fit0, fit1]);
+  const lo = Math.min.apply(null, values), hi = Math.max.apply(null, values), range = (hi - lo) || 1;
+  const perMin = slope * 60000;
+  const rangeText = T('lvi_trend_chart_range', '%1 °C → %2 °C')
+    .replace('%1', lviFmt(h[0].n)).replace('%2', lviFmt(h[h.length - 1].n));
+  const rateText = T('lvi_trend_rate', '%1 °C per minute over the last %2 s')
+    .replace('%1', (perMin >= 0 ? '+' : '−') + Math.abs(perMin).toFixed(1))
+    .replace('%2', String(Math.round((t1 - t0) / 1000)));
+  const summary = document.createElement('div'); summary.className = 'lvh-line';
+  summary.textContent = rangeText + ' · ' + rateText; box.appendChild(summary);
+  if (document.createElementNS) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'lvt-chart'); svg.setAttribute('viewBox', '0 0 300 104');
+    svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', rangeText + '. ' + rateText);
+    [8, 50, 92].forEach(function (y) {
+      const grid = document.createElementNS(NS, 'line'); grid.setAttribute('class', 'lvt-grid');
+      grid.setAttribute('x1', '4'); grid.setAttribute('x2', '296');
+      grid.setAttribute('y1', String(y)); grid.setAttribute('y2', String(y)); svg.appendChild(grid);
+    });
+    const xy = function (t, n) {
+      return [4 + (t - t0) * 292 / (t1 - t0), 92 - (n - lo) * 84 / range];
+    };
+    const pts = h.map(function (x) { const p = xy(x.t, x.n); return p[0].toFixed(1) + ',' + p[1].toFixed(1); });
+    const fill = document.createElementNS(NS, 'polygon'); fill.setAttribute('class', 'lvt-fill');
+    fill.setAttribute('points', '4,92 ' + pts.join(' ') + ' 296,92'); fill.setAttribute('fill', color || 'currentColor');
+    svg.appendChild(fill);
+    const line = document.createElementNS(NS, 'polyline'); line.setAttribute('class', 'lvt-line');
+    line.setAttribute('points', pts.join(' ')); line.setAttribute('stroke', color || 'currentColor'); svg.appendChild(line);
+    const a = xy(t0, fit0), b = xy(t1, fit1);
+    const overall = document.createElementNS(NS, 'line'); overall.setAttribute('class', 'lvt-overall');
+    overall.setAttribute('x1', a[0].toFixed(1)); overall.setAttribute('y1', a[1].toFixed(1));
+    overall.setAttribute('x2', b[0].toFixed(1)); overall.setAttribute('y2', b[1].toFixed(1));
+    overall.setAttribute('stroke', color || 'currentColor'); svg.appendChild(overall);
+    const end = document.createElementNS(NS, 'circle'); end.setAttribute('class', 'lvt-end');
+    end.setAttribute('cx', b[0].toFixed(1)); end.setAttribute('cy', xy(t1, h[h.length - 1].n)[1].toFixed(1));
+    end.setAttribute('r', '3.5'); end.setAttribute('fill', color || 'currentColor'); svg.appendChild(end);
+    box.appendChild(svg);
+  }
+  const axis = document.createElement('div'); axis.className = 'lvt-axis';
+  [lviFmt(lo) + ' °C', logReportDur(Math.max(1, Math.round((t1 - t0) / 60000))), lviFmt(hi) + ' °C'].forEach(function (text) {
+    const s = document.createElement('span'); s.textContent = text; axis.appendChild(s);
+  });
+  box.appendChild(axis); box.hidden = false;
+}
 function lviHistRender(box, key, color, extra) {
   box.textContent = '';
   const h = (_lviHist[_selectedProfile + ':' + key] || []).slice();
@@ -9831,7 +9915,8 @@ function liveInfoOpen(cell) {
   try { if (val && typeof getComputedStyle === 'function') iv.style.color = getComputedStyle(val).color || ''; } catch (e) {}
   _el('liveInfoText').textContent = lviFill(T(txt[0], txt[1]));
   lviScaleRender(_el('liveInfoScale'), key, lviScaleValue(key, iv.textContent));
-  lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));
+  if (key === 'trend' || key === 'strend') lviTrendRender(_el('liveInfoHist'), key, iv.style.color);
+  else lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));
   const src = _el('liveInfoSrc');
   const lines = liveInfoSource(key, cell);
   src.textContent = lines.join('\n');
@@ -18380,13 +18465,18 @@ function deviceInfoInsights(d) {
   });
   return out;
 }
-function devicePressureScale(d) {
+function devicePressureScale(d, context) {
   const wrap = document.createElement('div'); wrap.className = 'dev-pressure';
   const head = document.createElement('div'); head.className = 'dev-pressure-head';
   const bandRaw = deviceVal(d, 'system_load', 'band');
   if (/^(light|moderate|high|very_high)$/.test(bandRaw)) wrap.className += ' dev-pressure-' + bandRaw;
   const band = document.createElement('span'); band.className = 'dev-pressure-band';
-  band.textContent = T('dev_load_band_' + bandRaw, deviceFallbackLabel(bandRaw));
+  const bandText = T('dev_load_band_' + bandRaw, deviceFallbackLabel(bandRaw));
+  /* On the foreground Load sheet this is a second metric, not a second verdict about the
+   * app. Prefix the band itself: “medium” above and “System: light” below cannot be read as
+   * the same control contradicting itself. Device and Stock keep their original label. */
+  band.textContent = context === 'system'
+    ? T('lvp_system_band', 'System: {band}').replace('{band}', bandText) : bandText;
   const scoreRaw = deviceVal(d, 'system_load', 'score');
   const valid = /^\d{1,3}$/.test(scoreRaw) && Number(scoreRaw) <= 100;
   const score = document.createElement('span'); score.className = 'dev-pressure-score';
