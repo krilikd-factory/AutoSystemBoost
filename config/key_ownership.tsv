@@ -110,6 +110,7 @@ night_quiet_hour_end|internal|engine_or_derived|both
 BG_TRIM_LEVEL|user|webui_standard|shell
 mglru_hold|internal|webui_standard|shell
 kernel_mglru_min_ttl|advanced|webui_sensitive|shell
+io_scheduler|advanced|webui_sensitive|shell
 mglru_mode|advanced|webui_sensitive|shell
 kernel_timer_migration|advanced|webui_sensitive|shell
 kernel_sched_nr_migrate|advanced|webui_sensitive|shell
