@@ -4,6 +4,36 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix6 - trend truthfulness, bounded I/O discovery and companion-safe DSP headroom
+
+Input: the owner's seven-item revision request plus a repeated visual field report covering the
+UFO/orbit animation and ordinary/Liquid Glass backgrounds.
+
+- **Trend:** the Stock badge and dashed line share one regression slope. In Smart, the badge and
+  dashed control line use the same native `kv.smart_trend_slope`; the solid history remains the
+  measured WebUI samples. A warming message can no longer be paired with a cooling dashed line.
+- **Smart ownership:** conditional Smart indicators identify only actual dynamic/radio/thermal
+  ownership. Manual `mglru_mode=on/off/stock` now reaches the existing bounded helper in Smart;
+  only `mglru_mode=smart` remains dynamically owned. Failure/readback badges stay visible.
+- **Block I/O scheduler:** `io_scheduler` discovers exposed scheduler names per bounded block
+  device, supports custom kernel names, preflights the complete set, captures a per-device
+  baseline, verifies readback and restores Stock only for the same kernel. Auto never invents an
+  unavailable scheduler; an explicit unsupported request fails without substitution.
+- **TCP congestion control:** all three route cards consume the existing read-only runtime
+  algorithm discovery. BIC, Westwood and other exposed algorithms receive localized descriptions;
+  custom names use an honest RTT/loss/buffer/qdisc caveat rather than a generic performance claim.
+- **DSP +30 dB source ceiling:** UI, shared native core, apply, thermal, installer, diagnostics,
+  tests and all 13 locales now agree on 3000 mB. Both wrappers expose `gain_cap_mb=3000`; the build
+  and `asbdiag` identify old prebuilts. Existing prebuilt libraries still require replacement by a
+  new user workflow build. The limiter remains sample-peak, not oversampled true-peak. Android 17 /
+  ColorOS 17 AIDL V2/V3 source paths remain branch-matched; no physical runtime support is claimed.
+- **Visual lifecycle:** automatic `ui-jank` no longer destroys UFO/orbit/wordmark animation clocks;
+  real OS reduced-motion remains authoritative. Ordinary dark/light and both Liquid Glass canvases,
+  page roots and status scrim use solid colors; card-level Glass material washes remain intact.
+- **Evidence boundary:** host fixtures, native compilation and Chromium computed-style/timeline
+  checks cover these source contracts. They do not establish physical ColorOS WebView smoothness,
+  audible DSP quality, network throughput, storage latency or battery improvement on OnePlus 15.
+
 ## V66 dev66 buildfix5 - WebUI lifecycle, boot repair recovery and clearer diagnostics
 
 Input: the owner's eight-item revision request for the WebUI header and dark canvas, SOTER and
