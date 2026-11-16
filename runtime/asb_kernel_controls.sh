@@ -71,9 +71,9 @@ asb_kc_clean() { printf '%s' "$1" | tr -d ' \t\r\n'; }
 asb_kc_mode() {
   _akm_v="$(grep -E "^[[:space:]]*$1=" "$ASB_KC_CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \t\r\n')"
   case "$1:$_akm_v" in
+    kernel_mglru_min_ttl:) _akm_v=stock ;;
     kernel_mglru_min_ttl:stock|kernel_mglru_min_ttl:1000|kernel_mglru_min_ttl:2000) ;;
-    kernel_mglru_min_ttl:5000) _akm_v=2000 ;;
-    kernel_mglru_min_ttl:*) _akm_v=stock ;;
+    kernel_mglru_min_ttl:*) ;;
     mglru_mode:stock|mglru_mode:off|mglru_mode:on|mglru_mode:smart) ;;
     mglru_mode:*) _akm_v=smart ;;
     kernel_timer_migration:stock|kernel_timer_migration:auto|kernel_timer_migration:off|kernel_timer_migration:on) ;;
@@ -345,6 +345,12 @@ asb_kc_apply() {
   _aka_key="$1" _aka_smart="${2:-}" _aka_profile="${3:-${ASB_PROFILE:-}}"
   _aka_node="$(asb_kc_node "$_aka_key")" || return 1
   _aka_mode="$(asb_kc_mode "$_aka_key")" || return 1
+  if [ "$_aka_key" = kernel_mglru_min_ttl ]; then
+    case "$_aka_mode" in
+      stock|1000|2000) ;;
+      *) asb_kc_emit "$_aka_key" invalid_value "$_aka_mode" "" none; return 1 ;;
+    esac
+  fi
   if [ "$_aka_key" = kernel_hrtimer_migration ] && [ ! -e "$_aka_node" ]; then
     asb_kc_hrtimer_covered "$_aka_mode" none
     return $?
@@ -424,6 +430,12 @@ asb_kc_status() {
   _akst_key="$1"
   _akst_node="$(asb_kc_node "$_akst_key")" || return 1
   _akst_mode="$(asb_kc_mode "$_akst_key")" || return 1
+  if [ "$_akst_key" = kernel_mglru_min_ttl ]; then
+    case "$_akst_mode" in
+      stock|1000|2000) ;;
+      *) asb_kc_emit "$_akst_key" invalid_value "$_akst_mode" "" none; return 1 ;;
+    esac
+  fi
   _akst_prev="$(asb_kc_prev "$_akst_key")"
   _akst_base=none
   [ -f "$_akst_prev" ] && asb_kc_kid_ok "$_akst_prev" && _akst_base="$(asb_kc_clean "$(cat "$_akst_prev" 2>/dev/null)")"
