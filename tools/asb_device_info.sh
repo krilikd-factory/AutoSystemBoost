@@ -12,6 +12,7 @@ SUSFS_BIN="${ASB_DEVINFO_SUSFS:-/data/adb/ksu/bin/susfs}"
 KSUD_BIN="${ASB_DEVINFO_KSUD:-}"
 TC_BIN="${ASB_DEVINFO_TC:-}"
 STATE_FILE="${ASB_DEVINFO_STATE:-/dev/.asb/state}"
+PROP_STATE_DIR="${ASB_DEVINFO_ASB_STATE:-${ASB_CONFIG_STATE:-/data/adb/asb}}"
 DEV="${ASB_DEVINFO_DEV:-/dev}"
 
 _clean() {
@@ -46,12 +47,12 @@ _mem() { sed -n "s/^$2:[[:space:]]*//p" "$1" 2>/dev/null | head -n 1; }
 [ -r "$MODDIR/runtime/asb_zygisk_info.sh" ] && . "$MODDIR/runtime/asb_zygisk_info.sh"
 [ -r "$MODDIR/runtime/asb_lsposed_info.sh" ] && . "$MODDIR/runtime/asb_lsposed_info.sh"
 if [ "${1:-}" = --lsposed ]; then
-  _emit meta schema 5
+  _emit meta schema 6
   command -v _asb_lsposed_info >/dev/null 2>&1 && _asb_lsposed_info
   exit 0
 fi
 
-_emit meta schema 5
+_emit meta schema 6
 _emit meta generated_epoch "$(date +%s 2>/dev/null)"
 _emit meta access read_only
 _emit meta module_version "$(_kv "$MODDIR/module.prop" version)"
@@ -128,7 +129,7 @@ if [ -r "$MODDIR/tools/asb_kernel_uv_coexist.sh" ]; then
 fi
 
 # A bounded whitelist of useful kernel configuration features, when the kernel exposes it.
-_cfg_keys='CONFIG_LOCALVERSION CONFIG_PREEMPT CONFIG_PREEMPT_DYNAMIC CONFIG_HZ CONFIG_SCHEDSTATS CONFIG_SCHED_WALT CONFIG_SCHEDUTIL CONFIG_CPU_FREQ_GOV_SCHEDUTIL CONFIG_CPU_FREQ_GOV_PERFORMANCE CONFIG_CPU_FREQ_GOV_POWERSAVE CONFIG_CPU_BOOST CONFIG_LRU_GEN CONFIG_LRU_GEN_ENABLED CONFIG_ZRAM CONFIG_ZSWAP CONFIG_ZSMALLOC CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND CONFIG_DEVFREQ_GOV_MSM_ADRENO_TZ CONFIG_KGSL CONFIG_TCP_CONG_BBR CONFIG_TCP_CONG_BBR2 CONFIG_TCP_CONG_BBRV2 CONFIG_TCP_CONG_WESTWOOD CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_NOMOUNT CONFIG_NTSYNC CONFIG_NAMESPACES CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_UTS_NS CONFIG_USER_NS CONFIG_CGROUPS CONFIG_DEVTMPFS CONFIG_DROIDSPACES CONFIG_DROIDSPACE CONFIG_UNICODE CONFIG_UNICODE_BYPASS_FIX CONFIG_UNICODE_BYPASS CONFIG_TMPFS CONFIG_TMPFS_XATTR CONFIG_TMPFS_POSIX_ACL CONFIG_TMPFS_INODE64 CONFIG_LTO CONFIG_LTO_CLANG CONFIG_LTO_CLANG_THIN CONFIG_LTO_CLANG_FULL CONFIG_LTO_NONE CONFIG_BBG CONFIG_SECURITY_BASEBAND_GUARD CONFIG_BASEBAND_GUARD CONFIG_LSM CONFIG_DEBUG_INFO_BTF CONFIG_DEBUG_INFO_BTF_MODULES CONFIG_BPF CONFIG_BPF_SYSCALL CONFIG_BPF_JIT CONFIG_BPF_JIT_ALWAYS_ON CONFIG_BPF_JIT_DEFAULT_ON CONFIG_BPF_LSM CONFIG_CGROUP_BPF CONFIG_NET_CLS_BPF CONFIG_NET_ACT_BPF CONFIG_FUSE_FS CONFIG_FUSE_BPF CONFIG_FUSE_PASSTHROUGH CONFIG_VPNHIDE CONFIG_VPNHIDE_FS_HIDING CONFIG_USB_CONFIGFS CONFIG_USB_CONFIGFS_MASS_STORAGE CONFIG_USB_CONFIGFS_F_HID CONFIG_USB_CONFIGFS_NCM CONFIG_IP_NF_NAT CONFIG_IP_NF_TARGET_MASQUERADE CONFIG_TCP_CONG_BBR3 CONFIG_WIREGUARD CONFIG_NET_SCH_CAKE CONFIG_NET_SCH_FQ CONFIG_IP_SET CONFIG_REKERNEL CONFIG_REKERNEL_NETWORK CONFIG_REKERNEL_LEGACY_NETLINK CONFIG_ASB_WAKEUP_BLOCKER CONFIG_OVERLAY_FS CONFIG_CIFS CONFIG_BINFMT_MISC CONFIG_MACVLAN CONFIG_KPROBES CONFIG_UPROBES CONFIG_OPLUS_SDP_900MA CONFIG_DEBUG_FS CONFIG_SCHED_DEBUG CONFIG_SCHED_AUTOGROUP CONFIG_SCHED_BORE'
+_cfg_keys='CONFIG_LOCALVERSION CONFIG_PREEMPT CONFIG_PREEMPT_DYNAMIC CONFIG_HZ CONFIG_SCHEDSTATS CONFIG_SCHED_WALT CONFIG_SCHEDUTIL CONFIG_CPU_FREQ_GOV_SCHEDUTIL CONFIG_CPU_FREQ_GOV_PERFORMANCE CONFIG_CPU_FREQ_GOV_POWERSAVE CONFIG_CPU_BOOST CONFIG_LRU_GEN CONFIG_LRU_GEN_ENABLED CONFIG_ZRAM CONFIG_ZSWAP CONFIG_ZSMALLOC CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND CONFIG_DEVFREQ_GOV_MSM_ADRENO_TZ CONFIG_KGSL CONFIG_TCP_CONG_BBR CONFIG_TCP_CONG_BBR2 CONFIG_TCP_CONG_BBRV2 CONFIG_TCP_CONG_WESTWOOD CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_NOMOUNT CONFIG_NTSYNC CONFIG_NAMESPACES CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_UTS_NS CONFIG_USER_NS CONFIG_CGROUPS CONFIG_DEVTMPFS CONFIG_DROIDSPACES CONFIG_DROIDSPACE CONFIG_UNICODE CONFIG_UNICODE_BYPASS_FIX CONFIG_UNICODE_BYPASS CONFIG_TMPFS CONFIG_TMPFS_XATTR CONFIG_TMPFS_POSIX_ACL CONFIG_TMPFS_INODE64 CONFIG_LTO CONFIG_LTO_CLANG CONFIG_LTO_CLANG_THIN CONFIG_LTO_CLANG_FULL CONFIG_LTO_NONE CONFIG_BBG CONFIG_SECURITY_BASEBAND_GUARD CONFIG_BASEBAND_GUARD CONFIG_LSM CONFIG_DEBUG_INFO_BTF CONFIG_DEBUG_INFO_BTF_MODULES CONFIG_BPF CONFIG_BPF_SYSCALL CONFIG_BPF_JIT CONFIG_BPF_JIT_ALWAYS_ON CONFIG_BPF_JIT_DEFAULT_ON CONFIG_BPF_LSM CONFIG_CGROUP_BPF CONFIG_NET_CLS_BPF CONFIG_NET_ACT_BPF CONFIG_FUSE_FS CONFIG_FUSE_BPF CONFIG_FUSE_PASSTHROUGH CONFIG_VPNHIDE CONFIG_VPNHIDE_FS_HIDING CONFIG_USB_CONFIGFS CONFIG_USB_CONFIGFS_MASS_STORAGE CONFIG_USB_CONFIGFS_F_HID CONFIG_USB_CONFIGFS_NCM CONFIG_IP_NF_NAT CONFIG_IP_NF_TARGET_MASQUERADE CONFIG_TCP_CONG_BBR3 CONFIG_WIREGUARD CONFIG_NET_SCH_CAKE CONFIG_NET_SCH_FQ CONFIG_IP_SET CONFIG_REKERNEL CONFIG_REKERNEL_NETWORK CONFIG_REKERNEL_LEGACY_NETLINK CONFIG_ASB_WAKEUP_BLOCKER CONFIG_OVERLAY_FS CONFIG_CIFS CONFIG_BINFMT_MISC CONFIG_MACVLAN CONFIG_KPROBES CONFIG_UPROBES CONFIG_OPLUS_SDP_900MA CONFIG_DEBUG_FS CONFIG_SCHED_DEBUG CONFIG_SCHED_AUTOGROUP CONFIG_SCHED_BORE CONFIG_MQ_IOSCHED_ADIOS CONFIG_MQ_IOSCHED_DEFAULT_ADIOS'
 _cfg=''
 _cfg_lines=0
 _cfg_decoder=''
@@ -216,6 +217,7 @@ if [ -r "$PROC/kallsyms" ]; then
       else if (n ~ /^ntsync_(init|open|release|fops|misc_device)(\.|$)/) token="ntsync"
       else if (n ~ /^vpnhide_(init|should_hide_dev|setsockopt_bind)(\.|$)/) token="vpnhide"
       else if (n ~ /^bbg_init(\.|$)/) token="bbg"
+      else if (n ~ /^(adios_init|adios_init_sched|adios_insert_requests|adios_completed_request)(\.|$)/) token="adios"
       if (token != "" && !seen[token]++) hits=hits token " "
     }
     END { printf "rows=%d;hits=%s", rows+0, hits }
@@ -235,6 +237,44 @@ _ks_has() { case " $_ks_hits " in *" $1 "*) return 0 ;; esac; return 1; }
 _runtime_lsm="$(_read "$SYS/kernel/security/lsm")"
 _runtime_lsm_words=" $(printf '%s' "$_runtime_lsm" | tr ',' ' ') "
 
+# ADIOS is a block-I/O scheduler, not a CPU scheduler. Config and symbols establish
+# build/code evidence; only each existing non-rotational queue establishes runtime
+# exposure, and its bracketed token establishes actual selection. No tunable is written.
+_adios_cfg="$(_cfg_val CONFIG_MQ_IOSCHED_ADIOS)"
+_adios_default="$(_cfg_val CONFIG_MQ_IOSCHED_DEFAULT_ADIOS)"
+_adios_exposed=''; _adios_active=''; _adios_inactive=''; _adios_queues=0
+for _aq in "$SYS"/block/*/queue/scheduler; do
+  [ -r "$_aq" ] || continue
+  _ad="${_aq%/queue/scheduler}"; _an="${_ad##*/}"
+  case "$_an" in sd[a-z]*|mmcblk[0-9]*|nvme[0-9]*n[0-9]*|dm-[0-9]*) ;; *) continue ;; esac
+  case "$_an" in *[!A-Za-z0-9_-]*) continue ;; esac
+  [ "$(_read "${_ad}/queue/rotational")" = 1 ] && continue
+  _al="$(_read "$_aq")"
+  case " $_al " in *' adios '*|*' [adios]'*) ;; *) continue ;; esac
+  _adios_queues=$((_adios_queues + 1))
+  _adios_exposed="${_adios_exposed:+$_adios_exposed,}$_an"
+  case "$_al" in *'[adios]'*) _adios_active="${_adios_active:+$_adios_active,}$_an" ;;
+    *) _adios_inactive="${_adios_inactive:+$_adios_inactive,}$_an" ;; esac
+done
+if [ -n "$_adios_active" ] && [ -n "$_adios_inactive" ]; then _adios_selection='active on some exposed queues; mixed selection'
+elif [ -n "$_adios_active" ]; then _adios_selection='active on every exposed queue found'
+elif [ -n "$_adios_exposed" ]; then _adios_selection='exposed; not selected on the exposed queues found'
+elif [ "$_adios_cfg" = y ] || _ks_has adios; then _adios_selection='code/config evidence; no readable queue exposure found'
+else _adios_selection='unknown; not runtime-discoverable'; fi
+_emit adios config "${_adios_cfg:-unknown}"
+_emit adios default_config "${_adios_default:-unknown}"
+if _ks_has adios; then _emit adios symbols 'ADIOS scheduler symbols found'
+else _emit adios symbols "$_ks_read; no ADIOS symbol observed"; fi
+_emit adios runtime_interface "$([ -n "$_adios_exposed" ] && printf 'exposed in queue scheduler lists' || printf 'not exposed in readable targeted queues')"
+_emit adios exposed_queues "${_adios_exposed:-none found}"
+_emit adios active_queues "${_adios_active:-none}"
+_emit adios inactive_queues "${_adios_inactive:-none}"
+_emit adios selection "$_adios_selection"
+_emit adios version 'not runtime-discoverable from config, symbols or queue scheduler lists'
+_adios_mode="$(sed -n 's/^[[:space:]]*io_scheduler=//p' "$MODDIR/config/governor.conf" 2>/dev/null | head -n 1 | tr -d ' \t\r')"
+_emit adios asb_mode "${_adios_mode:-stock}"
+_emit adios control_policy 'ASB may select adios only through the existing per-queue io_scheduler owner; no private ADIOS tunables are written'
+
 # Kernel provenance is evidence, not a verdict from boot lock/build type. Positive
 # custom build/runtime indicators win over stock-like boot indicators; neither side
 # identifies who built the boot image, and missing evidence remains unknown.
@@ -246,6 +286,8 @@ case "$_origin_lower" in
 esac
 case "${_bore_cfg:-}" in y|m) _origin_add 'CONFIG_SCHED_BORE' ;; esac
 case "${_bore_state:-unknown}" in on|off) _origin_add 'BORE runtime sysctl' ;; esac
+case "${_adios_cfg:-}" in y|m) _origin_add 'CONFIG_MQ_IOSCHED_ADIOS' ;; esac
+[ -n "$_adios_exposed" ] && _origin_add 'ADIOS queue scheduler exposure'
 for _k in KSU KSU_SUSFS NOMOUNT UNICODE_BYPASS_FIX UNICODE_BYPASS BBG SECURITY_BASEBAND_GUARD BASEBAND_GUARD; do
   case "$(_cfg_val "CONFIG_$_k")" in y|m) _origin_add "CONFIG_$_k" ;; esac
 done
@@ -965,6 +1007,85 @@ if [ -r "$_probe" ]; then
     [ -n "$_tv" ] && [ "$_tv" != 0 ] && _tl="$_tl ${_spec%%:*}"
   done
   _emit asb_caps tunable "${_tl# }"
+fi
+
+# ASB property evidence. Only the two shipped, reviewed payloads are parsed: no arbitrary
+# property dump and no account/network identifier discovery. Static system.prop is loaded
+# by Magisk; managed entries count as selected only when their feature block and the
+# validated managed-property owner were active. Live equality is reported separately from
+# selection because a ROM can legitimately already use the same value.
+_sp_file="$MODDIR/system.prop"
+_sp_total=0
+_emit asb_properties static_owner 'Magisk system.prop (loaded before runtime feature checks)'
+if [ -r "$_sp_file" ]; then
+  while IFS= read -r _pl || [ -n "$_pl" ]; do
+    case "$_pl" in ''|'#'*) continue ;; esac
+    _pk="${_pl%%=*}"; _pv="${_pl#*=}"
+    [ "$_pk" != "$_pl" ] || continue
+    case "$_pk" in ''|*[!A-Za-z0-9_.-]*) continue ;; esac
+    _sp_total=$((_sp_total + 1)); _plive="$(_prop "$_pk")"
+    if [ -n "$_plive" ]; then
+      [ "$_plive" = "$_pv" ] && _pstate=match || _pstate=mismatch
+    else _pstate=unavailable_or_empty; fi
+    _emit asb_properties "$_pk" "source=system.prop; configured=$_pv; live=${_plive:-unavailable_or_empty}; readback=$_pstate"
+  done < "$_sp_file"
+  _emit asb_properties static_entries "$_sp_total"
+  [ "$_sp_total" -eq 0 ] && _emit asb_properties static_note 'No static assignments by design; optional properties use the validated managed owner'
+else
+  _emit asb_properties static_entries 'not readable'
+fi
+_mp_file="$MODDIR/runtime/asb_managed.props"
+_mp_state="$PROP_STATE_DIR/managed_props.state"
+_mp_status="$(_kv "$_mp_state" status)"
+_emit asb_properties managed_owner 'runtime/asb_apply_managed_props.sh after exact fingerprint/domain validation'
+_emit asb_properties managed_status "${_mp_status:-not exposed}"
+_emit asb_properties managed_reason "$(_kv "$_mp_state" reason)"
+_emit asb_properties managed_applied_total "$(_kv "$_mp_state" applied)"
+_emit asb_properties managed_skipped_total "$(_kv "$_mp_state" skipped)"
+_mp_selected=0; _mp_not_selected=0
+_di_feature_enabled() {
+  _df="$1"
+  _dl="$(grep -E "^[[:space:]]*${_df}=" "$MODDIR/features.conf" 2>/dev/null | tail -n 1)"
+  [ -n "$_dl" ] || return 1
+  _dv="${_dl#*=}"; _dv="${_dv%%#*}"
+  [ "$(printf '%s' "$_dv" | tr -d '[:space:]\r')" = 1 ]
+}
+if [ -r "$_mp_file" ] && [ "$_mp_status" = applied ]; then
+  _mblock=''; _mapply=0
+  while IFS= read -r _ml || [ -n "$_ml" ]; do
+    case "$_ml" in
+      '# ASB:'*:BEGIN)
+        _mblock="${_ml#\# ASB:}"; _mblock="${_mblock%:BEGIN}"
+        case "$_mblock" in BLUR|UIFX) _mfeature=DISPLAY ;; *) _mfeature="$_mblock" ;; esac
+        _mapply=0
+        if [ "$_mblock" = BT ] && [ ! -f "$PROP_STATE_DIR/enable_bt_policy" ]; then
+          continue
+        fi
+        _di_feature_enabled "$_mfeature" && _mapply=1
+        continue ;;
+      '# ASB:'*:END) _mblock=''; _mapply=0; continue ;;
+      ''|'#'*) continue ;;
+    esac
+    _mk="${_ml%%=*}"; _mv="${_ml#*=}"
+    [ "$_mk" != "$_ml" ] || continue
+    case "$_mk" in ''|*[!A-Za-z0-9_.-]*) continue ;; esac
+    if [ "$_mapply" != 1 ]; then _mp_not_selected=$((_mp_not_selected + 1)); continue; fi
+    _mp_selected=$((_mp_selected + 1)); _mlive="$(_prop "$_mk")"
+    if [ -n "$_mlive" ]; then
+      [ "$_mlive" = "$_mv" ] && _mstate=match || _mstate=mismatch
+    else _mstate=unavailable_or_empty; fi
+    _emit asb_properties "$_mk" "source=managed:${_mblock:-unknown}; configured=$_mv; live=${_mlive:-unavailable_or_empty}; readback=$_mstate"
+  done < "$_mp_file"
+fi
+_emit asb_properties managed_selected "$_mp_selected"
+_emit asb_properties managed_not_selected "$_mp_not_selected"
+_emit asb_properties managed_evidence 'Per-property readback is shown; aggregate owner counts alone do not prove an individual write'
+# This known runtime owner is outside both file payloads. Include it only when its exact
+# ASB setting and AUDIO feature select it; unrelated dynamic/vendor properties are excluded.
+_asb_safe_media="$(_kv "$MODDIR/config/governor.conf" audio_remove_volume_limit)"
+if [ "$_asb_safe_media" = 1 ] && _di_feature_enabled AUDIO; then
+  _sm_live="$(_prop audio.safemedia.bypass)"
+  _emit asb_properties audio.safemedia.bypass "source=runtime:audio_remove_volume_limit; configured=true; live=${_sm_live:-unavailable_or_empty}; readback=$([ "$_sm_live" = true ] && printf match || printf mismatch_or_unavailable)"
 fi
 
 # Pressure and observer metrics stay separate: neither is a health score or a policy input.
