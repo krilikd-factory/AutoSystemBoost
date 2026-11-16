@@ -533,10 +533,19 @@ smart    watching, testing, helped, nothelped, ctxlearn   (smooth| line of
                                            smart_records.txt plus learned contexts)
 mwake    n, nights, per_night, typical_s   (night-check snapshot; nights=0 means
                                            no completed night, not a zero average)
-cfg      key, value                       (seven advice-relevant switches, read from the
+cfg      key, value                       (ten advice-relevant switches, read from the
                                            CURRENT config, one line per key)
 error    no_capture                       (nothing found - the only failure line)
 ```
+
+Buildfix9 adds `sustained_temp_enter` and `perf_ceiling_pct` to the closed `cfg` read whitelist so
+existing thermal/jank evidence can name a current value and a bounded recommendation. This does not
+make report text executable. Infirmary derives operations only from the existing evidence rules and
+accepts only `night_modem_idle=1`, `doze_level=night`, `net_screen_off_lte=1`,
+`perf_ceiling_pct=100`, `sustained_temp_mode=smart` or `sustained_temp_enter=65`. Screen-off LTE
+additionally requires independently measured long-night drain. Apply requires preview, explicit
+confirmation, a fresh pre-write config comparison and saved-config read-back. Traffic volume alone,
+an unavailable capture or a value changed since preview cannot authorize a write.
 
 The WebUI parser keys on the tag; unknown tags are kept in `sections` and unknown keys
 are preserved, so older WebUIs tolerate newer digests and vice versa. In the `zygisk`
