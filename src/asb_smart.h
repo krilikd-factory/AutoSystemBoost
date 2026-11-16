@@ -430,6 +430,9 @@ static unsigned long g_stat_probe_topapp_empty = 0, g_stat_probe_topapp_ambig = 
  * the per-app energy table, as if it were an app the user had opened. Keyboards are left
  * out by name; a cgroup holding nothing else sends the lookup to the dumpsys chain. */
 static unsigned long g_stat_probe_topapp_ime = 0;
+/* dev66: an ambiguous top-app group can still contain one unambiguous foreground game.
+ * Count only resolutions that avoid the binder fallback; two visible games remain ambiguous. */
+static unsigned long g_stat_probe_topapp_game = 0;
 /* V66 dev8: an hourly budget for the optional forks - the dumpsys fallbacks of the app
  * lookup and the frame-count probes. A field day needed about 75 an hour; 240 is room for
  * a busy one, and a loop that went wrong (a ROM whose cgroup never answers, a probe that
@@ -527,6 +530,22 @@ static int asb_smart_pkg_via_topapp(char *out_pkg, size_t outsz) {
             return 1;
         }
     }
+    /* ColorOS can leave a game and another visible process in top-app together.  If exactly
+     * one adj-0 package is positively classified as a game, it is the foreground rendering
+     * owner; repeated processes of that same game still count as one.  Do not guess between
+     * two games, and never let a non-adj-0 background game outrank the visible app. */
+    const char *game = NULL;
+    int game_ambiguous = 0;
+    for (int i = 0; i < nc; i++) {
+        if (cadj[i] != 0 || asb_smart_app_hint_from_pkg(cand[i]) < ASB_APP_GAMING) continue;
+        if (!game) game = cand[i];
+        else if (strcmp(game, cand[i]) != 0) { game_ambiguous = 1; break; }
+    }
+    if (game && !game_ambiguous) {
+        g_stat_probe_topapp_game++;
+        asb_copy_str(out_pkg, game, outsz);
+        return 1;
+    }
     g_stat_probe_topapp_ambig++;
     return 0;
 }
@@ -565,11 +584,13 @@ static int asb_smart_pkg_via_activity_top(char *out_pkg, size_t outsz) {
 }
 #endif
 
-/* Source 2: dumpsys activity activities | mResumedActivity */
+/* Source 2: dumpsys activity activities | resumed ActivityRecord.
+ * Current ColorOS prints topResumedActivity and ResumedActivity; older Android prints
+ * mResumedActivity.  All three name the same framework-owned record, not an app dump. */
 static int asb_smart_pkg_via_resumed(char *out_pkg, size_t outsz) {
     if (!out_pkg || outsz == 0) return 0;
     out_pkg[0] = '\0';
-    FILE *p = popen("timeout 1 dumpsys activity activities 2>/dev/null | grep -m1 mResumedActivity", "r");
+    FILE *p = popen("timeout 1 dumpsys activity activities 2>/dev/null | grep -m1 -E 'mResumedActivity|topResumedActivity|ResumedActivity'", "r");
     if (!p) return 0;
     char line[512];
     int got = 0;

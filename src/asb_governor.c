@@ -4379,8 +4379,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "probe_cache_hits=%lu\nprobe_cache_misses=%lu\n",
             g_stat_probe_hits, g_stat_probe_misses);
     /* Foreground answered from the top-app cgroup, no fork (fix124). */
-    fprintf(f, "probe_topapp=%lu\nprobe_topapp_empty=%lu\nprobe_topapp_ambiguous=%lu\nprobe_topapp_keyboard_only=%lu\n",
-            g_stat_probe_topapp, g_stat_probe_topapp_empty, g_stat_probe_topapp_ambig, g_stat_probe_topapp_ime);
+    fprintf(f, "probe_topapp=%lu\nprobe_topapp_empty=%lu\nprobe_topapp_ambiguous=%lu\nprobe_topapp_keyboard_only=%lu\nprobe_topapp_game_resolved=%lu\n",
+            g_stat_probe_topapp, g_stat_probe_topapp_empty, g_stat_probe_topapp_ambig,
+            g_stat_probe_topapp_ime, g_stat_probe_topapp_game);
     fprintf(f, "zygisk_refresh_accepted=%lu\nzygisk_refresh_vetoed=%lu\n",
             g_zygisk_refresh_accepted, g_zygisk_refresh_vetoed);
     fprintf(f, "zygisk_launch_accepted=%lu\nzygisk_launch_vetoed=%lu\n"
