@@ -4,6 +4,30 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix3 - continuous visible-header animation through idle calm
+
+Input: the owner's field report that the WebUI header still froze about ten seconds after opening
+on buildfix2. A real Chromium run reproduced the exact boundary: the UFO layers stayed on their
+native clocks, but `html.asb-calm .app-name` still applied `animation: none !important` when the
+ten-second idle timer fired. The previous repair had therefore left the wordmark sweep stopped.
+
+- **Whole visible header stays alive:** both remaining calm selectors for `.app-name` are removed.
+  The UFO shells, pulsing pod, wordmark sweep and header indicators now retain their native CSS
+  animation clocks while their page is visible. No animation is manually restarted and no `rAF`
+  loop, interval, worker or persistent poller was added.
+- **Unchanged ownership boundaries:** closed/background pages still stop their decorative header
+  loops; `prefers-reduced-motion` and the existing reduced-effects setting still disable them.
+  Only the separate Smart-card glow uses the existing idle ambient ticker. Navigation, Battery
+  Fix, profiles, thermal ownership and runtime scripts are untouched.
+- **Regression and visual evidence:** source guards now reject every header layer, including the
+  wordmark, in any calm selector while preserving closed-page rules and the single bounded calm
+  timer. Across the six host suites, piped quiet-grep assertions now consume complete input
+  instead of closing their producers at the first match; their patterns, status checks and the
+  production helpers are unchanged. In Chromium with
+  calm active, all four principal header layers remained `running` and their `currentTime`
+  advanced at 11, 12 and 65 seconds; reduced-motion still returned `animation-name: none`. This
+  is host-browser evidence, not physical ColorOS WebView validation.
+
 ## V66 dev66 buildfix2 - bounded Battery Fix ART recovery after Binder refusal
 
 Input: the owner's Battery Fix screenshots from dev66 buildfix1. All twelve initial per-package
