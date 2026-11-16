@@ -247,7 +247,6 @@ _sf_run() {
 
 _sf_unlocked() {
   if [ "$(getprop sys.user.0.ce_available 2>/dev/null)" = true ]; then _bvia=ce_available; return 0; fi
-  if [ -d "$CE_ROOT/$PKG" ]; then _bvia=ce_storage; return 0; fi
   if [ "$1" = 1 ] && am get-started-user-state 0 2>/dev/null | grep -q RUNNING_UNLOCKED; then _bvia=user_state; return 0; fi
   return 1
 }
@@ -329,6 +328,13 @@ _sf_boot() {
   _sf_brec unlocked
   _sf_log "boot: unlocked ${_bw}s after boot_completed (via $_bvia); repair in ${SETTLE}s; $(_sf_snapshot)"
   sleep "$SETTLE"
+  if ! _sf_unlocked 1; then
+    _sf_brec skipped no_unlock
+    _sf_log "boot: skipped because CE storage was no longer unlocked after the settle; no SOTER data was touched"
+    printf 'soter|result|state=no_unlock|cleared=0|passes=0|services=%s
+' "$(_sf_services_line)"
+    return 0
+  fi
   if [ ! -f "$AUTO" ]; then
     _sf_brec skipped auto_off
     _sf_log "boot: skipped because automatic repair was switched off during the settle"

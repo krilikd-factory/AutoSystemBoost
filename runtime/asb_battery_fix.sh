@@ -96,6 +96,14 @@ _bf_compile_bulk() {
   [ -n "$_bf_err" ] || _bf_err=no_output
   return 1
 }
+_bf_schedule_bgjob() {
+  [ "${ASB_BFIX_NO_BGJOB:-0}" != 1 ] || return 1
+  command -v cmd >/dev/null 2>&1 || return 1
+  _bgo="$(cmd package bg-dexopt-job 2>&1)"; _bgrc=$?
+  [ "$_bgrc" -eq 0 ] || return 1
+  case "$_bgo" in *[Ff]ail*|*[Ee]rror*|*Exception*|*'not found'*) return 1 ;; esac
+  return 0
+}
 _prog_write() {
   _t="$PROG.tmp.$$"
   {
@@ -149,6 +157,8 @@ _bf_worker() {
       _prog_write running bulk "$_total" "$_d" "$_ok" "$_f" - "$_st" -
       if _bf_compile_bulk; then
         _d="$_total"; _ok="$_total"; _f=0; _bf_err=""; _state=done
+      elif _bf_schedule_bgjob; then
+        _d=$((_d + 1)); _f=0; _bf_err=""; _state=scheduled
       else
         _f=$((_f + 1)); _d=$((_d + 1)); _state=refused
       fi
