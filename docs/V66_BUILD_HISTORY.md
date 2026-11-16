@@ -4,6 +4,46 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix9 - applicable log evidence, complete startup snapshots and bounded Battery Fix
+
+Input: the owner's four-item revision of Infinite Log, Device Diagnostics, startup page loading and
+Battery Fix after ColorOS Package Manager repeatedly returned Binder `Failed transaction`.
+
+- **Infinite Log → Infirmary:** sufficiently captured night drain, measured at-cap jank and
+  sustained heat can now name a concrete current → recommended value. The closed operation list is
+  limited to `night_modem_idle=1`, `doze_level=night`, `net_screen_off_lte=1` (only with independent
+  long-night drain evidence), `perf_ceiling_pct=100`, `sustained_temp_mode=smart` and
+  `sustained_temp_enter=65`. Existing evidence floors and ROM/fair-cap exclusions remain. The
+  Infirmary card uses the same report snapshot, shows a preview and requires a second tap within
+  six seconds. It re-reads `governor.conf` before writing, skips values changed since the preview,
+  uses the existing validated/atomic `cfgSet()` owner and accepts success only after a separate
+  saved-config read-back. A failed read or an optimistic in-memory value is not an applied result.
+- **Device schema 6:** ADIOS build config, bounded symbol evidence, per-queue exposure, inactive /
+  active / mixed selection and ASB's existing I/O owner are separate rows. Config or symbols alone
+  do not prove runtime selection; absent evidence remains unknown/not runtime-discoverable. ASB
+  writes no private ADIOS tunable. Static `system.prop`, validated managed properties and the
+  conditional safe-media property show configured/live/readback values and their actual owner.
+  Empty static `system.prop` is intentional. BT properties remain behind their separate opt-in;
+  aggregate owner counters do not prove an individual write.
+- **Startup snapshots:** the once-per-boot splash performs five bounded jobs: Live, Config, Device,
+  Infinite Log and the complete Zygisk read. Device, Infinite Log and Zygisk open immediately from
+  that snapshot (or a bounded persistent Device/Log cache), with the snapshot time/state visible.
+  Navigation does not recollect; each explicit Refresh still performs a live read, and a missing
+  snapshot retains one bounded fallback. Live/Monitor freshness rules are unchanged. No persistent
+  polling worker was added.
+- **Battery Fix:** the broken aggregate `compile ... -a` recovery path was removed. Compilation is
+  package-scoped through `cmd package compile -m speed-profile -f PKG`, with package-scoped
+  `pm compile` fallback. Three consecutive Binder refusals stop the run by default. Results are
+  `scheduled`, `refused` or `partial` as applicable; only processed packages contribute to
+  succeeded/failed counts, and unattempted apps are named separately. An accepted Android
+  background job does not prove `speed-profile` compilation. The battery-statistics reset remains
+  a distinct reboot-time operation. No Dalvik/ART wipe or direct `dex2oat` was introduced.
+- **Verification:** host fixtures cover recommendation evidence/whitelist/locales, two-tap apply,
+  changed-since-preview protection, final-read failure, repaint-safe per-setting readback, ADIOS
+  states, property match/mismatch/selection, five-stage splash and snapshot navigation. Full
+  working-tree and clean-source-ZIP regressions are release gates. These are not physical ColorOS
+  WebView or OnePlus 15 field results, and no battery, heat, latency or smoothness gain is claimed.
+
 ## V66 dev66 buildfix8 - measured interaction headroom, honest Smart limits and multi-day capture epochs
 
 Input: the owner's ten-item field/UI/workflow revision and a new 254-minute full-day capture,
