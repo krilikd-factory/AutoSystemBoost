@@ -1844,15 +1844,15 @@ out="$(LK_OUT_DIR="$T/out" ASB_LK_CPUFREQ_ROOT="$T/cpufreq" sh -c '
 
 rows="$(printf '%s\n' "$out" | sed -n '/^--- trace/,/^--- report/p' | grep -v '^#' | grep -c '|')"
 [ "$rows" = 2 ] || f "expected 2 interval rows (pruned day and screen-off must not write one), got $rows: $out"
-r1="$(printf '%s\n' "$out" | grep '|active|' | head -1)"
+r1="$(printf '%s\n' "$out" | grep '|active|' | sed -n '1p')"
 [ "$(printf '%s' "$r1" | cut -d'|' -f4)" = MODERATE ] || f "same state at both ends must be named: $r1"
 [ "$(printf '%s' "$r1" | cut -d'|' -f6-13)" = "1|0|4|2000|106|126|0|0" ] || f "deltas or tags wrong: $r1"
-r2="$(printf '%s\n' "$out" | grep '|audio_bt_scr|' | head -1)"
+r2="$(printf '%s\n' "$out" | grep '|audio_bt_scr|' | sed -n '1p')"
 [ "$(printf '%s' "$r2" | cut -d'|' -f4)" = mixed ] || f "a state change inside the interval must read mixed: $r2"
 [ "$(printf '%s' "$r2" | cut -d'|' -f9-10)" = "200|2" ] || f "second interval deltas wrong: $r2"
-printf '%s\n' "$out" | grep -q 'all screen-on intervals: 2  frames 2200  janky 4.9%' || f "overall janky share wrong: $out"
-printf '%s\n' "$out" | grep -qE '^MODERATE +1 +2000 +5.3%' || f "per-state line wrong: $out"
-printf '%s\n' "$out" | grep -q 'main cores at the ASB ceiling (end of interval): yes 4.9% of 2200 frames' || f "ceiling correlation missing: $out"
+printf '%s\n' "$out" | grep 'all screen-on intervals: 2  frames 2200  janky 4.9%' >/dev/null || f "overall janky share wrong: $out"
+printf '%s\n' "$out" | grep -E '^MODERATE +1 +2000 +5.3%' >/dev/null || f "per-state line wrong: $out"
+printf '%s\n' "$out" | grep 'main cores at the ASB ceiling (end of interval): yes 4.9% of 2200 frames' >/dev/null || f "ceiling correlation missing: $out"
 
 # fix150: the wake itself. The last screen-on baseline survives the screen-off stretch and the
 # first screen-on poll after it writes one row marked "wake" (column 18); the report keeps
@@ -1880,11 +1880,11 @@ case "$(printf '%s' "$rw" | cut -d'|' -f17)" in
   *) f "wake row apps: $rw" ;;
 esac
 [ "$(printf '%s\n' "$outw" | sed -n '/^--- trace/,/^--- report/p' | grep -c '|')" = 3 ] || f "wake must not replace the ordinary rows: $outw"
-printf '%s\n' "$outw" | grep -q 'all screen-on intervals: 2  frames 2000  janky 5.3%' || f "a wake row leaked into the ordinary figures: $outw"
-printf '%s\n' "$outw" | grep -q 'the wake itself: 1 wake(s), last screen-on poll before each to the first after it - frames 200, janky 1.0% (ordinary screen-on intervals: 5.3%)' \
+printf '%s\n' "$outw" | grep 'all screen-on intervals: 2  frames 2000  janky 5.3%' >/dev/null || f "a wake row leaked into the ordinary figures: $outw"
+printf '%s\n' "$outw" | grep 'the wake itself: 1 wake(s), last screen-on poll before each to the first after it - frames 200, janky 1.0% (ordinary screen-on intervals: 5.3%)' >/dev/null \
   || f "wake summary missing: $outw"
-printf '%s\n' "$outw" | grep -q '  at the wakes, by app: com.android.systemui 1 of 100 janky (1.0%), com.google.android.youtube 1 of 100 janky (1.0%)' \
-  || printf '%s\n' "$outw" | grep -q '  at the wakes, by app: com.google.android.youtube 1 of 100 janky (1.0%), com.android.systemui 1 of 100 janky (1.0%)' \
+printf '%s\n' "$outw" | grep '  at the wakes, by app: com.android.systemui 1 of 100 janky (1.0%), com.google.android.youtube 1 of 100 janky (1.0%)' >/dev/null \
+  || printf '%s\n' "$outw" | grep '  at the wakes, by app: com.google.android.youtube 1 of 100 janky (1.0%), com.android.systemui 1 of 100 janky (1.0%)' >/dev/null \
   || f "wake apps missing: $outw"
 
 # fix125: time at the ceiling from time_in_state, and the app in front from the top-app cgroup.
@@ -1908,12 +1908,12 @@ out2="$(LK_OUT_DIR="$T/out2" ASB_LK_CPUFREQ_ROOT="$T/cpufreq" ASB_LK_TOPAPP_PROC
   grep -v "^#" "$LK_OUT_DIR/jank_trace.tsv"
   echo "--- report"; lk_emit_jank_summary
 ' "$C" "$T" 2>&1)"
-r3="$(printf '%s\n' "$out2" | grep '|active|' | head -1)"
+r3="$(printf '%s\n' "$out2" | grep '|active|' | sed -n '1p')"
 [ "$(printf '%s' "$r3" | cut -d'|' -f14-16)" = "80|0|com.instagram.android" ] || f "time-at-ceiling or app columns wrong: $r3"
-printf '%s\n' "$out2" | grep -q 'main cores, share of the interval AT the ceiling ->  >=60%: 5.3% of 2000' || f "time-at-ceiling split missing: $out2"
-printf '%s\n' "$out2" | grep -qE '^com.instagram.android +2000 +5.3%' || f "per-app line missing: $out2"
-printf '%s\n' "$out2" | grep -q 'high-input-latency events:' || f "input latency not shown as a count"
-printf '%s\n' "$out2" | grep -q 'high input latency [0-9.]*%' && f "input latency still shown as a share of frames"
+printf '%s\n' "$out2" | grep 'main cores, share of the interval AT the ceiling ->  >=60%: 5.3% of 2000' >/dev/null || f "time-at-ceiling split missing: $out2"
+printf '%s\n' "$out2" | grep -E '^com.instagram.android +2000 +5.3%' >/dev/null || f "per-app line missing: $out2"
+printf '%s\n' "$out2" | grep 'high-input-latency events:' >/dev/null || f "input latency not shown as a count"
+printf '%s\n' "$out2" | grep 'high input latency [0-9.]*%' >/dev/null && f "input latency still shown as a share of frames"
 
 # asbdiag: today's blocks only (the newest "Stats since"), totals and the most janky apps.
 sed -n '/^# asb_gfx_today_begin$/,/^# asb_gfx_today_end$/p' "$ROOT/tools/asb_diag.sh" > "$T/gfx_today.sh"
@@ -1947,8 +1947,8 @@ Number Slow UI thread: 0
 Number High input latency: 0
 EOF
 gd="$(sh -c '. "$1"; asb_gfx_today < "$2"' x "$T/gfx_today.sh" "$T/gd" 2>&1)"
-printf '%s\n' "$gd" | grep -q '^frames 10100  ·  janky 2.5%  ·  slow UI thread 1.0%  ·  high-input-latency events 10$' || f "asbdiag totals wrong (older day must be left out, latency is a count): $gd"
-printf '%s\n' "$gd" | grep -q '^most janky frames: com.instagram.android 120 (6.0% of 2000)  ·  com.android.systemui 80 (1.0% of 8000)$' || f "asbdiag ranking wrong (under 300 frames must be left out): $gd"
+printf '%s\n' "$gd" | grep '^frames 10100  ·  janky 2.5%  ·  slow UI thread 1.0%  ·  high-input-latency events 10$' >/dev/null || f "asbdiag totals wrong (older day must be left out, latency is a count): $gd"
+printf '%s\n' "$gd" | grep '^most janky frames: com.instagram.android 120 (6.0% of 2000)  ·  com.android.systemui 80 (1.0% of 8000)$' >/dev/null || f "asbdiag ranking wrong (under 300 frames must be left out): $gd"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || f "asbdiag copies differ"
 
 # The full-day recorder calls it and prints the section.
@@ -2289,9 +2289,9 @@ lk_state_kv() { case "$1" in current_scale_x100) echo 35 ;; current_scale_window
 _consistency="$(lk_emit_current_soc_consistency)"
 printf '%s\n' "$_consistency" | grep -Fq "governor's gauge check: on screen-on windows current_now integrates to x0.35 of the SOC-derived drain (61 windows) - multiply screen-on mA by about 2.9" || { echo "FAIL logkit capture-quality: governor gauge factor: $_consistency" >&2; exit 1; }
 lk_state_kv() { case "$1" in current_scale_x100) echo 135 ;; current_scale_windows) echo 61 ;; esac; }
-lk_emit_current_soc_consistency | grep -Fq 'integrates to x1.35 of' || { echo 'FAIL logkit capture-quality: gauge factor above 1' >&2; exit 1; }
+lk_emit_current_soc_consistency | grep -F 'integrates to x1.35 of' >/dev/null || { echo 'FAIL logkit capture-quality: gauge factor above 1' >&2; exit 1; }
 lk_state_kv() { case "$1" in current_scale_x100) echo 92 ;; current_scale_windows) echo 61 ;; esac; }
-lk_emit_current_soc_consistency | grep -q "governor's gauge check" && { echo 'FAIL logkit capture-quality: an accurate gauge was flagged' >&2; exit 1; }
+lk_emit_current_soc_consistency | grep "governor's gauge check" >/dev/null && { echo 'FAIL logkit capture-quality: an accurate gauge was flagged' >&2; exit 1; }
 unset -f lk_state_kv
 
 # Per-phase distribution must use raw battery samples mapped to each concrete ledger interval,
@@ -8809,6 +8809,8 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
 
   await paint(B + 'reset=pending compile=running phase=finishing total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=-' + tail);
   chk(step('bfxStepArt').text === 'Final background optimisation…' && reg.bfxBar.style.transform === 'scaleX(1.0000)', 'finishing phase not shown');
+  await paint(B + 'reset=pending compile=running phase=bulk total=300 done=0 ok=0 fail=0 cur=- started=1000 finished=-' + tail);
+  chk(step('bfxStepArt').text === 'Android is compiling all apps in one system operation…' && reg.bfxArtNow.textContent === '', 'aggregate Binder recovery phase not shown');
 
   await paint(B + 'reset=pending compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-ok' && step('bfxStepArt').text === 'Done: 297 succeeded, failed: 3 · 10 min', 'compile result wrong: ' + step('bfxStepArt').text);
@@ -8836,6 +8838,8 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
   chk(step('bfxStepArt').cls === 'bfx-step is-fail' && step('bfxStepArt').text === 'Android refused every recompile (12 of 12 apps), so it was stopped early. Android said: Error: Failed to compile x package', 'refused recompile not explained: ' + step('bfxStepArt').text);
   await paint('eligible=1 reason=- level=100 charging=1 reset=none compile=refused phase=refused total=560 done=12 ok=0 fail=12 cur=- started=1000 finished=1010' + tail);
   chk(/Android said: no reason given$/.test(step('bfxStepArt').text), 'a refusal without output has no fallback');
+  await paint(B + 'reset=pending compile=refused phase=refused total=560 done=1 ok=0 fail=1 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
+  chk(/per-package Binder call, its pm fallback and the all-package compile fallback/.test(step('bfxStepArt').text) && /No verified recompilation/.test(step('bfxStepArt').text), 'total Binder refusal still describes the old twelve-attempt path: ' + step('bfxStepArt').text);
 
   await paint(B + 'reset=none compile=interrupted phase=compile total=300 done=40 ok=40 fail=0 cur=x started=1000 finished=-' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-wait' && step('bfxStepArt').text === 'Interrupted at 40 of 300' && reg.bfxArtNow.textContent === '', 'interrupted run not shown');

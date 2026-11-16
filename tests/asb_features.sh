@@ -4339,6 +4339,47 @@ unset ASB_BFIX_COMPILE_CMD
 PATH="$T/bin:$PATH" ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='binder.one' sh "$A" run >/dev/null
 [ "$(kv compile)/$(kv ok)/$(kv fail)" = done/1/0 ] || f "pm fallback did not recover a Binder transaction failure: $(st)"
 grep -qx 'compile -m speed-profile -f binder.one' "$PM_FALLBACK_LOG" || f "pm fallback lost the force flag: $(cat "$PM_FALLBACK_LOG" 2>/dev/null)"
+
+# dev66 buildfix2: when both per-package Binder calls fail, try Android's own all-package
+# operation once. A recovered aggregate is successful only on explicit Success; a total Binder
+# refusal stops after one package instead of repeating the same failed transaction 12 times.
+cat > "$T/bin/cmd" <<'EOF'
+#!/bin/sh
+printf 'cmd %s\n' "$*" >> "$BINDER_LOG"
+case "$*" in
+  *' -a') [ "${BULK_CMD:-fail}" = success ] && echo 'Success' || echo 'cmd: Failure calling service package: Failed transaction (2147483646)' ;;
+  *) echo 'cmd: Failure calling service package: Failed transaction (2147483646)' ;;
+esac
+EOF
+cat > "$T/bin/pm" <<'EOF'
+#!/bin/sh
+printf 'pm %s\n' "$*" >> "$BINDER_LOG"
+case "$*" in
+  *' -a') [ "${BULK_PM:-fail}" = success ] && echo 'Success' || echo 'pm: Failure calling service package: Failed transaction (2147483646)' ;;
+  *) echo 'pm: Failure calling service package: Failed transaction (2147483646)' ;;
+esac
+EOF
+chmod 0755 "$T/bin/cmd" "$T/bin/pm"
+export BINDER_LOG="$T/binder.log"
+_bulk_pkgs='bulk.1 bulk.2 bulk.3 bulk.4 bulk.5 bulk.6 bulk.7 bulk.8 bulk.9 bulk.10 bulk.11 bulk.12'
+: > "$BINDER_LOG"
+PATH="$T/bin:$PATH" BULK_CMD=success BULK_PM=fail ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_bulk_pkgs" sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = done/12/12/0 ] || f "cmd all-package fallback did not recover Binder failure: $(st)"
+[ "$(grep -c '^cmd package compile .*bulk\.' "$BINDER_LOG")" = 1 ] || f "per-package cmd was repeated before aggregate recovery"
+[ "$(grep -c '^cmd package compile .* -a$' "$BINDER_LOG")" = 1 ] || f "aggregate cmd fallback did not run exactly once"
+[ "$(grep -c '^pm compile .* -a$' "$BINDER_LOG")" = 0 ] || f "pm aggregate ran after cmd already succeeded"
+st | grep '^err_text=' >/dev/null && f "aggregate recovery retained a stale error"
+: > "$BINDER_LOG"
+PATH="$T/bin:$PATH" BULK_CMD=fail BULK_PM=success ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_bulk_pkgs" sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = done/12/12/0 ] || f "pm all-package fallback did not recover Binder failure: $(st)"
+[ "$(grep -c '^pm compile .* -a$' "$BINDER_LOG")" = 1 ] || f "aggregate pm fallback did not run exactly once"
+: > "$BINDER_LOG"
+PATH="$T/bin:$PATH" BULK_CMD=fail BULK_PM=fail ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_bulk_pkgs" sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = refused/1/0/1 ] || f "total Binder refusal was not fail-closed after one package: $(st)"
+[ "$(grep -c '^cmd package compile .*bulk\.' "$BINDER_LOG")" = 1 ] || f "total Binder refusal repeated per-package cmd"
+[ "$(grep -c '^pm compile .*bulk\.' "$BINDER_LOG")" = 1 ] || f "total Binder refusal repeated per-package pm"
+[ "$(grep -c '^cmd package compile .* -a$' "$BINDER_LOG")" = 1 ] && [ "$(grep -c '^pm compile .* -a$' "$BINDER_LOG")" = 1 ] || f "total refusal did not try both aggregate owners exactly once"
+st | grep '^err_text=.*Failed transaction (2147483646)' >/dev/null || f "total Binder refusal lost Android's answer: $(st)"
 unset ASB_BFIX_COMPILE_CMD
 
 # Files Android never created are absent, not failures; a boot clock earlier than the arm
