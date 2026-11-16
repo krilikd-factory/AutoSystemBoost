@@ -4006,6 +4006,11 @@
   "cfg_net_cc_discovered": "Disponibilizado por este kernel. Depende do algoritmo, RTT, perdas, buffers e qdisc; nenhuma vantagem universal é prometida.",
   "cfg_io_scheduler_discovered": "Escalonador de E/S personalizado detectado. O ASB pode selecioná-lo e verificá-lo sem inferir o desempenho pelo nome.",
   "cfg_smart_owner_profile": "SMART · PERFIL",
-  "cfg_smart_owner_dsp_thermal": "O ganho é o nível pedido; o Smart pode reduzi-lo temporariamente no altifalante com a bateria quente. Não o aumente para compensar a proteção térmica. Saia do Smart ou defina DSP Loudness como 0.",
-  "cfg_smart_profile": "O Smart aplica o valor do perfil Battery/Balanced atual. A escolha Auto é preservada; escolha um valor explícito ou saia do Smart para retomar o controlo."
+  "cfg_smart_profile": "Auto usa o valor do perfil Smart Battery/Balanced atual. Escolha um valor explícito ou saia do Smart para controle manual.",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "O Smart usa este limite ou proteção fixa, mas não escolhe o valor sozinho.",
+  "bfx_summary": "Recompila apps e redefine as estatísticas de bateria do Android após reiniciar. Disponível a 100% no carregador; não aumenta a capacidade.",
+  "soter_summary": "Recria chaves SOTER quando apps compatíveis falham na verificação de pagamento por digital. Não oculta root nem o estado do bootloader.",
+  "soter_auto_note_short": "Após reiniciar, executa o reparo com o armazenamento desbloqueado. Reative o pagamento por digital nos apps afetados.",
+  "junk_summary": "Remove caches de falhas, diagnóstico e instalação, preservando fotos, configurações e arquivos de trabalho. Libera espaço sem garantir mais fluidez."
 }

@@ -4006,6 +4006,11 @@
   "cfg_net_cc_discovered": "Von diesem Kernel angeboten. Das Verhalten hängt von Algorithmus, RTT, Verlusten, Puffern und qdisc ab; kein universeller Geschwindigkeits- oder Akkuvorteil.",
   "cfg_io_scheduler_discovered": "Vom Kernel als eigener I/O-Scheduler angeboten. ASB kann ihn wählen und prüfen, leitet aber keine Leistungs- oder Energieeigenschaften aus dem Namen ab.",
   "cfg_smart_owner_profile": "SMART · PROFIL",
-  "cfg_smart_owner_dsp_thermal": "Dein Gain ist der angeforderte Pegel; Smart kann ihn am Lautsprecher bei heißem Akku vorübergehend senken. Nicht zur Kompensation der Thermalschutzregelung erhöhen. Smart verlassen oder DSP Loudness auf 0 setzen.",
-  "cfg_smart_profile": "Smart verwendet den Wert des aktuellen Battery/Balanced-Profils. Auto bleibt gespeichert; ein expliziter Wert oder das Verlassen von Smart gibt die Kontrolle zurück."
+  "cfg_smart_profile": "Auto verwendet den Wert des aktuellen Smart-Battery/Balanced-Profils. Einen festen Wert wählen oder Smart für manuelle Steuerung verlassen.",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "Smart nutzt dies als feste Grenze oder Schutzvorgabe, wählt den Wert aber nicht selbst.",
+  "bfx_summary": "Kompiliert Apps neu und setzt nach dem Neustart die Android-Akkustatistik zurück. Bei 100 % am Ladegerät verfügbar; erhöht die Kapazität nicht.",
+  "soter_summary": "Erstellt SOTER-Schlüssel neu, wenn unterstützte Apps die Geräteprüfung für Fingerabdruckzahlungen nicht bestehen. Root und Bootloader werden nicht verschleiert.",
+  "soter_auto_note_short": "Startet die Reparatur nach dem Neustart mit entsperrtem Speicher. Fingerabdruckzahlungen müssen in betroffenen Apps erneut aktiviert werden.",
+  "junk_summary": "Entfernt Absturz-, Diagnose- und Installer-Caches, erhält aber Fotos, Einstellungen und Arbeitsdateien. Schafft Speicherplatz, garantiert aber keine höhere Flüssigkeit."
 }

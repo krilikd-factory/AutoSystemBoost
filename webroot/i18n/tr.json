@@ -4006,6 +4006,11 @@
   "cfg_net_cc_discovered": "Bu çekirdekte sunuluyor. Davranış algoritmaya, RTT, kayıplara, arabellekler ve qdisc’e bağlıdır; evrensel avantaj vaat edilmez.",
   "cfg_io_scheduler_discovered": "Özel bir G/Ç zamanlayıcı olarak bulundu. ASB onu seçip doğrulayabilir, ancak performansı addan çıkarmaz.",
   "cfg_smart_owner_profile": "SMART · PROFİL",
-  "cfg_smart_owner_dsp_thermal": "Gain istediğiniz seviyedir; pil sıcakken Smart hoparlörde bunu geçici olarak azaltabilir. Termal korumayı dengelemek için yükseltmeyin. Smart’tan çıkın veya DSP Loudness değerini 0 yapın.",
-  "cfg_smart_profile": "Smart, geçerli Battery/Balanced profilinin değerini uygular. Auto seçiminiz korunur; denetimi almak için açık değer seçin veya Smart’tan çıkın."
+  "cfg_smart_profile": "Auto, geçerli Smart Battery/Balanced profil değerini kullanır. Elle kontrol için açık bir değer seçin veya Smart’tan çıkın.",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "Smart bunu sabit sınır veya koruma olarak kullanır; değeri kendisi seçmez.",
+  "bfx_summary": "Uygulamaları yeniden derler ve yeniden başlatma sonrasında Android pil istatistiklerini sıfırlar. Şarjda %100’de kullanılabilir; kapasite eklemez.",
+  "soter_summary": "Desteklenen uygulamalar parmak izi ödeme kontrolünü geçemezse SOTER anahtarlarını yeniden oluşturur. Root ve bootloader durumunu gizlemez.",
+  "soter_auto_note_short": "Yeniden başlatma sonrasında depolama açıldığında onarımı çalıştırır. Etkilenen uygulamalarda parmak izi ödemesini yeniden etkinleştirin.",
+  "junk_summary": "Fotoğraf, ayar ve çalışma dosyalarını koruyarak çökme, tanılama ve yükleyici önbelleklerini siler. Alan açar; akıcılığı garanti etmez."
 }

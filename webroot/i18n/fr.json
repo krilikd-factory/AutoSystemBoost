@@ -4006,6 +4006,11 @@
   "cfg_net_cc_discovered": "Proposé par ce noyau. Le comportement dépend de l’algorithme, du RTT, des pertes, des tampons et du qdisc; aucun gain universel n’est promis.",
   "cfg_io_scheduler_discovered": "Ordonnanceur I/O personnalisé détecté. ASB peut le sélectionner et le vérifier sans déduire ses performances de son nom.",
   "cfg_smart_owner_profile": "SMART · PROFIL",
-  "cfg_smart_owner_dsp_thermal": "Votre gain est le niveau demandé ; Smart peut le réduire temporairement sur le haut-parleur si la batterie chauffe. Ne l’augmentez pas pour compenser la protection thermique. Quittez Smart ou réglez DSP Loudness sur 0.",
-  "cfg_smart_profile": "Smart applique la valeur du profil Battery/Balanced actuel. Auto est conservé ; choisissez une valeur explicite ou quittez Smart pour reprendre le contrôle."
+  "cfg_smart_profile": "Auto utilise la valeur du profil Smart Battery/Balanced actuel. Choisissez une valeur explicite ou quittez Smart pour un contrôle manuel.",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "Smart utilise cette limite ou protection fixe, sans choisir la valeur lui-même.",
+  "bfx_summary": "Recompile les applications puis réinitialise les statistiques de batterie Android après redémarrage. Disponible à 100 % sur charge ; n’ajoute pas de capacité.",
+  "soter_summary": "Recrée les clés SOTER si les applications compatibles échouent à la vérification de paiement par empreinte. Ne masque ni root ni le bootloader.",
+  "soter_auto_note_short": "Après redémarrage, lance la réparation une fois le stockage déverrouillé. Réactivez le paiement par empreinte dans les applications concernées.",
+  "junk_summary": "Supprime les caches de plantage, diagnostic et installation en préservant photos, réglages et fichiers de travail. Libère de l’espace sans garantir plus de fluidité."
 }

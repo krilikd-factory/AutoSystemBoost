@@ -4006,6 +4006,11 @@
   "cfg_net_cc_discovered": "Disediakan kernel ini. Perilaku bergantung pada algoritma, RTT, kehilangan, buffer, dan qdisc; tidak ada keunggulan universal yang dijanjikan.",
   "cfg_io_scheduler_discovered": "Penjadwal I/O kustom yang ditemukan. ASB dapat memilih dan memverifikasinya tanpa menyimpulkan performa dari nama.",
   "cfg_smart_owner_profile": "SMART · PROFIL",
-  "cfg_smart_owner_dsp_thermal": "Gain Anda adalah tingkat yang diminta; Smart dapat menurunkannya sementara di speaker saat baterai panas. Jangan menaikkannya untuk mengimbangi perlindungan termal. Keluar dari Smart atau setel DSP Loudness ke 0.",
-  "cfg_smart_profile": "Smart menerapkan nilai profil Battery/Balanced saat ini. Pilihan Auto tetap tersimpan; pilih nilai eksplisit atau keluar dari Smart untuk mengambil alih kontrol."
+  "cfg_smart_profile": "Auto memakai nilai profil Smart Battery/Balanced saat ini. Pilih nilai eksplisit atau keluar dari Smart untuk kontrol manual.",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "Smart memakai batas atau perlindungan tetap ini, tetapi tidak memilih nilainya sendiri.",
+  "bfx_summary": "Mengompilasi ulang aplikasi lalu mengatur ulang statistik baterai Android setelah mulai ulang. Tersedia saat 100% dan mengisi daya; tidak menambah kapasitas.",
+  "soter_summary": "Membuat ulang kunci SOTER jika aplikasi pendukung gagal pemeriksaan pembayaran sidik jari. Root dan status bootloader tidak disembunyikan.",
+  "soter_auto_note_short": "Setelah mulai ulang, perbaikan berjalan saat penyimpanan terbuka. Aktifkan lagi pembayaran sidik jari di aplikasi terkait.",
+  "junk_summary": "Menghapus cache kerusakan, diagnostik, dan penginstal sambil mempertahankan foto, setelan, dan file kerja. Mengosongkan ruang tanpa menjamin kelancaran."
 }

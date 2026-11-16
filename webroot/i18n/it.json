@@ -4006,6 +4006,11 @@
   "cfg_net_cc_discovered": "Esposto dal kernel. Dipende da algoritmo, RTT, perdite, buffer e qdisc; nessun vantaggio universale è promesso.",
   "cfg_io_scheduler_discovered": "Scheduler I/O personalizzato rilevato. ASB può selezionarlo e verificarlo senza dedurre le prestazioni dal nome.",
   "cfg_smart_owner_profile": "SMART · PROFILO",
-  "cfg_smart_owner_dsp_thermal": "Il gain è il livello richiesto; Smart può ridurlo temporaneamente sull’altoparlante con batteria calda. Non aumentarlo per compensare la protezione termica. Esci da Smart o imposta DSP Loudness a 0.",
-  "cfg_smart_profile": "Smart applica il valore del profilo Battery/Balanced corrente. Auto resta salvato; scegli un valore esplicito o esci da Smart per riprendere il controllo."
+  "cfg_smart_profile": "Auto usa il valore del profilo Smart Battery/Balanced attuale. Scegli un valore esplicito o esci da Smart per il controllo manuale.",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "Smart usa questo limite o protezione fissa, ma non sceglie il valore autonomamente.",
+  "bfx_summary": "Ricompila le app e reimposta le statistiche batteria di Android dopo il riavvio. Disponibile al 100% in carica; non aumenta la capacità.",
+  "soter_summary": "Ricrea le chiavi SOTER se le app supportate non superano la verifica per i pagamenti con impronta. Non nasconde root né bootloader.",
+  "soter_auto_note_short": "Dopo il riavvio esegue la riparazione con archiviazione sbloccata. Riattiva il pagamento con impronta nelle app interessate.",
+  "junk_summary": "Elimina cache di arresti, diagnostica e installazione preservando foto, impostazioni e file di lavoro. Libera spazio senza garantire maggiore fluidità."
 }

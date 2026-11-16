@@ -4006,6 +4006,11 @@
   "cfg_net_cc_discovered": "由此内核提供。行为取决于算法、RTT、丢包、缓冲区和 qdisc；不承诺普遍的速度或续航优势。",
   "cfg_io_scheduler_discovered": "检测到的自定义 I/O 调度器。ASB 可以选择并验证它，但不会仅凭名称推断性能或功耗。",
   "cfg_smart_owner_profile": "SMART · 配置",
-  "cfg_smart_owner_dsp_thermal": "您的增益是请求级别；电池发热时 Smart 可能暂时降低扬声器增益。不要为了补偿热保护而提高它。退出 Smart 或将 DSP Loudness 设为 0 即可收回控制权。",
-  "cfg_smart_profile": "Smart 应用当前 Battery/Balanced 配置的值。Auto 选择会保留；选择明确值或退出 Smart 即可恢复手动控制。"
+  "cfg_smart_profile": "Auto 使用当前 Smart Battery/Balanced 配置的值。选择明确值或退出 Smart 即可手动控制。",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "Smart 将此作为固定上限或保护条件，但不会自行选择该值。",
+  "bfx_summary": "重新编译应用，并在重启后重置 Android 电池统计。充电且电量 100% 时可用；不会增加容量。",
+  "soter_summary": "当支持的应用未通过指纹支付设备检查时重新创建 SOTER 密钥。不会隐藏 Root 或引导加载程序状态。",
+  "soter_auto_note_short": "重启后会在存储解锁时运行修复。需要在受影响的应用中重新启用指纹支付。",
+  "junk_summary": "清除崩溃、诊断和安装器缓存，同时保留照片、设置和工作文件。可释放空间，但不保证提升流畅度。"
 }

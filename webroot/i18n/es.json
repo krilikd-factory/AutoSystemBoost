@@ -4006,6 +4006,11 @@
   "cfg_net_cc_discovered": "Detectado en este núcleo. Depende del algoritmo, RTT, pérdidas, búferes y qdisc; no promete una ventaja universal.",
   "cfg_io_scheduler_discovered": "Planificador de E/S personalizado detectado. ASB puede seleccionarlo y verificarlo sin inferir su rendimiento del nombre.",
   "cfg_smart_owner_profile": "SMART · PERFIL",
-  "cfg_smart_owner_dsp_thermal": "Tu ganancia es el nivel solicitado; Smart puede reducirla temporalmente en el altavoz con la batería caliente. No la subas para compensar la protección térmica. Sal de Smart o pon DSP Loudness en 0.",
-  "cfg_smart_profile": "Smart aplica el valor del perfil Battery/Balanced actual. Auto se conserva; elige un valor explícito o sal de Smart para recuperar el control."
+  "cfg_smart_profile": "Auto usa el valor del perfil Smart Battery/Balanced actual. Elige un valor explícito o sal de Smart para control manual.",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "Smart usa este límite o protección fija; no elige el valor por sí mismo.",
+  "bfx_summary": "Recompila aplicaciones y restablece las estadísticas de batería de Android tras reiniciar. Disponible al 100 % con carga; no añade capacidad.",
+  "soter_summary": "Recrea claves SOTER si las aplicaciones compatibles fallan la comprobación para pagos con huella. No oculta root ni el estado del bootloader.",
+  "soter_auto_note_short": "Tras reiniciar, ejecuta la reparación con el almacenamiento desbloqueado. Debes reactivar el pago con huella en las aplicaciones afectadas.",
+  "junk_summary": "Elimina cachés de fallos, diagnóstico e instalador conservando fotos, ajustes y archivos de trabajo. Libera espacio; no garantiza mayor fluidez."
 }

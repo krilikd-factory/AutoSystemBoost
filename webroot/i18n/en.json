@@ -3899,6 +3899,11 @@
   "cfg_net_cc_discovered": "Exposed by this kernel. Its behaviour depends on the exact algorithm, RTT, loss, buffers and qdisc; no universal speed or battery advantage is claimed.",
   "cfg_io_scheduler_discovered": "Exposed by this kernel as a custom I/O scheduler. ASB can select and verify it, but does not infer its latency, throughput or power policy from the name.",
   "cfg_smart_owner_profile": "SMART · PROFILE",
-  "cfg_smart_owner_dsp_thermal": "Your gain is the requested level; Smart may temporarily reduce it on the speaker when the battery is hot. Do not raise it to compensate for thermal protection. Leave Smart or set DSP Loudness to 0 to take ownership back.",
-  "cfg_smart_profile": "Smart applies the value belonging to its current Battery/Balanced profile. Your Auto choice is preserved; choose an explicit value or leave Smart to take ownership back."
+  "cfg_smart_profile": "Auto uses the current Smart Battery/Balanced profile value. Choose an explicit value or leave Smart for manual control.",
+  "cfg_smart_owner_limit": "SMART · LIMIT",
+  "cfg_smart_limit": "Smart uses this as your fixed limit or guard; it does not choose the value itself.",
+  "bfx_summary": "Recompiles apps, then resets Android battery statistics after reboot. Available at 100% on charge; it does not add capacity.",
+  "soter_summary": "Rebuilds SOTER keys for fingerprint payments when supported apps fail their device check. Root and bootloader state are not hidden.",
+  "soter_auto_note_short": "After each reboot, runs the repair once storage is unlocked. Fingerprint payment must be enabled again in affected apps.",
+  "junk_summary": "Removes crash, diagnostic and installer caches while preserving photos, settings and working files. Frees storage; does not guarantee smoother performance."
 }
