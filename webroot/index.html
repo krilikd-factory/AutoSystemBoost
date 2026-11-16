@@ -390,26 +390,22 @@ body::before, body::after {
  * on a closed page and under an open one. Progress spinners keep turning - they say that
  * something is running.
  *
- * dev17: the idle freeze is gone from the page in front. A user reported that ten seconds
- * after the last touch the header and the indicators froze until the screen was tapped -
- * which is this very mechanism, and it read as a hung interface. On the visible page the
- * header now stays alive: the logo glow and ring are composited transforms (the blur is
- * baked into their layer once, so rotating costs almost nothing) and the status, record,
- * charge and link dots are tiny. Only the wordmark's specular sweep - which repaints the
- * clipped text every frame and is the 4.1 W offender measured above - still stops while
- * idle. A closed or backgrounded page continues to stop everything. */
+ * dev17/dev66 buildfix3: the idle freeze is gone from the page in front. Ten seconds after
+ * the last touch the whole visible header used to freeze until the screen was tapped, which
+ * read as a hung interface. The logo, wordmark sweep and indicators now all keep their native
+ * CSS clocks while visible. Only the separate Smart-card glow calms when idle. A closed or
+ * backgrounded page continues to stop header decoration. */
 .live-page:not(.open) .logo-sphere-a, .live-page:not(.open) .logo-sphere-b, .live-page:not(.open) .logo-inner,
 .live-page:not(.open) .app-name, .live-page:not(.open) .dot, .live-page:not(.open) .dot::after,
 body.live-active .page:not(.live-page) .logo-sphere-a, body.live-active .page:not(.live-page) .logo-sphere-b,
 body.live-active .page:not(.live-page) .logo-inner,
 body.live-active .page:not(.live-page) .app-name, body.live-active .page:not(.live-page) .dot,
-body.live-active .page:not(.live-page) .dot::after, body.live-active .page:not(.live-page) .ai-glow,
-html.asb-calm .app-name {
+body.live-active .page:not(.live-page) .dot::after, body.live-active .page:not(.live-page) .ai-glow {
   animation-play-state: paused !important;
 }
-/* The sweep and the dot stop at rest rather than mid-stroke: no band frozen across the
- * wordmark, no dot frozen half-faded. The next touch starts them from the beginning. */
-.live-page:not(.open) .app-name, body.live-active .page:not(.live-page) .app-name, html.asb-calm .app-name {
+/* On a closed page the sweep and dot stop at rest rather than mid-stroke: no band frozen
+ * across the wordmark and no dot frozen half-faded when the page is reopened. */
+.live-page:not(.open) .app-name, body.live-active .page:not(.live-page) .app-name {
   animation: none !important; background-position: -70% 0, 0 0;
 }
 .live-page:not(.open) .dot, .live-page:not(.open) .dot::after, body.live-active .page:not(.live-page) .dot,
@@ -417,11 +413,11 @@ body.live-active .page:not(.live-page) .dot::after {
   animation: none !important;
 }
 
-/* dev66: calm never changes the visible header's animation clock. The dev61 ticker made
- * the UFO and status dots visibly judder after exactly ten seconds and could leave them
- * frozen when WebView did not resume a paused CSS animation cleanly. Only the Smart card's
- * decorative glow still uses the ambient ticker. Header loops remain governed by the native
- * CSS clock, and are stopped by the closed-page, reduced-effects and reduced-motion rules. */
+/* dev66/buildfix3: calm never changes any visible header animation clock. The dev61 ticker
+ * made the UFO and status dots judder, while the remaining calm rule still removed the
+ * wordmark sweep after exactly ten seconds. Only the Smart card's decorative glow uses the
+ * ambient ticker. All header loops remain on the native CSS clock and are stopped only by
+ * closed-page, reduced-effects and reduced-motion rules. */
 html.asb-calm .pico-smart .ai-glow {
   animation-play-state: paused !important;
 }
@@ -7302,8 +7298,9 @@ function asbFirstFrameMark() {
   try { requestAnimationFrame(function () { setTimeout(_asbFirstFrameDone, 0); }); } catch (e) { _asbFirstFrameDone(); }
 }
 let _asbInputAt = -1e9;
-/* V66 dev6/dev66: the wordmark sweep and Smart glow calm ten seconds after the last touch.
- * One timer, re-armed only when it has fired, so a scroll does not set a timer per event. */
+/* V66 dev6/dev66 buildfix3: only the Smart glow calms ten seconds after the last touch.
+ * Visible header animations never enter calm. One timer is re-armed only after it has fired,
+ * so a scroll does not set a timer per event. */
 const ASB_CALM_MS = 10000;
 let _asbCalmTimer = 0;
 /* Only non-header ambient decoration is manually stepped. Visible UFO/orbit/status loops are
