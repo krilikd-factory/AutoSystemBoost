@@ -286,6 +286,10 @@
       "24": "24 dp",
       "28": "28 dp",
       "32": "32 dp"
+    },
+    "io_scheduler": {
+      "stock": "Stock",
+      "auto": "Auto"
     }
   },
   "prof_none": "not selected",
@@ -563,7 +567,7 @@
       "desc": "Choose which outputs ASB DSP may process: the built-in speaker, wired headphones/USB DACs, or Bluetooth. Unavailable outputs are ignored. Off bypasses the whole DSP while preserving every level for later. Bluetooth processing can move playback away from hardware offload and increase screen-off CPU use; exclude Bluetooth if long listening sessions matter more than the effect."
     },
     "dsp_loudness": {
-      "desc": "ASB DSP adds up to +25 dB of gain, with optional compression and a final sample-peak limiter. Start at +3 dB: high settings can sound heavily compressed even when peaks are limited. The first enable needs a reboot. DSP is bypassed in the external-EQ audio profile. On the speaker, gain is reduced when the battery reaches 42 °C and restored below 40 °C; wired and Bluetooth gains are not reduced by this rule."
+      "desc": "ASB DSP adds up to +30 dB of gain, with optional compression and a final sample-peak limiter. Start at +3 dB: high settings can sound heavily compressed even when peaks are limited. The first enable needs a reboot. DSP is bypassed in the external-EQ audio profile. On the speaker, gain is reduced when the battery reaches 42 °C and restored below 40 °C; wired and Bluetooth gains are not reduced by this rule. Values above +25 dB require DSP libraries rebuilt from this source; old prebuilts remain capped at +25 dB."
     },
     "dsp_voice": {
       "desc": "Requires DSP Loudness. Two broad bands adjust voice body at 350 Hz and upper-edge sharpness at 3 kHz. Level 10 applies +5 dB and −6 dB respectively. This can make thin or harsh speech fuller, especially on the phone speaker; high values may sound unnatural. Start at 4–6 and use DSP Outputs to limit the effect to the outputs that need it. Changes apply live before the limiter."
@@ -620,11 +624,28 @@
       }
     },
     "net_congestion_mobile": {
-      "desc": "Download ramp for mobile data only. bbr often helps on mobile links with loss and changing delay.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: As global",
+      "desc": "Download ramp for mobile data only. bbr often helps on mobile links with loss and changing delay.\n\n🔋 Autonomy: no universal winner\n⚡ Performance: depends on RTT, loss, buffers and qdisc\n✋ Not sure: As global",
       "descOpt": {
         "auto": "Takes the value of the card for other links.",
-        "bbr": "Paces to the measured link speed; often better on lossy mobile and long-distance links.",
-        "cubic": "The classic Linux algorithm; backs off on loss."
+        "bbr": "Models bottleneck bandwidth and pacing; often useful on long or variable paths, but results still depend on queues and competing traffic.",
+        "cubic": "The common loss-based Linux default; robust general-purpose behaviour, with window reduction after loss.",
+        "bic": "Loss-based predecessor of CUBIC; grows quickly on high-bandwidth-delay paths, but can react sharply to loss.",
+        "westwood": "Estimates bandwidth from the ACK stream and can suit some lossy wireless links; the estimate may be unstable on modern routed paths.",
+        "reno": "Classic loss-based AIMD; predictable and conservative on high-bandwidth-delay paths.",
+        "bbr2": "A newer BBR variant with different loss/queue response; availability does not prove it is better than BBR for this route.",
+        "bbr3": "A newer BBR variant exposed by some custom kernels; behaviour is kernel-version dependent and not universally superior.",
+        "cdg": "Delay-gradient based and designed to back off around growing queues; real-world coexistence depends on the path.",
+        "dctcp": "ECN-oriented data-centre transport; not a general Internet choice unless the path and switches provide suitable ECN signalling.",
+        "highspeed": "Loss-based algorithm for very large bandwidth-delay products; more aggressive window growth can increase loss or queue pressure.",
+        "htcp": "High-speed loss-based variant that adapts growth using path history; not inherently lower latency.",
+        "hybla": "Designed for long-RTT/satellite-style paths; can be unnecessarily aggressive on ordinary short routes.",
+        "illinois": "Combines loss and delay signals for high-speed paths; queue response depends on accurate delay measurements.",
+        "lp": "Low-priority transport intended to yield to ordinary traffic; suitable for background flows rather than maximum foreground speed.",
+        "nv": "Delay-oriented New Vegas variant; can underperform when competing with aggressive loss-based flows.",
+        "scalable": "High-speed loss-based algorithm with scalable window growth; not a low-latency or power-saving policy.",
+        "vegas": "Delay-based algorithm that tries to avoid queues early; may yield too much against loss-based competitors.",
+        "veno": "Attempts to distinguish wireless/random loss from congestion; classification is not reliable on every modern path.",
+        "yeah": "Hybrid loss/delay algorithm aiming at fast paths with queue awareness; outcome depends on RTT and competing flows."
       }
     },
     "net_qdisc": {
@@ -876,19 +897,53 @@
       "desc": "Nudges Smart toward Battery: 300 moves it 30 % of the remaining way from what it learned to Battery, 600 moves it 60 %. From about 400 Smart behaves almost like Battery in ordinary use. Halved during heavy work and games.\n\n🔋 Battery life: 300-400\n⚡ Performance: 0\n✋ Not sure: 0"
     },
     "net_congestion": {
-      "desc": "How downloads ramp up on links the Wi-Fi and mobile cards do not cover: USB and Bluetooth tethering, VPN, Ethernet.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: Stock",
+      "desc": "How downloads ramp up on links the Wi-Fi and mobile cards do not cover: USB and Bluetooth tethering, VPN, Ethernet.\n\n🔋 Autonomy: no universal winner\n⚡ Performance: depends on RTT, loss, buffers and qdisc\n✋ Not sure: Stock",
       "descOpt": {
         "auto": "The device's own algorithm stays (often cubic).",
-        "bbr": "Paces to the measured link speed; often better on lossy mobile and long-distance links.",
-        "cubic": "The classic Linux algorithm; backs off on loss."
+        "bbr": "Models bottleneck bandwidth and pacing; often useful on long or variable paths, but results still depend on queues and competing traffic.",
+        "cubic": "The common loss-based Linux default; robust general-purpose behaviour, with window reduction after loss.",
+        "bic": "Loss-based predecessor of CUBIC; grows quickly on high-bandwidth-delay paths, but can react sharply to loss.",
+        "westwood": "Estimates bandwidth from the ACK stream and can suit some lossy wireless links; the estimate may be unstable on modern routed paths.",
+        "reno": "Classic loss-based AIMD; predictable and conservative on high-bandwidth-delay paths.",
+        "bbr2": "A newer BBR variant with different loss/queue response; availability does not prove it is better than BBR for this route.",
+        "bbr3": "A newer BBR variant exposed by some custom kernels; behaviour is kernel-version dependent and not universally superior.",
+        "cdg": "Delay-gradient based and designed to back off around growing queues; real-world coexistence depends on the path.",
+        "dctcp": "ECN-oriented data-centre transport; not a general Internet choice unless the path and switches provide suitable ECN signalling.",
+        "highspeed": "Loss-based algorithm for very large bandwidth-delay products; more aggressive window growth can increase loss or queue pressure.",
+        "htcp": "High-speed loss-based variant that adapts growth using path history; not inherently lower latency.",
+        "hybla": "Designed for long-RTT/satellite-style paths; can be unnecessarily aggressive on ordinary short routes.",
+        "illinois": "Combines loss and delay signals for high-speed paths; queue response depends on accurate delay measurements.",
+        "lp": "Low-priority transport intended to yield to ordinary traffic; suitable for background flows rather than maximum foreground speed.",
+        "nv": "Delay-oriented New Vegas variant; can underperform when competing with aggressive loss-based flows.",
+        "scalable": "High-speed loss-based algorithm with scalable window growth; not a low-latency or power-saving policy.",
+        "vegas": "Delay-based algorithm that tries to avoid queues early; may yield too much against loss-based competitors.",
+        "veno": "Attempts to distinguish wireless/random loss from congestion; classification is not reliable on every modern path.",
+        "yeah": "Hybrid loss/delay algorithm aiming at fast paths with queue awareness; outcome depends on RTT and competing flows."
       }
     },
     "net_congestion_wifi": {
-      "desc": "Download ramp for Wi-Fi only.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: As global",
+      "desc": "Download ramp for Wi-Fi only.\n\n🔋 Autonomy: no universal winner\n⚡ Performance: depends on RTT, loss, buffers and qdisc\n✋ Not sure: As global",
       "descOpt": {
         "auto": "Takes the value of the card for other links.",
-        "bbr": "Paces to the measured link speed; often better on lossy mobile and long-distance links.",
-        "cubic": "The classic Linux algorithm; backs off on loss."
+        "bbr": "Models bottleneck bandwidth and pacing; often useful on long or variable paths, but results still depend on queues and competing traffic.",
+        "cubic": "The common loss-based Linux default; robust general-purpose behaviour, with window reduction after loss.",
+        "bic": "Loss-based predecessor of CUBIC; grows quickly on high-bandwidth-delay paths, but can react sharply to loss.",
+        "westwood": "Estimates bandwidth from the ACK stream and can suit some lossy wireless links; the estimate may be unstable on modern routed paths.",
+        "reno": "Classic loss-based AIMD; predictable and conservative on high-bandwidth-delay paths.",
+        "bbr2": "A newer BBR variant with different loss/queue response; availability does not prove it is better than BBR for this route.",
+        "bbr3": "A newer BBR variant exposed by some custom kernels; behaviour is kernel-version dependent and not universally superior.",
+        "cdg": "Delay-gradient based and designed to back off around growing queues; real-world coexistence depends on the path.",
+        "dctcp": "ECN-oriented data-centre transport; not a general Internet choice unless the path and switches provide suitable ECN signalling.",
+        "highspeed": "Loss-based algorithm for very large bandwidth-delay products; more aggressive window growth can increase loss or queue pressure.",
+        "htcp": "High-speed loss-based variant that adapts growth using path history; not inherently lower latency.",
+        "hybla": "Designed for long-RTT/satellite-style paths; can be unnecessarily aggressive on ordinary short routes.",
+        "illinois": "Combines loss and delay signals for high-speed paths; queue response depends on accurate delay measurements.",
+        "lp": "Low-priority transport intended to yield to ordinary traffic; suitable for background flows rather than maximum foreground speed.",
+        "nv": "Delay-oriented New Vegas variant; can underperform when competing with aggressive loss-based flows.",
+        "scalable": "High-speed loss-based algorithm with scalable window growth; not a low-latency or power-saving policy.",
+        "vegas": "Delay-based algorithm that tries to avoid queues early; may yield too much against loss-based competitors.",
+        "veno": "Attempts to distinguish wireless/random loss from congestion; classification is not reliable on every modern path.",
+        "yeah": "Hybrid loss/delay algorithm aiming at fast paths with queue awareness; outcome depends on RTT and competing flows."
       }
     },
     "net_qdisc_wifi": {
@@ -989,6 +1044,18 @@
         "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
         "on": "Enable this setting and verify the write by read-back.",
         "off": "Disable this setting and verify the write by read-back."
+      }
+    },
+    "io_scheduler": {
+      "name": "I/O scheduler",
+      "desc": "Chooses only schedulers exposed by each block device. Auto prefers mq-deadline in Balanced/Smart/Battery and kyber in Performance, using only discovered fallbacks. Stock restores the exact per-device baseline. An unavailable explicit choice fails without substitution.\n\n🔋 Balanced default: Auto\n⚡ Performance policy: kyber when exposed\n✋ Not sure: Stock",
+      "descOpt": {
+        "stock": "Restore the original scheduler independently for every block device.",
+        "auto": "Use the profile policy, choosing only from schedulers discovered at runtime.",
+        "mq-deadline": "A practical default for mixed phone storage I/O; balances latency and throughput without promising a battery gain.",
+        "kyber": "Latency-oriented scheduler; preferred by the Performance policy when the kernel exposes it.",
+        "bfq": "Fairness-oriented scheduler for interactive mixed workloads; actual benefit depends on storage and workload.",
+        "none": "No I/O reordering scheduler; can suit fast virtual or NVMe queues, but is not universally faster."
       }
     }
   },
@@ -3821,5 +3888,13 @@
   "kernel_wb_risk_critical": "Blocking risk: critical — alarms, input, charging, unlock, thermal protection or system recovery may stop working. Do not block for an experiment.",
   "kernel_wb_risk_high": "Blocking risk: high — networking, storage, display, event delivery or interprocessor communication may stall. Block only with a measured reason and a recovery plan.",
   "kernel_wb_risk_medium": "Blocking risk: elevated — sound, sensors or graphics may be delayed. This does not prove a battery saving; test with the screen off.",
-  "kernel_wb_risk_unknown": "Blocking risk: unknown — do not block until the owner and consumers are identified. A high event count alone is not evidence of wasted energy."
+  "kernel_wb_risk_unknown": "Blocking risk: unknown — do not block until the owner and consumers are identified. A high event count alone is not evidence of wasted energy.",
+  "lvi_trend_native_rate": "%1 °C per minute · governor control signal",
+  "cfg_smart_owner": "SMART · AUTO",
+  "cfg_smart_owner_dynamic": "Smart dynamically changes this live value within the mode you selected. Do not force it manually: that would fight the governor. Choose a manual value or another profile to take ownership back.",
+  "cfg_smart_owner_radio": "Smart performs this opted-in radio transition with screen and traffic state. Keep the policy enabled rather than repeatedly toggling it; turn it off or leave Smart to take ownership back.",
+  "cfg_smart_owner_thermal": "Your gain is the requested level; Smart may temporarily reduce it on the speaker when the battery is hot. Do not raise it to compensate for thermal protection. Leave Smart or set DSP Loudness to 0 to take ownership back.",
+  "kc_why_io_scheduler": "No readable non-rotational block-device queue exposes a scheduler list, or the queue is read-only. ASB does not create a generic sysfs writer or claim support.",
+  "cfg_net_cc_discovered": "Exposed by this kernel. Its behaviour depends on the exact algorithm, RTT, loss, buffers and qdisc; no universal speed or battery advantage is claimed.",
+  "cfg_io_scheduler_discovered": "Exposed by this kernel as a custom I/O scheduler. ASB can select and verify it, but does not infer its latency, throughput or power policy from the name."
 }

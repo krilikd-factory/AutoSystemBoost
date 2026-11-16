@@ -57,7 +57,7 @@
     },
     "dsp_loudness": {
       "name": "DSP-Lautstärke",
-      "desc": "ASB DSP bietet bis zu +25 dB Verstärkung, optionalen Kompressor und finalen Sample-Peak-Limiter. Mit +3 dB beginnen: Hohe Werte können trotz Peak-Begrenzung stark komprimiert klingen. Das erste Aktivieren erfordert einen Neustart. Im Profil für externe Equalizer wird der DSP umgangen. Am Lautsprecher sinkt die Verstärkung ab 42 °C Akkutemperatur und kehrt unter 40 °C zurück; kabelgebundene und Bluetooth-Ausgänge sind davon ausgenommen."
+      "desc": "ASB DSP bietet bis zu +30 dB Verstärkung, optionalen Kompressor und finalen Sample-Peak-Limiter. Mit +3 dB beginnen: Hohe Werte können trotz Peak-Begrenzung stark komprimiert klingen. Das erste Aktivieren erfordert einen Neustart. Im Profil für externe Equalizer wird der DSP umgangen. Am Lautsprecher sinkt die Verstärkung ab 42 °C Akkutemperatur und kehrt unter 40 °C zurück; kabelgebundene und Bluetooth-Ausgänge sind davon ausgenommen. Werte über +25 dB erfordern aus diesem Quelltext neu gebaute DSP-Bibliotheken; alte Prebuilts bleiben bei +25 dB begrenzt."
     },
     "dsp_bass": {
       "name": "DSP-Bassanhebung",
@@ -142,29 +142,80 @@
     },
     "net_congestion": {
       "name": "Download-Anlauf · sonstige",
-      "desc": "Wie Downloads auf Verbindungen hochfahren, die die WLAN- und Mobilfunk-Karten nicht abdecken: USB- und Bluetooth-Tethering, VPN, Ethernet.\n\n🔋 Akkulaufzeit: kein messbarer Unterschied\n⚡ Leistung: bbr\n✋ Unsicher: Stock",
+      "desc": "Wie Downloads auf Verbindungen hochfahren, die die WLAN- und Mobilfunk-Karten nicht abdecken: USB- und Bluetooth-Tethering, VPN, Ethernet.\n\n🔋 Akkulaufzeit: kein universeller Gewinner\n⚡ Leistung: abhängig von RTT, Verlusten, Puffern und qdisc\n✋ Unsicher: Stock",
       "descOpt": {
         "auto": "Der eigene Algorithmus des Geräts bleibt (oft cubic).",
         "bbr": "Richtet sich nach der gemessenen Verbindungsgeschwindigkeit; oft besser auf verlustbehafteten Mobilfunk- und Fernverbindungen.",
-        "cubic": "Der klassische Linux-Algorithmus; drosselt bei Verlusten."
+        "cubic": "Der klassische Linux-Algorithmus; drosselt bei Verlusten.",
+        "bic": "Verlustbasierter Vorgänger von CUBIC; wächst schnell auf Pfaden mit hohem Bandbreiten-Verzögerungs-Produkt, kann aber scharf auf Verluste reagieren.",
+        "westwood": "Schätzt die Bandbreite aus dem ACK-Strom und kann zu einigen verlustbehafteten Funkverbindungen passen; auf modernen gerouteten Pfaden kann die Schätzung instabil sein.",
+        "reno": "Klassisches verlustbasiertes AIMD; vorhersehbar und konservativ auf Pfaden mit hohem Bandbreiten-Verzögerungs-Produkt.",
+        "bbr2": "Neuere BBR-Variante mit anderer Reaktion auf Verluste und Warteschlangen; ihre Verfügbarkeit beweist keinen Vorteil gegenüber BBR auf dieser Route.",
+        "bbr3": "Neuere BBR-Variante einiger Custom-Kernel; das Verhalten hängt von der Kernel-Version ab und ist nicht allgemein überlegen.",
+        "cdg": "Basiert auf Verzögerungsgradienten und weicht wachsenden Warteschlangen aus; die Koexistenz in der Praxis hängt vom Pfad ab.",
+        "dctcp": "ECN-orientierter Rechenzentrumstransport; keine allgemeine Internet-Wahl ohne geeignete ECN-Signalisierung durch Pfad und Switches.",
+        "highspeed": "Verlustbasierte Variante für sehr hohe Bandbreiten-Verzögerungs-Produkte; aggressiveres Fensterwachstum kann Verluste oder Warteschlangendruck erhöhen.",
+        "htcp": "Schnelle verlustbasierte Variante, die das Wachstum anhand der Pfadhistorie anpasst; nicht von Natur aus latenzärmer.",
+        "hybla": "Für lange RTT- oder satellitenähnliche Pfade; auf gewöhnlichen kurzen Routen möglicherweise unnötig aggressiv.",
+        "illinois": "Kombiniert Verlust- und Verzögerungssignale für schnelle Pfade; die Warteschlangenreaktion benötigt genaue Verzögerungsmessungen.",
+        "lp": "Niedrigpriorisierter Transport, die normalen Verkehr nachgeben soll; für Hintergrundflüsse statt maximale Vordergrundgeschwindigkeit.",
+        "nv": "Verzögerungsorientierte New-Vegas-Variante; kann gegen aggressive verlustbasierte Flüsse unterliegen.",
+        "scalable": "Schnelle verlustbasierte Variante mit skalierbarem Fensterwachstum; weder eine Niedriglatenz- noch eine Stromsparpolitik.",
+        "vegas": "Verzögerungsbasiert und versucht, Warteschlangen früh zu vermeiden; kann gegen verlustbasierte Konkurrenten zu stark nachgeben.",
+        "veno": "Versucht, zufällige Funkverluste von Überlastung zu unterscheiden; diese Klassifikation ist nicht auf jedem modernen Pfad zuverlässig.",
+        "yeah": "Hybride Verlust-/Verzögerungsvariante für schnelle Pfade mit Warteschlangenbewusstsein; das Ergebnis hängt von RTT und konkurrierenden Flüssen ab."
       }
     },
     "net_congestion_wifi": {
       "name": "Download-Anlauf · WLAN",
-      "desc": "Download-Anlauf nur für WLAN.\n\n🔋 Akkulaufzeit: kein messbarer Unterschied\n⚡ Leistung: bbr\n✋ Unsicher: Wie allgemein",
+      "desc": "Download-Anlauf nur für WLAN.\n\n🔋 Akkulaufzeit: kein universeller Gewinner\n⚡ Leistung: abhängig von RTT, Verlusten, Puffern und qdisc\n✋ Unsicher: Wie allgemein",
       "descOpt": {
         "auto": "Übernimmt den Wert der Karte für andere Verbindungen.",
         "bbr": "Richtet sich nach der gemessenen Verbindungsgeschwindigkeit; oft besser auf verlustbehafteten Mobilfunk- und Fernverbindungen.",
-        "cubic": "Der klassische Linux-Algorithmus; drosselt bei Verlusten."
+        "cubic": "Der klassische Linux-Algorithmus; drosselt bei Verlusten.",
+        "bic": "Verlustbasierter Vorgänger von CUBIC; wächst schnell auf Pfaden mit hohem Bandbreiten-Verzögerungs-Produkt, kann aber scharf auf Verluste reagieren.",
+        "westwood": "Schätzt die Bandbreite aus dem ACK-Strom und kann zu einigen verlustbehafteten Funkverbindungen passen; auf modernen gerouteten Pfaden kann die Schätzung instabil sein.",
+        "reno": "Klassisches verlustbasiertes AIMD; vorhersehbar und konservativ auf Pfaden mit hohem Bandbreiten-Verzögerungs-Produkt.",
+        "bbr2": "Neuere BBR-Variante mit anderer Reaktion auf Verluste und Warteschlangen; ihre Verfügbarkeit beweist keinen Vorteil gegenüber BBR auf dieser Route.",
+        "bbr3": "Neuere BBR-Variante einiger Custom-Kernel; das Verhalten hängt von der Kernel-Version ab und ist nicht allgemein überlegen.",
+        "cdg": "Basiert auf Verzögerungsgradienten und weicht wachsenden Warteschlangen aus; die Koexistenz in der Praxis hängt vom Pfad ab.",
+        "dctcp": "ECN-orientierter Rechenzentrumstransport; keine allgemeine Internet-Wahl ohne geeignete ECN-Signalisierung durch Pfad und Switches.",
+        "highspeed": "Verlustbasierte Variante für sehr hohe Bandbreiten-Verzögerungs-Produkte; aggressiveres Fensterwachstum kann Verluste oder Warteschlangendruck erhöhen.",
+        "htcp": "Schnelle verlustbasierte Variante, die das Wachstum anhand der Pfadhistorie anpasst; nicht von Natur aus latenzärmer.",
+        "hybla": "Für lange RTT- oder satellitenähnliche Pfade; auf gewöhnlichen kurzen Routen möglicherweise unnötig aggressiv.",
+        "illinois": "Kombiniert Verlust- und Verzögerungssignale für schnelle Pfade; die Warteschlangenreaktion benötigt genaue Verzögerungsmessungen.",
+        "lp": "Niedrigpriorisierter Transport, die normalen Verkehr nachgeben soll; für Hintergrundflüsse statt maximale Vordergrundgeschwindigkeit.",
+        "nv": "Verzögerungsorientierte New-Vegas-Variante; kann gegen aggressive verlustbasierte Flüsse unterliegen.",
+        "scalable": "Schnelle verlustbasierte Variante mit skalierbarem Fensterwachstum; weder eine Niedriglatenz- noch eine Stromsparpolitik.",
+        "vegas": "Verzögerungsbasiert und versucht, Warteschlangen früh zu vermeiden; kann gegen verlustbasierte Konkurrenten zu stark nachgeben.",
+        "veno": "Versucht, zufällige Funkverluste von Überlastung zu unterscheiden; diese Klassifikation ist nicht auf jedem modernen Pfad zuverlässig.",
+        "yeah": "Hybride Verlust-/Verzögerungsvariante für schnelle Pfade mit Warteschlangenbewusstsein; das Ergebnis hängt von RTT und konkurrierenden Flüssen ab."
       }
     },
     "net_congestion_mobile": {
       "name": "Download-Anlauf · mobil",
-      "desc": "Download-Anlauf nur für mobile Daten. bbr hilft oft auf Mobilfunkverbindungen mit Verlusten und schwankender Verzögerung.\n\n🔋 Akkulaufzeit: kein messbarer Unterschied\n⚡ Leistung: bbr\n✋ Unsicher: Wie allgemein",
+      "desc": "Download-Anlauf nur für mobile Daten. bbr hilft oft auf Mobilfunkverbindungen mit Verlusten und schwankender Verzögerung.\n\n🔋 Akkulaufzeit: kein universeller Gewinner\n⚡ Leistung: abhängig von RTT, Verlusten, Puffern und qdisc\n✋ Unsicher: Wie allgemein",
       "descOpt": {
         "auto": "Übernimmt den Wert der Karte für andere Verbindungen.",
         "bbr": "Richtet sich nach der gemessenen Verbindungsgeschwindigkeit; oft besser auf verlustbehafteten Mobilfunk- und Fernverbindungen.",
-        "cubic": "Der klassische Linux-Algorithmus; drosselt bei Verlusten."
+        "cubic": "Der klassische Linux-Algorithmus; drosselt bei Verlusten.",
+        "bic": "Verlustbasierter Vorgänger von CUBIC; wächst schnell auf Pfaden mit hohem Bandbreiten-Verzögerungs-Produkt, kann aber scharf auf Verluste reagieren.",
+        "westwood": "Schätzt die Bandbreite aus dem ACK-Strom und kann zu einigen verlustbehafteten Funkverbindungen passen; auf modernen gerouteten Pfaden kann die Schätzung instabil sein.",
+        "reno": "Klassisches verlustbasiertes AIMD; vorhersehbar und konservativ auf Pfaden mit hohem Bandbreiten-Verzögerungs-Produkt.",
+        "bbr2": "Neuere BBR-Variante mit anderer Reaktion auf Verluste und Warteschlangen; ihre Verfügbarkeit beweist keinen Vorteil gegenüber BBR auf dieser Route.",
+        "bbr3": "Neuere BBR-Variante einiger Custom-Kernel; das Verhalten hängt von der Kernel-Version ab und ist nicht allgemein überlegen.",
+        "cdg": "Basiert auf Verzögerungsgradienten und weicht wachsenden Warteschlangen aus; die Koexistenz in der Praxis hängt vom Pfad ab.",
+        "dctcp": "ECN-orientierter Rechenzentrumstransport; keine allgemeine Internet-Wahl ohne geeignete ECN-Signalisierung durch Pfad und Switches.",
+        "highspeed": "Verlustbasierte Variante für sehr hohe Bandbreiten-Verzögerungs-Produkte; aggressiveres Fensterwachstum kann Verluste oder Warteschlangendruck erhöhen.",
+        "htcp": "Schnelle verlustbasierte Variante, die das Wachstum anhand der Pfadhistorie anpasst; nicht von Natur aus latenzärmer.",
+        "hybla": "Für lange RTT- oder satellitenähnliche Pfade; auf gewöhnlichen kurzen Routen möglicherweise unnötig aggressiv.",
+        "illinois": "Kombiniert Verlust- und Verzögerungssignale für schnelle Pfade; die Warteschlangenreaktion benötigt genaue Verzögerungsmessungen.",
+        "lp": "Niedrigpriorisierter Transport, die normalen Verkehr nachgeben soll; für Hintergrundflüsse statt maximale Vordergrundgeschwindigkeit.",
+        "nv": "Verzögerungsorientierte New-Vegas-Variante; kann gegen aggressive verlustbasierte Flüsse unterliegen.",
+        "scalable": "Schnelle verlustbasierte Variante mit skalierbarem Fensterwachstum; weder eine Niedriglatenz- noch eine Stromsparpolitik.",
+        "vegas": "Verzögerungsbasiert und versucht, Warteschlangen früh zu vermeiden; kann gegen verlustbasierte Konkurrenten zu stark nachgeben.",
+        "veno": "Versucht, zufällige Funkverluste von Überlastung zu unterscheiden; diese Klassifikation ist nicht auf jedem modernen Pfad zuverlässig.",
+        "yeah": "Hybride Verlust-/Verzögerungsvariante für schnelle Pfade mit Warteschlangenbewusstsein; das Ergebnis hängt von RTT und konkurrierenden Flüssen ab."
       }
     },
     "net_qdisc": {
@@ -819,6 +870,18 @@
         "on": "Einstellung aktivieren und den Schreibvorgang per Read-back bestätigen.",
         "off": "Einstellung deaktivieren und den Schreibvorgang per Read-back bestätigen."
       }
+    },
+    "io_scheduler": {
+      "name": "I/O-Scheduler",
+      "desc": "Wählt nur Scheduler, die der Kernel für jedes Blockgerät tatsächlich anbietet. Auto folgt dem Profil, Stock stellt die gerätespezifischen Ausgangswerte wieder her. Eine nicht verfügbare explizite Wahl wird nicht ersetzt.",
+      "descOpt": {
+        "stock": "Ursprünglichen Scheduler jedes Blockgeräts wiederherstellen.",
+        "auto": "Nur zur Laufzeit erkannte Scheduler entsprechend dem Profil wählen.",
+        "mq-deadline": "Praktischer Standard für gemischte Speicherlast.",
+        "kyber": "Latenzorientiert; von Performance bevorzugt, falls verfügbar.",
+        "bfq": "Fairnessorientiert für interaktive gemischte Last.",
+        "none": "Keine I/O-Neuanordnung; nicht pauschal schneller."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -1104,6 +1167,10 @@
       "24": "24 dp",
       "28": "28 dp",
       "32": "32 dp"
+    },
+    "io_scheduler": {
+      "stock": "Stock",
+      "auto": "Auto"
     }
   },
   "prof_none": "nicht gewählt",
@@ -3928,5 +3995,13 @@
   "kernel_wb_risk_critical": "Blockierungsrisiko: kritisch — Alarme, Eingabe, Laden, Entsperren, Hitzeschutz oder Systemwiederherstellung können ausfallen. Nicht zum Experimentieren blockieren.",
   "kernel_wb_risk_high": "Blockierungsrisiko: hoch — Netzwerk, Speicher, Display, Ereigniszustellung oder Interprozessorkommunikation können hängen bleiben. Nur mit gemessener Ursache und Rückfallplan blockieren.",
   "kernel_wb_risk_medium": "Blockierungsrisiko: erhöht — Ton, Sensoren oder Grafik können verzögert werden. Eine Akkuersparnis ist nicht bewiesen; bei ausgeschaltetem Bildschirm testen.",
-  "kernel_wb_risk_unknown": "Blockierungsrisiko: unbekannt — nicht blockieren, bevor Eigentümer und Verbraucher bekannt sind. Eine hohe Ereigniszahl allein beweist keine Energieverschwendung."
+  "kernel_wb_risk_unknown": "Blockierungsrisiko: unbekannt — nicht blockieren, bevor Eigentümer und Verbraucher bekannt sind. Eine hohe Ereigniszahl allein beweist keine Energieverschwendung.",
+  "lvi_trend_native_rate": "%1 °C pro Minute · Steuersignal des Governors",
+  "cfg_smart_owner": "SMART · AUTO",
+  "cfg_smart_owner_dynamic": "Smart ändert diesen Ist-Wert dynamisch innerhalb des gewählten Modus. Nicht manuell erzwingen: Das würde den Governor bekämpfen. Einen manuellen Wert oder ein anderes Profil wählen, um die Kontrolle zurückzunehmen.",
+  "cfg_smart_owner_radio": "Smart führt diesen erlaubten Funkwechsel nach Bildschirm- und Verkehrszustand aus. Zum Zurücknehmen der Kontrolle die Richtlinie ausschalten oder Smart verlassen.",
+  "cfg_smart_owner_thermal": "Dein Gain ist der angeforderte Pegel; Smart kann ihn am Lautsprecher bei heißem Akku vorübergehend senken. Nicht zur Kompensation der Thermalschutzregelung erhöhen. Smart verlassen oder DSP Loudness auf 0 setzen.",
+  "kc_why_io_scheduler": "Keine lesbare Warteschlange eines nicht rotierenden Blockgeräts stellt eine Scheduler-Liste bereit, oder die Warteschlange ist schreibgeschützt. ASB erstellt keinen allgemeinen sysfs-Writer und behauptet keine Unterstützung.",
+  "cfg_net_cc_discovered": "Von diesem Kernel angeboten. Das Verhalten hängt von Algorithmus, RTT, Verlusten, Puffern und qdisc ab; kein universeller Geschwindigkeits- oder Akkuvorteil.",
+  "cfg_io_scheduler_discovered": "Vom Kernel als eigener I/O-Scheduler angeboten. ASB kann ihn wählen und prüfen, leitet aber keine Leistungs- oder Energieeigenschaften aus dem Namen ab."
 }

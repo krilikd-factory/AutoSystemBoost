@@ -57,7 +57,7 @@
     },
     "dsp_loudness": {
       "name": "DSP ses yükseltme",
-      "desc": "ASB DSP, isteğe bağlı sıkıştırma ve son örnek-tepe sınırlayıcıyla +25 dB'ye kadar kazanç ekler. +3 dB ile başlayın: Yüksek ayarlar, tepeler sınırlansa bile yoğun sıkıştırılmış duyulabilir. İlk etkinleştirme yeniden başlatma ister. Harici ekolayzer ses profilinde DSP atlanır. Hoparlörde kazanç pil 42 °C'ye ulaşınca azalır ve 40 °C altında geri gelir; bu kural kablolu ve Bluetooth kazancını azaltmaz."
+      "desc": "ASB DSP, isteğe bağlı sıkıştırma ve son örnek-tepe sınırlayıcıyla +30 dB'ye kadar kazanç ekler. +3 dB ile başlayın: Yüksek ayarlar, tepeler sınırlansa bile yoğun sıkıştırılmış duyulabilir. İlk etkinleştirme yeniden başlatma ister. Harici ekolayzer ses profilinde DSP atlanır. Hoparlörde kazanç pil 42 °C'ye ulaşınca azalır ve 40 °C altında geri gelir; bu kural kablolu ve Bluetooth kazancını azaltmaz. +25 dB üzerindeki değerler, bu kaynaktan yeniden derlenmiş DSP kitaplıkları gerektirir; eski prebuilt dosyaları +25 dB ile sınırlı kalır."
     },
     "dsp_bass": {
       "name": "DSP bas yükseltme",
@@ -142,29 +142,80 @@
     },
     "net_congestion": {
       "name": "İndirme hızlanması · diğer",
-      "desc": "Wi-Fi ve mobil veri kartlarının kapsamadığı bağlantılarda indirmelerin nasıl hızlandığı: USB ve Bluetooth paylaşımı, VPN, Ethernet.\n\n🔋 Pil ömrü: ölçülebilir fark yok\n⚡ Performans: bbr\n✋ Emin değilseniz: Stok",
+      "desc": "Wi-Fi ve mobil veri kartlarının kapsamadığı bağlantılarda indirmelerin nasıl hızlandığı: USB ve Bluetooth paylaşımı, VPN, Ethernet.\n\n🔋 Pil: evrensel bir kazanan yok\n⚡ Performans: RTT, kayıplar, arabellekler ve qdisc’e bağlıdır\n✋ Emin değilseniz: Stok",
       "descOpt": {
         "auto": "Cihazın kendi algoritması kalır (çoğu zaman cubic).",
         "bbr": "Ölçülen bağlantı hızına göre ayarlanır; kayıplı mobil ve uzak bağlantılarda çoğu zaman daha iyidir.",
-        "cubic": "Klasik Linux algoritması; kayıpta yavaşlar."
+        "cubic": "Klasik Linux algoritması; kayıpta yavaşlar.",
+        "bic": "CUBIC’in kayıp tabanlı öncülü; yüksek bant genişliği-gecikme çarpanlı yollarda hızlı büyür, ancak kayıplara sert tepki verebilir.",
+        "westwood": "Bant genişliğini ACK akışından tahmin eder ve bazı kayıplı kablosuz bağlantılara uyabilir; modern yönlendirilen yollarda tahmin kararsız olabilir.",
+        "reno": "Klasik kayıp tabanlı AIMD; yüksek bant genişliği-gecikme çarpanlı yollarda öngörülebilir ve ihtiyatlıdır.",
+        "bbr2": "Kayıp ve kuyruklara farklı tepki veren daha yeni BBR türü; bulunması bu rota için BBR’den daha iyi olduğunu kanıtlamaz.",
+        "bbr3": "Bazı özel çekirdeklerin sunduğu daha yeni BBR türü; davranışı çekirdek sürümüne bağlıdır ve evrensel olarak üstün değildir.",
+        "cdg": "Gecikme gradyanına dayanır ve büyüyen kuyruklarda geri çekilir; gerçek bir arada bulunma davranışı yola bağlıdır.",
+        "dctcp": "ECN odaklı veri merkezi taşıması; yol ve anahtarlar uygun ECN sinyallemesi sağlamadıkça genel İnternet seçeneği değildir.",
+        "highspeed": "Çok büyük bant genişliği-gecikme çarpanları için kayıp tabanlı algoritma; agresif pencere büyümesi kaybı veya kuyruk baskısını artırabilir.",
+        "htcp": "Büyümeyi yol geçmişine göre uyarlayan hızlı kayıp tabanlı tür; doğası gereği daha düşük gecikme sağlamaz.",
+        "hybla": "Uzun RTT veya uydu benzeri yollar için tasarlandı; sıradan kısa rotalarda gereksiz agresif olabilir.",
+        "illinois": "Hızlı yollar için kayıp ve gecikme sinyallerini birleştirir; kuyruk tepkisi doğru gecikme ölçümlerine bağlıdır.",
+        "lp": "Sıradan trafiğe yol vermesi amaçlanan düşük öncelikli taşıma; ön planda en yüksek hız yerine arka plan akışları için uygundur.",
+        "nv": "Gecikme odaklı New Vegas türü; agresif kayıp tabanlı akışlarla rekabet ederken daha düşük performans gösterebilir.",
+        "scalable": "Ölçeklenebilir pencere büyümeli hızlı kayıp tabanlı algoritma; düşük gecikme veya güç tasarrufu politikası değildir.",
+        "vegas": "Gecikme tabanlıdır ve kuyrukları erken önlemeye çalışır; kayıp tabanlı rakipler karşısında fazla geri çekilebilir.",
+        "veno": "Kablosuz rastgele kaybı tıkanıklıktan ayırmaya çalışır; sınıflandırma her modern yolda güvenilir değildir.",
+        "yeah": "Kuyruk farkındalığıyla hızlı yolları hedefleyen karma kayıp/gecikme algoritması; sonuç RTT ve rakip akışlara bağlıdır."
       }
     },
     "net_congestion_wifi": {
       "name": "İndirme hızlanması · Wi-Fi",
-      "desc": "Yalnızca Wi-Fi için indirme hızlanması.\n\n🔋 Pil ömrü: ölçülebilir fark yok\n⚡ Performans: bbr\n✋ Emin değilseniz: Genelle aynı",
+      "desc": "Yalnızca Wi-Fi için indirme hızlanması.\n\n🔋 Pil: evrensel bir kazanan yok\n⚡ Performans: RTT, kayıplar, arabellekler ve qdisc’e bağlıdır\n✋ Emin değilseniz: Genelle aynı",
       "descOpt": {
         "auto": "Diğer bağlantılar kartının değerini alır.",
         "bbr": "Ölçülen bağlantı hızına göre ayarlanır; kayıplı mobil ve uzak bağlantılarda çoğu zaman daha iyidir.",
-        "cubic": "Klasik Linux algoritması; kayıpta yavaşlar."
+        "cubic": "Klasik Linux algoritması; kayıpta yavaşlar.",
+        "bic": "CUBIC’in kayıp tabanlı öncülü; yüksek bant genişliği-gecikme çarpanlı yollarda hızlı büyür, ancak kayıplara sert tepki verebilir.",
+        "westwood": "Bant genişliğini ACK akışından tahmin eder ve bazı kayıplı kablosuz bağlantılara uyabilir; modern yönlendirilen yollarda tahmin kararsız olabilir.",
+        "reno": "Klasik kayıp tabanlı AIMD; yüksek bant genişliği-gecikme çarpanlı yollarda öngörülebilir ve ihtiyatlıdır.",
+        "bbr2": "Kayıp ve kuyruklara farklı tepki veren daha yeni BBR türü; bulunması bu rota için BBR’den daha iyi olduğunu kanıtlamaz.",
+        "bbr3": "Bazı özel çekirdeklerin sunduğu daha yeni BBR türü; davranışı çekirdek sürümüne bağlıdır ve evrensel olarak üstün değildir.",
+        "cdg": "Gecikme gradyanına dayanır ve büyüyen kuyruklarda geri çekilir; gerçek bir arada bulunma davranışı yola bağlıdır.",
+        "dctcp": "ECN odaklı veri merkezi taşıması; yol ve anahtarlar uygun ECN sinyallemesi sağlamadıkça genel İnternet seçeneği değildir.",
+        "highspeed": "Çok büyük bant genişliği-gecikme çarpanları için kayıp tabanlı algoritma; agresif pencere büyümesi kaybı veya kuyruk baskısını artırabilir.",
+        "htcp": "Büyümeyi yol geçmişine göre uyarlayan hızlı kayıp tabanlı tür; doğası gereği daha düşük gecikme sağlamaz.",
+        "hybla": "Uzun RTT veya uydu benzeri yollar için tasarlandı; sıradan kısa rotalarda gereksiz agresif olabilir.",
+        "illinois": "Hızlı yollar için kayıp ve gecikme sinyallerini birleştirir; kuyruk tepkisi doğru gecikme ölçümlerine bağlıdır.",
+        "lp": "Sıradan trafiğe yol vermesi amaçlanan düşük öncelikli taşıma; ön planda en yüksek hız yerine arka plan akışları için uygundur.",
+        "nv": "Gecikme odaklı New Vegas türü; agresif kayıp tabanlı akışlarla rekabet ederken daha düşük performans gösterebilir.",
+        "scalable": "Ölçeklenebilir pencere büyümeli hızlı kayıp tabanlı algoritma; düşük gecikme veya güç tasarrufu politikası değildir.",
+        "vegas": "Gecikme tabanlıdır ve kuyrukları erken önlemeye çalışır; kayıp tabanlı rakipler karşısında fazla geri çekilebilir.",
+        "veno": "Kablosuz rastgele kaybı tıkanıklıktan ayırmaya çalışır; sınıflandırma her modern yolda güvenilir değildir.",
+        "yeah": "Kuyruk farkındalığıyla hızlı yolları hedefleyen karma kayıp/gecikme algoritması; sonuç RTT ve rakip akışlara bağlıdır."
       }
     },
     "net_congestion_mobile": {
       "name": "İndirme hızlanması · mobil",
-      "desc": "Yalnızca mobil veri için indirme hızlanması. bbr, kayıplı ve gecikmesi değişen mobil bağlantılarda çoğu zaman yardımcı olur.\n\n🔋 Pil ömrü: ölçülebilir fark yok\n⚡ Performans: bbr\n✋ Emin değilseniz: Genelle aynı",
+      "desc": "Yalnızca mobil veri için indirme hızlanması. bbr, kayıplı ve gecikmesi değişen mobil bağlantılarda çoğu zaman yardımcı olur.\n\n🔋 Pil: evrensel bir kazanan yok\n⚡ Performans: RTT, kayıplar, arabellekler ve qdisc’e bağlıdır\n✋ Emin değilseniz: Genelle aynı",
       "descOpt": {
         "auto": "Diğer bağlantılar kartının değerini alır.",
         "bbr": "Ölçülen bağlantı hızına göre ayarlanır; kayıplı mobil ve uzak bağlantılarda çoğu zaman daha iyidir.",
-        "cubic": "Klasik Linux algoritması; kayıpta yavaşlar."
+        "cubic": "Klasik Linux algoritması; kayıpta yavaşlar.",
+        "bic": "CUBIC’in kayıp tabanlı öncülü; yüksek bant genişliği-gecikme çarpanlı yollarda hızlı büyür, ancak kayıplara sert tepki verebilir.",
+        "westwood": "Bant genişliğini ACK akışından tahmin eder ve bazı kayıplı kablosuz bağlantılara uyabilir; modern yönlendirilen yollarda tahmin kararsız olabilir.",
+        "reno": "Klasik kayıp tabanlı AIMD; yüksek bant genişliği-gecikme çarpanlı yollarda öngörülebilir ve ihtiyatlıdır.",
+        "bbr2": "Kayıp ve kuyruklara farklı tepki veren daha yeni BBR türü; bulunması bu rota için BBR’den daha iyi olduğunu kanıtlamaz.",
+        "bbr3": "Bazı özel çekirdeklerin sunduğu daha yeni BBR türü; davranışı çekirdek sürümüne bağlıdır ve evrensel olarak üstün değildir.",
+        "cdg": "Gecikme gradyanına dayanır ve büyüyen kuyruklarda geri çekilir; gerçek bir arada bulunma davranışı yola bağlıdır.",
+        "dctcp": "ECN odaklı veri merkezi taşıması; yol ve anahtarlar uygun ECN sinyallemesi sağlamadıkça genel İnternet seçeneği değildir.",
+        "highspeed": "Çok büyük bant genişliği-gecikme çarpanları için kayıp tabanlı algoritma; agresif pencere büyümesi kaybı veya kuyruk baskısını artırabilir.",
+        "htcp": "Büyümeyi yol geçmişine göre uyarlayan hızlı kayıp tabanlı tür; doğası gereği daha düşük gecikme sağlamaz.",
+        "hybla": "Uzun RTT veya uydu benzeri yollar için tasarlandı; sıradan kısa rotalarda gereksiz agresif olabilir.",
+        "illinois": "Hızlı yollar için kayıp ve gecikme sinyallerini birleştirir; kuyruk tepkisi doğru gecikme ölçümlerine bağlıdır.",
+        "lp": "Sıradan trafiğe yol vermesi amaçlanan düşük öncelikli taşıma; ön planda en yüksek hız yerine arka plan akışları için uygundur.",
+        "nv": "Gecikme odaklı New Vegas türü; agresif kayıp tabanlı akışlarla rekabet ederken daha düşük performans gösterebilir.",
+        "scalable": "Ölçeklenebilir pencere büyümeli hızlı kayıp tabanlı algoritma; düşük gecikme veya güç tasarrufu politikası değildir.",
+        "vegas": "Gecikme tabanlıdır ve kuyrukları erken önlemeye çalışır; kayıp tabanlı rakipler karşısında fazla geri çekilebilir.",
+        "veno": "Kablosuz rastgele kaybı tıkanıklıktan ayırmaya çalışır; sınıflandırma her modern yolda güvenilir değildir.",
+        "yeah": "Kuyruk farkındalığıyla hızlı yolları hedefleyen karma kayıp/gecikme algoritması; sonuç RTT ve rakip akışlara bağlıdır."
       }
     },
     "net_qdisc": {
@@ -819,6 +870,18 @@
         "on": "Ayarı aç ve yazmayı geri okuma ile doğrula.",
         "off": "Ayarı kapat ve yazmayı geri okuma ile doğrula."
       }
+    },
+    "io_scheduler": {
+      "name": "G/Ç zamanlayıcı",
+      "desc": "Her blok aygıtı için yalnızca sunulan zamanlayıcıları seçer. Auto profili izler, Stock özgün değerleri geri yükler. Kullanılamayan açık seçim başka bir seçenekle değiştirilmez.",
+      "descOpt": {
+        "stock": "Her aygıtın özgün zamanlayıcısını geri yükle.",
+        "auto": "Yalnızca çalışma zamanında bulunan seçenekler arasından profile göre seç.",
+        "mq-deadline": "Karma depolama yükleri için dengeli seçenek.",
+        "kyber": "Gecikme odaklı; varsa Performance tarafından tercih edilir.",
+        "bfq": "Etkileşimli karma yükler için adalet odaklı.",
+        "none": "G/Ç yeniden sıralaması yok; her zaman daha hızlı değildir."
+      }
     }
   },
   "nav_live": "İzleme",
@@ -1104,6 +1167,10 @@
       "24": "24 dp",
       "28": "28 dp",
       "32": "32 dp"
+    },
+    "io_scheduler": {
+      "stock": "Stock",
+      "auto": "Otomatik"
     }
   },
   "prof_none": "seçilmedi",
@@ -3928,5 +3995,13 @@
   "kernel_wb_risk_critical": "Engelleme riski: kritik — alarmlar, giriş, şarj, kilit açma, termal koruma veya sistem kurtarma çalışmayabilir. Denemek için engellemeyin.",
   "kernel_wb_risk_high": "Engelleme riski: yüksek — ağ, depolama, ekran, olay iletimi veya işlemciler arası iletişim takılabilir. Yalnızca ölçülmüş bir neden ve geri dönüş planıyla engelleyin.",
   "kernel_wb_risk_medium": "Engelleme riski: artmış — ses, sensörler veya grafikler gecikebilir. Pil tasarrufu kanıtlanmamıştır; ekran kapalıyken test edin.",
-  "kernel_wb_risk_unknown": "Engelleme riski: bilinmiyor — sahibi ve tüketicileri belirlenmeden engellemeyin. Yüksek olay sayısı tek başına enerji israfını kanıtlamaz."
+  "kernel_wb_risk_unknown": "Engelleme riski: bilinmiyor — sahibi ve tüketicileri belirlenmeden engellemeyin. Yüksek olay sayısı tek başına enerji israfını kanıtlamaz.",
+  "lvi_trend_native_rate": "%1 °C/dakika · governor kontrol sinyali",
+  "cfg_smart_owner": "SMART · OTOMATİK",
+  "cfg_smart_owner_dynamic": "Smart, seçtiğiniz mod içinde gerçek değeri dinamik olarak değiştirir. Elle zorlamayın: bu governor ile çakışır. Denetimi geri almak için manuel değer veya başka profil seçin.",
+  "cfg_smart_owner_radio": "Smart, izin verdiğiniz radyo geçişini ekran ve trafik durumuna göre yapar. Manuel denetim için politikayı kapatın veya Smart’tan çıkın.",
+  "cfg_smart_owner_thermal": "Gain istediğiniz seviyedir; pil sıcakken Smart hoparlörde bunu geçici olarak azaltabilir. Termal korumayı dengelemek için yükseltmeyin. Smart’tan çıkın veya DSP Loudness değerini 0 yapın.",
+  "kc_why_io_scheduler": "Okunabilir hiçbir döner olmayan blok aygıtı kuyruğu zamanlayıcı listesi sunmuyor veya kuyruk salt okunur. ASB genel bir sysfs yazıcısı oluşturmaz ve var olmayan desteği iddia etmez.",
+  "cfg_net_cc_discovered": "Bu çekirdekte sunuluyor. Davranış algoritmaya, RTT, kayıplara, arabellekler ve qdisc’e bağlıdır; evrensel avantaj vaat edilmez.",
+  "cfg_io_scheduler_discovered": "Özel bir G/Ç zamanlayıcı olarak bulundu. ASB onu seçip doğrulayabilir, ancak performansı addan çıkarmaz."
 }

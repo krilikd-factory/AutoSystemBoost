@@ -57,7 +57,7 @@
     },
     "dsp_loudness": {
       "name": "Volumen DSP",
-      "desc": "ASB DSP añade hasta +25 dB de ganancia, con compresión opcional y limitador final de picos de muestra. Empieza con +3 dB: los valores altos pueden sonar muy comprimidos aunque los picos estén limitados. La primera activación requiere reinicio. El DSP se omite con el perfil de ecualizador externo. En el altavoz, la ganancia baja cuando la batería llega a 42 °C y vuelve por debajo de 40 °C; esta regla no reduce cable ni Bluetooth."
+      "desc": "ASB DSP añade hasta +30 dB de ganancia, con compresión opcional y limitador final de picos de muestra. Empieza con +3 dB: los valores altos pueden sonar muy comprimidos aunque los picos estén limitados. La primera activación requiere reinicio. El DSP se omite con el perfil de ecualizador externo. En el altavoz, la ganancia baja cuando la batería llega a 42 °C y vuelve por debajo de 40 °C; esta regla no reduce cable ni Bluetooth. Los valores superiores a +25 dB requieren bibliotecas DSP recompiladas desde este código; las precompiladas antiguas siguen limitadas a +25 dB."
     },
     "dsp_bass": {
       "name": "Refuerzo de graves DSP",
@@ -142,29 +142,80 @@
     },
     "net_congestion": {
       "name": "Arranque de descargas · otros",
-      "desc": "Cómo aceleran las descargas en los enlaces que las tarjetas de Wi-Fi y datos móviles no cubren: anclaje USB y Bluetooth, VPN, Ethernet.\n\n🔋 Autonomía: sin diferencia medible\n⚡ Rendimiento: bbr\n✋ Si dudas: Stock",
+      "desc": "Cómo aceleran las descargas en los enlaces que las tarjetas de Wi-Fi y datos móviles no cubren: anclaje USB y Bluetooth, VPN, Ethernet.\n\n🔋 Autonomía: no hay un ganador universal\n⚡ Rendimiento: depende de RTT, pérdidas, búferes y qdisc\n✋ Si dudas: Stock",
       "descOpt": {
         "auto": "Se mantiene el algoritmo propio del dispositivo (a menudo cubic).",
         "bbr": "Se ajusta a la velocidad medida del enlace; a menudo mejor en enlaces móviles con pérdidas y de larga distancia.",
-        "cubic": "El algoritmo clásico de Linux; reduce la velocidad ante pérdidas."
+        "cubic": "El algoritmo clásico de Linux; reduce la velocidad ante pérdidas.",
+        "bic": "Predecesor de CUBIC basado en pérdidas; crece rápido en rutas con gran producto ancho de banda-retardo, pero puede reaccionar bruscamente a las pérdidas.",
+        "westwood": "Estima el ancho de banda mediante los ACK y puede convenir a algunos enlaces inalámbricos con pérdidas; la estimación puede ser inestable en rutas modernas.",
+        "reno": "AIMD clásico basado en pérdidas; predecible y conservador en rutas con gran producto ancho de banda-retardo.",
+        "bbr2": "Variante más reciente de BBR con otra respuesta a pérdidas y colas; su disponibilidad no demuestra que supere a BBR en esta ruta.",
+        "bbr3": "Variante más reciente de BBR presente en algunos kernels personalizados; depende de la versión del kernel y no es universalmente superior.",
+        "cdg": "Usa el gradiente de retardo y retrocede cuando crecen las colas; su coexistencia real depende de la ruta.",
+        "dctcp": "Transporte de centros de datos orientado a ECN; no es una opción general para Internet sin señalización ECN adecuada en la ruta y los conmutadores.",
+        "highspeed": "Algoritmo basado en pérdidas para productos ancho de banda-retardo muy grandes; el crecimiento agresivo de la ventana puede aumentar pérdidas o presión de colas.",
+        "htcp": "Variante rápida basada en pérdidas que adapta el crecimiento según el historial de la ruta; no implica menor latencia.",
+        "hybla": "Diseñado para rutas de RTT largo o tipo satélite; puede ser innecesariamente agresivo en rutas cortas normales.",
+        "illinois": "Combina señales de pérdida y retardo para rutas rápidas; la respuesta a las colas depende de mediciones precisas del retardo.",
+        "lp": "Transporte de baja prioridad que cede ante el tráfico normal; adecuado para flujos en segundo plano, no para máxima velocidad en primer plano.",
+        "nv": "Variante de New Vegas orientada al retardo; puede rendir peor frente a flujos agresivos basados en pérdidas.",
+        "scalable": "Algoritmo rápido basado en pérdidas con crecimiento escalable de la ventana; no es una política de baja latencia ni de ahorro energético.",
+        "vegas": "Basado en retardo, intenta evitar las colas pronto; puede ceder demasiado frente a competidores basados en pérdidas.",
+        "veno": "Intenta distinguir pérdidas inalámbricas aleatorias de congestión; la clasificación no es fiable en todas las rutas modernas.",
+        "yeah": "Algoritmo híbrido de pérdida y retardo para rutas rápidas con atención a las colas; el resultado depende del RTT y los flujos competidores."
       }
     },
     "net_congestion_wifi": {
       "name": "Arranque de descargas · WiFi",
-      "desc": "Aceleración de descargas solo para Wi-Fi.\n\n🔋 Autonomía: sin diferencia medible\n⚡ Rendimiento: bbr\n✋ Si dudas: Como la general",
+      "desc": "Aceleración de descargas solo para Wi-Fi.\n\n🔋 Autonomía: no hay un ganador universal\n⚡ Rendimiento: depende de RTT, pérdidas, búferes y qdisc\n✋ Si dudas: Como la general",
       "descOpt": {
         "auto": "Toma el valor de la tarjeta para otros enlaces.",
         "bbr": "Se ajusta a la velocidad medida del enlace; a menudo mejor en enlaces móviles con pérdidas y de larga distancia.",
-        "cubic": "El algoritmo clásico de Linux; reduce la velocidad ante pérdidas."
+        "cubic": "El algoritmo clásico de Linux; reduce la velocidad ante pérdidas.",
+        "bic": "Predecesor de CUBIC basado en pérdidas; crece rápido en rutas con gran producto ancho de banda-retardo, pero puede reaccionar bruscamente a las pérdidas.",
+        "westwood": "Estima el ancho de banda mediante los ACK y puede convenir a algunos enlaces inalámbricos con pérdidas; la estimación puede ser inestable en rutas modernas.",
+        "reno": "AIMD clásico basado en pérdidas; predecible y conservador en rutas con gran producto ancho de banda-retardo.",
+        "bbr2": "Variante más reciente de BBR con otra respuesta a pérdidas y colas; su disponibilidad no demuestra que supere a BBR en esta ruta.",
+        "bbr3": "Variante más reciente de BBR presente en algunos kernels personalizados; depende de la versión del kernel y no es universalmente superior.",
+        "cdg": "Usa el gradiente de retardo y retrocede cuando crecen las colas; su coexistencia real depende de la ruta.",
+        "dctcp": "Transporte de centros de datos orientado a ECN; no es una opción general para Internet sin señalización ECN adecuada en la ruta y los conmutadores.",
+        "highspeed": "Algoritmo basado en pérdidas para productos ancho de banda-retardo muy grandes; el crecimiento agresivo de la ventana puede aumentar pérdidas o presión de colas.",
+        "htcp": "Variante rápida basada en pérdidas que adapta el crecimiento según el historial de la ruta; no implica menor latencia.",
+        "hybla": "Diseñado para rutas de RTT largo o tipo satélite; puede ser innecesariamente agresivo en rutas cortas normales.",
+        "illinois": "Combina señales de pérdida y retardo para rutas rápidas; la respuesta a las colas depende de mediciones precisas del retardo.",
+        "lp": "Transporte de baja prioridad que cede ante el tráfico normal; adecuado para flujos en segundo plano, no para máxima velocidad en primer plano.",
+        "nv": "Variante de New Vegas orientada al retardo; puede rendir peor frente a flujos agresivos basados en pérdidas.",
+        "scalable": "Algoritmo rápido basado en pérdidas con crecimiento escalable de la ventana; no es una política de baja latencia ni de ahorro energético.",
+        "vegas": "Basado en retardo, intenta evitar las colas pronto; puede ceder demasiado frente a competidores basados en pérdidas.",
+        "veno": "Intenta distinguir pérdidas inalámbricas aleatorias de congestión; la clasificación no es fiable en todas las rutas modernas.",
+        "yeah": "Algoritmo híbrido de pérdida y retardo para rutas rápidas con atención a las colas; el resultado depende del RTT y los flujos competidores."
       }
     },
     "net_congestion_mobile": {
       "name": "Arranque de descargas · móvil",
-      "desc": "Aceleración de descargas solo para datos móviles. bbr suele ayudar en enlaces móviles con pérdidas y retraso variable.\n\n🔋 Autonomía: sin diferencia medible\n⚡ Rendimiento: bbr\n✋ Si dudas: Como la general",
+      "desc": "Aceleración de descargas solo para datos móviles. bbr suele ayudar en enlaces móviles con pérdidas y retraso variable.\n\n🔋 Autonomía: no hay un ganador universal\n⚡ Rendimiento: depende de RTT, pérdidas, búferes y qdisc\n✋ Si dudas: Como la general",
       "descOpt": {
         "auto": "Toma el valor de la tarjeta para otros enlaces.",
         "bbr": "Se ajusta a la velocidad medida del enlace; a menudo mejor en enlaces móviles con pérdidas y de larga distancia.",
-        "cubic": "El algoritmo clásico de Linux; reduce la velocidad ante pérdidas."
+        "cubic": "El algoritmo clásico de Linux; reduce la velocidad ante pérdidas.",
+        "bic": "Predecesor de CUBIC basado en pérdidas; crece rápido en rutas con gran producto ancho de banda-retardo, pero puede reaccionar bruscamente a las pérdidas.",
+        "westwood": "Estima el ancho de banda mediante los ACK y puede convenir a algunos enlaces inalámbricos con pérdidas; la estimación puede ser inestable en rutas modernas.",
+        "reno": "AIMD clásico basado en pérdidas; predecible y conservador en rutas con gran producto ancho de banda-retardo.",
+        "bbr2": "Variante más reciente de BBR con otra respuesta a pérdidas y colas; su disponibilidad no demuestra que supere a BBR en esta ruta.",
+        "bbr3": "Variante más reciente de BBR presente en algunos kernels personalizados; depende de la versión del kernel y no es universalmente superior.",
+        "cdg": "Usa el gradiente de retardo y retrocede cuando crecen las colas; su coexistencia real depende de la ruta.",
+        "dctcp": "Transporte de centros de datos orientado a ECN; no es una opción general para Internet sin señalización ECN adecuada en la ruta y los conmutadores.",
+        "highspeed": "Algoritmo basado en pérdidas para productos ancho de banda-retardo muy grandes; el crecimiento agresivo de la ventana puede aumentar pérdidas o presión de colas.",
+        "htcp": "Variante rápida basada en pérdidas que adapta el crecimiento según el historial de la ruta; no implica menor latencia.",
+        "hybla": "Diseñado para rutas de RTT largo o tipo satélite; puede ser innecesariamente agresivo en rutas cortas normales.",
+        "illinois": "Combina señales de pérdida y retardo para rutas rápidas; la respuesta a las colas depende de mediciones precisas del retardo.",
+        "lp": "Transporte de baja prioridad que cede ante el tráfico normal; adecuado para flujos en segundo plano, no para máxima velocidad en primer plano.",
+        "nv": "Variante de New Vegas orientada al retardo; puede rendir peor frente a flujos agresivos basados en pérdidas.",
+        "scalable": "Algoritmo rápido basado en pérdidas con crecimiento escalable de la ventana; no es una política de baja latencia ni de ahorro energético.",
+        "vegas": "Basado en retardo, intenta evitar las colas pronto; puede ceder demasiado frente a competidores basados en pérdidas.",
+        "veno": "Intenta distinguir pérdidas inalámbricas aleatorias de congestión; la clasificación no es fiable en todas las rutas modernas.",
+        "yeah": "Algoritmo híbrido de pérdida y retardo para rutas rápidas con atención a las colas; el resultado depende del RTT y los flujos competidores."
       }
     },
     "net_qdisc": {
@@ -819,6 +870,18 @@
         "on": "Activar el ajuste y confirmar la escritura mediante lectura.",
         "off": "Desactivar el ajuste y confirmar la escritura mediante lectura."
       }
+    },
+    "io_scheduler": {
+      "name": "Planificador de E/S",
+      "desc": "Elige solo planificadores expuestos para cada dispositivo de bloques. Auto sigue el perfil y Stock restaura los valores originales. Una opción explícita no disponible no se sustituye.",
+      "descOpt": {
+        "stock": "Restaurar el planificador original de cada dispositivo.",
+        "auto": "Elegir según el perfil solo entre opciones detectadas.",
+        "mq-deadline": "Opción equilibrada para cargas mixtas de almacenamiento.",
+        "kyber": "Orientado a latencia; preferido por Performance si está disponible.",
+        "bfq": "Orientado a equidad para cargas interactivas mixtas.",
+        "none": "Sin reordenación de E/S; no siempre es más rápido."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -1104,6 +1167,10 @@
       "24": "24 dp",
       "28": "28 dp",
       "32": "32 dp"
+    },
+    "io_scheduler": {
+      "stock": "Stock",
+      "auto": "Auto"
     }
   },
   "prof_none": "sin seleccionar",
@@ -3928,5 +3995,13 @@
   "kernel_wb_risk_critical": "Riesgo de bloqueo: crítico — pueden dejar de funcionar las alarmas, la entrada, la carga, el desbloqueo, la protección térmica o la recuperación del sistema. No lo bloquees para experimentar.",
   "kernel_wb_risk_high": "Riesgo de bloqueo: alto — la red, el almacenamiento, la pantalla, la entrega de eventos o la comunicación entre procesadores pueden quedar bloqueados. Bloquea solo con una causa medida y un plan de recuperación.",
   "kernel_wb_risk_medium": "Riesgo de bloqueo: elevado — el sonido, los sensores o los gráficos pueden sufrir retrasos. No demuestra ahorro de batería; prueba con la pantalla apagada.",
-  "kernel_wb_risk_unknown": "Riesgo de bloqueo: desconocido — no bloquees hasta identificar al propietario y a los consumidores. Un número alto de eventos no demuestra por sí solo un desperdicio de energía."
+  "kernel_wb_risk_unknown": "Riesgo de bloqueo: desconocido — no bloquees hasta identificar al propietario y a los consumidores. Un número alto de eventos no demuestra por sí solo un desperdicio de energía.",
+  "lvi_trend_native_rate": "%1 °C por minuto · señal de control del governor",
+  "cfg_smart_owner": "SMART · AUTO",
+  "cfg_smart_owner_dynamic": "Smart cambia dinámicamente el valor real dentro del modo elegido. No lo fuerces manualmente: interferiría con el governor. Elige un valor manual u otro perfil para recuperar el control.",
+  "cfg_smart_owner_radio": "Smart realiza esta transición de radio permitida según la pantalla y el tráfico. Desactiva la política o sal de Smart para recuperar el control manual.",
+  "cfg_smart_owner_thermal": "Tu ganancia es el nivel solicitado; Smart puede reducirla temporalmente en el altavoz con la batería caliente. No la subas para compensar la protección térmica. Sal de Smart o pon DSP Loudness en 0.",
+  "kc_why_io_scheduler": "Ninguna cola legible de un dispositivo de bloques no rotacional ofrece una lista de planificadores, o la cola es de solo lectura. ASB no crea un escritor sysfs genérico ni declara compatibilidad inexistente.",
+  "cfg_net_cc_discovered": "Detectado en este núcleo. Depende del algoritmo, RTT, pérdidas, búferes y qdisc; no promete una ventaja universal.",
+  "cfg_io_scheduler_discovered": "Planificador de E/S personalizado detectado. ASB puede seleccionarlo y verificarlo sin inferir su rendimiento del nombre."
 }

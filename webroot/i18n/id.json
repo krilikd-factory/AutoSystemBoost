@@ -57,7 +57,7 @@
     },
     "dsp_loudness": {
       "name": "Penguat volume DSP",
-      "desc": "ASB DSP menambahkan gain hingga +25 dB, dengan kompresi opsional dan limiter puncak sampel akhir. Mulai dari +3 dB: pengaturan tinggi dapat terdengar sangat terkompresi walaupun puncak dibatasi. Aktivasi pertama memerlukan mulai ulang. DSP dilewati pada profil equalizer eksternal. Pada speaker, gain turun saat baterai mencapai 42 °C dan kembali di bawah 40 °C; aturan ini tidak menurunkan keluaran kabel atau Bluetooth."
+      "desc": "ASB DSP menambahkan gain hingga +30 dB, dengan kompresi opsional dan limiter puncak sampel akhir. Mulai dari +3 dB: pengaturan tinggi dapat terdengar sangat terkompresi walaupun puncak dibatasi. Aktivasi pertama memerlukan mulai ulang. DSP dilewati pada profil equalizer eksternal. Pada speaker, gain turun saat baterai mencapai 42 °C dan kembali di bawah 40 °C; aturan ini tidak menurunkan keluaran kabel atau Bluetooth. Nilai di atas +25 dB memerlukan pustaka DSP yang dibangun ulang dari sumber ini; prebuilt lama tetap dibatasi hingga +25 dB."
     },
     "dsp_bass": {
       "name": "Penguat bass DSP",
@@ -142,29 +142,80 @@
     },
     "net_congestion": {
       "name": "Percepatan unduhan · lainnya",
-      "desc": "Bagaimana unduhan menanjak pada koneksi yang tidak dicakup kartu Wi-Fi dan data seluler: tethering USB dan Bluetooth, VPN, Ethernet.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Performa: bbr\n✋ Jika ragu: Stok",
+      "desc": "Bagaimana unduhan menanjak pada koneksi yang tidak dicakup kartu Wi-Fi dan data seluler: tethering USB dan Bluetooth, VPN, Ethernet.\n\n🔋 Baterai: tidak ada pemenang universal\n⚡ Performa: bergantung pada RTT, kehilangan, buffer, dan qdisc\n✋ Jika ragu: Stok",
       "descOpt": {
         "auto": "Algoritme bawaan perangkat tetap dipakai (sering cubic).",
         "bbr": "Menyesuaikan dengan kecepatan koneksi yang diukur; sering lebih baik pada koneksi seluler yang kehilangan paket dan jarak jauh.",
-        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket."
+        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket.",
+        "bic": "Pendahulu CUBIC berbasis kehilangan paket; tumbuh cepat pada jalur dengan produk bandwidth-delay besar, tetapi dapat bereaksi tajam terhadap kehilangan.",
+        "westwood": "Memperkirakan bandwidth dari aliran ACK dan dapat cocok untuk sebagian tautan nirkabel yang kehilangan paket; estimasinya dapat tidak stabil pada jalur modern.",
+        "reno": "AIMD klasik berbasis kehilangan; dapat diprediksi dan konservatif pada jalur dengan produk bandwidth-delay besar.",
+        "bbr2": "Varian BBR yang lebih baru dengan respons berbeda terhadap kehilangan dan antrean; ketersediaannya tidak membuktikan lebih baik daripada BBR pada rute ini.",
+        "bbr3": "Varian BBR yang lebih baru pada sebagian kernel kustom; perilakunya bergantung pada versi kernel dan tidak selalu lebih unggul.",
+        "cdg": "Berbasis gradien delay dan mengurangi laju saat antrean membesar; koeksistensi nyatanya bergantung pada jalur.",
+        "dctcp": "Transport pusat data berorientasi ECN; bukan pilihan Internet umum kecuali jalur dan switch menyediakan sinyal ECN yang sesuai.",
+        "highspeed": "Algoritme berbasis kehilangan untuk produk bandwidth-delay sangat besar; pertumbuhan jendela agresif dapat menambah kehilangan atau tekanan antrean.",
+        "htcp": "Varian cepat berbasis kehilangan yang menyesuaikan pertumbuhan dari riwayat jalur; tidak secara inheren menghasilkan latensi lebih rendah.",
+        "hybla": "Dirancang untuk jalur RTT panjang atau seperti satelit; dapat terlalu agresif pada rute pendek biasa.",
+        "illinois": "Menggabungkan sinyal kehilangan dan delay untuk jalur cepat; respons antreannya bergantung pada pengukuran delay yang akurat.",
+        "lp": "Transport prioritas rendah yang mengalah kepada lalu lintas biasa; cocok untuk aliran latar belakang, bukan kecepatan maksimum di latar depan.",
+        "nv": "Varian New Vegas berorientasi delay; dapat berkinerja lebih rendah saat bersaing dengan aliran agresif berbasis kehilangan.",
+        "scalable": "Algoritme cepat berbasis kehilangan dengan pertumbuhan jendela skalabel; bukan kebijakan latensi rendah atau penghematan daya.",
+        "vegas": "Berbasis delay dan berusaha menghindari antrean sejak dini; dapat terlalu mengalah terhadap pesaing berbasis kehilangan.",
+        "veno": "Berusaha membedakan kehilangan nirkabel acak dari kongesti; klasifikasinya tidak andal pada setiap jalur modern.",
+        "yeah": "Algoritme hibrida kehilangan/delay untuk jalur cepat dengan kesadaran antrean; hasilnya bergantung pada RTT dan aliran pesaing."
       }
     },
     "net_congestion_wifi": {
       "name": "Percepatan unduhan · Wi-Fi",
-      "desc": "Tanjakan unduhan khusus Wi-Fi.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Performa: bbr\n✋ Jika ragu: Seperti umum",
+      "desc": "Tanjakan unduhan khusus Wi-Fi.\n\n🔋 Baterai: tidak ada pemenang universal\n⚡ Performa: bergantung pada RTT, kehilangan, buffer, dan qdisc\n✋ Jika ragu: Seperti umum",
       "descOpt": {
         "auto": "Mengambil nilai dari kartu untuk koneksi lain.",
         "bbr": "Menyesuaikan dengan kecepatan koneksi yang diukur; sering lebih baik pada koneksi seluler yang kehilangan paket dan jarak jauh.",
-        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket."
+        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket.",
+        "bic": "Pendahulu CUBIC berbasis kehilangan paket; tumbuh cepat pada jalur dengan produk bandwidth-delay besar, tetapi dapat bereaksi tajam terhadap kehilangan.",
+        "westwood": "Memperkirakan bandwidth dari aliran ACK dan dapat cocok untuk sebagian tautan nirkabel yang kehilangan paket; estimasinya dapat tidak stabil pada jalur modern.",
+        "reno": "AIMD klasik berbasis kehilangan; dapat diprediksi dan konservatif pada jalur dengan produk bandwidth-delay besar.",
+        "bbr2": "Varian BBR yang lebih baru dengan respons berbeda terhadap kehilangan dan antrean; ketersediaannya tidak membuktikan lebih baik daripada BBR pada rute ini.",
+        "bbr3": "Varian BBR yang lebih baru pada sebagian kernel kustom; perilakunya bergantung pada versi kernel dan tidak selalu lebih unggul.",
+        "cdg": "Berbasis gradien delay dan mengurangi laju saat antrean membesar; koeksistensi nyatanya bergantung pada jalur.",
+        "dctcp": "Transport pusat data berorientasi ECN; bukan pilihan Internet umum kecuali jalur dan switch menyediakan sinyal ECN yang sesuai.",
+        "highspeed": "Algoritme berbasis kehilangan untuk produk bandwidth-delay sangat besar; pertumbuhan jendela agresif dapat menambah kehilangan atau tekanan antrean.",
+        "htcp": "Varian cepat berbasis kehilangan yang menyesuaikan pertumbuhan dari riwayat jalur; tidak secara inheren menghasilkan latensi lebih rendah.",
+        "hybla": "Dirancang untuk jalur RTT panjang atau seperti satelit; dapat terlalu agresif pada rute pendek biasa.",
+        "illinois": "Menggabungkan sinyal kehilangan dan delay untuk jalur cepat; respons antreannya bergantung pada pengukuran delay yang akurat.",
+        "lp": "Transport prioritas rendah yang mengalah kepada lalu lintas biasa; cocok untuk aliran latar belakang, bukan kecepatan maksimum di latar depan.",
+        "nv": "Varian New Vegas berorientasi delay; dapat berkinerja lebih rendah saat bersaing dengan aliran agresif berbasis kehilangan.",
+        "scalable": "Algoritme cepat berbasis kehilangan dengan pertumbuhan jendela skalabel; bukan kebijakan latensi rendah atau penghematan daya.",
+        "vegas": "Berbasis delay dan berusaha menghindari antrean sejak dini; dapat terlalu mengalah terhadap pesaing berbasis kehilangan.",
+        "veno": "Berusaha membedakan kehilangan nirkabel acak dari kongesti; klasifikasinya tidak andal pada setiap jalur modern.",
+        "yeah": "Algoritme hibrida kehilangan/delay untuk jalur cepat dengan kesadaran antrean; hasilnya bergantung pada RTT dan aliran pesaing."
       }
     },
     "net_congestion_mobile": {
       "name": "Percepatan unduhan · seluler",
-      "desc": "Tanjakan unduhan khusus data seluler. bbr sering membantu pada koneksi seluler dengan kehilangan paket dan jeda yang berubah-ubah.\n\n🔋 Daya tahan baterai: tidak ada beda terukur\n⚡ Performa: bbr\n✋ Jika ragu: Seperti umum",
+      "desc": "Tanjakan unduhan khusus data seluler. bbr sering membantu pada koneksi seluler dengan kehilangan paket dan jeda yang berubah-ubah.\n\n🔋 Baterai: tidak ada pemenang universal\n⚡ Performa: bergantung pada RTT, kehilangan, buffer, dan qdisc\n✋ Jika ragu: Seperti umum",
       "descOpt": {
         "auto": "Mengambil nilai dari kartu untuk koneksi lain.",
         "bbr": "Menyesuaikan dengan kecepatan koneksi yang diukur; sering lebih baik pada koneksi seluler yang kehilangan paket dan jarak jauh.",
-        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket."
+        "cubic": "Algoritme Linux klasik; melambat saat ada kehilangan paket.",
+        "bic": "Pendahulu CUBIC berbasis kehilangan paket; tumbuh cepat pada jalur dengan produk bandwidth-delay besar, tetapi dapat bereaksi tajam terhadap kehilangan.",
+        "westwood": "Memperkirakan bandwidth dari aliran ACK dan dapat cocok untuk sebagian tautan nirkabel yang kehilangan paket; estimasinya dapat tidak stabil pada jalur modern.",
+        "reno": "AIMD klasik berbasis kehilangan; dapat diprediksi dan konservatif pada jalur dengan produk bandwidth-delay besar.",
+        "bbr2": "Varian BBR yang lebih baru dengan respons berbeda terhadap kehilangan dan antrean; ketersediaannya tidak membuktikan lebih baik daripada BBR pada rute ini.",
+        "bbr3": "Varian BBR yang lebih baru pada sebagian kernel kustom; perilakunya bergantung pada versi kernel dan tidak selalu lebih unggul.",
+        "cdg": "Berbasis gradien delay dan mengurangi laju saat antrean membesar; koeksistensi nyatanya bergantung pada jalur.",
+        "dctcp": "Transport pusat data berorientasi ECN; bukan pilihan Internet umum kecuali jalur dan switch menyediakan sinyal ECN yang sesuai.",
+        "highspeed": "Algoritme berbasis kehilangan untuk produk bandwidth-delay sangat besar; pertumbuhan jendela agresif dapat menambah kehilangan atau tekanan antrean.",
+        "htcp": "Varian cepat berbasis kehilangan yang menyesuaikan pertumbuhan dari riwayat jalur; tidak secara inheren menghasilkan latensi lebih rendah.",
+        "hybla": "Dirancang untuk jalur RTT panjang atau seperti satelit; dapat terlalu agresif pada rute pendek biasa.",
+        "illinois": "Menggabungkan sinyal kehilangan dan delay untuk jalur cepat; respons antreannya bergantung pada pengukuran delay yang akurat.",
+        "lp": "Transport prioritas rendah yang mengalah kepada lalu lintas biasa; cocok untuk aliran latar belakang, bukan kecepatan maksimum di latar depan.",
+        "nv": "Varian New Vegas berorientasi delay; dapat berkinerja lebih rendah saat bersaing dengan aliran agresif berbasis kehilangan.",
+        "scalable": "Algoritme cepat berbasis kehilangan dengan pertumbuhan jendela skalabel; bukan kebijakan latensi rendah atau penghematan daya.",
+        "vegas": "Berbasis delay dan berusaha menghindari antrean sejak dini; dapat terlalu mengalah terhadap pesaing berbasis kehilangan.",
+        "veno": "Berusaha membedakan kehilangan nirkabel acak dari kongesti; klasifikasinya tidak andal pada setiap jalur modern.",
+        "yeah": "Algoritme hibrida kehilangan/delay untuk jalur cepat dengan kesadaran antrean; hasilnya bergantung pada RTT dan aliran pesaing."
       }
     },
     "net_qdisc": {
@@ -819,6 +870,18 @@
         "on": "Aktifkan setelan dan konfirmasi penulisan dengan read-back.",
         "off": "Nonaktifkan setelan dan konfirmasi penulisan dengan read-back."
       }
+    },
+    "io_scheduler": {
+      "name": "Penjadwal I/O",
+      "desc": "Hanya memilih penjadwal yang tersedia untuk setiap perangkat blok. Auto mengikuti profil, Stock memulihkan nilai awal. Pilihan eksplisit yang tidak tersedia tidak diganti.",
+      "descOpt": {
+        "stock": "Pulihkan penjadwal awal setiap perangkat.",
+        "auto": "Pilih sesuai profil hanya dari opsi yang ditemukan saat runtime.",
+        "mq-deadline": "Pilihan seimbang untuk beban penyimpanan campuran.",
+        "kyber": "Berorientasi latensi; dipilih Performance bila tersedia.",
+        "bfq": "Berorientasi keadilan untuk beban interaktif campuran.",
+        "none": "Tanpa pengurutan ulang I/O; tidak selalu lebih cepat."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -1104,6 +1167,10 @@
       "24": "24 dp",
       "28": "28 dp",
       "32": "32 dp"
+    },
+    "io_scheduler": {
+      "stock": "Stock",
+      "auto": "Otomatis"
     }
   },
   "prof_none": "belum dipilih",
@@ -3928,5 +3995,13 @@
   "kernel_wb_risk_critical": "Risiko pemblokiran: kritis — alarm, input, pengisian daya, membuka kunci, perlindungan termal, atau pemulihan sistem dapat berhenti bekerja. Jangan blokir untuk bereksperimen.",
   "kernel_wb_risk_high": "Risiko pemblokiran: tinggi — jaringan, penyimpanan, layar, pengiriman peristiwa, atau komunikasi antarprosesor dapat macet. Blokir hanya dengan alasan terukur dan rencana pemulihan.",
   "kernel_wb_risk_medium": "Risiko pemblokiran: meningkat — suara, sensor, atau grafis dapat tertunda. Penghematan baterai tidak terbukti; uji dengan layar mati.",
-  "kernel_wb_risk_unknown": "Risiko pemblokiran: tidak diketahui — jangan blokir sampai pemilik dan konsumennya diketahui. Jumlah peristiwa yang tinggi saja tidak membuktikan pemborosan energi."
+  "kernel_wb_risk_unknown": "Risiko pemblokiran: tidak diketahui — jangan blokir sampai pemilik dan konsumennya diketahui. Jumlah peristiwa yang tinggi saja tidak membuktikan pemborosan energi.",
+  "lvi_trend_native_rate": "%1 °C per menit · sinyal kontrol governor",
+  "cfg_smart_owner": "SMART · OTOMATIS",
+  "cfg_smart_owner_dynamic": "Smart mengubah nilai aktual secara dinamis dalam mode pilihan Anda. Jangan memaksanya secara manual: itu akan melawan governor. Pilih nilai manual atau profil lain untuk mengambil kembali kendali.",
+  "cfg_smart_owner_radio": "Smart melakukan transisi radio yang Anda izinkan berdasarkan layar dan lalu lintas. Nonaktifkan kebijakan atau keluar dari Smart untuk kembali ke kendali manual.",
+  "cfg_smart_owner_thermal": "Gain Anda adalah tingkat yang diminta; Smart dapat menurunkannya sementara di speaker saat baterai panas. Jangan menaikkannya untuk mengimbangi perlindungan termal. Keluar dari Smart atau setel DSP Loudness ke 0.",
+  "kc_why_io_scheduler": "Tidak ada antrean perangkat blok nonrotasional yang dapat dibaca dan menyediakan daftar penjadwal, atau antreannya hanya dapat dibaca. ASB tidak membuat penulis sysfs generik dan tidak mengklaim dukungan yang tidak tersedia.",
+  "cfg_net_cc_discovered": "Disediakan kernel ini. Perilaku bergantung pada algoritma, RTT, kehilangan, buffer, dan qdisc; tidak ada keunggulan universal yang dijanjikan.",
+  "cfg_io_scheduler_discovered": "Penjadwal I/O kustom yang ditemukan. ASB dapat memilih dan memverifikasinya tanpa menyimpulkan performa dari nama."
 }

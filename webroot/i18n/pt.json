@@ -57,7 +57,7 @@
     },
     "dsp_loudness": {
       "name": "Volume do DSP",
-      "desc": "O ASB DSP adiciona até +25 dB de ganho, com compressão opcional e limitador final de picos de amostra. Comece com +3 dB: valores altos podem soar muito comprimidos mesmo com picos limitados. A primeira ativação requer reinício. O DSP é contornado no perfil de equalizador externo. No altifalante, o ganho diminui quando a bateria atinge 42 °C e volta abaixo de 40 °C; esta regra não reduz saídas com fio ou Bluetooth."
+      "desc": "O ASB DSP adiciona até +30 dB de ganho, com compressão opcional e limitador final de picos de amostra. Comece com +3 dB: valores altos podem soar muito comprimidos mesmo com picos limitados. A primeira ativação requer reinício. O DSP é contornado no perfil de equalizador externo. No altifalante, o ganho diminui quando a bateria atinge 42 °C e volta abaixo de 40 °C; esta regra não reduz saídas com fio ou Bluetooth. Valores acima de +25 dB exigem bibliotecas DSP recompiladas a partir deste código-fonte; prebuilts antigos permanecem limitados a +25 dB."
     },
     "dsp_bass": {
       "name": "Reforço de graves DSP",
@@ -142,29 +142,80 @@
     },
     "net_congestion": {
       "name": "Arranque de downloads · outros",
-      "desc": "Como os downloads aceleram nos links que os cartões de Wi-Fi e dados móveis não cobrem: ancoragem USB e Bluetooth, VPN, Ethernet.\n\n🔋 Autonomia: sem diferença mensurável\n⚡ Desempenho: bbr\n✋ Na dúvida: Stock",
+      "desc": "Como os downloads aceleram nos links que os cartões de Wi-Fi e dados móveis não cobrem: ancoragem USB e Bluetooth, VPN, Ethernet.\n\n🔋 Autonomia: não há vencedor universal\n⚡ Desempenho: depende de RTT, perdas, buffers e qdisc\n✋ Na dúvida: Stock",
       "descOpt": {
         "auto": "Fica o algoritmo próprio do aparelho (muitas vezes cubic).",
         "bbr": "Ajusta-se à velocidade medida do link; muitas vezes melhor em links móveis com perdas e de longa distância.",
-        "cubic": "O algoritmo clássico do Linux; recua quando há perdas."
+        "cubic": "O algoritmo clássico do Linux; recua quando há perdas.",
+        "bic": "Predecessor do CUBIC baseado em perdas; cresce rapidamente em caminhos com alto produto largura de banda-atraso, mas pode reagir de forma brusca às perdas.",
+        "westwood": "Estima a largura de banda pelo fluxo ACK e pode servir a algumas ligações sem fios com perdas; a estimativa pode ser instável em caminhos modernos.",
+        "reno": "AIMD clássico baseado em perdas; previsível e conservador em caminhos com alto produto largura de banda-atraso.",
+        "bbr2": "Variante mais recente do BBR com resposta diferente a perdas e filas; a disponibilidade não prova que seja melhor que o BBR nesta rota.",
+        "bbr3": "Variante mais recente do BBR exposta por alguns kernels personalizados; o comportamento depende da versão do kernel e não é universalmente superior.",
+        "cdg": "Baseado no gradiente de atraso e recua quando as filas crescem; a coexistência real depende do caminho.",
+        "dctcp": "Transporte de centros de dados orientado a ECN; não é uma escolha geral para a Internet sem sinalização ECN adequada no caminho e nos comutadores.",
+        "highspeed": "Algoritmo baseado em perdas para produtos largura de banda-atraso muito grandes; o crescimento agressivo da janela pode aumentar perdas ou pressão nas filas.",
+        "htcp": "Variante rápida baseada em perdas que adapta o crescimento ao histórico do caminho; não implica intrinsecamente menor latência.",
+        "hybla": "Concebido para caminhos de RTT longo ou tipo satélite; pode ser desnecessariamente agressivo em rotas curtas comuns.",
+        "illinois": "Combina sinais de perda e atraso para caminhos rápidos; a resposta às filas depende de medições precisas do atraso.",
+        "lp": "Transporte de baixa prioridade que cede ao tráfego normal; adequado a fluxos em segundo plano, não à velocidade máxima em primeiro plano.",
+        "nv": "Variante New Vegas orientada ao atraso; pode ter desempenho inferior contra fluxos agressivos baseados em perdas.",
+        "scalable": "Algoritmo rápido baseado em perdas com crescimento escalável da janela; não é uma política de baixa latência nem de poupança de energia.",
+        "vegas": "Baseado no atraso, tenta evitar filas cedo; pode ceder demasiado contra concorrentes baseados em perdas.",
+        "veno": "Tenta distinguir perdas sem fios aleatórias de congestão; a classificação não é fiável em todos os caminhos modernos.",
+        "yeah": "Algoritmo híbrido de perda/atraso para caminhos rápidos com atenção às filas; o resultado depende do RTT e dos fluxos concorrentes."
       }
     },
     "net_congestion_wifi": {
       "name": "Arranque de downloads · WiFi",
-      "desc": "Aceleração de downloads só para Wi-Fi.\n\n🔋 Autonomia: sem diferença mensurável\n⚡ Desempenho: bbr\n✋ Na dúvida: Como a geral",
+      "desc": "Aceleração de downloads só para Wi-Fi.\n\n🔋 Autonomia: não há vencedor universal\n⚡ Desempenho: depende de RTT, perdas, buffers e qdisc\n✋ Na dúvida: Como a geral",
       "descOpt": {
         "auto": "Usa o valor do cartão para os outros links.",
         "bbr": "Ajusta-se à velocidade medida do link; muitas vezes melhor em links móveis com perdas e de longa distância.",
-        "cubic": "O algoritmo clássico do Linux; recua quando há perdas."
+        "cubic": "O algoritmo clássico do Linux; recua quando há perdas.",
+        "bic": "Predecessor do CUBIC baseado em perdas; cresce rapidamente em caminhos com alto produto largura de banda-atraso, mas pode reagir de forma brusca às perdas.",
+        "westwood": "Estima a largura de banda pelo fluxo ACK e pode servir a algumas ligações sem fios com perdas; a estimativa pode ser instável em caminhos modernos.",
+        "reno": "AIMD clássico baseado em perdas; previsível e conservador em caminhos com alto produto largura de banda-atraso.",
+        "bbr2": "Variante mais recente do BBR com resposta diferente a perdas e filas; a disponibilidade não prova que seja melhor que o BBR nesta rota.",
+        "bbr3": "Variante mais recente do BBR exposta por alguns kernels personalizados; o comportamento depende da versão do kernel e não é universalmente superior.",
+        "cdg": "Baseado no gradiente de atraso e recua quando as filas crescem; a coexistência real depende do caminho.",
+        "dctcp": "Transporte de centros de dados orientado a ECN; não é uma escolha geral para a Internet sem sinalização ECN adequada no caminho e nos comutadores.",
+        "highspeed": "Algoritmo baseado em perdas para produtos largura de banda-atraso muito grandes; o crescimento agressivo da janela pode aumentar perdas ou pressão nas filas.",
+        "htcp": "Variante rápida baseada em perdas que adapta o crescimento ao histórico do caminho; não implica intrinsecamente menor latência.",
+        "hybla": "Concebido para caminhos de RTT longo ou tipo satélite; pode ser desnecessariamente agressivo em rotas curtas comuns.",
+        "illinois": "Combina sinais de perda e atraso para caminhos rápidos; a resposta às filas depende de medições precisas do atraso.",
+        "lp": "Transporte de baixa prioridade que cede ao tráfego normal; adequado a fluxos em segundo plano, não à velocidade máxima em primeiro plano.",
+        "nv": "Variante New Vegas orientada ao atraso; pode ter desempenho inferior contra fluxos agressivos baseados em perdas.",
+        "scalable": "Algoritmo rápido baseado em perdas com crescimento escalável da janela; não é uma política de baixa latência nem de poupança de energia.",
+        "vegas": "Baseado no atraso, tenta evitar filas cedo; pode ceder demasiado contra concorrentes baseados em perdas.",
+        "veno": "Tenta distinguir perdas sem fios aleatórias de congestão; a classificação não é fiável em todos os caminhos modernos.",
+        "yeah": "Algoritmo híbrido de perda/atraso para caminhos rápidos com atenção às filas; o resultado depende do RTT e dos fluxos concorrentes."
       }
     },
     "net_congestion_mobile": {
       "name": "Arranque de downloads · móvel",
-      "desc": "Aceleração de downloads só para dados móveis. O bbr costuma ajudar em links móveis com perdas e atraso variável.\n\n🔋 Autonomia: sem diferença mensurável\n⚡ Desempenho: bbr\n✋ Na dúvida: Como a geral",
+      "desc": "Aceleração de downloads só para dados móveis. O bbr costuma ajudar em links móveis com perdas e atraso variável.\n\n🔋 Autonomia: não há vencedor universal\n⚡ Desempenho: depende de RTT, perdas, buffers e qdisc\n✋ Na dúvida: Como a geral",
       "descOpt": {
         "auto": "Usa o valor do cartão para os outros links.",
         "bbr": "Ajusta-se à velocidade medida do link; muitas vezes melhor em links móveis com perdas e de longa distância.",
-        "cubic": "O algoritmo clássico do Linux; recua quando há perdas."
+        "cubic": "O algoritmo clássico do Linux; recua quando há perdas.",
+        "bic": "Predecessor do CUBIC baseado em perdas; cresce rapidamente em caminhos com alto produto largura de banda-atraso, mas pode reagir de forma brusca às perdas.",
+        "westwood": "Estima a largura de banda pelo fluxo ACK e pode servir a algumas ligações sem fios com perdas; a estimativa pode ser instável em caminhos modernos.",
+        "reno": "AIMD clássico baseado em perdas; previsível e conservador em caminhos com alto produto largura de banda-atraso.",
+        "bbr2": "Variante mais recente do BBR com resposta diferente a perdas e filas; a disponibilidade não prova que seja melhor que o BBR nesta rota.",
+        "bbr3": "Variante mais recente do BBR exposta por alguns kernels personalizados; o comportamento depende da versão do kernel e não é universalmente superior.",
+        "cdg": "Baseado no gradiente de atraso e recua quando as filas crescem; a coexistência real depende do caminho.",
+        "dctcp": "Transporte de centros de dados orientado a ECN; não é uma escolha geral para a Internet sem sinalização ECN adequada no caminho e nos comutadores.",
+        "highspeed": "Algoritmo baseado em perdas para produtos largura de banda-atraso muito grandes; o crescimento agressivo da janela pode aumentar perdas ou pressão nas filas.",
+        "htcp": "Variante rápida baseada em perdas que adapta o crescimento ao histórico do caminho; não implica intrinsecamente menor latência.",
+        "hybla": "Concebido para caminhos de RTT longo ou tipo satélite; pode ser desnecessariamente agressivo em rotas curtas comuns.",
+        "illinois": "Combina sinais de perda e atraso para caminhos rápidos; a resposta às filas depende de medições precisas do atraso.",
+        "lp": "Transporte de baixa prioridade que cede ao tráfego normal; adequado a fluxos em segundo plano, não à velocidade máxima em primeiro plano.",
+        "nv": "Variante New Vegas orientada ao atraso; pode ter desempenho inferior contra fluxos agressivos baseados em perdas.",
+        "scalable": "Algoritmo rápido baseado em perdas com crescimento escalável da janela; não é uma política de baixa latência nem de poupança de energia.",
+        "vegas": "Baseado no atraso, tenta evitar filas cedo; pode ceder demasiado contra concorrentes baseados em perdas.",
+        "veno": "Tenta distinguir perdas sem fios aleatórias de congestão; a classificação não é fiável em todos os caminhos modernos.",
+        "yeah": "Algoritmo híbrido de perda/atraso para caminhos rápidos com atenção às filas; o resultado depende do RTT e dos fluxos concorrentes."
       }
     },
     "net_qdisc": {
@@ -819,6 +870,18 @@
         "on": "Ativar a definição e confirmar a escrita por leitura.",
         "off": "Desativar a definição e confirmar a escrita por leitura."
       }
+    },
+    "io_scheduler": {
+      "name": "Escalonador de E/S",
+      "desc": "Escolhe apenas escalonadores expostos para cada dispositivo de blocos. Auto segue o perfil e Stock restaura os valores originais. Uma escolha explícita indisponível não é substituída.",
+      "descOpt": {
+        "stock": "Restaurar o escalonador original de cada dispositivo.",
+        "auto": "Escolher conforme o perfil apenas entre opções detectadas.",
+        "mq-deadline": "Opção equilibrada para cargas mistas de armazenamento.",
+        "kyber": "Orientado à latência; preferido por Performance se disponível.",
+        "bfq": "Orientado à justiça para cargas interactivas mistas.",
+        "none": "Sem reordenação de E/S; nem sempre é mais rápido."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -1104,6 +1167,10 @@
       "24": "24 dp",
       "28": "28 dp",
       "32": "32 dp"
+    },
+    "io_scheduler": {
+      "stock": "Stock",
+      "auto": "Auto"
     }
   },
   "prof_none": "não selecionado",
@@ -3928,5 +3995,13 @@
   "kernel_wb_risk_critical": "Risco de bloqueio: crítico — alarmes, entrada, carregamento, desbloqueio, proteção térmica ou recuperação do sistema podem deixar de funcionar. Não bloqueie para experimentar.",
   "kernel_wb_risk_high": "Risco de bloqueio: alto — rede, armazenamento, ecrã, entrega de eventos ou comunicação entre processadores podem bloquear. Bloqueie apenas com uma causa medida e um plano de recuperação.",
   "kernel_wb_risk_medium": "Risco de bloqueio: elevado — som, sensores ou gráficos podem sofrer atrasos. Não há poupança de bateria comprovada; teste com o ecrã desligado.",
-  "kernel_wb_risk_unknown": "Risco de bloqueio: desconhecido — não bloqueie até identificar o proprietário e os consumidores. Um número elevado de eventos, por si só, não prova desperdício de energia."
+  "kernel_wb_risk_unknown": "Risco de bloqueio: desconhecido — não bloqueie até identificar o proprietário e os consumidores. Um número elevado de eventos, por si só, não prova desperdício de energia.",
+  "lvi_trend_native_rate": "%1 °C por minuto · sinal de controlo do governor",
+  "cfg_smart_owner": "SMART · AUTO",
+  "cfg_smart_owner_dynamic": "O Smart altera dinamicamente o valor real dentro do modo escolhido. Não o force manualmente: isso interfere com o governor. Escolha um valor manual ou outro perfil para recuperar o controlo.",
+  "cfg_smart_owner_radio": "O Smart executa esta transição de rádio permitida conforme o ecrã e o tráfego. Desative a política ou saia do Smart para recuperar o controlo manual.",
+  "cfg_smart_owner_thermal": "O ganho é o nível pedido; o Smart pode reduzi-lo temporariamente no altifalante com a bateria quente. Não o aumente para compensar a proteção térmica. Saia do Smart ou defina DSP Loudness como 0.",
+  "kc_why_io_scheduler": "Nenhuma fila legível de um dispositivo de blocos não rotativo oferece uma lista de escalonadores, ou a fila é somente leitura. O ASB não cria um gravador sysfs genérico nem declara suporte inexistente.",
+  "cfg_net_cc_discovered": "Disponibilizado por este kernel. Depende do algoritmo, RTT, perdas, buffers e qdisc; nenhuma vantagem universal é prometida.",
+  "cfg_io_scheduler_discovered": "Escalonador de E/S personalizado detectado. O ASB pode selecioná-lo e verificá-lo sem inferir o desempenho pelo nome."
 }
