@@ -4,6 +4,37 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix10 - paint-first Camera, continuous Zygisk controls and faster Monitor navigation
+
+Input: the owner's four-item WebUI revision covering slow Camera category opening, unwanted
+lines between the four Zygisk switches, Monitor opening cost and animation smoothness.
+
+- **Camera:** the category and both Camera Tools cards are fully drawn before capabilities,
+  camera-grade and USB/ART status evidence start. These are one-shot post-entrance reads, not
+  pollers. If the page closes or the WebView is hidden before the deferred read, it does not run
+  and the capability/grade state remains retryable. Both explicit Check again buttons and all
+  post-write read-backs retain their immediate live reads.
+- **Zygisk Settings:** the four switch rows remain in one continuous card. The generated
+  `::before` hairlines between them are removed in ordinary and Liquid Glass themes; no spacing,
+  state indication, control or evidence row was removed.
+- **Monitor:** the bounded splash Live job now retains its complete Stock and non-Stock snapshot
+  while Monitor is closed. An overlapping collector preserves that explicit prefetch request;
+  ordinary closed-page reads, hidden-document reads and page-sequence stale guards remain in
+  force. Opening paints the cached tiles before a two-frame, sequence-guarded entrance. A very
+  recent successful sample can defer the duplicate opening read, but only within 1200 ms; the
+  mandatory fresh visible read is not replaced by a cache.
+- **Motion:** Monitor moves only after its restored layer has had a rendered frame. Profile card,
+  icon, label and checkmark transitions now name their actual properties instead of `all`;
+  letter-spacing no longer animates. No persistent worker, ambient timer or layout-animation
+  loop was added.
+- **Verification:** targeted source and Node fixtures cover deferral/retry, manual Camera refresh,
+  both Monitor prefetch branches, overlap/freshness/stale behavior, two-frame entrance and CSS
+  transition ownership. The lint group-membership checks no longer write into an early-closed
+  `grep -q` pipe, removing an intermittent Broken pipe diagnostic without changing their verdict.
+  Full working-tree and clean-source-ZIP regressions are release gates. These are host-side
+  contracts, not measured ColorOS WebView latency/frame-time improvements or
+  physical OnePlus 15 validation.
+
 ## V66 dev66 buildfix9 - applicable log evidence, complete startup snapshots and bounded Battery Fix
 
 Input: the owner's four-item revision of Infinite Log, Device Diagnostics, startup page loading and
