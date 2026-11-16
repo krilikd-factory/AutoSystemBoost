@@ -731,11 +731,12 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "246" ] || fail "expected 246 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "246" ] || fail "expected 246 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "247" ] || fail "expected 247 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "247" ] || fail "expected 247 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
+grep -qx 'CAMERA_PREVIEW_TNR|user|webui_standard|shell' "$REG" || fail 'CAMERA_PREVIEW_TNR consumer is not pinned to shell'
 for _kc_key in io_scheduler mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore; do
   grep -qx "$_kc_key|advanced|webui_sensitive|shell" "$REG" || fail "$_kc_key consumer is not pinned to shell"
 done
@@ -755,7 +756,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "114" ] || fail "expected 114 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "115" ] || fail "expected 115 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -799,7 +800,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (246 keys; 49 user, 65 advanced, 132 internal)'
+echo 'PASS config ownership registry contract (247 keys; 50 user, 65 advanced, 132 internal)'
 )
 
 t_config_metadata_coherence_buildfix1() (
@@ -826,7 +827,7 @@ cmp -s "$CONF" "$SHIPPED" || fail 'active and shipped config copies differ'
 shape="$(cd "$ROOT" && grep -oE "key:'[a-zA-Z0-9_]+'[^}]*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
   | sed -E "s/.*key:'([a-zA-Z0-9_]+)'.*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)/\1=\2/" \
   | sort | md5sum | cut -c1-12)"
-[ "$shape" = a9530704fe92 ] || fail "unexpected computed WebUI shape: $shape"
+[ "$shape" = cd239239061c ] || fail "unexpected computed WebUI shape: $shape"
 grep -Fqx "# CONFIG_SHAPE=$shape" "$CONF" || fail 'governor.conf shape is stale'
 grep -Fqx "# CONFIG_SHAPE=$shape" "$SHIPPED" || fail 'shipped config shape is stale'
 schema="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' "$ROOT/common/install.sh" \
@@ -860,7 +861,7 @@ for rel in ('config/governor.conf', 'config/governor.conf.shipped', 'config/key_
             kept.append(line)
     text = ''.join(kept)
     if separator == '=':
-        text = text.replace('# CONFIG_SHAPE=a9530704fe92',
+        text = text.replace('# CONFIG_SHAPE=cd239239061c',
                             '# CONFIG_SHAPE=928eea600217', 1)
     path.write_text(text, encoding='utf-8')
 PY
@@ -868,7 +869,7 @@ if (cd "$TMP/stale" && MODE=RELEASE_STRICT bash tools/asb_lint.sh) > "$TMP/befor
   fail 'stale 237-key metadata with dev64 WebUI cards passed lint'
 fi
 need "$TMP/before.log" 'internal-or-unregistered-cards=[feel_dc_dimming feel_game_memc feel_gesture_mistouch feel_pointer_speed ui_nav_handle_autohide ui_recents_corner_radius ui_recents_memory ui_smooth_corners ] stale-public-keys=[]' 'ownership drift no longer reproduces the CI failure'
-need "$TMP/before.log" 'config shape changed (928eea600217 -> a9530704fe92) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
+need "$TMP/before.log" 'config shape changed (928eea600217 -> cd239239061c) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
 if ! grep -Fq 'Lint: ❌ 2 errors  ⚠️  0 warnings' "$TMP/before.log"; then cat "$TMP/before.log" >&2; fail 'stale fixture has unexpected additional lint findings'; fi
 
 cp "$CONF" "$TMP/stale/config/governor.conf"
@@ -880,7 +881,7 @@ cp "$REG" "$TMP/stale/config/key_ownership.tsv"
 }
 need "$TMP/after.log" 'config shape matches the recorded fingerprint (schema 4)' 'schema 4 coherence was not reported'
 need "$TMP/after.log" 'Lint: ❌ 0 errors  ⚠️  0 warnings' 'corrected fixture is not lint-clean'
-echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 246-key configs, shape a9530704fe92/schema 4, exact stale-CI failure and three-file repair'
+echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 247-key configs, shape cd239239061c/schema 4, exact stale-CI failure and three-file repair'
 )
 
 t_config_restore_outcome_runtime() (

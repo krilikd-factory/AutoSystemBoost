@@ -8056,7 +8056,7 @@ function zygiskHeaderPublish() {} function zygiskHeaderRefresh() {}
 function logReportSec() { return { classList: { add() {} }, appendChild() {} }; } function logReportNote() { return {}; }
 function runText(r) { return r.stdout || ''; }
 let runOut = null;
-async function run(c) { log.push('run:' + (_el('deviceBody').classList.contains('dev-stale') ? 'stale:' : '') + _el('deviceStatus').textContent); return runOut; }
+async function run(c) { log.push('run:' + _el('deviceStatus').textContent); return runOut; }
 async function asbPaintYield() { log.push('yield'); }
 const MD = "/mod"; const window = {};
 JS
@@ -8077,8 +8077,8 @@ let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; 
   delete nodes.deviceBody; log.length = 0;
   runOut = { errno: 0, stdout: fresh + 'D\tkernel\trelease\t6.12\n' };
   await asbDeviceInfoLoad();
-  chk(/^render:2:[^|]*\|yield\|run:stale:Snapshot from .* · refreshing…\|render:3:/.test(log.join('|')), 'a new page does not show the last snapshot before the read: ' + log.join('|'));
-  chk(log[log.length - 1].indexOf('render:3:') === 0 && !nodes.deviceBody.cls.has('dev-stale'), 'the fresh read did not replace the snapshot: ' + log.join('|'));
+  chk(/^render:2:[^|]*\|yield\|run:Snapshot from .* · refreshing…\|render:3:/.test(log.join('|')), 'a new page does not show the last snapshot before the read: ' + log.join('|'));
+  chk(log[log.length - 1].indexOf('render:3:') === 0, 'the fresh read did not replace the snapshot: ' + log.join('|'));
   delete nodes.deviceBody; log.length = 0;
   runOut = { errno: 1, stdout: '' };
   await asbDeviceInfoLoad();
@@ -10178,7 +10178,7 @@ en = json.loads((root / 'webroot' / 'i18n' / 'en.json').read_text(encoding='utf-
 # rewritten cards. These strings are rendered with textContent, never as device markup.
 audited = set('''bt_link_stability dsp_outputs dsp_loudness dsp_voice audio_remove_volume_limit
 audio_resampler media_vol_steps CAMERA_LEVEL CAMERA_CONTRAST CAMERA_GRAIN CAMERA_PORTRAIT
-CAMERA_LOWLIGHT camera_hold_enable UX_MANAGE_TIMEOUTS anim_speed UX_ANIM_FORCE_RESTART
+CAMERA_LOWLIGHT CAMERA_PREVIEW_TNR camera_hold_enable UX_MANAGE_TIMEOUTS anim_speed UX_ANIM_FORCE_RESTART
 disable_blur ui_effects_level night_modem_idle net_screen_off_lte net_lte_light
 net_congestion_mobile net_qdisc net_rps net_txqueue net_route_tune wifi_country
 wifi_scan_throttle net_wifi_leave wifi_powersave doze_level doze_trim_whitelist
@@ -10818,6 +10818,7 @@ from pathlib import Path
 r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text(encoding='utf-8')
 assert h.count('function deviceInfoSnapshot(')==1
 assert 'function deviceInfoSnapshot(d) {' in h and 'function deviceInfoReusableSnapshot() {' in h
+assert 'dev-stale' not in h, 'global snapshot dimming returned'
 assert 'const ov = deviceInfoOverview(d), snapshot = deviceInfoSnapshot(d);' in h
 for token in ('if (!deviceInfoPresentSnapshot()) asbDeviceInfoLoad();',
               'if (!logReportCachedPaint(logReportCacheGet(), false)) asbLogReportLoad();',
@@ -10864,7 +10865,7 @@ for(const id of ['devicePage','deviceBody','deviceStatus','devSave','devRefresh'
  global._deviceOpen=false;openDevicePage();chk(deviceLoads===0&&deviceRenders===2,'reopening Device repeated the collector');
  window._asbDeviceInfoData=null;window._asbDeviceInfoRaw='';persistent={t:2000,raw:'D\tsoc\tsoc_model\tSM8850'};global._deviceOpen=false;
  openDevicePage();chk(deviceLoads===0&&deviceRenders===3,'bounded persistent Device snapshot was not reused');
- chk(nodes.deviceBody.classList.contains('dev-stale'),'persistent snapshot was not marked as a snapshot');
+ chk(!nodes.deviceBody.classList.contains('dev-stale'),'persistent snapshot was dimmed instead of staying readable');
  window._asbDeviceInfoData=null;window._asbDeviceInfoRaw='';persistent=null;global._deviceOpen=false;
  openDevicePage();chk(deviceLoads===1,'Device without any snapshot did not run its one collector fallback');
 
@@ -12868,13 +12869,14 @@ assert 'now - _junkArmed > 5000' in b and "state === 'lock_error'" in b
 assert "junkButtons(false); return true;" in b
 for css in ('.junk-total', '.junk-cats', '.junk-cat.is-warn', '.junk-card .bfx-btn'):
     assert css in h, css
-keys=set('cfg_inf_section_cleanup cfg_inf_section_cleanup_hint junk_title junk_desc junk_scan junk_run junk_refresh junk_confirm junk_running junk_partial_toast junk_cat_dropbox junk_cat_tombstones junk_cat_anr junk_cat_environment junk_cat_installer junk_cat_logs junk_cat_backup junk_cat_local junk_cat_trash junk_cat_screenshots junk_cat_coloros junk_unavailable junk_result_meta junk_remaining junk_meta junk_unavailable_short junk_failed junk_found junk_empty junk_ready junk_check junk_clean junk_skipped junk_busy_chip junk_busy junk_done junk_partial junk_partial_chip junk_cleaned'.split())
+keys=set('cfg_inf_section_cleanup cfg_inf_section_cleanup_hint junk_title junk_desc junk_scan junk_run junk_refresh junk_confirm junk_running junk_partial_toast junk_cat_dropbox junk_cat_tombstones junk_cat_anr junk_cat_environment junk_cat_installer junk_cat_logs junk_cat_backup junk_cat_trash junk_cat_screenshots junk_cat_coloros junk_unavailable junk_result_meta junk_remaining junk_meta junk_unavailable_short junk_failed junk_found junk_empty junk_ready junk_check junk_clean junk_skipped junk_busy_chip junk_busy junk_done junk_partial junk_partial_chip junk_cleaned'.split())
 locales=sorted((root/'webroot/i18n').glob('*.json'))
 assert len(locales)==13
 base=json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8'))
 for p in locales:
     d=json.loads(p.read_text(encoding='utf-8'))
     assert not keys-set(d), (p.name, keys-set(d))
+    assert 'junk_cat_local' not in d, (p.name, 'removed ASB report category')
     for k in keys:
         assert set(re.findall(r'\{[^}]+\}',base[k])) == set(re.findall(r'\{[^}]+\}',d[k])), (p.name,k)
 assert json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))['junk_title']=='Чистка от шлаков'
@@ -12904,7 +12906,7 @@ function mk(tag){
 function bfxEl(tag,cls,text){const e=mk(tag);e.className=cls||'';if(text!=null)e.textContent=text;return e;}
 function kernelMoreBlock(card,id,nodes){const btn=mk('button');btn.className='kernel-more';card.appendChild(btn);const body=mk('div');body.className='kernel-more-body';body.hidden=true;nodes.forEach(n=>{if(n)body.appendChild(n);});card.appendChild(body);return body;}
 function _el(id){return reg[id]||null;}
-const cats=['dropbox','tombstones','anr','environment','installer','logs','backup','local','trash','screenshots','coloros'];
+const cats=['dropbox','tombstones','anr','environment','installer','logs','backup','trash','screenshots','coloros'];
 function status(count){
   const rows=cats.map(function(id){
     if(id==='dropbox'&&count)return 'junk_category|dropbox|count=2|bytes=1024|state=ready';
@@ -12925,7 +12927,7 @@ async function flush(){await Promise.resolve();await Promise.resolve();await Pro
 async function confirmRun(){await junkCleanupRun();now+=4000;await junkCleanupRun();}
 (async function(){
   const list=mk('div');cfgRenderJunkCleanupCard(list);await flush();
-  chk(reg.junkCard&&reg.junkCats.children.length===11,'card or eleven categories not rendered');
+  chk(reg.junkCard&&reg.junkCats.children.length===10,'card or ten categories not rendered');
   chk(cmds[0]==="sh '/m/runtime/asb_junk_cleanup.sh' status",'unexpected scan command: '+cmds[0]);
   chk(reg.junkTotal.textContent==='Found: 3 · 3 KB'&&!reg.junkRun.disabled,'ready scan not painted');
   chk(reg.junkNote.textContent==='Unreadable categories are skipped: 1','unreadable category not explained');
@@ -12971,7 +12973,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui junk cleanup: all 13 locales and 39 keys, fixed status/run commands, eleven safe textContent rows, five-second double confirmation, cleaned/partial/busy/lock/unreadable/empty states, no polling or arbitrary path"
+echo "PASS webui junk cleanup: all 13 locales and 38 keys, fixed status/run commands, ten safe textContent rows, no ASB report category, five-second double confirmation, cleaned/partial/busy/lock/unreadable/empty states, no polling or arbitrary path"
 )
 
 t_webui_category_color_consistency() (
@@ -15063,6 +15065,10 @@ if(own('heavy_prime_escape','1')!=='dynamic'||own('heavy_prime_escape','0')!==nu
 _cfgVals.heavy_prime_escape='1';if(own('prime_escape_burst_s','20')!=='limit'||own('prime_escape_rest_s','40')!=='limit')throw Error('prime guard ownership');
 _cfgVals.heavy_prime_escape='0';if(own('prime_escape_burst_s','20')!==null||own('prime_escape_rest_s','40')!==null)throw Error('disabled prime guards owned');
 if(own('io_scheduler','auto')!=='profile'||own('kernel_bore','auto')!=='profile')throw Error('Smart profile ownership missing');
+for(const k of ['kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_rt_boost']){
+ if(own(k,'auto')!=='dynamic')throw Error('Smart dynamic kernel ownership missing '+k);
+ for(const v of ['stock','off','on','0','2','512'])if(own(k,v)!==null)throw Error('manual kernel value incorrectly Smart-owned '+k+'='+v);
+}
 if(own('io_scheduler','mq-deadline')!==null||own('auto_battery_enable','1')!=='dynamic'||own('auto_battery_enable','0')!==null)throw Error('manual/Auto Battery ownership');
 if(own('sustained_temp_mode','smart')!=='thermal'||own('doze_level','night')!==null)throw Error('battery ownership is too broad');
 _selectedProfile='balanced';if(own('mglru_mode','smart')!==null||own('wifi_powersave','always')!==null)throw Error('non-Smart profile marked Smart-owned');

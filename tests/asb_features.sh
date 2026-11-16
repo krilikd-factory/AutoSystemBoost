@@ -11148,7 +11148,7 @@ echo "PASS zygisk aot exclude: owner exclusion reaches native policy and is neve
 
 t_junk_cleanup_runtime() (
 # dev32: the Infirmary cleanup is a fixed, manual owner. It previews metadata and deletes only
-# bounded residue classes; exact /data/local/tmp names and the 24-hour journal barrier matter.
+# bounded residue classes; ASB temporary reports are never cleanup targets.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 A="$ROOT/runtime/asb_junk_cleanup.sh"
@@ -11194,24 +11194,29 @@ printf xxxx > "$R/storage/emulated/0/ColorOS/system crash@2026.txt.gz"
 printf keep > "$R/storage/emulated/0/ColorOS/ThemeStore/settings"
 run() { ASB_JUNK_ROOT="$R" ASB_JUNK_STATE_DIR="$S" sh "$A" "$@"; }
 out="$(run status)"
-grep -Fqx 'junk_cleanup|status|total_count=19|total_bytes=37|failed_categories=0' <<<"$out" || fail "scan total: $out"
-[ "$(grep -c '^junk_category|' <<<"$out")" = 11 ] || fail "not all eleven categories were returned"
+grep -Fqx 'junk_cleanup|status|total_count=12|total_bytes=30|failed_categories=0' <<<"$out" || fail "scan total: $out"
+[ "$(grep -c '^junk_category|' <<<"$out")" = 10 ] || fail "not all ten categories were returned"
 grep -Fq 'junk_category|backup|count=1|bytes=4|state=ready' <<<"$out" || fail "recent journal was not excluded"
-grep -Fq 'junk_category|local|count=7|bytes=7|state=ready' <<<"$out" || fail "exact local allowlist: $out"
+! grep -Fq 'junk_category|local|' <<<"$out" || fail "ASB temporary reports reappeared in scan: $out"
+grep -Fq 'junk_category|installer|count=1|bytes=1|state=ready' <<<"$out" || fail "package_cache missing: $out"
+grep -Fq 'junk_category|dropbox|count=1|bytes=1|state=ready' <<<"$out" || fail "DropBox missing: $out"
+grep -Fq 'junk_category|tombstones|count=1|bytes=2|state=ready' <<<"$out" || fail "tombstones missing: $out"
 [ -d "$S" ] && fail "a read-only scan created state or a lock"
 out="$(run run)"
-grep -Fqx 'junk_cleanup|result|state=cleaned|removed_count=19|freed_bytes=37|failed_categories=0' <<<"$out" || fail "cleanup result: $out"
-[ "$(grep -c '^junk_category|.*|state=cleaned$' <<<"$out")" = 11 ] || fail "a category did not report cleaned: $out"
+grep -Fqx 'junk_cleanup|result|state=cleaned|removed_count=12|freed_bytes=30|failed_categories=0' <<<"$out" || fail "cleanup result: $out"
+[ "$(grep -c '^junk_category|.*|state=cleaned$' <<<"$out")" = 10 ] || fail "a category did not report cleaned: $out"
 for f in \
   data/tombstones/other data/backup/pending/journal2.tmp data/backup/pending/journal3.tmp data/local/tmp/oost_test.flag \
   data/local/tmp/unknown.bin data/local/tmp/google_shelf_controller/settings.conf \
+  data/local/tmp/asb_diag_report.txt data/local/tmp/asb_full_day.out data/local/tmp/uninstall.log \
+  data/local/tmp/soterfix.log data/local/tmp/webui_info.txt data/local/tmp/google_shelf_ui.html \
+  data/local/tmp/google_shelf_controller/controller.log \
   storage/emulated/0/Pictures/Screenshots/normal.jpg storage/emulated/0/ColorOS/ThemeStore/settings; do
   [ -f "$R/$f" ] || fail "protected file removed: $f"
 done
 for f in data/system/dropbox/sub/event.txt data/tombstones/tombstone_00 data/anr/traces.txt \
   cache/environment/sub/env.bin data/system/package_cache/package.bin cache/magisk.log \
-  data/backup/pending/journal1.tmp data/local/tmp/asb_diag_report.txt \
-  data/local/tmp/google_shelf_controller/controller.log storage/emulated/0/.trash-storage/sub/item \
+  data/backup/pending/journal1.tmp storage/emulated/0/.trash-storage/sub/item \
   storage/emulated/0/Pictures/Screenshots/.trashed-one 'storage/emulated/0/ColorOS/ui crash@2026.txt' \
   'storage/emulated/0/ColorOS/system crash@2026.txt.gz'; do
   [ ! -e "$R/$f" ] || fail "target survived: $f"
@@ -11248,7 +11253,7 @@ grep -Fq 'junk_category|logs|removed=0|freed=0|remaining=1|state=partial' <<<"$o
 [ -f "$R/cache/magisk.log" ] && [ ! -e "$R/data/system/dropbox/new-event" ] || fail "partial fixture result wrong"
 run run >/dev/null
 
-# Neither a symlinked category root nor an exact-name symlink may widen deletion to its target.
+# A symlinked category root may not widen deletion to its target.
 printf outside > "$T/outside"
 mkdir -p "$T/external"
 printf outside > "$T/external/event"
@@ -11257,14 +11262,13 @@ ln -s "$T/external" "$R/data/system/dropbox-link"
 rmdir "$R/data/system/dropbox/sub" 2>/dev/null || true
 rmdir "$R/data/system/dropbox" 2>/dev/null || true
 ln -s "$T/external" "$R/data/system/dropbox"
-ln -s "$T/outside" "$R/data/local/tmp/asb_diag_report.txt"
 out="$(run status)"
 grep -Fq 'junk_category|dropbox|count=0|bytes=0|state=not_readable' <<<"$out" || fail "symlink root not rejected: $out"
-grep -Fq 'junk_category|local|count=0|bytes=0|state=not_readable' <<<"$out" || fail "symlink exact file not rejected: $out"
 out="$(run run)"
 grep -Fq 'junk_cleanup|result|state=partial|' <<<"$out" || fail "symlink run not partial: $out"
 [ "$(cat "$T/outside")" = outside ] && [ "$(cat "$T/external/event")" = outside ] || fail "symlink target was deleted"
-[ -L "$R/data/system/dropbox" ] && [ -L "$R/data/local/tmp/asb_diag_report.txt" ] || fail "symlink itself was removed"
+[ -L "$R/data/system/dropbox" ] || fail "symlink itself was removed"
+[ "$(cat "$R/data/local/tmp/asb_diag_report.txt")" = z ] || fail "ASB report removed during symlink run"
 
 set +e
 out="$(run 'status; rm -rf /' 2>&1)"; rc=$?
@@ -11273,16 +11277,21 @@ set -e
 for f in service.sh post-fs-data.sh action.sh; do
   grep -Fq 'asb_junk_cleanup' "$ROOT/$f" && fail "persistent/boot integration appeared in $f"
 done
-python3 - "$A" <<'PY2' || fail "fixed find boundary missing"
+python3 - "$A" "$ROOT/webroot/index.html" <<'PY2' || fail "fixed find boundary missing"
 import sys
 s=open(sys.argv[1], encoding='utf-8').read()
 assert 'set -- $' in s  # fixed numeric protocol only; no predicate is evaluated as shell text
 assert 'eval ' not in s and 'cat ' not in s and 'grep ' not in s
 for token in ('all)', 'tombstones)', 'backup)', 'screenshots)', 'coloros)'):
     assert token in s
+for path in ('$R/data/system/package_cache', '$R/data/tombstones', '$R/data/system/dropbox'):
+    assert path in s
+assert '/data/local/tmp' not in s and '_jc_file_group_begin local' not in s
+ui=open(sys.argv[2], encoding='utf-8').read()
+assert "'backup','local','trash'" not in ui and "'backup','trash'" in ui
 assert s.count('-xdev') >= 11 and "-mmin +1440" in s and "-mtime" not in s
 PY2
-echo "PASS junk cleanup runtime: eleven bounded categories, 19-file scan/delete with exact byte accounting, 24-hour journal barrier, protected files, idempotence, busy/lock/partial states, symlink and unknown-command safety, no worker"
+echo "PASS junk cleanup runtime: ten bounded categories, 12-file scan/delete with exact byte accounting, 24-hour journal barrier, protected files, idempotence, busy/lock/partial states, symlink and unknown-command safety, no worker"
 )
 
 t_soter_fix_runtime() (
@@ -11996,6 +12005,85 @@ done
 echo 'PASS camera tools: webcam readiness (service app, kernel UVC probe, gadget function, switch), descriptor tree, start/stop with restore, HAL refusal, off hands back the ROM state, speed compile/reset worker, boot re-check, cold-launch measurement history, busy/interrupted states'
 )
 
+t_camera_preview_tnr_buildfix11() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_camera_tools.sh"
+fail() { echo "FAIL camera preview TNR: $*" >&2; exit 1; }
+sh -n "$S" || fail 'syntax'
+[ -x "$S" ] || fail 'not executable'
+! grep -q '^[[:space:]]*#' <(tail -n +2 "$S") || fail 'comment lines in module shell code'
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/bin" "$T/props" "$T/mod/config"
+cat > "$T/bin/getprop" <<'SH'
+#!/bin/sh
+cat "$PROPS/$1" 2>/dev/null
+SH
+cat > "$T/bin/resetprop" <<'SH'
+#!/bin/sh
+printf '%s\n' "$*" >> "$Q/calls"
+case "$1" in
+  -n)
+    [ ! -f "$Q/refuse" ] || [ "$2" != persist.vendor.camera.tnr.preview ] || exit 0
+    printf '%s' "$3" > "$PROPS/$2" ;;
+  --delete) rm -f "$PROPS/$2" ;;
+  *) exit 1 ;;
+esac
+SH
+chmod 0755 "$T/bin/"*
+printf '1' > "$T/props/persist.camera.tnr.preview"
+printf 'CAMERA_PREVIEW_TNR=stock\n' > "$T/mod/config/governor.conf"
+export PATH="$T/bin:$PATH" PROPS="$T/props" Q="$T" MODDIR="$T/mod" ASB_CAMTOOLS_STATE="$T/state"
+out="$(sh "$S" preview status)"
+[ "$out" = 'camtools|preview|mode=stock|state=ready|owned=0|camera=1|vendor=unset' ] || fail "initial status: $out"
+[ ! -e "$T/state" ] || fail 'status wrote state'
+printf 'CAMERA_PREVIEW_TNR=off\n' > "$T/mod/config/governor.conf"
+out="$(sh "$S" preview apply)"
+[ "$out" = 'camtools|preview|mode=off|state=applied|camera=0|vendor=0' ] || fail "off: $out"
+[ "$(cat "$T/state/preview.persist_camera_tnr_preview.base")" = 1 ] || fail 'existing baseline not exact'
+[ "$(cat "$T/state/preview.persist_vendor_camera_tnr_preview.base")" = __ASB_UNSET__ ] || fail 'unset baseline not exact'
+printf 'CAMERA_PREVIEW_TNR=on\n' > "$T/mod/config/governor.conf"
+out="$(sh "$S" preview apply)"
+[ "$out" = 'camtools|preview|mode=on|state=applied|camera=1|vendor=1' ] || fail "on: $out"
+[ "$(cat "$T/state/preview.persist_camera_tnr_preview.base")" = 1 ] || fail 'baseline was recaptured'
+printf 'CAMERA_PREVIEW_TNR=stock\n' > "$T/mod/config/governor.conf"
+out="$(sh "$S" preview apply)"
+[ "$out" = 'camtools|preview|mode=stock|state=restored|camera=1|vendor=unset' ] || fail "stock restore: $out"
+[ ! -e "$T/state/preview.persist_camera_tnr_preview.base" ] && [ ! -e "$T/state/preview.persist_vendor_camera_tnr_preview.base" ] || fail 'baseline survived successful restore'
+out="$(sh "$S" preview apply)"
+[ "$out" = 'camtools|preview|mode=stock|state=stock_unowned|camera=1|vendor=unset' ] || fail "unowned stock: $out"
+printf 'CAMERA_PREVIEW_TNR=off\n' > "$T/mod/config/governor.conf"
+sh "$S" preview apply >/dev/null
+out="$(sh "$S" preview restore)"
+[ "$out" = 'camtools|preview|mode=stock|state=restored|camera=1|vendor=unset' ] || fail "explicit restore: $out"
+printf 'CAMERA_PREVIEW_TNR=off\n' > "$T/mod/config/governor.conf"
+: > "$T/refuse"
+out="$(sh "$S" preview apply)"
+[ "$out" = 'camtools|preview|mode=off|state=write_failed|camera=0|vendor=unset' ] || fail "readback failure: $out"
+[ -f "$T/state/preview.persist_camera_tnr_preview.base" ] && [ -f "$T/state/preview.persist_vendor_camera_tnr_preview.base" ] || fail 'failed write discarded baselines'
+rm -f "$T/refuse"
+out="$(sh "$S" preview restore)"
+[ "$out" = 'camtools|preview|mode=stock|state=restored|camera=1|vendor=unset' ] || fail "failure recovery: $out"
+printf 'CAMERA_PREVIEW_TNR=invalid\n' > "$T/mod/config/governor.conf"
+out="$(sh "$S" preview apply)"
+[ "$out" = 'camtools|preview|mode=invalid|state=config_invalid' ] || fail "invalid vocabulary: $out"
+set +e; sh "$S" preview 'apply;id' >/dev/null 2>&1; rc=$?; set -e
+[ "$rc" = 2 ] || fail 'unknown preview command accepted'
+for v in stock off on; do
+  sed "s/^CAMERA_PREVIEW_TNR=.*/CAMERA_PREVIEW_TNR=$v/" "$ROOT/config/governor.conf" > "$T/governor.conf"
+  MODDIR="$T/mod" ASB_CONFIG_STATE="$T/cfgstate" sh "$ROOT/runtime/asb_config_safe.sh" validate "$T/governor.conf" >/dev/null || fail "safe writer refused $v"
+done
+sed 's/^CAMERA_PREVIEW_TNR=.*/CAMERA_PREVIEW_TNR=invalid/' "$ROOT/config/governor.conf" > "$T/governor.conf"
+set +e; MODDIR="$T/mod" ASB_CONFIG_STATE="$T/cfgstate" sh "$ROOT/runtime/asb_config_safe.sh" validate "$T/governor.conf" >/dev/null 2>&1; rc=$?; set -e
+[ "$rc" -ne 0 ] || fail 'safe writer accepted invalid value'
+! grep -R 'persist\.\(vendor\.\)\{0,1\}camera\.tnr\.preview' "$ROOT/runtime/asb_managed.props" "$ROOT/service.sh" >/dev/null || fail 'competing preview writer remains'
+grep -Fq 'asb_camera_tools.sh" preview apply' "$ROOT/service.sh" || fail 'boot owner missing'
+grep -Fq 'asb_camera_tools.sh" preview restore' "$ROOT/uninstall.sh" || fail 'uninstall restore missing'
+grep -Fq "key === 'CAMERA_PREVIEW_TNR'" "$ROOT/webroot/index.html" || fail 'live WebUI owner missing'
+grep -Fq 'CAMERA_PREVIEW_TNR' "$ROOT/common/install.sh" || fail 'settings carry-over missing'
+echo 'PASS camera preview TNR buildfix11: closed Stock/Off/On schema, two existing preview properties, exact baselines including unset, live readback, failure retention, Stock/uninstall restore, no competing writer'
+)
+
 t_kernel_profile_follow_dev57() (
 # dev57: kernel controls follow the power profile. Auto values: Timer migration 0 only in
 # Performance; scheduler migration batch Battery 2 / Balanced and Smart 4 / Performance 8;
@@ -12110,6 +12198,113 @@ grep -q 'echo 4 > ' "$T/fn.sh" || fail 'schema not bumped to 4'
 echo 'PASS kernel profile follow: Auto values per profile, exact release elsewhere and under Stock, one-process follow on profile switches, Smart MGLRU left to the governor, RT baseline deferred until post-boot, bounded RT values, safe writer, defaults, lists and schema-4 migration'
 )
 
+
+t_smart_kernel_scenarios_buildfix11() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL Smart kernel scenarios: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state"
+printf '1\n' > "$T/timer"; printf '1\n' > "$T/hrtimer"; printf '32\n' > "$T/nr"
+printf '1\n' > "$T/stats"; printf '0\n' > "$T/lpm"; printf '0\n' > "$T/rt"
+cat > "$T/mod/config/governor.conf" <<'EOF'
+kernel_timer_migration=auto
+kernel_sched_nr_migrate=auto
+kernel_sched_stats=auto
+kernel_hrtimer_migration=auto
+kernel_lpm_prediction=auto
+kernel_rt_boost=auto
+mglru_mode=stock
+EOF
+run() {
+  MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_KC_KERNEL_ID=k66 ASB_KC_RT_READY=1 \
+    ASB_SAFE_MODE_FILE="$T/safe_mode" ASB_RECOVERY_DISABLED_FILE="$T/recovery_disabled" \
+    ASB_TIMER_MIGRATION_NODE="$T/timer" ASB_HRTIMER_MIGRATION_NODE="$T/hrtimer" \
+    ASB_SCHED_NR_MIGRATE_NODE="$T/nr" ASB_SCHED_STATS_NODE="$T/stats" \
+    ASB_LPM_PREDICTION_NODE="$T/lpm" ASB_RT_BOOST_NODE="$T/rt" sh "$K" "$@"
+}
+nodes() { for n in timer nr stats hrtimer lpm rt; do printf '%s ' "$(cat "$T/$n")"; done; }
+want() { [ "$(nodes)" = "$1 " ] || fail "$2: $(nodes)"; }
+out="$(run smart 2 0 1)"
+printf '%s\n' "$out" | grep -qx 'smart_kernel|scenario=light|state=applied' || fail "light: $out"
+want '1 4 0 1 1 128' light
+for k in kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost; do
+  [ -f "$T/state/$k.prev" ] || fail "$k baseline missing"
+done
+out="$(run smart 4 0 1)"
+printf '%s\n' "$out" | grep -qx 'smart_kernel|scenario=heavy|state=applied' || fail "heavy: $out"
+want '0 8 0 0 0 256' heavy
+[ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] && [ "$(cat "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'scenario transition replaced a baseline'
+run smart 4 1 1 >/dev/null; want '1 4 0 1 1 128' warm-heavy
+run smart 4 2 1 >/dev/null; want '1 2 0 1 1 0' hot
+run smart 4 0 0 >/dev/null; want '1 2 0 1 1 0' screen-off
+run smart 0 0 1 >/dev/null; want '1 2 0 1 1 0' idle
+before="$(nodes)"; : > "$T/safe_mode"
+out="$(run smart 4 0 1)"
+[ "$out" = 'smart_kernel|state=safe_mode' ] && [ "$(nodes)" = "$before" ] || fail "Safe mode wrote: $out $(nodes)"
+rm -f "$T/safe_mode"; : > "$T/recovery_disabled"
+out="$(run smart 4 0 1)"
+[ "$out" = 'smart_kernel|state=safe_mode' ] && [ "$(nodes)" = "$before" ] || fail "recovery-disabled wrote: $out $(nodes)"
+rm -f "$T/recovery_disabled"
+for args in '9 0 1' '2 9 1' '2 0 9'; do
+  set +e; out="$(run smart $args)"; rc=$?; set -e
+  [ "$rc" = 2 ] && [ "$out" = 'smart_kernel|state=invalid' ] && [ "$(nodes)" = "$before" ] || fail "invalid input accepted: $args $out"
+done
+run smart 2 0 1 >/dev/null
+printf '32\n' > "$T/nr"; printf '0\n' > "$T/lpm"
+run apply kernel_sched_nr_migrate '' smart >/dev/null; run apply kernel_lpm_prediction '' smart >/dev/null
+want '1 4 0 1 1 128' reinforcement-with-plan
+cat > "$T/mod/config/governor.conf" <<'EOF'
+kernel_timer_migration=off
+kernel_sched_nr_migrate=16
+kernel_sched_stats=off
+kernel_hrtimer_migration=on
+kernel_lpm_prediction=off
+kernel_rt_boost=512
+mglru_mode=stock
+EOF
+for k in kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost; do
+  run apply "$k" '' smart >/dev/null
+done
+want '0 16 0 1 0 512' manual-applied
+run smart 4 0 1 >/dev/null; want '0 16 0 1 0 512' manual-values
+cat > "$T/mod/config/governor.conf" <<'EOF'
+kernel_timer_migration=auto
+kernel_sched_nr_migrate=auto
+kernel_sched_stats=auto
+kernel_hrtimer_migration=auto
+kernel_lpm_prediction=auto
+kernel_rt_boost=auto
+mglru_mode=stock
+EOF
+out="$(run follow balanced)" || fail "Balanced follow failed: $out"
+want '1 4 1 1 0 0' leaving-smart
+[ ! -e "$T/state/smart.plan" ] || fail 'non-Smart retained a dynamic plan'
+out="$(run smart 2 0 1)"; want '1 4 0 1 1 128' smart-return
+rm -f "$T/nr"
+set +e; out="$(run smart 4 0 1)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|not_exposed|auto|' && printf '%s\n' "$out" | grep -qx 'smart_kernel|scenario=heavy|state=degraded' || fail "missing node overclaimed: $out"
+printf '32\n' > "$T/nr"; run smart 2 0 1 >/dev/null
+out="$(run restore || true)"
+want '1 32 1 1 0 0' exact-restore
+[ ! -e "$T/state/smart.plan" ] || fail 'restore retained dynamic plan'
+for k in kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost; do
+  [ ! -e "$T/state/$k.prev" ] || fail "$k baseline retained after restore"
+done
+mkdir -p "$T/cmod/config" "$T/cmod/runtime"
+cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
+cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
+for v in stock auto off; do
+  MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_sched_stats "$v" >/dev/null || fail "safe stats $v"
+done
+set +e; MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_sched_stats on >/dev/null 2>&1; rc=$?; set -e
+[ "$rc" -ne 0 ] || fail 'safe writer accepted stats=on'
+for f in governor.conf governor.conf.shipped; do grep -qx 'kernel_sched_stats=auto' "$ROOT/config/$f" || fail "$f stats default"; done
+grep -Fq 'asb_kernel_controls.sh" smart "$HINT" "$THERM" "$SCREEN"' "$ROOT/runtime/smart_dynamic_tune.sh" || fail 'Smart tuner does not call the registered owner'
+! grep -E 'writef .*kernel/(timer_migration|sched_nr_migrate|sched_schedstats|hrtimer_migration)|writef .*sched_util_clamp_min_rt_default' "$ROOT/runtime/smart_dynamic_tune.sh" >/dev/null || fail 'Smart tuner bypassed the owner'
+echo 'PASS Smart kernel scenarios buildfix11: light/heavy/idle/hot/screen-off policy, warm derating, Safe/recovery holds, closed inputs, manual exclusions, plan reinforcement, profile handoff, exact restore and honest missing-node result'
+)
 
 t_bore_controls_dev63() (
 # dev63: BORE is an opt-in, fixed-node control. Build evidence alone never authorizes a write.
