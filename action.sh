@@ -900,6 +900,8 @@ T_A_BTVOL="BT volume: phone drives gain (independent scales)"
 T_A_DSP_OUTOFF="DSP: off (DSP Outputs = off) - its sliders are kept"
 T_A_LIMIT_OFF="headphone volume limit: off (Android confirms)"
 T_A_LIMIT_ON="headphone volume limit: still on in Android - reboot once to remove it"
+T_A_LIMIT_PROP="Volume alert property: audio.safemedia.bypass=true - Android state not readable"
+T_A_LIMIT_WAIT="Volume alert: bypass property is not live yet - reboot once"
 T_A_RS_OK="resampler: %s (active)"
 T_A_RS_WAIT="resampler: %s - takes effect after the next reboot"
 T_A_VS_OK="media volume: %s steps (Android confirms)"
@@ -1073,6 +1075,9 @@ T_Y_OVL_LIVE="overlay: live (private namespace)"
 T_Y_OVL_PART="overlay: partial -%s not visible to the system"
 T_Y_OVL_NONE="overlay: not detected"
 T_Y_KERNEL="kernel %s"
+T_Y_IO="I/O scheduler: mode %s · live %s · stock baseline %s"
+T_Y_IO_ADIOS="ADIOS: exposed by the kernel; ASB Auto may select it (no battery/throughput gain assumed)"
+T_Y_IO_NOADIOS="ADIOS: not exposed by this kernel; the usual discovered scheduler policy is unchanged"
 T_Y_UP="up %sh %sm"
 T_Y_ATHENA="Athena killer off"
 T_Y_LOG_STOCK="device logging untouched"
@@ -1905,9 +1910,12 @@ esac
 [ -n "$_abx" ] && _f "       $T_A_BT" "$_abx"
 [ "$_a_dsp_outoff" = "1" ] && _f "       $T_A_DSP_OUTOFF"
 if [ "$(_cfg audio_remove_volume_limit)" = "1" ]; then
-  case "$(dumpsys audio 2>/dev/null | sed -n 's/^[[:space:]]*mSafeMediaVolumeState=//p' | head -1)" in
+  _a_safe_prop="$(getprop audio.safemedia.bypass 2>/dev/null)"
+  _a_safe_state="$(dumpsys audio 2>/dev/null | sed -n 's/^[[:space:]]*mSafeMediaVolumeState=//p' | head -1)"
+  case "$_a_safe_state" in
     SAFE_MEDIA_VOLUME_ACTIVE) _f "       $T_A_LIMIT_ON" ;;
     SAFE_MEDIA_VOLUME_DISABLED|SAFE_MEDIA_VOLUME_INACTIVE) _f "       $T_A_LIMIT_OFF" ;;
+    *) if [ "$_a_safe_prop" = true ]; then _f "       $T_A_LIMIT_PROP"; else _f "       $T_A_LIMIT_WAIT"; fi ;;
   esac
 fi
 _a_rs="$(_cfg audio_resampler)"
@@ -2650,6 +2658,22 @@ esac
 [ "$(_cfg kernel_sched_stats)" = off ] && _yx="$(_join "$_yx" "$T_Y_SCHEDSTATS")"
 [ "$(_cfg ltpo_force)" = 1 ] && _yx="$(_join "$_yx" "$T_Y_LTPO")"
 [ -n "$_yx" ] && _f "       $T_ALSO" "$_yx"
+
+# Live I/O ownership, including optional ADIOS. The helper only reads existing queue
+# nodes here; it neither applies a scheduler nor starts a worker.
+if [ -r "$MODDIR/runtime/asb_io_scheduler.sh" ]; then
+  _io_report="$(MODDIR="$MODDIR" ASB_CONF="$MODDIR/config/governor.conf" sh "$MODDIR/runtime/asb_io_scheduler.sh" status 2>/dev/null)"
+  _io_line="$(printf '%s\n' "$_io_report" | sed -n 's/^io_scheduler|//p' | head -1)"
+  _io_opts="$(printf '%s\n' "$_io_report" | sed -n 's/^io_scheduler_options|//p' | head -1)"
+  if [ -n "$_io_line" ]; then
+    _io_oldifs="$IFS"; IFS='|'; set -- $_io_line; IFS="$_io_oldifs"
+    _f "       $T_Y_IO" "${2:-unknown}" "${3:-unknown}" "${4:-none}"
+    case " $_io_opts " in
+      *' adios '*) _f "       $T_Y_IO_ADIOS" ;;
+      *) _f "       $T_Y_IO_NOADIOS" ;;
+    esac
+  fi
+fi
 
 # Haptics. The numbers that matter are the OEM stepless values actually in force, not
 # the level we asked for - a rejected write would leave the two disagreeing.
