@@ -23,9 +23,10 @@ LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 LK_RESUME=0
 case "${ASB_LK_RESUME_DIR:-}" in
   */asb_log_full_day_*)
-    if [ "$LK_MAX_SEC" -eq 0 ] && [ -d "$ASB_LK_RESUME_DIR" ] && [ -f "$ASB_LK_RESUME_DIR/phase_ledger.tsv" ]; then
+    if [ "$LK_MAX_SEC" -eq 0 ] && [ -d "$ASB_LK_RESUME_DIR" ] &&        { [ -f "$ASB_LK_RESUME_DIR/phase_ledger.tsv" ] || [ "${ASB_LK_EPOCH_ROTATED:-0}" = 1 ]; }; then
       LK_OUT_DIR="$ASB_LK_RESUME_DIR"
       LK_RESUME=1
+      [ "${ASB_LK_EPOCH_ROTATED:-0}" = 1 ] && LK_RESUME=0
     fi ;;
 esac
 LK_RESUME_FILE="${ASB_DEBUG_SUPPORT_RESUMEFILE:-}"
@@ -1613,6 +1614,11 @@ lk_emit_full_day_report() {
     else
       echo " capture: 0h target (until stopped), $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
     fi
+    echo " capture epoch: ${LK_EPOCH_ID:-1}; this report contains only this ASB/kernel identity"
+    if [ -s "$LK_OUT_DIR/epoch_history.tsv" ]; then
+      _le_done="$(awk -F'\t' '$1 ~ /^[0-9]+$/ { n++ } END { print n+0 }' "$LK_OUT_DIR/epoch_history.tsv")"
+      echo " completed epochs: $_le_done; separate reports: epochs/epoch-*/_full_day_report.txt"
+    fi
     if [ -s "$LK_OUT_DIR/reboots.txt" ]; then
       awk -F'|' '!/^#/ && $1 ~ /^[0-9]+$/ {
           if ($6 ~ /^same_boot:/) { r++; if ($3 ~ /^[0-9]+$/) rd += $3; if ($6 == "same_boot:framework_restart") fr++; next }
@@ -2082,6 +2088,109 @@ lk_emit_charging_idle_anomaly() {
   fi
 }
 
+# Multi-day captures are comparable only inside one software identity. Charging already has
+# its own phases and off-charger drain windows; reboot/restart gaps already live outside every
+# phase and start fresh process-local gfxstats baselines. A module or kernel replacement is a
+# harder boundary: close and archive the old epoch, then re-run normal init in the same capture
+# directory. The root report always describes the current epoch only; epoch_history.tsv points
+# to completed reports under epochs/ and no cross-build smoothness/drain total is synthesized.
+lk_epoch_identity() {
+  _ei_mod="${LK_MODDIR:-${MODDIR:-$(lk_resolve_moddir 2>/dev/null)}}"
+  _ei_kfile="${ASB_LK_KERNEL_VERSION_FILE:-/proc/version}"
+  {
+    printf 'kernel_release=%s\n' "${ASB_LK_KERNEL_RELEASE:-$(uname -r 2>/dev/null)}"
+    [ -r "$_ei_kfile" ] && { printf 'kernel_version='; tr '\n' ' ' < "$_ei_kfile"; printf '\n'; }
+    for _ei_rel in module.prop runtime/build_manifest.json build_manifest.json release-manifest.json                    bin/asb bin/arm64-v8a/asb service.sh; do
+      [ -f "$_ei_mod/$_ei_rel" ] || continue
+      printf 'file=%s\n' "$_ei_rel"
+      sha256sum "$_ei_mod/$_ei_rel" 2>/dev/null | awk '{print $1}'
+    done
+  } | sha256sum 2>/dev/null | awk '{print $1}'
+}
+
+lk_epoch_close_report() {
+  # A process killed during a restart cannot accumulate its in-memory open phase. Its last complete
+  # live row is still a valid closed segment; fold it exactly once before producing the report.
+  if [ -s "$LK_OUT_DIR/.phase_live.tsv" ]; then
+    cat "$LK_OUT_DIR/.phase_live.tsv" >> "$LK_OUT_DIR/phase_ledger.tsv" 2>/dev/null
+    rm -f "$LK_OUT_DIR/.phase_live.tsv" 2>/dev/null
+  fi
+  rm -f "$LK_OUT_DIR/.phase_live.tsv.tmp" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null
+  lk_emit_phase_summary 2>/dev/null || true
+  lk_emit_full_day_report 2>/dev/null || true
+}
+
+lk_epoch_archive() {
+  _ea_reason="${1:-identity_change}"
+  [ -d "$LK_OUT_DIR" ] || return 1
+  _ea_now="$(date +%s)"
+  _ea_start="$(cat "$LK_OUT_DIR/.capture_start_epoch" 2>/dev/null | tr -dc '0-9')"
+  case "$_ea_start" in ''|*[!0-9]*) _ea_start="$_ea_now" ;; esac
+  _ea_identity="$(cat "$LK_OUT_DIR/.capture_identity" 2>/dev/null | tr -dc '0-9a-fA-F')"
+  _ea_oldid="$(cat "$LK_OUT_DIR/.epoch_id" 2>/dev/null | tr -dc '0-9')"
+  case "$_ea_oldid" in ''|*[!0-9]*) _ea_oldid=1 ;; esac
+  mkdir -p "$LK_OUT_DIR/epochs" || return 1
+  [ -s "$LK_OUT_DIR/epoch_history.tsv" ] || \
+    printf '# epoch\tstart\tend\treason\tidentity\treport\n' > "$LK_OUT_DIR/epoch_history.tsv"
+  _ea_dir="$LK_OUT_DIR/epochs/epoch-$(printf '%03d' "$_ea_oldid")"
+  while [ -e "$_ea_dir" ]; do _ea_oldid=$((_ea_oldid + 1)); _ea_dir="$LK_OUT_DIR/epochs/epoch-$(printf '%03d' "$_ea_oldid")"; done
+  mkdir "$_ea_dir" || return 1
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n'     "$_ea_oldid" "$_ea_start" "$_ea_now" "$_ea_reason" "${_ea_identity:-unknown}"     "epochs/epoch-$(printf '%03d' "$_ea_oldid")/_full_day_report.txt" >> "$LK_OUT_DIR/epoch_history.tsv"
+  # Include dotfiles (.capture_start_epoch, jank/cap baselines), but preserve the epoch store
+  # and its index at the capture root. Nothing from the old counters survives into the new root.
+  for _ea_f in "$LK_OUT_DIR"/* "$LK_OUT_DIR"/.[!.]* "$LK_OUT_DIR"/..?*; do
+    [ -e "$_ea_f" ] || continue
+    _ea_b="${_ea_f##*/}"
+    case "$_ea_b" in epochs|epoch_history.tsv) continue ;; esac
+    mv -f "$_ea_f" "$_ea_dir/" 2>/dev/null || return 1
+  done
+  LK_RESUME=0
+  return 0
+}
+
+lk_epoch_begin() {
+  LK_CAPTURE_IDENTITY="$(lk_epoch_identity)"
+  [ -n "$LK_CAPTURE_IDENTITY" ] || LK_CAPTURE_IDENTITY=unknown
+  _eb_n=1
+  if [ -d "$LK_OUT_DIR/epochs" ]; then
+    _eb_n=$(( $(find "$LK_OUT_DIR/epochs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l) + 1 ))
+  fi
+  LK_EPOCH_ID="$_eb_n"
+  printf '%s\n' "$LK_EPOCH_ID" > "$LK_OUT_DIR/.epoch_id"
+  printf '%s\n' "$LK_CAPTURE_IDENTITY" > "$LK_OUT_DIR/.capture_identity"
+}
+
+lk_epoch_prepare_resume() {
+  [ "$LK_RESUME" = 1 ] || return 0
+  _ep_new="$(lk_epoch_identity)"
+  _ep_old="$(cat "$LK_OUT_DIR/.capture_identity" 2>/dev/null | tr -dc '0-9a-fA-F')"
+  [ -n "$_ep_new" ] || return 0
+  if [ "$_ep_old" != "$_ep_new" ]; then
+    LK_START_EPOCH="$(cat "$LK_OUT_DIR/.capture_start_epoch" 2>/dev/null | tr -dc '0-9')"
+    case "$LK_START_EPOCH" in ''|*[!0-9]*) LK_START_EPOCH="$(date +%s)" ;; esac
+    lk_epoch_close_report
+    lk_epoch_archive identity_change || { echo '[debug-webui] epoch rotation failed'; exit 2; }
+  fi
+  return 0
+}
+
+lk_epoch_runtime_guard() {
+  _erg_new="$(lk_epoch_identity)"
+  [ -n "$_erg_new" ] && [ "$_erg_new" != "${LK_CAPTURE_IDENTITY:-}" ] || return 1
+  lk_stage epoch_rotate
+  lk_phase_ledger_accumulate
+  lk_phase_ledger_flush
+  lk_smart_feedback_clear
+  lk_epoch_close_report
+  lk_epoch_archive identity_change || return 2
+  lk_wl_release
+  lk_bt_reconnect_stop
+  ASB_LK_RESUME_DIR="$LK_OUT_DIR"
+  ASB_LK_EPOCH_ROTATED=1
+  export ASB_LK_RESUME_DIR ASB_LK_EPOCH_ROTATED
+  exec sh "$0" "$LK_HOURS"
+}
+
 # ── run ────────────────────────────────────────────────────────────────────
 # Full-day logs are a user-requested diagnostic capture. Enable bounded, redacted Bluetooth
 # lifecycle evidence by default so a reconnect can be proven without an extra environment flag.
@@ -2180,7 +2289,9 @@ lk_smart_feedback_observe() {
   lk_smart_feedback_reset_streak
 }
 
+lk_epoch_prepare_resume
 lk_init
+lk_epoch_begin
 lk_stage init
 LK_SF_CAPTURE="${LK_START_EPOCH}_$$"
 renice -n 10 -p $$ >/dev/null 2>&1 || true
@@ -2304,6 +2415,9 @@ while : ; do
 
   lk_stage sampling
   lk_wl_acquire
+  lk_epoch_runtime_guard
+  _guard_rc=$?
+  [ "$_guard_rc" -eq 0 ] || [ "$_guard_rc" -eq 1 ] || exit 2
   lk_sample_gpu_busy
   lk_sample_audio
 
