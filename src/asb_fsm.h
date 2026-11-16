@@ -2070,6 +2070,12 @@ static int asb_perf_thermal_lead(int cpu_c, int enter_c, time_t now) {
     return lead > 0 ? lead : 0;
 }
 
+static int asb_gpu_idle_trim_interactive(const asb_metrics_t *m) {
+    if (!m->misc.screen_on || m->misc.camera_active) return 0;
+    if (m->gpu.load_pct >= 12) return 1;
+    return g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S;
+}
+
 static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
     fsm->state_changed = 0;
     fsm->caps_changed  = 0;
@@ -2914,6 +2920,7 @@ if (!can_leave &&
             fsm->profile_idx != PROFILE_PERFORMANCE &&
             !video_active &&
             !fsm->thermal_cap &&
+            !asb_gpu_idle_trim_interactive(m) &&
             (fsm->state == ASB_STATE_LIGHT_IDLE ||
              fsm->state == ASB_STATE_MODERATE)) {
             int floor_gpu = g_asb_cfg.gpu_idle_trim_floor > 0
