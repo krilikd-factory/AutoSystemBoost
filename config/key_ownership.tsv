@@ -158,6 +158,7 @@ CAMERA_GRAIN|user|webui_standard|shell
 CAMERA_CONTRAST|user|webui_standard|shell
 CAMERA_PORTRAIT|user|webui_standard|shell
 CAMERA_LOWLIGHT|user|webui_standard|shell
+CAMERA_PREVIEW_TNR|user|webui_standard|shell
 CAMERA_AGGRESSIVE|internal|engine_or_derived|shell
 CAMERA_AGGRESSIVE_INJECT|internal|engine_or_derived|shell
 smart_mode_enabled|internal|engine_or_derived|both
