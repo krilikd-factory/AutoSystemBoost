@@ -245,10 +245,16 @@ else
   # a bogus 'wifileave' group for a release - an icon name pasted into the group column.
   if [ -f "$MODDIR/webroot/index.html" ]; then
     _grp_ids="$( { sed -n '/const CFG_GROUPS = \[/,/\];/p' "$MODDIR/webroot/index.html"; sed -n '/const CFG_EXTRA_GROUPS = {/,/};/p' "$MODDIR/webroot/index.html"; } | grep -oE "id:'[a-z]+'" | sed "s/id:'//;s/'//" | sort -u)"
-    _grp_bad="$(sed -n '/const CFG_GROUP_OF = {/,/};/p' "$MODDIR/webroot/index.html" | grep -oE ":'[a-z]+'" | sed "s/:'//;s/'//" | sort -u | while IFS= read -r _g; do echo "$_grp_ids" | grep -Fqx "$_g" || printf '%s ' "$_g"; done)"
+    _grp_bad="$(sed -n '/const CFG_GROUP_OF = {/,/};/p' "$MODDIR/webroot/index.html" | grep -oE ":'[a-z]+'" | sed "s/:'//;s/'//" | sort -u | while IFS= read -r _g; do grep -Fqx "$_g" <<EOF || printf '%s ' "$_g"
+$_grp_ids
+EOF
+done)"
     # every card key must also HAVE a group entry (default 'ui' hides omissions)
     _gof_keys="$(sed -n '/const CFG_GROUP_OF = {/,/};/p' "$MODDIR/webroot/index.html" | grep -oE "[A-Za-z_][A-Za-z0-9_]*:'[a-z]+'" | sed "s/:.*//" | sort -u)"
-    _gof_missing="$(sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$MODDIR/webroot/index.html" | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u | while IFS= read -r _k; do echo "$_gof_keys" | grep -Fqx "$_k" || printf '%s ' "$_k"; done)"
+    _gof_missing="$(sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$MODDIR/webroot/index.html" | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u | while IFS= read -r _k; do grep -Fqx "$_k" <<EOF || printf '%s ' "$_k"
+$_gof_keys
+EOF
+done)"
     if [ -n "$_grp_bad" ] || [ -n "$_gof_missing" ]; then
       err "CFG_GROUP_OF drift: unknown-groups=[${_grp_bad:-}] cards-without-group=[${_gof_missing:-}]"
     else
