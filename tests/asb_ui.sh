@@ -14653,11 +14653,12 @@ assert "['stock','auto'].concat(ASB_IO_SCHEDULERS" in h
 assert h.index('main.appendChild(badge);') < h.index('const _smartOwner = cfgSmartOwner')
 assert "if (_selectedProfile !== 'smart' || !it) return null;" in h
 assert "it.key === 'mglru_mode' && v === 'smart'" in h
-assert "it.key === 'io_scheduler'" not in h[h.index('function cfgSmartOwner'):h.index('function cfgVerify',h.index('function cfgSmartOwner'))]
+assert "'io_scheduler','kernel_timer_migration'" in h[h.index('function cfgSmartOwner'):h.index('function cfgVerify',h.index('function cfgSmartOwner'))]
 for p in (root/'webroot/i18n').glob('*.json'):
  d=json.loads(p.read_text()); c=d['cfg']['io_scheduler']
- assert c['name'] and c['desc'] and all(k in c['descOpt'] for k in ('stock','auto','mq-deadline','kyber','bfq','none')),p.name
+ assert c['name'] and c['desc'] and all(k in c['descOpt'] for k in ('stock','auto','adios','mq-deadline','kyber','bfq','none')),p.name
  assert d['optFor']['io_scheduler']['stock'] and d['optFor']['io_scheduler']['auto']
+ assert d.get('cfg_smart_profile') and d.get('cfg_smart_owner_profile') and d.get('cfg_smart_owner_dsp_thermal')
 PY
 command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI Smart/scheduler runtime: no node'; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
@@ -14677,9 +14678,11 @@ if(own('mglru_mode','smart')!=='dynamic')throw Error('Smart MGLRU owner missing'
 for(const v of ['on','off','stock'])if(own('mglru_mode',v)!==null)throw Error('manual MGLRU incorrectly owned '+v);
 if(own('wifi_powersave','screen_off')!=='dynamic'||own('wifi_powersave','always')!=='dynamic'||own('wifi_powersave','off')!==null)throw Error('Wi-Fi ownership');
 for(const k of ['net_screen_off_lte','net_lte_light'])if(own(k,'1')!=='radio'||own(k,'0')!==null)throw Error('radio ownership '+k);
-if(own('dsp_loudness','30')!=='thermal'||own('dsp_loudness','0')!==null||own('dsp_loudness','31')!==null)throw Error('DSP ownership');
+if(own('dsp_loudness','30')!=='dsp_thermal'||own('dsp_loudness','0')!==null||own('dsp_loudness','31')!==null)throw Error('DSP ownership');
 _cfgVals.dsp_outputs='off';if(own('dsp_loudness','30')!==null)throw Error('disabled DSP has owner');_cfgVals.dsp_outputs='speaker';_cfgVals.audio_profile='eq_compat';if(own('dsp_loudness','30')!==null)throw Error('EQ compatibility has owner');
-if(own('io_scheduler','auto')!==null||own('kernel_bore','auto')!==null)throw Error('non-dynamic card marked Smart-owned');
+if(own('io_scheduler','auto')!=='profile'||own('kernel_bore','auto')!=='profile')throw Error('Smart profile ownership missing');
+if(own('io_scheduler','mq-deadline')!==null||own('auto_battery_enable','1')!=='dynamic'||own('auto_battery_enable','0')!==null)throw Error('manual/Auto Battery ownership');
+if(own('sustained_temp_mode','smart')!=='thermal'||own('doze_level','night')!==null)throw Error('battery ownership is too broad');
 _selectedProfile='balanced';if(own('mglru_mode','smart')!==null||own('wifi_powersave','always')!==null)throw Error('non-Smart profile marked Smart-owned');
 console.log('ok');
 JS

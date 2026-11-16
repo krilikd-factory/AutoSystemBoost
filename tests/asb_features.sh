@@ -11419,6 +11419,41 @@ grep -q '^soter|log|empty$' <<<"$(ASB_SOTER_STATE_DIR="$T/none" sh "$S" log)" ||
 echo "PASS soter fix: absent/present status, persistent per-run log, stale-lock recovery, two-pass force-stop/stop/clear/start sequence, bounded service stabilization, transient crash rejection, early stop on refusal or a dead service, opt-in boot repair, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
 )
 
+t_appops_transport_fallback() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL appops transport fallback: $*" >&2; exit 1; }
+mkdir -p "$T/bin"
+cat > "$T/bin/appops" <<'SH'
+#!/bin/sh
+echo 'cmd: Failure calling service appops: Failed transaction (2147483646)'
+exit 0
+SH
+cat > "$T/bin/cmd" <<'SH'
+#!/bin/sh
+[ "$1" = appops ] || exit 2
+shift
+printf '%s\n' "$*" >> "$CMD_LOG"
+if [ "${1:-}" = get ]; then echo 'WAKE_LOCK: ignore; time=+1m'; else exit 0; fi
+SH
+chmod 0755 "$T/bin/appops" "$T/bin/cmd"
+out="$(PATH="$T/bin:$PATH" CMD_LOG="$T/cmd.log" sh -c '. "$1"; asb_appops get com.example.fitness WAKE_LOCK' sh "$ROOT/runtime/asb_appops.sh")"
+[ "$out" = 'WAKE_LOCK: ignore; time=+1m' ] || fail "fallback output: $out"
+grep -qx 'get com.example.fitness WAKE_LOCK' "$T/cmd.log" || fail 'cmd appops was not used'
+cat > "$T/bin/cmd" <<'SH'
+#!/bin/sh
+echo 'cmd: Failure calling service appops: Failed transaction (2147483646)'
+exit 0
+SH
+chmod 0755 "$T/bin/cmd"
+if PATH="$T/bin:$PATH" sh -c '. "$1"; asb_appops get com.example.fitness WAKE_LOCK' sh "$ROOT/runtime/asb_appops.sh" >/dev/null 2>&1; then
+  fail 'two transport failures were parsed as an empty/default op'
+fi
+grep -Fq 'appops transport unavailable - current WAKE_LOCK mode is unknown' "$ROOT/tools/asb_diag.sh" || fail 'diag still calls transport failure a lapse'
+echo 'PASS appops transport: failed Java client falls back to cmd appops; double failure returns unknown instead of default'
+)
+
 t_wakelock_fitness_reapply_evidence_runtime() (
 # dev48: every asbdiag the owner sent (30 min to 10 h after boot) read "limit lapsed" for all
 # three fitness apps, with the same "ASB puts it back 5-10 min after boot" sentence. Whether

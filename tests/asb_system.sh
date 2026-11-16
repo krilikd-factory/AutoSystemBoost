@@ -10100,6 +10100,16 @@ out="$(ASB_PROFILE=performance run_io apply)"
 printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|kyber|mixed' || fail "performance auto: $out"
 
 new_fixture
+printf 'none [mq-deadline] adios kyber bfq\n' > "$T/block/sda/queue/scheduler"
+printf 'none mq-deadline [kyber] adios bfq\n' > "$T/block/mmcblk0/queue/scheduler"
+printf 'io_scheduler=auto\n' > "$T/conf"
+out="$(run_io apply)"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|adios|mixed' || fail "ADIOS auto/readback: $out"
+printf 'io_scheduler=stock\n' > "$T/conf"
+out="$(run_io restore)"
+[ "$(cat "$T/block/sda/queue/scheduler")" = mq-deadline ] && [ "$(cat "$T/block/mmcblk0/queue/scheduler")" = kyber ] || fail 'ADIOS stock did not restore per-device baselines'
+
+new_fixture
 printf 'none [mq-deadline] bfq-mq\n' > "$T/block/sda/queue/scheduler"
 printf 'none [mq-deadline] bfq-mq\n' > "$T/block/mmcblk0/queue/scheduler"
 printf 'io_scheduler=bfq-mq\n' > "$T/conf"
