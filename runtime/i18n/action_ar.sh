@@ -312,3 +312,10 @@ T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="معطّل"
 T_ZY_UNKNOWN="الحالة غير معروفة"
 T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
+
+# ADIOS / safe-media action evidence.
+T_A_LIMIT_PROP="خاصية Volume alert: audio.safemedia.bypass=true · حالة Android غير مقروءة"
+T_A_LIMIT_WAIT="Volume alert: خاصية bypass ليست نشطة بعد · أعد التشغيل مرة واحدة"
+T_Y_IO="مجدول I/O: الوضع %s · الفعلي %s · خط Stock الأساسي %s"
+T_Y_IO_ADIOS="ADIOS: يوفره النواة؛ يمكن لـ Smart/Auto اختياره (دون افتراض تحسن البطارية أو السرعة)"
+T_Y_IO_NOADIOS="ADIOS: لا يوفره هذا النواة؛ سياسة المجدولات المكتشفة المعتادة لم تتغير"

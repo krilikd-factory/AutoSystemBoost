@@ -312,3 +312,10 @@ T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Devre dışı"
 T_ZY_UNKNOWN="Durum bilinmiyor"
 T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
+
+# ADIOS / safe-media action evidence.
+T_A_LIMIT_PROP="Volume alert özelliği: audio.safemedia.bypass=true · Android durumu okunamıyor"
+T_A_LIMIT_WAIT="Volume alert: bypass özelliği henüz etkin değil · bir kez yeniden başlatın"
+T_Y_IO="I/O zamanlayıcı: mod %s · canlı %s · Stock tabanı %s"
+T_Y_IO_ADIOS="ADIOS: kernel tarafından sunuluyor; Smart/Auto seçebilir (pil/hız kazancı varsayılmaz)"
+T_Y_IO_NOADIOS="ADIOS: bu kernel tarafından sunulmuyor; keşfedilen zamanlayıcı politikası değişmedi"

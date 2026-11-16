@@ -312,3 +312,10 @@ T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="已停用"
 T_ZY_UNKNOWN="状态未知"
 T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
+
+# ADIOS / safe-media action evidence.
+T_A_LIMIT_PROP="Volume alert 属性：audio.safemedia.bypass=true · 无法读取 Android 状态"
+T_A_LIMIT_WAIT="Volume alert：bypass 属性尚未生效 · 请重启一次"
+T_Y_IO="I/O 调度：模式 %s · 当前 %s · Stock 基线 %s"
+T_Y_IO_ADIOS="ADIOS：内核已提供；Smart/Auto 可选择它（不假定电池或速度收益）"
+T_Y_IO_NOADIOS="ADIOS：此内核未提供；现有已发现调度策略不变"

@@ -312,3 +312,10 @@ T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Вимкнено"
 T_ZY_UNKNOWN="Стан невідомий"
 T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
+
+# ADIOS / safe-media action evidence.
+T_A_LIMIT_PROP="властивість Volume alert: audio.safemedia.bypass=true · стан Android не прочитано"
+T_A_LIMIT_WAIT="Volume alert: властивість bypass ще не активна — перезавантажте один раз"
+T_Y_IO="планувальник I/O: режим %s · зараз %s · початковий %s"
+T_Y_IO_ADIOS="ADIOS: доступний у ядрі; Smart/Auto може вибрати його (без обіцяного виграшу батареї чи швидкості)"
+T_Y_IO_NOADIOS="ADIOS: ядро його не надає; звичайна політика виявлених планувальників не змінена"

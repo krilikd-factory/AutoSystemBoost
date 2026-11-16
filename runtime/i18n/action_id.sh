@@ -351,3 +351,10 @@ T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Nonaktif"
 T_ZY_UNKNOWN="Status tidak diketahui"
 T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
+
+# ADIOS / safe-media action evidence.
+T_A_LIMIT_PROP="properti Volume alert: audio.safemedia.bypass=true · status Android tidak terbaca"
+T_A_LIMIT_WAIT="Volume alert: properti bypass belum aktif · mulai ulang sekali"
+T_Y_IO="Scheduler I/O: mode %s · live %s · baseline Stock %s"
+T_Y_IO_ADIOS="ADIOS: tersedia di kernel; Smart/Auto dapat memilihnya (tanpa asumsi peningkatan baterai/kecepatan)"
+T_Y_IO_NOADIOS="ADIOS: tidak tersedia di kernel ini; kebijakan scheduler yang terdeteksi tidak berubah"

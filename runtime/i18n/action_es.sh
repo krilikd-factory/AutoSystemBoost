@@ -312,3 +312,10 @@ T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Desactivado"
 T_ZY_UNKNOWN="Estado desconocido"
 T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
+
+# ADIOS / safe-media action evidence.
+T_A_LIMIT_PROP="propiedad Volume alert: audio.safemedia.bypass=true · estado de Android no legible"
+T_A_LIMIT_WAIT="Volume alert: la propiedad bypass aún no está activa; reinicia una vez"
+T_Y_IO="Planificador I/O: modo %s · actual %s · base Stock %s"
+T_Y_IO_ADIOS="ADIOS: expuesto por el kernel; Smart/Auto puede seleccionarlo (sin asumir ganancia de batería o velocidad)"
+T_Y_IO_NOADIOS="ADIOS: no expuesto por este kernel; la política de schedulers detectados no cambia"

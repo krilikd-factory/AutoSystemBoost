@@ -312,3 +312,10 @@ T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Անջատված"
 T_ZY_UNKNOWN="Վիճակը անհայտ է"
 T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
+
+# ADIOS / safe-media action evidence.
+T_A_LIMIT_PROP="Volume alert հատկությունը՝ audio.safemedia.bypass=true · Android-ի վիճակը ընթերցվում չէ"
+T_A_LIMIT_WAIT="Volume alert՝ bypass հատկությունը դեռ ակտիվ չէ · վերագործարկեք մեկ անգամ"
+T_Y_IO="I/O պլանավորիչ՝ ռեժիմ %s · ընթացիկ %s · Stock սկզբնական %s"
+T_Y_IO_ADIOS="ADIOS՝ հասանելի է միջուկում; Smart/Auto-ը կարող է ընտրել այն (առանց մարտկոցի/արագության երաշխավորված բարելավման)"
+T_Y_IO_NOADIOS="ADIOS՝ այս միջուկում հասանելի չէ; հայտնաբերված պլանավորիչների սովորական քաղաքականությունը չի փոխվել"
