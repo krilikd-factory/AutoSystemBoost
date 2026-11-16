@@ -122,6 +122,12 @@ for _root in /data/adb/modules /data/adb/ap/modules /data/adb/ksu/modules; do
 done
 [ -z "$MODDIR" ] && [ -d /data/adb/modules/AutoSystemBoost ] && MODDIR=/data/adb/modules/AutoSystemBoost
 CONF="$MODDIR/config/governor.conf"
+if [ -f "$MODDIR/runtime/asb_appops.sh" ]; then
+  . "$MODDIR/runtime/asb_appops.sh"
+else
+  asb_appops() { appops "$@"; }
+fi
+
 cfg() { grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
 
 # =====================================================================
@@ -133,6 +139,11 @@ P " device  : $(gp ro.product.manufacturer) $(gp ro.product.model)  ($(gp ro.pro
 P " android : $(gp ro.build.version.release)  | build $(gp ro.build.id)"
 P " platform: $(gp ro.board.platform)  | soc $(gp ro.soc.model)$(gp ro.hardware.chipname)"
 P " kernel  : $(uname -r 2>/dev/null)"
+if [ -r "$MODDIR/runtime/asb_io_scheduler.sh" ]; then
+  _dio="$(MODDIR="$MODDIR" ASB_CONF="$MODDIR/config/governor.conf" sh "$MODDIR/runtime/asb_io_scheduler.sh" status 2>/dev/null)"
+  printf '%s
+' "$_dio" | sed -n 's/^io_scheduler|/ I/O scheduler: /p; s/^io_scheduler_options|/ I/O schedulers exposed: /p'
+fi
 _root_mgr="unknown"
 [ -d /data/adb/ap ] && _root_mgr="APatch"
 [ -d /data/adb/ksu ] && _root_mgr="KernelSU"
@@ -3581,8 +3592,8 @@ if [ -s /data/adb/asb/wakelock_manual ]; then
     case "$_mp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
     _me=unknown
     if command -v appops >/dev/null 2>&1; then
-      _me="$(appops get "$_mp" WAKE_LOCK 2>/dev/null | grep -v 'Uid mode' | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
-      _mu_now="$(appops get "$_mp" WAKE_LOCK 2>/dev/null | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+      _me="$(asb_appops get "$_mp" WAKE_LOCK 2>/dev/null | grep -v 'Uid mode' | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+      _mu_now="$(asb_appops get "$_mp" WAKE_LOCK 2>/dev/null | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
       case "$_mu_now" in ''|default) : ;; *) _me="$_mu_now" ;; esac
     fi
     P "    $_mp | ${_mo:-default}/${_mu:-default} | ${_me:-unknown}"
@@ -3636,8 +3647,13 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
     # Proof, not the record: the app-op as Android reads it now, and whether PowerManager
     # actually marks this app's held locks disabled (it prints DISABLED on such a line).
     # The package line, not a "Uid mode:" line printed above it (fix177); a uid mode wins.
-    _fnow="$(appops get "$_fp" WAKE_LOCK 2>/dev/null | grep -v 'Uid mode' | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
-    _fuidm="$(appops get "$_fp" WAKE_LOCK 2>/dev/null | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+    _fops="$(asb_appops get "$_fp" WAKE_LOCK 2>/dev/null)"; _fops_rc=$?
+    if [ "$_fops_rc" -eq 0 ]; then
+      _fnow="$(printf '%s\n' "$_fops" | grep -v 'Uid mode' | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+      _fuidm="$(printf '%s\n' "$_fops" | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+    else
+      _fnow=unknown; _fuidm=unknown
+    fi
     case "$_fuidm" in ''|default) : ;; *) _fnow="$_fuidm (uid mode)" ;; esac
     _fuid="$(pm list packages -U "$_fp" 2>/dev/null | sed -n "s/^package:$_fp uid:\([0-9]*\).*/\1/p" | head -1)"
     _fheld=""; _fdis=""
@@ -3651,13 +3667,16 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
     # fix143: put back about 5 and 10 minutes after boot, then by the hourly screen-off pass.
     case "${_fnow:-default}" in
       ignore*) : ;;
+      unknown*)
+        NOTE "  appops transport unavailable - current WAKE_LOCK mode is unknown, not proven default/lapsed; ASB retries through cmd appops on its next scheduled pass"
+        ;;
       *)
         _fra="$(grep "^$_fp|" /data/adb/asb/wakelock_fitness_reapply 2>/dev/null | tail -1)"
         _fra_t="$(printf '%s' "$_fra" | cut -d'|' -f2)"
         _fra_m="$(printf '%s' "$_fra" | cut -d'|' -f3)"
         _fra_r="$(printf '%s' "$_fra" | cut -d'|' -f4-)"
         _fra_w="$(date -d "@$_fra_t" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$_fra_t")"
-        _fraw="$(appops get "$_fp" WAKE_LOCK 2>/dev/null | grep -m1 . | cut -c1-80)"
+        _fraw="$(asb_appops get "$_fp" WAKE_LOCK 2>/dev/null | grep -m1 . | cut -c1-80)"
         if [ -z "$_fra" ]; then
           NOTE "  limit lapsed - the system reset this app-op (OPlus does at boot); ASB puts it back about 5-10 min after boot, otherwise on the next hourly screen-off pass"
         elif [ "$_fra_m" = ignore ]; then
