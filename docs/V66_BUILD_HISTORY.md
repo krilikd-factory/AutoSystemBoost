@@ -4,6 +4,31 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix4 - audit-driven strict TTL input and explicit pointer baseline semantics
+
+Input: the owner's Russian diff-audit of buildfix2, re-checked item by item against the buildfix3
+source. Only findings confirmed by that source were changed.
+
+- **G3, strict MGLRU TTL vocabulary:** `kernel_mglru_min_ttl` accepts only `stock`, `1000` and
+  `2000`. Legacy `5000` and other unsupported values now produce `invalid_value` from both apply
+  and status, without a sysfs write or baseline replacement; the atomic config writer rejects them
+  without changing `governor.conf`. The former silent `5000`→`2000` coercion and the stale English
+  `5000 ms` option label are removed. Existing valid baseline capture and exact Stock restore stay
+  unchanged.
+- **G4, honest pointer-speed restore:** the Pointer Speed card now states in the fallback text and
+  all 13 locales that Stock restores the value captured at ASB's first override, not necessarily a
+  factory default. The Settings writer, bounded −7..7 mapping, read-back and exact restore logic
+  are unchanged.
+- **Audit items not requiring a patch:** both host tools from G1 already run inside the mandatory
+  canonical regression used by both workflows. G2's reduced-effects tier already disables its blur
+  layers; phone frame-time measurement remains field work. G5/G6 require no action, and G7's
+  pre-publication OTA manifest check already exists as an intentional advisory step. The Smart Lab
+  defaults stay enabled: the cited host/field observations do not establish harmful overhead or a
+  failed memory-bus writer, and the existing ownership/yield gates remain in force.
+- **Evidence boundary:** new fixtures prove rejection, non-mutation and localized wording on the
+  host. They do not measure phone battery life, Liquid Glass frame time, physical ART recovery,
+  BORE/RT transitions or ColorOS panel behaviour.
+
 ## V66 dev66 buildfix3 - continuous visible-header animation through idle calm
 
 Input: the owner's field report that the WebUI header still froze about ten seconds after opening
