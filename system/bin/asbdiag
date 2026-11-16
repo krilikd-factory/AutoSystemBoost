@@ -1981,10 +1981,12 @@ _dsp_g="$(cfg dsp_loudness)"
 case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released from the audio path entirely" ;;
   eq_compat) NOTE "audio_profile = eq_compat - the ASB DSP is intentionally off; tone, dynamics and headroom settings are kept for stock/hifi" ;;
   outputs_off) NOTE "dsp_outputs = off - the DSP is switched off (enable=$(gp persist.asb.dsp.enable)); loudness $(cfg dsp_loudness), bass $(cfg dsp_bass), voice $(cfg dsp_voice), width $(cfg dsp_width), clarity $(cfg dsp_clarity), rumble $(cfg dsp_rumble) and headroom are kept for when an output is picked again" ;;
+  *[!0-9]*)
+    NOTE "dsp_loudness has a non-numeric value; native gain capability is unknown" ;;
   *)
     _dsp_requested_mb=$((_dsp_g * 100))
     _dsp_expected_mb="$_dsp_requested_mb"
-    [ "$_dsp_expected_mb" -gt 2500 ] && _dsp_expected_mb=2500
+    [ "$_dsp_expected_mb" -gt 3000 ] && _dsp_expected_mb=3000
     # A thermally reduced gain is correct behaviour, not a failed write.
     #
     # Graded against what the module DECIDED (gain_applied_mb), not against the request: a
@@ -2014,8 +2016,21 @@ case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released fr
     [ -n "$_dsp_th_step" ] && \
       NOTE "  heat back-off: step ${_dsp_th_step} (battery ${_dsp_th_c} C, ${_dsp_th_why}) - loudspeaker only; 42/45 C down, 43/40 C back"
     [ "$_dsp_requested_mb" -ne "$_dsp_expected_mb" ] && \
-      NOTE "  requested ${_dsp_requested_mb}mB is safely capped to ${_dsp_expected_mb}mB (+25 dB compatibility limit)"
+      NOTE "  requested ${_dsp_requested_mb}mB is safely capped to ${_dsp_expected_mb}mB (+30 dB source limit; old prebuilts remain capped at +25 dB)"
     V "  DSP enabled" "1" "$(gp persist.asb.dsp.enable)" eq
+    if [ "$_dsp_requested_mb" -gt 2500 ] 2>/dev/null; then
+      _dsp_cap_lib=""
+      for _dsp_cap_c in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do
+        [ -f "$_dsp_cap_c" ] && { _dsp_cap_lib="$_dsp_cap_c"; break; }
+      done
+      if [ -z "$_dsp_cap_lib" ]; then
+        NOTE "  +30 dB capability: unknown (DSP library not readable); the property value is not proof of native support"
+      elif grep -aq 'gain_cap_mb=3000' "$_dsp_cap_lib" 2>/dev/null; then
+        NOTE "  +30 dB capability marker present in $_dsp_cap_lib (source/binary contract only, not an audibility measurement)"
+      else
+        NOTE "  +30 dB capability marker absent in $_dsp_cap_lib: rebuild the DSP library; an old prebuilt remains capped at +25 dB even when the requested property says 3000mB"
+      fi
+    fi
     ;;
 esac
 NOTE "dsp_bass = $(cfg dsp_bass)  ·  live: $(gp persist.asb.dsp.bass_db)"
