@@ -4,6 +4,50 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix8 - measured interaction headroom, honest Smart limits and multi-day capture epochs
+
+Input: the owner's ten-item field/UI/workflow revision and a new 254-minute full-day capture,
+asbdiag, screenshots and three GitHub Actions log sets. The capture is evidence about the tested
+installed build, not physical validation of this source revision.
+
+- **Performance complaint:** the strongest corroborated signal was LIGHT_IDLE YouTube work at the
+  500 MHz GPU ceiling with long GPU/frame times, not a general governor-overhead or chattering
+  finding. GPU idle trim now keeps its existing profile ceiling when visible GPU load reaches
+  12% or recent touch evidence is present. Idle trim remains for genuinely idle content;
+  Performance, video, thermal-cap, camera and screen-off guards are unchanged. No user setting
+  was reset and no persistent worker or permanent Performance mode was added.
+- **Settings/Zygisk:** four embedded toggles use subtle hairlines in dark Liquid Glass. A measured
+  short-fit class suppresses only redundant scrolling; overflow is re-enabled whenever content,
+  search, a small screen or enlarged text needs it.
+- **Smart explanations and ownership:** long Auto/profile hints are concise, with the full meaning
+  retained in tooltips. `SMART · PROFILE` means a profile-selected Auto value. The new
+  `SMART · LIMIT` marks the user's fixed performance ceiling and prime burst/rest guards; the
+  prime master switch receives AUTO only when the bounded mechanism is enabled. Manual thermal
+  ceilings do not acquire a false AUTO badge.
+- **DSP:** Smart no longer mirrors or claims ownership of DSP loudness/effects. DSP remains a
+  manual audio setting. The separate profile-neutral loudspeaker battery-temperature safety
+  guard remains; it is not presented as Smart control.
+- **Presentation:** Fast Camera Start is immediately followed by USB Webcam. Battery Fix, SOTER
+  and Junk Cleanup show short summaries with their complete explanations under Details. The
+  Zygisk page folds additional long descriptions in place, with keyboard activation, while
+  retaining evidence and actions. All 13 locales carry the new text.
+- **Infinite Log:** charging remains in distinct phases and drain uses off-charger windows;
+  reboot/restart gaps stay outside phases and process-local gfxstats baselines start fresh.
+  In addition, the existing recorder loop now fingerprints the installed ASB build and kernel.
+  An identity change closes and archives the old epoch, including its report and hidden counter
+  baselines, then starts a clean epoch in the same capture bundle. `epoch_history.tsv` indexes
+  separate reports; the current report never totals incompatible builds. A normal user stop
+  still finalises and clears resume ownership, so a later start is a new capture directory.
+- **NoMount:** the kernel Update Check compared known-good `master` pins with upstream `dev`,
+  although Build resolves and integrates `master`. Update Check now uses `master` too. The 21
+  commits in the supplied log were therefore cross-branch differences, not evidence that
+  Mark known-good forgot the booted pin. Known-good attestation and fail-closed full-build
+  classification are unchanged.
+- **Verification:** 412 ASB host tests plus schema/lint/native/DSP static gates passed in
+  source-only mode. Targeted fixtures cover the GPU activity guard, Smart badges, camera order,
+  compact UI, identity rotation and legacy resume. No measured responsiveness or battery gain,
+  physical ColorOS WebView result, or new kernel boot result is claimed.
+
 ## V66 dev66 buildfix7 - ADIOS runtime discovery, explicit Smart ownership and Binder-safe AppOps
 
 Input: the owner's five-item ADIOS/Smart/audio/action/log request and the 16 November 2026 device,
