@@ -873,14 +873,15 @@
     },
     "io_scheduler": {
       "name": "G/Ç zamanlayıcı",
-      "desc": "Her blok aygıtı için yalnızca sunulan zamanlayıcıları seçer. Auto profili izler, Stock özgün değerleri geri yükler. Kullanılamayan açık seçim başka bir seçenekle değiştirilmez.",
+      "desc": "Her blok aygıtı için yalnızca sunulan zamanlayıcıları seçer. Auto profili izler, Stock özgün değerleri geri yükler. Kullanılamayan açık seçim başka bir seçenekle değiştirilmez.\n\nADIOS sunuluyorsa Auto önce onu seçer; yoksa önceki profil sırası geçerlidir.",
       "descOpt": {
         "stock": "Her aygıtın özgün zamanlayıcısını geri yükle.",
         "auto": "Yalnızca çalışma zamanında bulunan seçenekler arasından profile göre seç.",
         "mq-deadline": "Karma depolama yükleri için dengeli seçenek.",
         "kyber": "Gecikme odaklı; varsa Performance tarafından tercih edilir.",
         "bfq": "Etkileşimli karma yükler için adalet odaklı.",
-        "none": "G/Ç yeniden sıralaması yok; her zaman daha hızlı değildir."
+        "none": "G/Ç yeniden sıralaması yok; her zaman daha hızlı değildir.",
+        "adios": "Uyarlanabilir deadline I/O zamanlayıcısı; yalnızca çalışma zamanında keşfedilirse seçilir, UFS, hız veya pil kazancı varsayılmaz."
       }
     }
   },
@@ -4000,8 +4001,11 @@
   "cfg_smart_owner": "SMART · OTOMATİK",
   "cfg_smart_owner_dynamic": "Smart, seçtiğiniz mod içinde gerçek değeri dinamik olarak değiştirir. Elle zorlamayın: bu governor ile çakışır. Denetimi geri almak için manuel değer veya başka profil seçin.",
   "cfg_smart_owner_radio": "Smart, izin verdiğiniz radyo geçişini ekran ve trafik durumuna göre yapar. Manuel denetim için politikayı kapatın veya Smart’tan çıkın.",
-  "cfg_smart_owner_thermal": "Gain istediğiniz seviyedir; pil sıcakken Smart hoparlörde bunu geçici olarak azaltabilir. Termal korumayı dengelemek için yükseltmeyin. Smart’tan çıkın veya DSP Loudness değerini 0 yapın.",
+  "cfg_smart_owner_thermal": "Smart, istenen ayarı koruyarak termal koruma için gerçek değeri geçici olarak azaltabilir.",
   "kc_why_io_scheduler": "Okunabilir hiçbir döner olmayan blok aygıtı kuyruğu zamanlayıcı listesi sunmuyor veya kuyruk salt okunur. ASB genel bir sysfs yazıcısı oluşturmaz ve var olmayan desteği iddia etmez.",
   "cfg_net_cc_discovered": "Bu çekirdekte sunuluyor. Davranış algoritmaya, RTT, kayıplara, arabellekler ve qdisc’e bağlıdır; evrensel avantaj vaat edilmez.",
-  "cfg_io_scheduler_discovered": "Özel bir G/Ç zamanlayıcı olarak bulundu. ASB onu seçip doğrulayabilir, ancak performansı addan çıkarmaz."
+  "cfg_io_scheduler_discovered": "Özel bir G/Ç zamanlayıcı olarak bulundu. ASB onu seçip doğrulayabilir, ancak performansı addan çıkarmaz.",
+  "cfg_smart_owner_profile": "SMART · PROFİL",
+  "cfg_smart_owner_dsp_thermal": "Gain istediğiniz seviyedir; pil sıcakken Smart hoparlörde bunu geçici olarak azaltabilir. Termal korumayı dengelemek için yükseltmeyin. Smart’tan çıkın veya DSP Loudness değerini 0 yapın.",
+  "cfg_smart_profile": "Smart, geçerli Battery/Balanced profilinin değerini uygular. Auto seçiminiz korunur; denetimi almak için açık değer seçin veya Smart’tan çıkın."
 }

@@ -873,14 +873,15 @@
     },
     "io_scheduler": {
       "name": "Planificador de E/S",
-      "desc": "Elige solo planificadores expuestos para cada dispositivo de bloques. Auto sigue el perfil y Stock restaura los valores originales. Una opción explícita no disponible no se sustituye.",
+      "desc": "Elige solo planificadores expuestos para cada dispositivo de bloques. Auto sigue el perfil y Stock restaura los valores originales. Una opción explícita no disponible no se sustituye.\n\nSi ADIOS está disponible, Auto lo prueba primero; si no, se mantiene el orden anterior del perfil.",
       "descOpt": {
         "stock": "Restaurar el planificador original de cada dispositivo.",
         "auto": "Elegir según el perfil solo entre opciones detectadas.",
         "mq-deadline": "Opción equilibrada para cargas mixtas de almacenamiento.",
         "kyber": "Orientado a latencia; preferido por Performance si está disponible.",
         "bfq": "Orientado a equidad para cargas interactivas mixtas.",
-        "none": "Sin reordenación de E/S; no siempre es más rápido."
+        "none": "Sin reordenación de E/S; no siempre es más rápido.",
+        "adios": "Planificador I/O de plazos adaptativos; solo tras detectarlo, sin asumir mejoras de UFS, velocidad o batería."
       }
     }
   },
@@ -4000,8 +4001,11 @@
   "cfg_smart_owner": "SMART · AUTO",
   "cfg_smart_owner_dynamic": "Smart cambia dinámicamente el valor real dentro del modo elegido. No lo fuerces manualmente: interferiría con el governor. Elige un valor manual u otro perfil para recuperar el control.",
   "cfg_smart_owner_radio": "Smart realiza esta transición de radio permitida según la pantalla y el tráfico. Desactiva la política o sal de Smart para recuperar el control manual.",
-  "cfg_smart_owner_thermal": "Tu ganancia es el nivel solicitado; Smart puede reducirla temporalmente en el altavoz con la batería caliente. No la subas para compensar la protección térmica. Sal de Smart o pon DSP Loudness en 0.",
+  "cfg_smart_owner_thermal": "Smart puede reducir temporalmente un valor real para protección térmica sin borrar tu ajuste solicitado.",
   "kc_why_io_scheduler": "Ninguna cola legible de un dispositivo de bloques no rotacional ofrece una lista de planificadores, o la cola es de solo lectura. ASB no crea un escritor sysfs genérico ni declara compatibilidad inexistente.",
   "cfg_net_cc_discovered": "Detectado en este núcleo. Depende del algoritmo, RTT, pérdidas, búferes y qdisc; no promete una ventaja universal.",
-  "cfg_io_scheduler_discovered": "Planificador de E/S personalizado detectado. ASB puede seleccionarlo y verificarlo sin inferir su rendimiento del nombre."
+  "cfg_io_scheduler_discovered": "Planificador de E/S personalizado detectado. ASB puede seleccionarlo y verificarlo sin inferir su rendimiento del nombre.",
+  "cfg_smart_owner_profile": "SMART · PERFIL",
+  "cfg_smart_owner_dsp_thermal": "Tu ganancia es el nivel solicitado; Smart puede reducirla temporalmente en el altavoz con la batería caliente. No la subas para compensar la protección térmica. Sal de Smart o pon DSP Loudness en 0.",
+  "cfg_smart_profile": "Smart aplica el valor del perfil Battery/Balanced actual. Auto se conserva; elige un valor explícito o sal de Smart para recuperar el control."
 }

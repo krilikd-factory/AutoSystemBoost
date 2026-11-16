@@ -903,14 +903,15 @@
     },
     "io_scheduler": {
       "name": "I/O 调度器",
-      "desc": "只选择每个块设备实际提供的调度器。Auto 按配置文件选择，Stock 恢复各设备原始值。不可用的明确选项不会被静默替换。",
+      "desc": "只选择每个块设备实际提供的调度器。Auto 按配置文件选择，Stock 恢复各设备原始值。不可用的明确选项不会被静默替换。\n\n如果内核提供 ADIOS，Auto 会优先选择它；否则沿用原来的配置顺序。",
       "descOpt": {
         "stock": "恢复每个块设备原来的调度器。",
         "auto": "按配置文件，仅从运行时发现的选项中选择。",
         "mq-deadline": "适合混合存储负载的均衡选项。",
         "kyber": "侧重延迟；Performance 在可用时优先选择。",
         "bfq": "侧重交互式混合负载的公平性。",
-        "none": "不重排 I/O；并非总是更快。"
+        "none": "不重排 I/O；并非总是更快。",
+        "adios": "自适应期限 I/O 调度器；仅在运行时检测到后选择，不假定 UFS 延迟、吞吐量或电池收益。"
       }
     }
   },
@@ -4000,8 +4001,11 @@
   "cfg_smart_owner": "SMART · 自动",
   "cfg_smart_owner_dynamic": "Smart 会在您选择的模式内动态更改实际值。请勿手动强制设置，否则会与 governor 冲突。选择手动值或其他配置文件即可收回控制权。",
   "cfg_smart_owner_radio": "Smart 会根据屏幕和流量状态执行您允许的无线电切换。关闭此策略或退出 Smart 即可恢复手动控制。",
-  "cfg_smart_owner_thermal": "您的增益是请求级别；电池发热时 Smart 可能暂时降低扬声器增益。不要为了补偿热保护而提高它。退出 Smart 或将 DSP Loudness 设为 0 即可收回控制权。",
+  "cfg_smart_owner_thermal": "Smart 可能因热保护暂时降低实际值，同时保留您请求的设置。",
   "kc_why_io_scheduler": "没有任何可读取的非旋转块设备队列提供调度器列表，或者队列处于只读状态。ASB 不会创建通用 sysfs 写入器，也不会声称具备实际不存在的支持。",
   "cfg_net_cc_discovered": "由此内核提供。行为取决于算法、RTT、丢包、缓冲区和 qdisc；不承诺普遍的速度或续航优势。",
-  "cfg_io_scheduler_discovered": "检测到的自定义 I/O 调度器。ASB 可以选择并验证它，但不会仅凭名称推断性能或功耗。"
+  "cfg_io_scheduler_discovered": "检测到的自定义 I/O 调度器。ASB 可以选择并验证它，但不会仅凭名称推断性能或功耗。",
+  "cfg_smart_owner_profile": "SMART · 配置",
+  "cfg_smart_owner_dsp_thermal": "您的增益是请求级别；电池发热时 Smart 可能暂时降低扬声器增益。不要为了补偿热保护而提高它。退出 Smart 或将 DSP Loudness 设为 0 即可收回控制权。",
+  "cfg_smart_profile": "Smart 应用当前 Battery/Balanced 配置的值。Auto 选择会保留；选择明确值或退出 Smart 即可恢复手动控制。"
 }

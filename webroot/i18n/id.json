@@ -873,14 +873,15 @@
     },
     "io_scheduler": {
       "name": "Penjadwal I/O",
-      "desc": "Hanya memilih penjadwal yang tersedia untuk setiap perangkat blok. Auto mengikuti profil, Stock memulihkan nilai awal. Pilihan eksplisit yang tidak tersedia tidak diganti.",
+      "desc": "Hanya memilih penjadwal yang tersedia untuk setiap perangkat blok. Auto mengikuti profil, Stock memulihkan nilai awal. Pilihan eksplisit yang tidak tersedia tidak diganti.\n\nJika tersedia, ADIOS menjadi pilihan Auto pertama; jika tidak, urutan profil sebelumnya tetap berlaku.",
       "descOpt": {
         "stock": "Pulihkan penjadwal awal setiap perangkat.",
         "auto": "Pilih sesuai profil hanya dari opsi yang ditemukan saat runtime.",
         "mq-deadline": "Pilihan seimbang untuk beban penyimpanan campuran.",
         "kyber": "Berorientasi latensi; dipilih Performance bila tersedia.",
         "bfq": "Berorientasi keadilan untuk beban interaktif campuran.",
-        "none": "Tanpa pengurutan ulang I/O; tidak selalu lebih cepat."
+        "none": "Tanpa pengurutan ulang I/O; tidak selalu lebih cepat.",
+        "adios": "Scheduler I/O deadline adaptif; dipilih hanya setelah terdeteksi, tanpa asumsi peningkatan UFS, kecepatan, atau baterai."
       }
     }
   },
@@ -4000,8 +4001,11 @@
   "cfg_smart_owner": "SMART · OTOMATIS",
   "cfg_smart_owner_dynamic": "Smart mengubah nilai aktual secara dinamis dalam mode pilihan Anda. Jangan memaksanya secara manual: itu akan melawan governor. Pilih nilai manual atau profil lain untuk mengambil kembali kendali.",
   "cfg_smart_owner_radio": "Smart melakukan transisi radio yang Anda izinkan berdasarkan layar dan lalu lintas. Nonaktifkan kebijakan atau keluar dari Smart untuk kembali ke kendali manual.",
-  "cfg_smart_owner_thermal": "Gain Anda adalah tingkat yang diminta; Smart dapat menurunkannya sementara di speaker saat baterai panas. Jangan menaikkannya untuk mengimbangi perlindungan termal. Keluar dari Smart atau setel DSP Loudness ke 0.",
+  "cfg_smart_owner_thermal": "Smart dapat sementara menurunkan nilai aktual untuk perlindungan termal sambil mempertahankan setelan yang diminta.",
   "kc_why_io_scheduler": "Tidak ada antrean perangkat blok nonrotasional yang dapat dibaca dan menyediakan daftar penjadwal, atau antreannya hanya dapat dibaca. ASB tidak membuat penulis sysfs generik dan tidak mengklaim dukungan yang tidak tersedia.",
   "cfg_net_cc_discovered": "Disediakan kernel ini. Perilaku bergantung pada algoritma, RTT, kehilangan, buffer, dan qdisc; tidak ada keunggulan universal yang dijanjikan.",
-  "cfg_io_scheduler_discovered": "Penjadwal I/O kustom yang ditemukan. ASB dapat memilih dan memverifikasinya tanpa menyimpulkan performa dari nama."
+  "cfg_io_scheduler_discovered": "Penjadwal I/O kustom yang ditemukan. ASB dapat memilih dan memverifikasinya tanpa menyimpulkan performa dari nama.",
+  "cfg_smart_owner_profile": "SMART · PROFIL",
+  "cfg_smart_owner_dsp_thermal": "Gain Anda adalah tingkat yang diminta; Smart dapat menurunkannya sementara di speaker saat baterai panas. Jangan menaikkannya untuk mengimbangi perlindungan termal. Keluar dari Smart atau setel DSP Loudness ke 0.",
+  "cfg_smart_profile": "Smart menerapkan nilai profil Battery/Balanced saat ini. Pilihan Auto tetap tersimpan; pilih nilai eksplisit atau keluar dari Smart untuk mengambil alih kontrol."
 }

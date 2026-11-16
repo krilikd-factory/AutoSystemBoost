@@ -903,14 +903,15 @@
     },
     "io_scheduler": {
       "name": "Scheduler I/O",
-      "desc": "Sceglie solo scheduler esposti per ciascun dispositivo a blocchi. Auto segue il profilo, Stock ripristina i valori originali. Una scelta esplicita non disponibile non viene sostituita.",
+      "desc": "Sceglie solo scheduler esposti per ciascun dispositivo a blocchi. Auto segue il profilo, Stock ripristina i valori originali. Una scelta esplicita non disponibile non viene sostituita.\n\nSe ADIOS è disponibile, Auto lo prova per primo; altrimenti vale il precedente ordine del profilo.",
       "descOpt": {
         "stock": "Ripristina lo scheduler originale di ogni dispositivo.",
         "auto": "Sceglie secondo il profilo solo tra le opzioni rilevate.",
         "mq-deadline": "Scelta equilibrata per carichi di archiviazione misti.",
         "kyber": "Orientato alla latenza; preferito da Performance se disponibile.",
         "bfq": "Orientato all’equità per carichi interattivi misti.",
-        "none": "Nessun riordino I/O; non è sempre più veloce."
+        "none": "Nessun riordino I/O; non è sempre più veloce.",
+        "adios": "Scheduler I/O a deadline adattive, selezionato solo dopo rilevamento, senza presumere guadagni UFS, velocità o batteria."
       }
     }
   },
@@ -4000,8 +4001,11 @@
   "cfg_smart_owner": "SMART · AUTO",
   "cfg_smart_owner_dynamic": "Smart modifica dinamicamente il valore reale entro la modalità scelta. Non forzarlo manualmente: entrerebbe in conflitto con il governor. Scegli un valore manuale o un altro profilo per riprendere il controllo.",
   "cfg_smart_owner_radio": "Smart esegue questa transizione radio autorizzata in base a schermo e traffico. Disattiva la politica o esci da Smart per riprendere il controllo manuale.",
-  "cfg_smart_owner_thermal": "Il gain è il livello richiesto; Smart può ridurlo temporaneamente sull’altoparlante con batteria calda. Non aumentarlo per compensare la protezione termica. Esci da Smart o imposta DSP Loudness a 0.",
+  "cfg_smart_owner_thermal": "Smart può ridurre temporaneamente un valore reale per la protezione termica, conservando il valore richiesto.",
   "kc_why_io_scheduler": "Nessuna coda leggibile di un dispositivo a blocchi non rotazionale espone un elenco di scheduler, oppure la coda è di sola lettura. ASB non crea un writer sysfs generico e non dichiara un supporto inesistente.",
   "cfg_net_cc_discovered": "Esposto dal kernel. Dipende da algoritmo, RTT, perdite, buffer e qdisc; nessun vantaggio universale è promesso.",
-  "cfg_io_scheduler_discovered": "Scheduler I/O personalizzato rilevato. ASB può selezionarlo e verificarlo senza dedurre le prestazioni dal nome."
+  "cfg_io_scheduler_discovered": "Scheduler I/O personalizzato rilevato. ASB può selezionarlo e verificarlo senza dedurre le prestazioni dal nome.",
+  "cfg_smart_owner_profile": "SMART · PROFILO",
+  "cfg_smart_owner_dsp_thermal": "Il gain è il livello richiesto; Smart può ridurlo temporaneamente sull’altoparlante con batteria calda. Non aumentarlo per compensare la protezione termica. Esci da Smart o imposta DSP Loudness a 0.",
+  "cfg_smart_profile": "Smart applica il valore del profilo Battery/Balanced corrente. Auto resta salvato; scegli un valore esplicito o esci da Smart per riprendere il controllo."
 }

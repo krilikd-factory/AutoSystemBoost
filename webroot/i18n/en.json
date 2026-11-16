@@ -1048,14 +1048,15 @@
     },
     "io_scheduler": {
       "name": "I/O scheduler",
-      "desc": "Chooses only schedulers exposed by each block device. Auto prefers mq-deadline in Balanced/Smart/Battery and kyber in Performance, using only discovered fallbacks. Stock restores the exact per-device baseline. An unavailable explicit choice fails without substitution.\n\n🔋 Balanced default: Auto\n⚡ Performance policy: kyber when exposed\n✋ Not sure: Stock",
+      "desc": "Chooses only schedulers exposed by each block device. Auto prefers mq-deadline in Balanced/Smart/Battery and kyber in Performance, using only discovered fallbacks. Stock restores the exact per-device baseline. An unavailable explicit choice fails without substitution.\n\n🔋 Balanced default: Auto\n⚡ Performance policy: kyber when exposed\n✋ Not sure: Stock\n\nADIOS, when exposed, is the first Auto choice; the remaining profile order applies otherwise.",
       "descOpt": {
         "stock": "Restore the original scheduler independently for every block device.",
         "auto": "Use the profile policy, choosing only from schedulers discovered at runtime.",
         "mq-deadline": "A practical default for mixed phone storage I/O; balances latency and throughput without promising a battery gain.",
         "kyber": "Latency-oriented scheduler; preferred by the Performance policy when the kernel exposes it.",
         "bfq": "Fairness-oriented scheduler for interactive mixed workloads; actual benefit depends on storage and workload.",
-        "none": "No I/O reordering scheduler; can suit fast virtual or NVMe queues, but is not universally faster."
+        "none": "No I/O reordering scheduler; can suit fast virtual or NVMe queues, but is not universally faster.",
+        "adios": "Adaptive deadline I/O scheduler. Auto selects it only after runtime discovery; no UFS latency, throughput or battery gain is assumed."
       }
     }
   },
@@ -3893,8 +3894,11 @@
   "cfg_smart_owner": "SMART · AUTO",
   "cfg_smart_owner_dynamic": "Smart dynamically changes this live value within the mode you selected. Do not force it manually: that would fight the governor. Choose a manual value or another profile to take ownership back.",
   "cfg_smart_owner_radio": "Smart performs this opted-in radio transition with screen and traffic state. Keep the policy enabled rather than repeatedly toggling it; turn it off or leave Smart to take ownership back.",
-  "cfg_smart_owner_thermal": "Your gain is the requested level; Smart may temporarily reduce it on the speaker when the battery is hot. Do not raise it to compensate for thermal protection. Leave Smart or set DSP Loudness to 0 to take ownership back.",
+  "cfg_smart_owner_thermal": "Smart may temporarily reduce a live value for thermal protection while preserving your requested setting. Leave Smart or choose Stock/manual to take ownership back.",
   "kc_why_io_scheduler": "No readable non-rotational block-device queue exposes a scheduler list, or the queue is read-only. ASB does not create a generic sysfs writer or claim support.",
   "cfg_net_cc_discovered": "Exposed by this kernel. Its behaviour depends on the exact algorithm, RTT, loss, buffers and qdisc; no universal speed or battery advantage is claimed.",
-  "cfg_io_scheduler_discovered": "Exposed by this kernel as a custom I/O scheduler. ASB can select and verify it, but does not infer its latency, throughput or power policy from the name."
+  "cfg_io_scheduler_discovered": "Exposed by this kernel as a custom I/O scheduler. ASB can select and verify it, but does not infer its latency, throughput or power policy from the name.",
+  "cfg_smart_owner_profile": "SMART · PROFILE",
+  "cfg_smart_owner_dsp_thermal": "Your gain is the requested level; Smart may temporarily reduce it on the speaker when the battery is hot. Do not raise it to compensate for thermal protection. Leave Smart or set DSP Loudness to 0 to take ownership back.",
+  "cfg_smart_profile": "Smart applies the value belonging to its current Battery/Balanced profile. Your Auto choice is preserved; choose an explicit value or leave Smart to take ownership back."
 }

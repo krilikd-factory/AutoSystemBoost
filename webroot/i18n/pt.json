@@ -873,14 +873,15 @@
     },
     "io_scheduler": {
       "name": "Escalonador de E/S",
-      "desc": "Escolhe apenas escalonadores expostos para cada dispositivo de blocos. Auto segue o perfil e Stock restaura os valores originais. Uma escolha explícita indisponível não é substituída.",
+      "desc": "Escolhe apenas escalonadores expostos para cada dispositivo de blocos. Auto segue o perfil e Stock restaura os valores originais. Uma escolha explícita indisponível não é substituída.\n\nQuando exposto, ADIOS é a primeira escolha Auto; caso contrário, mantém-se a ordem anterior do perfil.",
       "descOpt": {
         "stock": "Restaurar o escalonador original de cada dispositivo.",
         "auto": "Escolher conforme o perfil apenas entre opções detectadas.",
         "mq-deadline": "Opção equilibrada para cargas mistas de armazenamento.",
         "kyber": "Orientado à latência; preferido por Performance se disponível.",
         "bfq": "Orientado à justiça para cargas interactivas mistas.",
-        "none": "Sem reordenação de E/S; nem sempre é mais rápido."
+        "none": "Sem reordenação de E/S; nem sempre é mais rápido.",
+        "adios": "Scheduler I/O com prazos adaptativos; apenas após deteção, sem assumir ganho de UFS, velocidade ou bateria."
       }
     }
   },
@@ -4000,8 +4001,11 @@
   "cfg_smart_owner": "SMART · AUTO",
   "cfg_smart_owner_dynamic": "O Smart altera dinamicamente o valor real dentro do modo escolhido. Não o force manualmente: isso interfere com o governor. Escolha um valor manual ou outro perfil para recuperar o controlo.",
   "cfg_smart_owner_radio": "O Smart executa esta transição de rádio permitida conforme o ecrã e o tráfego. Desative a política ou saia do Smart para recuperar o controlo manual.",
-  "cfg_smart_owner_thermal": "O ganho é o nível pedido; o Smart pode reduzi-lo temporariamente no altifalante com a bateria quente. Não o aumente para compensar a proteção térmica. Saia do Smart ou defina DSP Loudness como 0.",
+  "cfg_smart_owner_thermal": "O Smart pode reduzir temporariamente um valor real para proteção térmica, preservando o ajuste pedido.",
   "kc_why_io_scheduler": "Nenhuma fila legível de um dispositivo de blocos não rotativo oferece uma lista de escalonadores, ou a fila é somente leitura. O ASB não cria um gravador sysfs genérico nem declara suporte inexistente.",
   "cfg_net_cc_discovered": "Disponibilizado por este kernel. Depende do algoritmo, RTT, perdas, buffers e qdisc; nenhuma vantagem universal é prometida.",
-  "cfg_io_scheduler_discovered": "Escalonador de E/S personalizado detectado. O ASB pode selecioná-lo e verificá-lo sem inferir o desempenho pelo nome."
+  "cfg_io_scheduler_discovered": "Escalonador de E/S personalizado detectado. O ASB pode selecioná-lo e verificá-lo sem inferir o desempenho pelo nome.",
+  "cfg_smart_owner_profile": "SMART · PERFIL",
+  "cfg_smart_owner_dsp_thermal": "O ganho é o nível pedido; o Smart pode reduzi-lo temporariamente no altifalante com a bateria quente. Não o aumente para compensar a proteção térmica. Saia do Smart ou defina DSP Loudness como 0.",
+  "cfg_smart_profile": "O Smart aplica o valor do perfil Battery/Balanced atual. A escolha Auto é preservada; escolha um valor explícito ou saia do Smart para retomar o controlo."
 }

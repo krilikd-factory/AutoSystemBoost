@@ -873,14 +873,15 @@
     },
     "io_scheduler": {
       "name": "I/O-Scheduler",
-      "desc": "Wählt nur Scheduler, die der Kernel für jedes Blockgerät tatsächlich anbietet. Auto folgt dem Profil, Stock stellt die gerätespezifischen Ausgangswerte wieder her. Eine nicht verfügbare explizite Wahl wird nicht ersetzt.",
+      "desc": "Wählt nur Scheduler, die der Kernel für jedes Blockgerät tatsächlich anbietet. Auto folgt dem Profil, Stock stellt die gerätespezifischen Ausgangswerte wieder her. Eine nicht verfügbare explizite Wahl wird nicht ersetzt.\n\nADIOS ist bei Verfügbarkeit die erste Auto-Wahl; sonst gilt die bisherige Profilreihenfolge.",
       "descOpt": {
         "stock": "Ursprünglichen Scheduler jedes Blockgeräts wiederherstellen.",
         "auto": "Nur zur Laufzeit erkannte Scheduler entsprechend dem Profil wählen.",
         "mq-deadline": "Praktischer Standard für gemischte Speicherlast.",
         "kyber": "Latenzorientiert; von Performance bevorzugt, falls verfügbar.",
         "bfq": "Fairnessorientiert für interaktive gemischte Last.",
-        "none": "Keine I/O-Neuanordnung; nicht pauschal schneller."
+        "none": "Keine I/O-Neuanordnung; nicht pauschal schneller.",
+        "adios": "I/O-Scheduler mit adaptiven Deadlines; nur nach Laufzeiterkennung, ohne zugesicherten UFS-, Tempo- oder Akkugewinn."
       }
     }
   },
@@ -4000,8 +4001,11 @@
   "cfg_smart_owner": "SMART · AUTO",
   "cfg_smart_owner_dynamic": "Smart ändert diesen Ist-Wert dynamisch innerhalb des gewählten Modus. Nicht manuell erzwingen: Das würde den Governor bekämpfen. Einen manuellen Wert oder ein anderes Profil wählen, um die Kontrolle zurückzunehmen.",
   "cfg_smart_owner_radio": "Smart führt diesen erlaubten Funkwechsel nach Bildschirm- und Verkehrszustand aus. Zum Zurücknehmen der Kontrolle die Richtlinie ausschalten oder Smart verlassen.",
-  "cfg_smart_owner_thermal": "Dein Gain ist der angeforderte Pegel; Smart kann ihn am Lautsprecher bei heißem Akku vorübergehend senken. Nicht zur Kompensation der Thermalschutzregelung erhöhen. Smart verlassen oder DSP Loudness auf 0 setzen.",
+  "cfg_smart_owner_thermal": "Smart kann einen Ist-Wert zum Thermalschutz vorübergehend ändern; die angeforderte Einstellung bleibt erhalten.",
   "kc_why_io_scheduler": "Keine lesbare Warteschlange eines nicht rotierenden Blockgeräts stellt eine Scheduler-Liste bereit, oder die Warteschlange ist schreibgeschützt. ASB erstellt keinen allgemeinen sysfs-Writer und behauptet keine Unterstützung.",
   "cfg_net_cc_discovered": "Von diesem Kernel angeboten. Das Verhalten hängt von Algorithmus, RTT, Verlusten, Puffern und qdisc ab; kein universeller Geschwindigkeits- oder Akkuvorteil.",
-  "cfg_io_scheduler_discovered": "Vom Kernel als eigener I/O-Scheduler angeboten. ASB kann ihn wählen und prüfen, leitet aber keine Leistungs- oder Energieeigenschaften aus dem Namen ab."
+  "cfg_io_scheduler_discovered": "Vom Kernel als eigener I/O-Scheduler angeboten. ASB kann ihn wählen und prüfen, leitet aber keine Leistungs- oder Energieeigenschaften aus dem Namen ab.",
+  "cfg_smart_owner_profile": "SMART · PROFIL",
+  "cfg_smart_owner_dsp_thermal": "Dein Gain ist der angeforderte Pegel; Smart kann ihn am Lautsprecher bei heißem Akku vorübergehend senken. Nicht zur Kompensation der Thermalschutzregelung erhöhen. Smart verlassen oder DSP Loudness auf 0 setzen.",
+  "cfg_smart_profile": "Smart verwendet den Wert des aktuellen Battery/Balanced-Profils. Auto bleibt gespeichert; ein expliziter Wert oder das Verlassen von Smart gibt die Kontrolle zurück."
 }

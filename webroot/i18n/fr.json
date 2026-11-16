@@ -984,14 +984,15 @@
     },
     "io_scheduler": {
       "name": "Ordonnanceur I/O",
-      "desc": "Choisit uniquement les ordonnanceurs exposés pour chaque périphérique bloc. Auto suit le profil, Stock restaure les valeurs initiales. Un choix explicite indisponible n’est pas remplacé.",
+      "desc": "Choisit uniquement les ordonnanceurs exposés pour chaque périphérique bloc. Auto suit le profil, Stock restaure les valeurs initiales. Un choix explicite indisponible n’est pas remplacé.\n\nSi ADIOS est exposé, Auto le choisit en premier ; sinon l’ordre de profil précédent est conservé.",
       "descOpt": {
         "stock": "Restaurer l’ordonnanceur initial de chaque périphérique.",
         "auto": "Choisir selon le profil uniquement parmi les options détectées.",
         "mq-deadline": "Choix équilibré pour les charges de stockage mixtes.",
         "kyber": "Orienté latence; privilégié par Performance s’il est disponible.",
         "bfq": "Orienté équité pour les charges interactives mixtes.",
-        "none": "Aucun réordonnancement I/O; pas universellement plus rapide."
+        "none": "Aucun réordonnancement I/O; pas universellement plus rapide.",
+        "adios": "Ordonnanceur I/O à échéances adaptatives, choisi seulement après détection, sans gain UFS, de débit ou de batterie supposé."
       }
     }
   },
@@ -4000,8 +4001,11 @@
   "cfg_smart_owner": "SMART · AUTO",
   "cfg_smart_owner_dynamic": "Smart modifie dynamiquement cette valeur réelle dans le mode choisi. Ne la forcez pas manuellement : cela contrecarrerait le governor. Choisissez une valeur manuelle ou un autre profil pour reprendre le contrôle.",
   "cfg_smart_owner_radio": "Smart effectue cette transition radio autorisée selon l’écran et le trafic. Désactivez la règle ou quittez Smart pour reprendre le contrôle manuel.",
-  "cfg_smart_owner_thermal": "Votre gain est le niveau demandé ; Smart peut le réduire temporairement sur le haut-parleur si la batterie chauffe. Ne l’augmentez pas pour compenser la protection thermique. Quittez Smart ou réglez DSP Loudness sur 0.",
+  "cfg_smart_owner_thermal": "Smart peut temporairement réduire une valeur réelle pour la protection thermique tout en conservant votre réglage.",
   "kc_why_io_scheduler": "Aucune file lisible d’un périphérique bloc non rotatif ne fournit de liste d’ordonnanceurs, ou la file est en lecture seule. ASB ne crée pas de writer sysfs générique et ne prétend pas prendre en charge ce réglage.",
   "cfg_net_cc_discovered": "Proposé par ce noyau. Le comportement dépend de l’algorithme, du RTT, des pertes, des tampons et du qdisc; aucun gain universel n’est promis.",
-  "cfg_io_scheduler_discovered": "Ordonnanceur I/O personnalisé détecté. ASB peut le sélectionner et le vérifier sans déduire ses performances de son nom."
+  "cfg_io_scheduler_discovered": "Ordonnanceur I/O personnalisé détecté. ASB peut le sélectionner et le vérifier sans déduire ses performances de son nom.",
+  "cfg_smart_owner_profile": "SMART · PROFIL",
+  "cfg_smart_owner_dsp_thermal": "Votre gain est le niveau demandé ; Smart peut le réduire temporairement sur le haut-parleur si la batterie chauffe. Ne l’augmentez pas pour compenser la protection thermique. Quittez Smart ou réglez DSP Loudness sur 0.",
+  "cfg_smart_profile": "Smart applique la valeur du profil Battery/Balanced actuel. Auto est conservé ; choisissez une valeur explicite ou quittez Smart pour reprendre le contrôle."
 }
