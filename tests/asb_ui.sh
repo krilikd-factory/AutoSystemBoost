@@ -3836,6 +3836,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cat > "$T/t.js" <<'JS'
 const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
 const code = h.slice(h.indexOf('let _asbFirstFrameDone = null;'), h.indexOf('\n/* Contextual sonic feedback.'));
+const navDelay = h.slice(h.indexOf('function asbNavReadDelay() {'), h.indexOf('\n}', h.indexOf('function asbNavReadDelay() {')) + 2);
 global._liveOpen = false; global._cfgOpen = false; global._rpOpen = false; global._deviceOpen = false; global._zygiskOpen = false;
 let now = 0; const timers = []; const listeners = {}; let rafs = [];
 global.setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn, live: true }); };
@@ -3853,7 +3854,7 @@ async function advance(ms) {
   }
   now = end; await flush();
 }
-eval(code + '\nglobal.Q = { later: asbStartupLater, mark: asbFirstFrameMark };');
+eval(navDelay + '\n' + code + '\nglobal.Q = { later: asbStartupLater, mark: asbFirstFrameMark };');
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 (async () => {
   const log = []; let release = null;
@@ -3889,11 +3890,12 @@ node "$T/t.js" "$H" || fail "runtime"
 cat > "$T/f.js" <<'JS'
 const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
 const code = h.slice(h.indexOf('let _asbFirstFrameDone = null;'), h.indexOf('\n/* Contextual sonic feedback.'));
+const navDelay = h.slice(h.indexOf('function asbNavReadDelay() {'), h.indexOf('\n}', h.indexOf('function asbNavReadDelay() {')) + 2);
 let now = 0; const timers = [];
 global.setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn }); };
 global.performance = { now: () => now };
 global.window = { addEventListener() {} };
-eval(code + '\nglobal.later = asbStartupLater;');
+eval(navDelay + '\n' + code + '\nglobal.later = asbStartupLater;');
 let ran = 0; later(() => { ran++; }, 0, 0);
 (async () => {
   for (const t of timers.sort((a, b) => a.at - b.at).slice()) { if (t.at > 2600) break; now = t.at; t.fn(); await new Promise(r => setImmediate(r)); }
@@ -4376,7 +4378,7 @@ import sys
 s = open(sys.argv[1], encoding='utf-8').read()
 o = s[s.index('function openLivePage() {'):s.index('function closeLivePage() {')]
 assert o.index("paintStockLive(_stockTelemetryKv)") < o.index('liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);'), 'the freshness-aware read is scheduled before the cached ROM sample is painted'
-m = s[s.index('function liveMonitorSchedule(delay) {'):s.index('function liveBackgroundSchedule() {')]
+m = s[s.index('function liveMonitorSchedule(delay) {'):s.index('function liveBackgroundSchedule(')]
 assert m.index('setTimeout(function () {') < m.index('pollStockTelemetry(true)'), 'the Stock freshness-aware read runs before the page has slid in'
 assert 'pollStockTelemetry(true, true)' not in o, 'a recent Stock sample is forced again on every opening'
 p = s[s.index('async function pollStockTelemetry('):s.index('async function pollLive(')]
@@ -4549,7 +4551,7 @@ printf '%s\n' "$out" | grep -q 'trip\|pm8550' && fail "a trip point or an unshow
 run refresh >/dev/null
 i=0; while [ ! -s "$T/mdao" ] && [ "$i" -lt 30 ]; do sleep 0.1; i=$((i + 1)); done
 [ "$(cat "$T/mdao" 2>/dev/null)" = 1 ] || fail "the background refresh did not fill the cache"
-printf '%s\n' "$(run)" | grep -qx 'settings.global.mobile_data_always_on=1' || fail "the cached value is not printed"
+printf '%s\n' "$(run)" | grep -x 'settings.global.mobile_data_always_on=1' >/dev/null || fail "the cached value is not printed"
 # Builtins only: no cat, no date, no grep in the foreground part.
 sed -n '/^_r() {/,$p' "$R" | grep -vE '^[[:space:]]*#' | grep -v 'nohup sh -c' | grep -qE '\$\((cat|date|grep|head|cut) ' \
   && fail "the snapshot forks a reader again"
@@ -4636,6 +4638,7 @@ function liveInfoEnsure() { if (_nodes.liveInfoSheet) return _nodes.liveInfoShee
 const _lviCalls = [];
 function lviSample() { _lviCalls.push('sample'); } function lviNum() { return null; } function lviScaleValue() { return null; }
 function lviScaleRender(box, key) { _lviCalls.push('scale:' + key); } function lviHistRender(box, key) { _lviCalls.push('hist:' + key); }
+function lviTrendRender(box, key) { _lviCalls.push('trend:' + key); }
 function lviExtra(key) { return []; }
 function cell(pos, label, value, cls, title) {
   const l = { textContent: label }, v = { textContent: value, className: 'live-cell-value' + (cls ? ' ' + cls : ''), title: title || '' };
@@ -9250,7 +9253,7 @@ run() {
 }
 want() {
   _line="$(printf 'D\t%s\t%s\t%s' "$1" "$2" "$3")"
-  printf '%s\n' "$out" | grep -Fqx "$_line" || fail "missing [$_line] in: $out"
+  printf '%s\n' "$out" | grep -Fx "$_line" >/dev/null || fail "missing [$_line] in: $out"
 }
 out="$(run)"
 printf '%s\n' "$out" | awk -F '\t' 'NF < 4 || $1 != "D" || $2 == "" || $3 == "" { bad = 1 } END { exit bad }' || fail "malformed TSV"
@@ -9679,7 +9682,7 @@ out="$(ASB_DEVINFO_MODDIR="$T/mod" ASB_DEVINFO_SYS="$T/sys" ASB_DEVINFO_PROC="$T
   SUSFS_LOG="$T/susfs.log" TC_LOG="$T/tc.log" sh "$D")"
 want() {
   _line="$(printf 'D\t%s\t%s\t%s' "$1" "$2" "$3")"
-  printf '%s\n' "$out" | grep -Fqx "$_line" || fail "missing [$_line] in: $out"
+  printf '%s\n' "$out" | grep -Fx "$_line" >/dev/null || fail "missing [$_line] in: $out"
 }
 want kernel_origin assessment custom-like
 want kernel_origin custom_evidence 'build/localversion marker; SuSFS interface; NoMount driver; Re-Kernel kernel symbols; VPN Hide control interface; VPN Hide kernel symbols; Baseband Guard kernel symbols; Baseband Guard in runtime LSM list; BBRv3 runtime algorithm'
@@ -10161,7 +10164,7 @@ assert b.count('html:root[data-asb-glass="1"]') >= 20
 for token in (
     '--glass-surface:rgba(12,18,15,.52)',
     '--glass-surface-quiet:rgba(8,13,10,.42)',
-    '--glass-surface-strong:rgba(10,15,13,.74)',
+    '--glass-surface-strong:rgba(10,15,13,.90)',
     '--glass-nav-surface:rgba(6,10,8,.84)',
     '--glass-nav-wash:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.008) 48%,rgba(255,255,255,.018))',
     '--glass-control:rgba(20,27,24,.44)',
@@ -10171,7 +10174,7 @@ for token in (
     '--glass-blur:blur(22px) saturate(1.28)',
     '--glass-surface:rgba(255,255,255,.42)',
     '--glass-surface-quiet:rgba(255,255,255,.32)',
-    '--glass-surface-strong:rgba(250,252,251,.70)',
+    '--glass-surface-strong:rgba(250,252,251,.90)',
     '--glass-nav-surface:var(--glass-surface-strong)',
     '--glass-nav-wash:var(--glass-wash)',
     '--glass-control:rgba(255,255,255,.36)',
@@ -13997,9 +14000,9 @@ t_webui_dev61_ambient_gpu_pressure() (
 #    40/100". The GPU figure was this page drawing its own header at the lowest clock
 #    (160 MHz): with the WebUI closed the log's GPU busy median was 4 %. The tile now shows
 #    the clock beside the busy share and colours busy x clock / top clock;
-#  - the idle header kept drawing 60 frames a second (dev17 kept it moving so the page does
-#    not look hung). Calm now pauses those loops in CSS and steps them from one 100 ms timer:
-#    still moving, a tenth of the frames (a browser trace: 60 -> 10 DrawFrame/s);
+#  - dev61 stepped the idle header from a 100 ms timer, which looked like a ten-second
+#    slowdown/freeze. Dev66 returns visible header loops to the native CSS clock and keeps
+#    the ticker only for the Smart card glow; hidden/reduced-motion rules remain intact;
 #  - the pressure sheet scored loadavg (it counts tasks asleep on storage) and the share of
 #    memory in use (Android keeps apps cached on purpose), which read "moderate" on a phone
 #    doing nothing. With /proc/pressure it now scores stall time, and says which basis it used;
@@ -14012,14 +14015,15 @@ fail() { echo "FAIL webui dev61 ambient/gpu/pressure: $*" >&2; exit 1; }
 python3 - "$ROOT" <<'P' || fail 'static contract and locales'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
-i = h.index('/* dev61: ambient motion while idle.')
+i = h.index('/* dev66: calm never changes the visible header')
 blk = h[i:h.index('}', i) + 1]
 blk = blk[blk.index('*/') + 2:]
-for need in ('html.asb-calm .logo-sphere-a', 'html.asb-calm .logo-sphere-b', 'html.asb-calm .logo-inner',
-             'html.asb-calm .dot', 'html.asb-calm .dot::after', 'html.asb-calm .zygisk-header-dot',
-             'html.asb-calm .dev-zygisk-link-dot', 'html.asb-calm .pico-smart .ai-glow'):
-    assert need in blk, need
+assert 'html.asb-calm .pico-smart .ai-glow' in blk
 assert 'animation-play-state: paused !important;' in blk
+for header in ('.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot',
+               '.zygisk-header-dot', '.dev-zygisk-link-dot'):
+    assert header not in blk, 'header returned to the 100 ms idle ticker: ' + header
+assert "el.closest('.asb-boot-intro, .header')" in h
 for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'stock-restoring', 'is-recording'):
     assert spinner not in blk, 'a progress indicator would stop: ' + spinner
 names = re.search(r"const ASB_AMBIENT_NAMES = \[([^\]]*)\];", h).group(1)
@@ -14071,12 +14075,13 @@ const slice = (a, b) => { const i = h.indexOf(a); const j = h.indexOf(b, i); if 
     closest: () => null, checkVisibility: () => true }, opts || {});
   const A = [
     { animationName: 'asbBootSpin', currentTime: 0, effect: { target: el(10) } },
-    { animationName: 'pulse', currentTime: 500, effect: { target: el(20) } },
-    { animationName: 'asbBootSpin', currentTime: 0, effect: { target: el(5000) } },
-    { animationName: 'asbBootPulse', currentTime: 0, effect: { target: el(10, { checkVisibility: () => false }) } },
-    { animationName: 'asbBootSpin', currentTime: 0, effect: { target: el(10, { closest: s => s === '.asb-boot-intro' ? {} : null }) } },
+    { animationName: 'ai-spin', currentTime: 500, effect: { target: el(20) } },
+    { animationName: 'ai-spin', currentTime: 0, effect: { target: el(5000) } },
+    { animationName: 'ai-spin', currentTime: 0, effect: { target: el(10, { checkVisibility: () => false }) } },
+    { animationName: 'ai-spin', currentTime: 0, effect: { target: el(10, { closest: s => s.includes('.asb-boot-intro') ? {} : null }) } },
     { animationName: 'asbSweep', currentTime: 0, effect: { target: el(10) } },
-    { animationName: 'spin', currentTime: 0, effect: { target: el(10) } }
+    { animationName: 'spin', currentTime: 0, effect: { target: el(10) } },
+    { animationName: 'ai-spin', currentTime: 0, effect: { target: el(10, { closest: s => s.includes('.header') ? {} : null }) } }
   ];
   let anims = A;
   const document = { hidden: false, getAnimations: () => anims,
@@ -14097,21 +14102,21 @@ const slice = (a, b) => { const i = h.indexOf(a); const j = h.indexOf(b, i); if 
   chk(typeof docl.visibilitychange === 'function', 'no visibility listener');
   advance(9900); chk(!cls.has('asb-calm') && A[0].currentTime === 0, 'stepped before calm');
   advance(100); chk(cls.has('asb-calm'), 'not calm after ten seconds');
-  chk(A[0].currentTime === 100 && A[1].currentTime === 600, 'first ambient step: ' + A[0].currentTime + '/' + A[1].currentTime);
+  chk(A[0].currentTime === 0 && A[1].currentTime === 600, 'header was stepped or Smart glow was not: ' + A[0].currentTime + '/' + A[1].currentTime);
   chk(live() === 1, 'one ambient timer, got ' + live());
   advance(1000);
-  chk(A[0].currentTime === 1100, 'ten steps a second: ' + A[0].currentTime);
+  chk(A[1].currentTime === 1600, 'ten steps a second: ' + A[1].currentTime);
   chk(A[2].currentTime === 0 && A[3].currentTime === 0 && A[4].currentTime === 0, 'off-screen, invisible or boot-intro loops were stepped');
-  chk(A[5].currentTime === 0 && A[6].currentTime === 0, 'the wordmark sweep or a spinner was stepped');
+  chk(A[5].currentTime === 0 && A[6].currentTime === 0 && A[7].currentTime === 0, 'wordmark, spinner or header loops were stepped');
   document.hidden = true; advance(500);
-  const frozen = A[0].currentTime;
-  chk(live() === 0 && frozen <= 1200, 'a hidden page kept stepping');
+  const frozen = A[1].currentTime;
+  chk(live() === 0 && frozen <= 1700, 'a hidden page kept stepping');
   document.hidden = false; docl.visibilitychange();
-  chk(A[0].currentTime === frozen + 100 && live() === 1, 'showing the page did not resume the steps');
+  chk(A[1].currentTime === frozen + 100 && live() === 1, 'showing the page did not resume the steps');
   docl.visibilitychange(); chk(live() === 1, 'a second visibility event doubled the ticker');
   listeners.touchstart();
   chk(!cls.has('asb-calm') && live() === 1, 'a touch left the ticker running or did not re-arm calm (' + live() + ')');
-  const atWake = A[0].currentTime; advance(5000); chk(A[0].currentTime === atWake, 'stepped while awake');
+  const atWake = A[1].currentTime; advance(5000); chk(A[1].currentTime === atWake, 'stepped while awake');
   anims = []; advance(6000);
   chk(cls.has('asb-calm') && live() === 0, 'nothing on screen still left a timer (' + live() + ')');
   document.getAnimations = undefined; listeners.touchstart(); advance(10100);
@@ -14208,7 +14213,7 @@ console.log(bad ? 'bad ' + bad : 'ok');
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS webui dev61: calm header loops paused in CSS and stepped at 10 fps only on screen (stops hidden, on touch, with nothing to step), GPU tile shows the clock and colours busy x clock (snapshot keeps the clock apart), pressure sheet on PSI with a basis note, Vendor ↑ is a boost not a clamp (neutral, not a chip issue, outranked by a clamp on the other cluster), 13 locales'
+echo 'PASS webui dev66 ambient/dev61 GPU-pressure: header loops never enter the 100 ms ticker, Smart glow alone steps only on screen (stops hidden, on touch, with nothing to step), GPU tile shows the clock and colours busy x clock, pressure sheet on PSI, Vendor ↑ stays neutral, 13 locales'
 )
 
 
@@ -14514,6 +14519,106 @@ JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI performance lifecycle dev63: unified frames, reduced effects, explicit TTL diagnostics, 3/5/8-second backoff, hidden timers stopped, stale page paint dropped with one fresh follow-up'
+)
+
+t_webui_dev66_navigation_trend_material() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI dev66 navigation/trend/material: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'static contract'
+import json, pathlib, re, sys
+r = pathlib.Path(sys.argv[1]); h = (r/'webroot/index.html').read_text(encoding='utf-8')
+assert "const ASB_AMBIENT_NAMES = ['ai-spin'];" in h
+calm = h[h.index('/* dev66: calm never changes the visible header'):]
+calm = calm[:calm.index('}')+1]
+for x in ('.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot', '.zygisk-header-dot'):
+    assert x not in calm, x
+assert "el.closest('.asb-boot-intro, .header')" in h
+mon = h[h.index('function liveMonitorSchedule(delay) {'):h.index('function livePollTrack(')]
+assert mon.count('asbNavReadDelay()') >= 4
+assert 'const navWait = asbNavReadDelay();' in mon
+assert 'function asbNavReadDelay()' in h and 'function liveBackgroundSchedule(delay)' in mon
+queue = h[h.index('function asbLaterPump() {'):h.index('function asbLaterPump() {')+1800]
+assert 'const navWait = asbNavReadDelay();' in queue
+assert 'setInterval' not in mon and 'Worker(' not in mon
+assert "if (key === 'trend' || key === 'strend') lviTrendRender" in h
+assert "devicePressureScale(d, key === 'apphint' ? 'system' : '')" in h
+assert "function devicePressureScale(d, context)" in h
+assert "T('lvp_system_band', 'System: {band}')" in h
+assert '--glass-surface-strong:rgba(10,15,13,.90);' in h
+assert '--glass-surface-strong:rgba(250,252,251,.90);' in h
+for p in sorted((r/'webroot/i18n').glob('*.json')):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in ('lvp_system_band','lvi_trend_chart_wait','lvi_trend_chart_range'):
+        assert d.get(k) and '{band}' in d[k] if k == 'lvp_system_band' else d.get(k), (p.name,k)
+en = json.loads((r/'webroot/i18n/en.json').read_text(encoding='utf-8'))
+assert en['lvp_system_band'] == 'System: {band}'
+assert en['lvi_trend_chart_wait'] == 'The diagram appears after two temperature readings in the same window.'
+assert en['lvi_trend_chart_range'] == '%1 °C → %2 °C'
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI dev66 navigation/trend/material runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const slice=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i);if(i<0||j<0)throw Error('markers '+a);return h.slice(i,j)};
+const chk=(c,m)=>{if(!c)throw Error(m)};
+function mk(tag){return {tag,children:[],className:'',style:{},hidden:false,_t:'',attrs:{},
+ setAttribute(k,v){this.attrs[k]=String(v);if(k==='class')this.className=String(v)},appendChild(c){this.children.push(c);return c},
+ set textContent(v){this._t=String(v);this.children=[]},get textContent(){return this._t+this.children.map(c=>c.textContent).join(' ')},
+ querySelector(sel){return this.children.find(c=>('.'+c.className)===sel)||null}};}
+const find=(e,cls)=>e.className===cls?e:(e.children||[]).map(c=>find(c,cls)).find(x=>x)||null;
+/* Real pressure scale: only the foreground sheet prefixes the system band. */
+{
+ const document={createElement:mk};
+ const T=(k,f)=>k==='lvp_system_band'?'System: {band}':f;
+ const deviceVal=(d,s,k)=>((d&&d[s])||{})[k]||'';
+ const deviceFallbackLabel=x=>x,deviceFill=(k,f,o)=>f.replace('{coverage}',o.coverage);
+ eval(slice('function devicePressureScale(d, context) {','/* A compact evidence verdict'));
+ const d={system_load:{band:'light',score:'13',coverage_pct:'100'}};
+ chk(find(devicePressureScale(d,'system'),'dev-pressure-band').textContent==='System: light','foreground system band is not named');
+ chk(find(devicePressureScale(d,''),'dev-pressure-band').textContent==='light','ordinary pressure scale changed');
+}
+/* Real trend renderer: measured polyline plus whole-window regression, no fake one-point chart. */
+{
+ const document={createElement:mk,createElementNS:(ns,tag)=>mk(tag)};
+ const T=(k,f)=>f,logReportDur=n=>n+' min';
+ const _lviHist={'smart:cpu':[{t:1000,n:30},{t:31000,n:31},{t:61000,n:32}]};
+ const _stockTrendSamples=[{t:1000,c:40},{t:31000,c:42},{t:61000,c:41}];
+ const _selectedProfile='smart';
+ eval(slice('function lviFmt(n) {','function lviHistRender('));
+ let b=mk('div');lviTrendRender(b,'trend','green');
+ chk(find(b,'lvt-line').attrs.points.split(' ').length===3,'Smart did not chart CPU history');
+ chk(find(b,'lvt-overall').attrs.x2==='296.0','overall regression line missing');
+ chk(b.textContent.includes('30 °C → 32 °C')&&b.textContent.includes('+2.0'),'Smart summary: '+b.textContent);
+ b=mk('div');lviTrendRender(b,'strend','amber');
+ chk(b.textContent.includes('40 °C → 41 °C'),'Stock samples not used: '+b.textContent);
+ chk(find(b,'lvt-chart').attrs.role==='img','chart has no accessible name');
+ const empty=mk('div');lviTrendData=()=>[{t:1000,n:35}];lviTrendRender(empty,'trend','green');
+ chk(!find(empty,'lvt-chart')&&empty.textContent.includes('after two temperature readings'),'one point drew a chart');
+}
+/* Real scheduler: a timer becoming due mid-slide waits; it never starts a root poll there. */
+{
+ let now=0,timers=[],seq=0,polls=0,stock=0;
+ const performance={now:()=>now},document={hidden:false};
+ const setTimeout=(f,ms)=>{timers.push({id:++seq,f,at:now+ms,live:true});return seq};
+ const clearTimeout=id=>{const t=timers.find(x=>x.id===id);if(t)t.live=false};
+ let _liveTimer=null,_liveBgTimer=null,_liveOpen=true,_asbNavAnimUntil=360;
+ const _livePollMeta={nextDelay:3000},_selectedProfile='smart';
+ const pollLive=()=>{polls++;return new Promise(()=>{})},pollStockTelemetry=()=>{stock++},lviSample=()=>{};
+ eval(slice('function asbNavReadDelay() {','function livePollTrack('));
+ liveMonitorSchedule(0);chk(timers[0].at===392,'opening read not moved past transition: '+timers[0].at);
+ const advance=ms=>{now+=ms;const due=timers.filter(t=>t.live&&t.at<=now);due.forEach(t=>{t.live=false;t.f()})};
+ advance(390);chk(polls===0,'poll started inside slide');advance(2);chk(polls===1,'deferred poll never started');
+ _liveTimer=null;_asbNavAnimUntil=0;liveMonitorSchedule(0);_asbNavAnimUntil=500;advance(0);
+ chk(polls===1,'timer due at navigation started a poll');chk(timers.some(t=>t.live&&t.at===532),'mid-slide timer not rearmed');
+ _liveOpen=false;_asbNavAnimUntil=700;liveBackgroundSchedule(0);chk(timers.some(t=>t.live&&t.at===732),'background read not deferred');
+}
+console.log('ok');
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI dev66: native-clock header, navigation-safe root timers, explicit system load band, measured+overall Trend charts for Smart/Stock, denser Glass popups, 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

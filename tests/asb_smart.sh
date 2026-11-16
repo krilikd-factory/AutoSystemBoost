@@ -4547,6 +4547,10 @@ proc 2005  10300 0    com.netflix.mediaclient
 proc 3001  1010234 0  com.whatsapp                        # work profile (user 10)
 proc 2006  10151 0    com.touchtype.swiftkey
 proc 2007  10152 100  com.baidu.input_oppo
+proc 2008  10431 0    com.supercell.brawlstars
+proc 2009  10431 0    com.supercell.brawlstars:render
+proc 2010  10432 0    com.riotgames.league
+proc 2011  10431 100  com.supercell.brawlstars
 {
   cat <<X
 #include <stdio.h>
@@ -4555,6 +4559,8 @@ proc 2007  10152 100  com.baidu.input_oppo
 #include <stdint.h>
 #include <fcntl.h>
 #include <unistd.h>
+enum { ASB_APP_IDLE = 0, ASB_APP_LIGHT = 1, ASB_APP_MEDIUM = 2,
+       ASB_APP_HEAVY = 3, ASB_APP_GAMING = 4 };
 #define ASB_PROC_ROOT "$T/proc"
 #define ASB_TOPAPP_PROCS_A "$T/cpuset.procs"
 #define ASB_TOPAPP_PROCS_B "$T/cpuctl.procs"
@@ -4566,13 +4572,15 @@ static inline void asb_copy_str(char *dst, const char *src, size_t n) {
     dst[i] = 0;
 }
 X
+  awk '/^static int asb_smart_app_hint_from_pkg/{f=1} f{print} f&&/^}$/{exit}' "$S"
   awk '/^#ifndef ASB_PROC_ROOT/{on=1} on&&/^static int asb_smart_pkg_via_topapp/{f=1} on{print} f&&/^}$/{exit}' "$S"
   cat <<'X'
 int main(int argc, char **argv) {
     (void)argc;
     char pkg[128];
     int r = asb_smart_pkg_via_topapp(pkg, sizeof(pkg));
-    printf("%s|%s|%lu|%lu\n", r ? "1" : "0", r ? pkg : "-", g_stat_probe_topapp, g_stat_probe_topapp_ime);
+    printf("%s|%s|%lu|%lu|%lu\n", r ? "1" : "0", r ? pkg : "-", g_stat_probe_topapp,
+           g_stat_probe_topapp_ime, g_stat_probe_topapp_game);
     return 0;
     (void)argv;
 }
@@ -4609,8 +4617,57 @@ printf '1000\n2004\n' > "$T/cpuctl.procs"
 [ "$(run | cut -d'|' -f4)" = 1 ] || fail "keyboard-only answer not counted: $(run)"
 printf '2007\n2005\n' > "$T/cpuctl.procs"
 [ "$(run | cut -d'|' -f1-2)" = "1|com.netflix.mediaclient" ] || fail "an OEM keyboard was taken for an app: $(run)"
+# dev66 field regression: ColorOS may keep the game and another visible process in top-app.
+# One adj-0 game is unambiguous even with a second process of that game; two games are not.
+printf '2008\n2001\n' > "$T/cpuctl.procs"
+[ "$(run | cut -d'|' -f1-2)" = "1|com.supercell.brawlstars" ] || fail "one visible game was lost in an ambiguous group: $(run)"
+printf '2008\n2009\n2001\n' > "$T/cpuctl.procs"
+[ "$(run | cut -d'|' -f1-2)" = "1|com.supercell.brawlstars" ] || fail "two processes of one game were treated as two games: $(run)"
+printf '2008\n2010\n2001\n' > "$T/cpuctl.procs"
+[ "$(run | cut -d'|' -f1)" = 0 ] || fail "two visible games were resolved by guessing: $(run)"
+printf '2011\n2001\n' > "$T/cpuctl.procs"
+[ "$(run | cut -d'|' -f1-2)" = "1|com.instagram.android" ] || fail "a background game outranked the adj-0 app: $(run)"
 grep -q 'probe_topapp_keyboard_only=%lu' "$ROOT/src/asb_governor.c" || fail "keyboard-only answers not published"
-echo "PASS foreground app from the top-app cgroup (no dumpsys activity top; keyboards left out)"
+grep -q 'probe_topapp_game_resolved=%lu' "$ROOT/src/asb_governor.c" || fail "locally resolved game groups are not published"
+
+# Execute the real resumed-ActivityRecord parser against the field format that triggered
+# the MODERATE/low-GPU-clock capture, plus both legacy variants.
+mkdir -p "$T/bin"
+cat > "$T/bin/timeout" <<'X'
+#!/bin/sh
+shift
+exec "$@"
+X
+cat > "$T/bin/dumpsys" <<'X'
+#!/bin/sh
+cat "$ASB_TEST_ACTIVITY"
+X
+chmod +x "$T/bin/timeout" "$T/bin/dumpsys"
+{
+  cat <<'X'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+X
+  awk '/^static void asb_smart_strip_activity/{f=1} f{print} f&&/^}$/{exit}' "$S"
+  awk '/^static int asb_smart_pkg_via_resumed/{f=1} f{print} f&&/^}$/{exit}' "$S"
+  cat <<'X'
+int main(void) {
+    char pkg[128];
+    int r = asb_smart_pkg_via_resumed(pkg, sizeof(pkg));
+    printf("%d|%s\n", r, r ? pkg : "-");
+    return 0;
+}
+X
+} > "$T/resumed.c"
+"$CC" -O2 -Wall -Werror -Wno-unused-function -o "$T/resumed" "$T/resumed.c" || fail "resumed parser fixture did not compile"
+printf '%s\n' '    topResumedActivity=ActivityRecord{13604027 u0 com.supercell.brawlstars/.GameApp t720}' > "$T/activity"
+[ "$(PATH="$T/bin:$PATH" ASB_TEST_ACTIVITY="$T/activity" "$T/resumed")" = '1|com.supercell.brawlstars' ] || fail "topResumedActivity was not parsed"
+printf '%s\n' '  ResumedActivity: ActivityRecord{13604027 u10 com.supercell.brawlstars/.GameApp t720}' > "$T/activity"
+[ "$(PATH="$T/bin:$PATH" ASB_TEST_ACTIVITY="$T/activity" "$T/resumed")" = '1|com.supercell.brawlstars' ] || fail "ResumedActivity was not parsed"
+printf '%s\n' '  mResumedActivity: ActivityRecord{abc u0 com.netflix.mediaclient/.Main t1}' > "$T/activity"
+[ "$(PATH="$T/bin:$PATH" ASB_TEST_ACTIVITY="$T/activity" "$T/resumed")" = '1|com.netflix.mediaclient' ] || fail "legacy mResumedActivity regressed"
+echo "PASS foreground app from top-app and current/legacy resumed ActivityRecord formats"
 )
 
 t_touch_watch_runtime() (
