@@ -299,16 +299,8 @@ if [ "$THERM" = "2" ]; then
   done
 fi
 
-# Re-publish the DSP values (mirror) on every tuner run.
-#
-# The gain's heat back-off used to be decided right here from cpu_max_c, at the moment the
-# CPU heat band or the foreground had just changed - the spikiest number on the phone, read at
-# the worst moment, and then kept. From fix135 mirror asks asb_dsp_thermal.sh: battery
-# temperature with hysteresis, loudspeaker only, the same answer the once-a-minute watcher in
-# service.sh gives. mirror stays idempotent: it rewrites a property only when the value moved.
-if [ "$MODE" != manual ] && [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh ]; then
-  sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh mirror >/dev/null 2>&1 || true
-fi
+# DSP is deliberately outside Smart ownership. Its user-requested effects are applied by
+# the audio owner; the independent loudspeaker thermal guard remains profile-neutral.
 
 # Prefer LTE with the screen off (opt-in, net_screen_off_lte). The script owns all the
 # safety: delay, call check, save/verify/restore. Screen-off only starts its timer;
