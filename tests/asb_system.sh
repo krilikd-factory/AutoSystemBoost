@@ -9740,16 +9740,27 @@ touch -d '2001-01-01' "$M/module.prop"; hx refresh
 [ "$(date -r "$M/module.prop" +%Y)" = 2001 ] || fail 'unchanged refresh touched module.prop'
 cfg 0; hx refresh
 grep -qxF 'description=[Smart Mode 🤖 active ✅]   [Zygisk 🧩 off ⏸️]' "$M/module.prop" || fail "state change: $(grep description "$M/module.prop")"
-# settle: polls while waiting, stops at the first final state or after its step budget.
+# settle: the sleep stub publishes connected on poll two, so this regression does not
+# depend on a background writer winning a wall-clock race on a loaded CI runner.
 cfg 1 0; rm -f "$R/state.arm64-v8a.tsv"
-( sleep 1; printf 'Z\tevents_total\t1\n' > "$R/state.arm64-v8a.tsv" ) &
-MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" ASB_MD_SETTLE_SLEEP=0.2 ASB_MD_SETTLE_STEPS=50 sh "$H" settle
-wait
+mkdir -p "$T/bin"
+cat > "$T/bin/sleep" <<'SH'
+#!/bin/sh
+_n=0
+[ ! -s "$ASB_MD_TEST_COUNT" ] || _n="$(cat "$ASB_MD_TEST_COUNT")"
+_n=$((_n + 1))
+printf '%s\n' "$_n" > "$ASB_MD_TEST_COUNT"
+[ "${ASB_MD_TEST_PUBLISH:-0}" = 1 ] || exit 0
+[ "$_n" -lt 2 ] || printf 'Z\tevents_total\t1\n' > "$ASB_MD_TEST_STATE"
+SH
+chmod +x "$T/bin/sleep"
+: > "$T/settle.count"
+ASB_MD_TEST_COUNT="$T/settle.count" ASB_MD_TEST_STATE="$R/state.arm64-v8a.tsv" ASB_MD_TEST_PUBLISH=1 PATH="$T/bin:$PATH" MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" ASB_MD_SETTLE_SLEEP=10 ASB_MD_SETTLE_STEPS=50 sh "$H" settle
+[ "$(cat "$T/settle.count")" = 2 ] || fail "settle poll count: $(cat "$T/settle.count")"
 grep -qxF 'description=[Smart Mode 🤖 active ✅]   [Zygisk 🧩 connected ✅]' "$M/module.prop" || fail "settle did not pick up the connection: $(grep description "$M/module.prop")"
-rm -f "$R/state.arm64-v8a.tsv"
-s0="$(date +%s)"
-MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" ASB_MD_SETTLE_SLEEP=0.1 ASB_MD_SETTLE_STEPS=5 sh "$H" settle
-[ $(( $(date +%s) - s0 )) -le 3 ] || fail 'settle is not bounded'
+rm -f "$R/state.arm64-v8a.tsv"; : > "$T/settle.count"
+ASB_MD_TEST_COUNT="$T/settle.count" ASB_MD_TEST_STATE="$R/state.arm64-v8a.tsv" PATH="$T/bin:$PATH" MODDIR="$M" ASB_ZYGISK_DIR="$Z" ASB_ZYGISK_RUN_DIR="$R" ASB_MD_SETTLE_SLEEP=10 ASB_MD_SETTLE_STEPS=5 sh "$H" settle
+[ "$(cat "$T/settle.count")" = 5 ] || fail "settle exceeded its step budget: $(cat "$T/settle.count")"
 grep -qxF 'description=[Smart Mode 🤖 active ✅]   [Zygisk 🧩 waiting ⏳]' "$M/module.prop" || fail 'settle left a stale line'
 # The profile writer (runtime/profile_core.sh) appends the same suffix; install-time stays plain.
 cp "$H" "$M/runtime/asb_module_desc.sh"

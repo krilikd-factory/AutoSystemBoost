@@ -1738,7 +1738,7 @@ CPP
   for want in version=1 classes=on classes_slow=1 classes_fast=2 comp_state=1 comp_supported=1 comp_long=5 comp_short=3 comp_classes_loaded=1 \
       denylist_spawns=7 gov_launch=20 gov_long=4 gov_short=2 gov_cold_long=3 gov_trims=1 lsposed=1 lsposed_modules=2 lsposed_apps=5 lsposed_system=1 lsposed_sysui=2 \
       'zmod|other_x|0|Other x(id)' 'zmod|zygisk_lsposed|1|Zygisk - LSPosed' 'cmp|575|2|700|5'; do
-    printf '%s\n' "$st" | grep -qxF "$want" || fail "status lacks '$want': $st"
+    printf '%s\n' "$st" | grep -xF "$want" >/dev/null || fail "status lacks '$want': $st"
   done
   printf '%s\n' "$st" | grep -q 'AutoSystemBoost' && fail 'ASB listed itself among other Zygisk modules'
   printf '%s\n' "$st" | grep -qxF 'app|com.example.midapp|normal|normal|measured|3|700|0|-|3|-1|loop|-|notif|0' || fail "guarded + protected row: $st"
