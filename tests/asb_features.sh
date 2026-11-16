@@ -11483,9 +11483,11 @@ out="$(run apply kernel_mglru_min_ttl)"
 printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|2000' >/dev/null || fail "bounded apply/readback: $out"
 [ "$(cat "$T/ttl")" = 1000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'value or original baseline is wrong'
 printf 'kernel_mglru_min_ttl=5000\n' > "$T/mod/config/governor.conf"
-out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|2000|2000|2000' >/dev/null || fail "legacy 5000 is not read as 2000: $out"
-[ "$(cat "$T/ttl")" = 2000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'repeat apply replaced the original baseline'
+set +e; out="$(run apply kernel_mglru_min_ttl)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|invalid_value|5000|unknown|none' >/dev/null || fail "legacy 5000 was not rejected explicitly: $out"
+[ "$(cat "$T/ttl")" = 1000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'rejected TTL changed the live value or original baseline'
+set +e; out="$(run status kernel_mglru_min_ttl)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|invalid_value|5000|unknown|none' >/dev/null || fail "invalid TTL status was hidden: $out"
 printf '9\n' > "$T/ttl"
 printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
@@ -11503,13 +11505,36 @@ grep -Fq 'asb_kernel_controls.sh" restore' "$ROOT/uninstall.sh" || fail 'uninsta
 mkdir -p "$T/cmod/config" "$T/cmod/runtime"
 cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
 cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
-MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_mglru_min_ttl 5000 >/dev/null
+before="$(sha256sum "$T/cmod/config/governor.conf" | cut -d' ' -f1)"
+set +e
+MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_mglru_min_ttl 5000 >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail 'config writer accepted legacy 5000'
+[ "$before" = "$(sha256sum "$T/cmod/config/governor.conf" | cut -d' ' -f1)" ] || fail 'rejected legacy 5000 changed config'
 set +e
 MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_mglru_min_ttl 1 >/dev/null 2>&1
 rc=$?
 set -e
 [ "$rc" -ne 0 ] || fail 'config writer accepted an arbitrary TTL'
-echo 'PASS kernel MGLRU TTL: fixed node, bounded values, stable baseline, exact restore, honest absence and no legacy direct writer'
+python3 - "$ROOT/webroot" <<'PY' || fail 'WebUI still exposes a coerced TTL'
+import json, pathlib, sys
+w = pathlib.Path(sys.argv[1])
+h = (w / 'index.html').read_text(encoding='utf-8')
+a = h.index("{ key:'kernel_mglru_min_ttl'")
+b = h.index("{ key:'kernel_timer_migration'", a)
+assert "opts:['stock','1000','2000']" in h[a:b]
+en = json.loads((w / 'i18n' / 'en.json').read_text(encoding='utf-8'))
+def find(x, key):
+    if isinstance(x, dict):
+        if key in x: return x[key]
+        for v in x.values():
+            r = find(v, key)
+            if r is not None: return r
+    return None
+assert set(find(en, 'kernel_mglru_min_ttl')) == {'stock', '1000', '2000'}
+PY
+echo 'PASS kernel MGLRU TTL: fixed node, strict bounded values, stable baseline, exact restore, explicit invalid_value and no legacy direct writer'
 )
 
 

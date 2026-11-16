@@ -9911,7 +9911,37 @@ need "$ROOT/service.sh" 'asb_display_ui_apply.sh" boot' 'boot reconcile missing'
 need "$ROOT/.github/workflows/build-test.yml" 'runtime/asb_display_ui_apply.sh' 'test CI syntax list missing'
 need "$ROOT/.github/workflows/build-release.yml" 'runtime/asb_display_ui_apply.sh' 'release CI syntax list missing'
 need "$ROOT/webroot/index.html" 'DISPLAY_UI_KEYS' 'WebUI read-back verdict branch missing'
-echo 'PASS display/ui settings dev64: eight bounded mappings, exact restore, rejected-write and paired-radius rollback, stock boot ownership, atomic config validation, installer/CI/WebUI wiring'
+python3 - "$ROOT/webroot" <<'PY' || fail 'pointer-speed baseline semantics are not explicit in every locale'
+import json, pathlib, sys
+w = pathlib.Path(sys.argv[1])
+notes = {
+'en':'The saved baseline is the value captured when ASB first applied an override, not necessarily the factory default.',
+'ru':'Исходное состояние — это значение, сохранённое при первом применении настройки ASB, а не обязательно заводское значение.',
+'uk':'Початкове значення — це значення, збережене під час першого застосування налаштування ASB, а не обов’язково заводське.',
+'de':'Der gespeicherte Ausgangswert ist der Wert bei der ersten ASB-Anwendung, nicht unbedingt der Werksstandard.',
+'fr':'La valeur de référence enregistrée est celle capturée lors de la première application par ASB, pas nécessairement la valeur d’usine.',
+'es':'El valor base guardado es el capturado cuando ASB aplicó el primer ajuste, no necesariamente el valor de fábrica.',
+'it':'Il valore iniziale salvato è quello rilevato quando ASB ha applicato la prima modifica, non necessariamente il valore di fabbrica.',
+'pt':'O valor base guardado é o capturado quando o ASB aplicou a primeira alteração, não necessariamente o valor de fábrica.',
+'tr':'Kaydedilen başlangıç değeri, ASB ilk değişikliği uyguladığında alınan değerdir; fabrika varsayılanı olmak zorunda değildir.',
+'id':'Nilai awal yang disimpan adalah nilai saat ASB pertama kali menerapkan perubahan, bukan selalu nilai bawaan pabrik.',
+'zh':'保存的基准值是 ASB 首次应用修改时读取的值，不一定是出厂默认值。',
+'ar':'القيمة المرجعية المحفوظة هي القيمة الملتقطة عند أول تطبيق من ASB، وليست بالضرورة القيمة الافتراضية من المصنع.',
+'hy':'Պահպանված սկզբնական արժեքը ASB-ի առաջին փոփոխություն կիրառելիս գրանցված արժեքն է, ոչ պարտադիր գործարանային լռելյայնը։',
+}
+def find(x, key):
+    if isinstance(x, dict):
+        if key in x: return x[key]
+        for v in x.values():
+            r = find(v, key)
+            if r is not None: return r
+    return None
+for lang, note in notes.items():
+    data = json.loads((w / 'i18n' / (lang + '.json')).read_text(encoding='utf-8'))
+    assert find(data, 'feel_pointer_speed')['desc'].endswith(note), lang
+assert notes['en'] in (w / 'index.html').read_text(encoding='utf-8')
+PY
+echo 'PASS display/ui settings dev64: eight bounded mappings, exact first-apply restore, rejected-write and paired-radius rollback, stock boot ownership, atomic config validation, installer/CI/WebUI wiring and explicit non-factory baseline semantics in 13 locales'
 )
 
 t_benchmark_learning_isolation_dev63() (
