@@ -1459,7 +1459,7 @@ fi
 _MD="$(CDPATH= cd -- "$(dirname "$0")/../.." 2>/dev/null && pwd)"
 _CFG="${ASB_CFG_FILE:-$_MD/config/governor.conf}"
 if [ -f "$_CFG" ]; then
-  for _k in wakelock_action ltpo_video night_modem_idle net_screen_off_lte wifi_powersave gms_freeze doze_level sustained_temp_mode; do
+  for _k in wakelock_action ltpo_video night_modem_idle net_screen_off_lte wifi_powersave gms_freeze doze_level sustained_temp_mode sustained_temp_enter perf_ceiling_pct; do
     _v="$(grep -E "^[[:space:]]*$_k=" "$_CFG" 2>/dev/null | tail -n 1 | sed 's/^[^=]*=//; s/#.*//' | tr -d ' \t\r')"
     [ -n "$_v" ] && printf 'cfg\tkey=%s\tvalue=%s\n' "$_k" "$_v"
   done
