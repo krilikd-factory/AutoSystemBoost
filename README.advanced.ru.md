@@ -529,9 +529,9 @@ Budget не заменяет vendor thermal engine. Если платформа 
 | `night_modem_idle` | Quiet Radio at Night | `0` | Дополнительное ночное radio-сдерживание; проверять доставку сообщений и связь. |
 | `net_screen_off_lte` | LTE While Screen Off | `0` | Screen-off cellular политика там, где поддерживается. |
 | `net_lte_light` | 5G Only When Needed | `0` | Need-based 5G; сигнал и оператор могут доминировать над результатом. |
-| `net_congestion` | Download Ramp · other links | `auto` | Auto/BBR/CUBIC для прочих типов маршрутов. |
-| `net_congestion_wifi` | Download Ramp · WiFi | `auto` | Per-Wi-Fi congestion control только при доступности маршрута и алгоритма. |
-| `net_congestion_mobile` | Download Ramp · mobile | `auto` | Per-mobile congestion control; проверять live interface, а не состояние Wi-Fi. |
+| `net_congestion` | Download Ramp · other links | `auto` | Runtime-discovered TCP algorithms, включая BBR/CUBIC и exposed BIC/Westwood/custom; availability и readback проверяются per-route. |
+| `net_congestion_wifi` | Download Ramp · WiFi | `auto` | Per-Wi-Fi congestion control только при доступности маршрута и алгоритма. По имени не выводится универсальный выигрыш автономности или throughput. |
+| `net_congestion_mobile` | Download Ramp · mobile | `auto` | Per-mobile congestion control; проверять live interface. Поведение зависит от algorithm, RTT, loss, buffers и qdisc. |
 | `net_qdisc` | Packet Queue · other links | `auto` | Auto/`fq`/`fq_codel`/`cake` для прочих подключений. |
 | `net_qdisc_wifi` | Packet Queue · WiFi | `auto` | Queue discipline Wi-Fi при поддержке ядром и интерфейсом. |
 | `net_qdisc_mobile` | Packet Queue · mobile | `auto` | Queue discipline mobile route; успех нельзя выводить из значения конфигурации. |
@@ -563,7 +563,7 @@ Budget не заменяет vendor thermal engine. Если платформа 
 | `bt_link_stability` | Bluetooth Link Stability | `stock` | Stable подавляет Wi-Fi scans во время звука на проблемных соединениях; новые сети могут появляться медленнее. |
 | `bt_a2dp_offload` | Bluetooth Audio Offload | `auto` | Auto/on/off hardware encoding route; off может помочь внешнему EQ, но переносит работу на CPU. |
 | `dsp_outputs` | DSP Outputs | `all` | Выбирает speaker/wired/Bluetooth сочетания или отключает DSP с сохранением значений параметров. |
-| `dsp_loudness` | DSP Loudness | `0` | Основной DSP enable/gain, 0–25 dB; первое включение effect может требовать reboot. |
+| `dsp_loudness` | DSP Loudness | `0` | Основной DSP enable/gain, 0–30 dB в текущем исходнике; значения выше 25 dB требуют новой сборки DSP-библиотек. Первое включение effect может требовать reboot. |
 | `dsp_bass` | DSP Bass Boost | `0` | Low-shelf boost; расходует headroom и приближает срабатывание limiter. |
 | `dsp_voice` | DSP Voice Tone | `0` | Широкая настройка voice-body и presence-edge, особенно полезная маленьким динамикам. |
 | `dsp_width` | DSP Stereo Width | `0` | Усиливает stereo side выше защищённой bass-области; mono/centre не расширяется так же. |
@@ -583,6 +583,10 @@ sub-bass filter → bass → voice tone → clarity → stereo width
 ```
 
 Gain, bass и width нельзя оценивать независимо от headroom. Большой bass boost перед limiter может уменьшить общую громкость, хотя его числовой уровень вырос. Headroom control является sample-peak ceiling, а не oversampled true-peak detector.
+
+Общий предел исходника теперь 3000 mB (+30 dB), а актуальные wrapper содержат маркер `gain_cap_mb=3000`. Ранее поставленные prebuilt `.so` не получают новый предел от правки shell/UI: их нужно пересобрать через DSP workflow и заменить в проекте. `asbdiag` сообщает об отсутствии маркера, а не считает property 3000 mB доказательством поддержки native-кодом. Больше gain по-прежнему означает больше компрессии/насыщения, а не гарантированно чистое усиление.
+
+Для Android 17 / ColorOS 17 сохранены сборка AIDL против соответствующей ветки AOSP и существующие варианты интерфейса V2/V3. Загружаемый вариант выбирается vendor audio-HAL, а не только маркетинговой версией Android. Host-компиляция и чтение исходника не доказывают runtime-совместимость с Android 17 / ColorOS 17.
 
 `dsp_outputs=off` убирает обработку ASB с выбранного пути без удаления tone- и dynamics-настроек. Выбор только фактического listening route не даёт применить speaker-oriented gain к наушникам или наоборот.
 
@@ -664,7 +668,8 @@ ART helper для HeyTap является ограниченным one-shot, а 
 
 | Ключ | Название в WebUI | По умолчанию | Поведение / фокус тестирования |
 |:---|:---|:---:|:---|
-| `mglru_mode` | Режим MGLRU | `smart` | Stock/off/on/smart через одного владельца. Подходящая политика reclaim может помочь отзывчивости при нехватке памяти; неподходящая способна увеличить повторные загрузки и подтормаживания. Экономия не гарантирована. |
+| `mglru_mode` | Режим MGLRU | `smart` | Stock/off/on/smart через одного владельца. Ручные on/off/stock остаются ручными даже в профиле Smart; только `smart` передаёт управление динамическому tuner. Экономия не гарантирована. |
+| `io_scheduler` | Планировщик I/O | `stock` | Runtime discovery для bounded block devices. Auto выбирает только exposed schedulers; explicit custom name не получает silent fallback, Stock восстанавливает per-device baseline того же kernel. |
 | `kernel_mglru_min_ttl` | Защита поколений MGLRU | `stock` | `min_ttl_ms` через того же владельца с baseline и readback: Stock восстанавливает сохранённое значение ядра, 1000/2000 мс удерживают самое новое поколение страниц в памяти указанное время. Ненулевое значение разрешает ядру вызвать OOM killer, если защищённый рабочий набор не помещается в память, поэтому фоновые приложения могут закрываться раньше; документация ядра рекомендует 1000 мс. Прежний вариант 5000 мс читается как 2000. |
 | `kernel_timer_migration` | Миграция таймеров | `auto` | Меняет размещение таймеров между CPU. 1 (значение ядра по умолчанию) позволяет занятому CPU обслуживать таймеры простаивающих, и те дольше спят; 0 оставляет каждый таймер на своём CPU. Auto пишет 0 только в Performance и возвращает сохранённое значение во всех остальных профилях. Любой режим способен улучшить или ухудшить задержку и расход в зависимости от нагрузки и CPU idle. |
 | `kernel_sched_nr_migrate` | Пакет миграций планировщика | `auto` | `/sys/kernel/debug/sched/nr_migrate`; меньшее значение сокращает работу за проход, но дольше сохраняет перекос, большее быстрее балансирует ценой миграций и потерь кэша. Auto следует профилю: Battery 2, Balanced/Smart 4 (прежнее значение по умолчанию), Performance 8 — отправные точки, а не доказанные оптимумы. |

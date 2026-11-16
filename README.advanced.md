@@ -529,9 +529,9 @@ The following tables mirror the WebUI's seven configuration groups. Defaults des
 | `night_modem_idle` | Quiet Radio at Night | `0` | Optional night-time radio restraint; test message delivery and connectivity. |
 | `net_screen_off_lte` | LTE While Screen Off | `0` | Controls screen-off cellular policy where supported. |
 | `net_lte_light` | 5G Only When Needed | `0` | Need-based 5G policy; signal and carrier behaviour can dominate results. |
-| `net_congestion` | Download Ramp · other links | `auto` | Auto/BBR/CUBIC for other route types. |
-| `net_congestion_wifi` | Download Ramp · WiFi | `auto` | Per-Wi-Fi congestion control, applied only when the route and algorithm are available. |
-| `net_congestion_mobile` | Download Ramp · mobile | `auto` | Per-mobile congestion control; verify the live interface rather than Wi-Fi state. |
+| `net_congestion` | Download Ramp · other links | `auto` | Runtime-discovered TCP algorithms, including BBR/CUBIC and exposed BIC/Westwood/custom variants; availability and readback are checked per route. |
+| `net_congestion_wifi` | Download Ramp · WiFi | `auto` | Per-Wi-Fi congestion control, applied only when the route and algorithm are available. No universal battery or throughput winner is inferred from a name. |
+| `net_congestion_mobile` | Download Ramp · mobile | `auto` | Per-mobile congestion control; verify the live interface. Behaviour depends on the algorithm, RTT, loss, buffers and qdisc. |
 | `net_qdisc` | Packet Queue · other links | `auto` | Auto/`fq`/`fq_codel`/`cake` for other links. |
 | `net_qdisc_wifi` | Packet Queue · WiFi | `auto` | Queue discipline for Wi-Fi when supported by the kernel and interface. |
 | `net_qdisc_mobile` | Packet Queue · mobile | `auto` | Queue discipline for mobile routes; do not infer success from a configuration value. |
@@ -563,7 +563,7 @@ A valid network test identifies the exact route and interface. Wi-Fi results mus
 | `bt_link_stability` | Bluetooth Link Stability | `stock` | Stable mode suppresses Wi-Fi scans during audio on affected links; new networks can appear more slowly. |
 | `bt_a2dp_offload` | Bluetooth Audio Offload | `auto` | Auto/on/off hardware encoding route; off can help some external EQs but moves work to the CPU. |
 | `dsp_outputs` | DSP Outputs | `all` | Selects speaker/wired/Bluetooth combinations or disables DSP while preserving its parameter values. |
-| `dsp_loudness` | DSP Loudness | `0` | Main DSP enable/gain control, 0–25 dB; first effect enable can require reboot. |
+| `dsp_loudness` | DSP Loudness | `0` | Main DSP enable/gain control, 0–30 dB in current source; values above 25 dB require newly rebuilt DSP libraries. First effect enable can require reboot. |
 | `dsp_bass` | DSP Bass Boost | `0` | Low-shelf boost; consumes headroom and causes the limiter to engage sooner. |
 | `dsp_voice` | DSP Voice Tone | `0` | Broad voice-body and presence-edge adjustment, especially useful on small speakers. |
 | `dsp_width` | DSP Stereo Width | `0` | Enhances stereo side information above the protected bass region; mono/centre content is not widened in the same way. |
@@ -583,6 +583,10 @@ sub-bass filter → bass → voice tone → clarity → stereo width
 ```
 
 Gain, bass and width cannot be assessed independently of headroom. A large bass boost before the limiter can reduce overall loudness even though its numeric level increased. The headroom control is a sample-peak ceiling, not an oversampled true-peak detector.
+
+The shared source ceiling is now 3000 mB (+30 dB), and current wrappers embed `gain_cap_mb=3000`. Previously shipped prebuilt `.so` files do not gain that ceiling from a shell/UI edit: rebuild them through the DSP workflow and replace the prebuilts. `asbdiag` reports a missing marker instead of treating a 3000 mB property as native capability proof. More gain still means more compression/saturation, not a guaranteed clean loudness increase.
+
+For Android 17 / ColorOS 17, retain the branch-matched AOSP AIDL build and the existing V2/V3 interface variants. The vendor audio-HAL interface, not the Android marketing version alone, selects the loadable variant. No Android 17 / ColorOS 17 runtime compatibility is claimed from host compilation or source inspection.
 
 `dsp_outputs=off` releases ASB processing from the selected path without erasing tone and dynamics settings. Selecting only the actual listening route avoids applying speaker-oriented gain to headphones or vice versa.
 
@@ -664,7 +668,8 @@ The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → ru
 
 | Key | WebUI name | Default | Advanced behaviour / test focus |
 |:---|:---|:---:|:---|
-| `mglru_mode` | MGLRU Mode | `smart` | Stock/off/on/smart through one baseline/readback owner. A suitable reclaim policy can help responsiveness under memory pressure; an unsuitable one can increase reloads and stutter. No battery gain is guaranteed. |
+| `mglru_mode` | MGLRU Mode | `smart` | Stock/off/on/smart through one baseline/readback owner. Manual on/off/stock remains manual even in the Smart profile; only `smart` transfers ownership to the dynamic tuner. No battery gain is guaranteed. |
+| `io_scheduler` | Block I/O Scheduler | `stock` | Runtime discovery per bounded block device. Auto chooses only exposed schedulers; explicit custom names fail without fallback, and Stock restores the captured per-device baseline for the same kernel. |
 | `kernel_mglru_min_ttl` | MGLRU Generation Protection | `stock` | `min_ttl_ms` through the same baseline/readback owner: Stock restores the captured kernel value, 1000/2000 ms keep the newest page generation in memory for that long. A nonzero value lets the kernel invoke the OOM killer when the protected working set cannot stay resident, so background apps can be closed earlier; the kernel documentation recommends 1000 ms. The former 5000 ms option is read as 2000. |
 | `kernel_timer_migration` | Timer Migration | `auto` | Controls timer placement between CPUs. 1 (the kernel default) lets a busy CPU handle the timers of idle ones so they can stay idle longer; 0 keeps every timer on its own CPU. Auto writes 0 only in Performance and restores the captured value in every other profile. Either mode can help or hurt latency and power depending on load and CPU idle behavior. |
 | `kernel_sched_nr_migrate` | Scheduler Migration Batch | `auto` | `/sys/kernel/debug/sched/nr_migrate`; lower values reduce work per balancing pass but can prolong imbalance, higher values balance sooner with more migration/cache cost. Auto follows the profile: Battery 2, Balanced/Smart 4 (the former default), Performance 8 — starting points, not proven optima. |

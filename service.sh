@@ -2476,6 +2476,7 @@ apply_kernel() {
     sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_lpm_prediction "" "$ASB_PROFILE" >/dev/null 2>&1 || true
     sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_usb_autosuspend >/dev/null 2>&1 || true
     sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_bore >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply io_scheduler >/dev/null 2>&1 || true
     [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] && sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_rt_boost "" "$ASB_PROFILE" >/dev/null 2>&1 || true
   fi
   tune_io_queues
@@ -4343,6 +4344,7 @@ fi
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_lpm_prediction "" "$ASB_PROFILE" >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_usb_autosuspend >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_bore >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply io_scheduler >/dev/null 2>&1 || true
       [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] && sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_rt_boost "" "$ASB_PROFILE" >/dev/null 2>&1 || true
     fi
   fi
@@ -4374,6 +4376,7 @@ fi
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_lpm_prediction "" "$ASB_PROFILE" >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_usb_autosuspend >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_bore >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply io_scheduler >/dev/null 2>&1 || true
       [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] && sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_rt_boost "" "$ASB_PROFILE" >/dev/null 2>&1 || true
     fi
   fi
