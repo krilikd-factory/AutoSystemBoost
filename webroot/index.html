@@ -10191,7 +10191,7 @@ const CFG_ITEMS = [
   { key:'ui_nav_handle_autohide', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Auto-hide Navigation Handle',
     desc:'Controls oost_navigation_handle_auto_hide for the gesture navigation handle. It does not switch navigation mode or hide the handle permanently. The original setting is restored when returned to Stock.' },
   { key:'feel_pointer_speed', type:'range', def:'stock', stock:'stock', stockAt:-8, min:-8, max:7, step:1, name:'Pointer Speed',
-    desc:'Sets Android pointer_speed from -7 to 7 for a mouse, trackpad or other pointer; it is not a touchscreen sensitivity or polling-rate hack. Stock leaves the current value untouched and restores the exact pre-ASB value after an override.' },
+    desc:'Sets Android pointer_speed from -7 to 7 for a mouse, trackpad or other pointer; it is not a touchscreen sensitivity or polling-rate hack. Stock leaves the current value untouched and restores the exact pre-ASB value after an override. The saved baseline is the value captured when ASB first applied an override, not necessarily the factory default.' },
   { key:'feel_gesture_mistouch', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Gesture Mistouch Prevention',
     desc:'Controls the ColorOS gesture_mistouch_prevention_enable switch. On may reject some edge touches; Off deliberately disables that protection. Game-specific OEM rules can still apply. No touch sampling-rate change is claimed.' },
   { key:'feel_game_memc', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Game MEMC',
@@ -11711,7 +11711,7 @@ const ASB_KC_VERDICTS = {
   baseline_failed: 'original value could not be saved; nothing written',
   baseline_invalid: 'saved original value is invalid', state_cleanup_failed: 'restored; state file not removed',
   covered_by_timer_migration: 'covered by the general Timer migration control; no separate write',
-  invalid_request: 'invalid request',
+  invalid_request: 'invalid request', invalid_value: 'invalid setting value; nothing written',
   deferred: 'boot scripts are still setting this value; applied on the next pass',
   auto_kernel: 'Auto: kernel value kept for this profile'
 };
