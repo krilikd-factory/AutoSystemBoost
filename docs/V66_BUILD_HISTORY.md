@@ -4,6 +4,39 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix7 - ADIOS runtime discovery, explicit Smart ownership and Binder-safe AppOps
+
+Input: the owner's five-item ADIOS/Smart/audio/action/log request and the 16 November 2026 device,
+report, Zygisk, asbdiag and full-day capture set. The captures came from V66-test7 (660), so they
+are not physical validation of buildfix6 or this source revision.
+
+- **ADIOS:** `io_scheduler=auto` prefers `adios` only when each targeted non-rotational queue
+  actually exposes it. Existing `mq-deadline`/`kyber`/`none`/`bfq` fallbacks, explicit choices,
+  per-device baselines, preflight, readback, kernel-id invalidation and exact Stock restore remain
+  unchanged. ASB writes no ADIOS private tunables. The WebUI documents the new choice in all 13
+  locales; `action.sh` and `asbdiag` report requested mode, live scheduler, baseline and exposure.
+- **Smart ownership:** the former five badges were exactly the old `cfgSmartOwner()` list, not
+  proof that nothing else was controlled. `auto_battery_enable=1` and Smart thermal mode now show
+  dynamic/thermal ownership. Profile-dependent `auto` kernel/I/O/network cards show the distinct
+  `SMART · PROFILE` badge; DSP keeps its specific thermal explanation. Manual values, user limits,
+  doze policy and other guards are not mislabeled as Smart-owned.
+- **Volume alert:** no duplicate setting was added. Existing `audio_remove_volume_limit=1` already
+  sets `audio.safemedia.bypass=true` in post-fs-data and Android's safe-volume state in service;
+  the uploaded device log confirms both. `action.sh` now distinguishes property presence, Android
+  confirmation, a still-active limiter and a pending reboot.
+- **AppOps transport:** a shared bounded wrapper detects the ColorOS Java client's
+  `Failure calling service appops` even when it exits 0, retries the same operation through
+  `cmd appops`, and fails honestly if both transports fail. Fitness/wakelock diagnostics report
+  `unknown`, not a fabricated `default` or a proven lapse. No persistent poller was added.
+- **Log conclusions left bounded:** the refused `network_recommendations_enabled` setting remains
+  refused rather than fought; native crashes without ASB frames are not attributed to ASB; the
+  current-gauge scale is retained as corrected gauge evidence; MGLRU's known clamp, mixed sleep
+  phases and unavailable >=180-minute night verdict are not rewritten into successes. The existing
+  reconcile passive vendor-ownership guard remains the owner for the observed uclamp drift.
+- **Verification boundary:** source tests cover ADIOS discovery/fallback/restore, expanded Smart
+  badges, action localization and AppOps fallback. No physical OnePlus 15/UFS responsiveness,
+  throughput or battery gain is claimed; ADIOS requires same-kernel field A/B.
+
 ## V66 dev66 buildfix6 - trend truthfulness, bounded I/O discovery and companion-safe DSP headroom
 
 Input: the owner's seven-item revision request plus a repeated visual field report covering the
