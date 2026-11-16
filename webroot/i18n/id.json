@@ -604,10 +604,11 @@
     },
     "kernel_sched_stats": {
       "name": "Statistik Debug Penjadwal",
-      "desc": "Statistik tambahan yang dikumpulkan penjadwal untuk alat debug. Pemakaian sehari-hari tidak membutuhkannya. Sebagian besar kernel sudah mematikannya; maka kedua pilihan sama saja.\n\n🔋 Daya tahan baterai: Off\n⚡ Performa: Off\n✋ Jika ragu: Off",
+      "desc": "Statistik tambahan yang dikumpulkan penjadwal untuk alat debug. Pemakaian sehari-hari tidak membutuhkannya. Sebagian besar kernel sudah mematikannya; maka kedua pilihan sama saja.\n\n🔋 Daya tahan baterai: Off\n⚡ Performa: Off\n✋ Jika ragu: Off Otomatis menonaktifkannya hanya saat Smart aktif dan memulihkan nilai awal secara tepat di profil lain; Nonaktif mematikannya di semua profil. Penghematan baterai terukur tidak dijanjikan.",
       "descOpt": {
         "stock": "Nilai kernel sendiri. Pilih saat menyelidiki patah-patah atau masalah penjadwal.",
-        "off": "Tanpa statistik debug, jadi tanpa beban kecilnya. Dikembalikan saat Stock atau pencopotan."
+        "off": "Tanpa statistik debug, jadi tanpa beban kecilnya. Dikembalikan saat Stock atau pencopotan.",
+        "auto": "Otomatis menonaktifkan statistik debug hanya di Smart dan memulihkan nilai awal secara tepat pada profil lain."
       }
     },
     "heytap_mcs": {
@@ -883,6 +884,10 @@
         "none": "Tanpa pengurutan ulang I/O; tidak selalu lebih cepat.",
         "adios": "Scheduler I/O deadline adaptif; dipilih hanya setelah terdeteksi, tanpa asumsi peningkatan UFS, kecepatan, atau baterai."
       }
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "name": "Reduksi Derau Pratinjau",
+      "desc": "Mengontrol properti reduksi derau temporal yang sudah ada pada pratinjau kamera. Nonaktif dapat mengurangi pemrosesan pratinjau dengan lebih banyak derau yang terlihat; Aktif meminta reduksi derau lebih kuat. Bawaan memulihkan nilai yang disimpan sebelum ASB pertama kali mengontrolnya. Properti diterapkan dan dibaca kembali seketika, tetapi penulisan berhasil tidak membuktikan bahwa setiap mode HAL kamera menggunakannya. Kualitas atau kelancaran video yang direkam tidak diubah atau dijamin secara langsung."
     }
   },
   "nav_live": "Monitor",
@@ -1122,7 +1127,8 @@
     },
     "kernel_sched_stats": {
       "stock": "Stock",
-      "off": "Off"
+      "off": "Off",
+      "auto": "Otomatis"
     },
     "kernel_sched_autogroup": {
       "stock": "Stock",
@@ -1172,6 +1178,11 @@
     "io_scheduler": {
       "stock": "Stock",
       "auto": "Otomatis"
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "stock": "Bawaan",
+      "off": "Nonaktif",
+      "on": "Aktif"
     }
   },
   "prof_none": "belum dipilih",
@@ -3675,7 +3686,6 @@
   "junk_cat_installer": "Cache penginstal",
   "junk_cat_logs": "Log diagnostik",
   "junk_cat_backup": "Jurnal cadangan lama",
-  "junk_cat_local": "Laporan sementara ASB",
   "junk_cat_trash": "Sampah Linux",
   "junk_cat_screenshots": "Screenshot di sampah",
   "junk_cat_coloros": "Log kerusakan ColorOS",

@@ -604,10 +604,11 @@
     },
     "kernel_sched_stats": {
       "name": "Scheduler-Debugstatistik",
-      "desc": "Zusätzliche Statistiken, die der Scheduler für Debugging-Werkzeuge sammelt. Im Alltag werden sie nicht gebraucht. Die meisten Kernel haben sie schon aus; dann sind beide Optionen gleich.\n\n🔋 Akkulaufzeit: Aus\n⚡ Leistung: Aus\n✋ Unsicher: Aus",
+      "desc": "Zusätzliche Statistiken, die der Scheduler für Debugging-Werkzeuge sammelt. Im Alltag werden sie nicht gebraucht. Die meisten Kernel haben sie schon aus; dann sind beide Optionen gleich.\n\n🔋 Akkulaufzeit: Aus\n⚡ Leistung: Aus\n✋ Unsicher: Aus Auto deaktiviert sie nur bei aktivem Smart und gibt in anderen Profilen die exakte Ausgangsbasis frei; Aus deaktiviert sie in jedem Profil. Ein messbarer Akkugewinn wird nicht versprochen.",
       "descOpt": {
         "stock": "Der eigene Wert des Kernels. Wähle ihn, während du Ruckler oder Scheduler-Probleme untersuchst.",
-        "off": "Keine Debug-Statistiken und damit auch nicht ihr kleiner Mehraufwand. Wird bei „Standard“ oder Deinstallation zurückgesetzt."
+        "off": "Keine Debug-Statistiken und damit auch nicht ihr kleiner Mehraufwand. Wird bei „Standard“ oder Deinstallation zurückgesetzt.",
+        "auto": "Auto deaktiviert die Debugstatistik nur in Smart und stellt bei anderen Profilen die exakte Ausgangsbasis wieder her."
       }
     },
     "heytap_mcs": {
@@ -883,6 +884,10 @@
         "none": "Keine I/O-Neuanordnung; nicht pauschal schneller.",
         "adios": "I/O-Scheduler mit adaptiven Deadlines; nur nach Laufzeiterkennung, ohne zugesicherten UFS-, Tempo- oder Akkugewinn."
       }
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "name": "Vorschau-Rauschunterdrückung",
+      "desc": "Steuert die vorhandenen Eigenschaften der temporalen Rauschunterdrückung in der Kameravorschau. Aus kann die Vorschauverarbeitung reduzieren, zeigt aber möglicherweise mehr Rauschen; Ein fordert stärkere Rauschunterdrückung an. Standard stellt die vor der ersten ASB-Übernahme erfassten Werte wieder her. Die Eigenschaften werden sofort angewendet und zurückgelesen; ein erfolgreicher Schreibvorgang beweist jedoch nicht, dass jeder HAL-Modus sie berücksichtigt. Qualität oder Flüssigkeit aufgezeichneter Videos werden nicht direkt geändert oder garantiert."
     }
   },
   "nav_live": "Monitor",
@@ -1122,7 +1127,8 @@
     },
     "kernel_sched_stats": {
       "stock": "Standard",
-      "off": "Aus"
+      "off": "Aus",
+      "auto": "Auto"
     },
     "kernel_sched_autogroup": {
       "stock": "Standard",
@@ -1172,6 +1178,11 @@
     "io_scheduler": {
       "stock": "Stock",
       "auto": "Auto"
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "stock": "Standard",
+      "off": "Aus",
+      "on": "Ein"
     }
   },
   "prof_none": "nicht gewählt",
@@ -3675,7 +3686,6 @@
   "junk_cat_installer": "Installer-Cache",
   "junk_cat_logs": "Diagnoseprotokolle",
   "junk_cat_backup": "Alte Sicherungsjournale",
-  "junk_cat_local": "Temporäre ASB-Berichte",
   "junk_cat_trash": "Linux-Papierkorb",
   "junk_cat_screenshots": "Screenshots im Papierkorb",
   "junk_cat_coloros": "ColorOS-Absturzprotokolle",

@@ -240,7 +240,8 @@
     },
     "kernel_sched_stats": {
       "stock": "Stock",
-      "off": "Off"
+      "off": "Off",
+      "auto": "Auto"
     },
     "kernel_sched_autogroup": {
       "stock": "Stock",
@@ -290,6 +291,11 @@
     "io_scheduler": {
       "stock": "Stock",
       "auto": "Auto"
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "stock": "Stock",
+      "off": "Off",
+      "on": "On"
     }
   },
   "prof_none": "not selected",
@@ -541,10 +547,11 @@
     },
     "kernel_sched_stats": {
       "name": "Scheduler Debug Accounting",
-      "desc": "Extra statistics the scheduler collects for debugging tools. Everyday use does not need them. Most kernels have them off already; then both choices are the same.\n\n🔋 Battery life: Off\n⚡ Performance: Off\n✋ Not sure: Off",
+      "desc": "Extra statistics the scheduler collects for debugging tools. Everyday use does not need them. Most kernels have them off already; then both choices are the same. Auto disables them only while Smart is active and releases the exact baseline in other profiles; Off disables them in every profile. Stock restores the kernel value. No measurable battery gain is promised.\n\n🔋 Battery life: Off or Auto\n⚡ Performance: Off or Auto\n✋ Not sure: Auto",
       "descOpt": {
         "stock": "The kernel's own value. Choose it while diagnosing lag or scheduler problems.",
-        "off": "No debug statistics, so none of their small overhead. Restored on Stock or uninstall."
+        "off": "No debug statistics, so none of their small overhead. Restored on Stock or uninstall.",
+        "auto": "Auto disables debug accounting only in Smart and restores the exact baseline when another profile takes over."
       }
     },
     "zygisk_enabled": {
@@ -1058,6 +1065,10 @@
         "none": "No I/O reordering scheduler; can suit fast virtual or NVMe queues, but is not universally faster.",
         "adios": "Adaptive deadline I/O scheduler. Auto selects it only after runtime discovery; no UFS latency, throughput or battery gain is assumed."
       }
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "name": "Preview Noise Reduction",
+      "desc": "Controls the camera's existing preview temporal noise reduction properties. Off can reduce preview processing at the cost of more visible noise; On requests stronger preview noise reduction. Stock restores the values captured before ASB first owned them. The properties apply live and are read back, but a successful write does not prove that every camera HAL mode honours them. Recorded-video quality or smoothness is not directly changed or guaranteed."
     }
   },
   "cfg_search": "Search",
@@ -3568,7 +3579,6 @@
   "junk_cat_installer": "Installer cache",
   "junk_cat_logs": "Diagnostic logs",
   "junk_cat_backup": "Old backup journals",
-  "junk_cat_local": "Temporary ASB reports",
   "junk_cat_trash": "Linux trash",
   "junk_cat_screenshots": "Trashed screenshots",
   "junk_cat_coloros": "ColorOS crash logs",

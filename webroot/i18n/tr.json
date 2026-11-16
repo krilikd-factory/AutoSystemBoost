@@ -604,10 +604,11 @@
     },
     "kernel_sched_stats": {
       "name": "Zamanlayıcı Hata Ayıklama İstatistikleri",
-      "desc": "Zamanlayıcının hata ayıklama araçları için topladığı ek istatistikler. Günlük kullanımda gerekmez. Çoğu çekirdekte zaten kapalıdır; o zaman iki seçenek aynıdır.\n\n🔋 Pil ömrü: Kapalı\n⚡ Performans: Kapalı\n✋ Emin değilseniz: Kapalı",
+      "desc": "Zamanlayıcının hata ayıklama araçları için topladığı ek istatistikler. Günlük kullanımda gerekmez. Çoğu çekirdekte zaten kapalıdır; o zaman iki seçenek aynıdır.\n\n🔋 Pil ömrü: Kapalı\n⚡ Performans: Kapalı\n✋ Emin değilseniz: Kapalı Otomatik bunları yalnızca Smart etkinken kapatır ve diğer profillerde tam başlangıç değerini geri yükler; Kapalı her profilde kapatır. Ölçülebilir pil kazancı vaat edilmez.",
       "descOpt": {
         "stock": "Çekirdeğin kendi değeri. Takılmaları veya zamanlayıcı sorunlarını incelerken seçin.",
-        "off": "Hata ayıklama istatistiği yok, dolayısıyla küçük ek yükü de yok. Stok seçildiğinde veya kaldırmada geri yüklenir."
+        "off": "Hata ayıklama istatistiği yok, dolayısıyla küçük ek yükü de yok. Stok seçildiğinde veya kaldırmada geri yüklenir.",
+        "auto": "Otomatik, hata ayıklama istatistiklerini yalnızca Smart profilinde kapatır ve diğer profillerde tam başlangıç değerini geri yükler."
       }
     },
     "heytap_mcs": {
@@ -883,6 +884,10 @@
         "none": "G/Ç yeniden sıralaması yok; her zaman daha hızlı değildir.",
         "adios": "Uyarlanabilir deadline I/O zamanlayıcısı; yalnızca çalışma zamanında keşfedilirse seçilir, UFS, hız veya pil kazancı varsayılmaz."
       }
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "name": "Önizleme Gürültü Azaltma",
+      "desc": "Kameranın mevcut zamansal önizleme gürültü azaltma özelliklerini kontrol eder. Kapalı, daha görünür gürültü pahasına önizleme işlemesini azaltabilir; Açık daha güçlü gürültü azaltma ister. Stok, ASB’nin ilk kontrolünden önce kaydedilen değerleri geri yükler. Özellikler hemen uygulanır ve geri okunur, ancak başarılı yazma her HAL kamera modunun bunları kullandığını kanıtlamaz. Kaydedilen videonun kalitesi veya akıcılığı doğrudan değiştirilmez ya da garanti edilmez."
     }
   },
   "nav_live": "İzleme",
@@ -1122,7 +1127,8 @@
     },
     "kernel_sched_stats": {
       "stock": "Stok",
-      "off": "Kapalı"
+      "off": "Kapalı",
+      "auto": "Otomatik"
     },
     "kernel_sched_autogroup": {
       "stock": "Stok",
@@ -1172,6 +1178,11 @@
     "io_scheduler": {
       "stock": "Stock",
       "auto": "Otomatik"
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "stock": "Stok",
+      "off": "Kapalı",
+      "on": "Açık"
     }
   },
   "prof_none": "seçilmedi",
@@ -3675,7 +3686,6 @@
   "junk_cat_installer": "Yükleyici önbelleği",
   "junk_cat_logs": "Tanılama günlükleri",
   "junk_cat_backup": "Eski yedekleme günlükleri",
-  "junk_cat_local": "Geçici ASB raporları",
   "junk_cat_trash": "Linux çöp kutusu",
   "junk_cat_screenshots": "Çöp kutusundaki ekran görüntüleri",
   "junk_cat_coloros": "ColorOS çökme günlükleri",

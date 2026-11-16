@@ -604,10 +604,11 @@
     },
     "kernel_sched_stats": {
       "name": "Estatísticas de depuração do agendador",
-      "desc": "Estatísticas adicionais que o escalonador recolhe para ferramentas de depuração. O uso diário não precisa delas. A maioria dos kernels já as tem desligadas; nesse caso as duas opções são iguais.\n\n🔋 Autonomia: Off\n⚡ Desempenho: Off\n✋ Na dúvida: Off",
+      "desc": "Estatísticas adicionais que o escalonador recolhe para ferramentas de depuração. O uso diário não precisa delas. A maioria dos kernels já as tem desligadas; nesse caso as duas opções são iguais.\n\n🔋 Autonomia: Off\n⚡ Desempenho: Off\n✋ Na dúvida: Off Auto desativa-as apenas com Smart ativo e restaura o valor inicial exato nos outros perfis; Desativado desativa-as sempre. Não é prometida poupança mensurável.",
       "descOpt": {
         "stock": "O valor próprio do kernel. Escolha-o enquanto investiga engasgos ou problemas do escalonador.",
-        "off": "Sem estatísticas de depuração e, portanto, sem o seu pequeno custo. Reposto com Stock ou ao desinstalar."
+        "off": "Sem estatísticas de depuração e, portanto, sem o seu pequeno custo. Reposto com Stock ou ao desinstalar.",
+        "auto": "Auto desativa as estatísticas de depuração apenas em Smart e restaura o valor inicial exato nos outros perfis."
       }
     },
     "heytap_mcs": {
@@ -883,6 +884,10 @@
         "none": "Sem reordenação de E/S; nem sempre é mais rápido.",
         "adios": "Scheduler I/O com prazos adaptativos; apenas após deteção, sem assumir ganho de UFS, velocidade ou bateria."
       }
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "name": "Redução de ruído da prévia",
+      "desc": "Controla as propriedades existentes de redução temporal de ruído na prévia da câmara. Desativada pode reduzir o processamento ao custo de mais ruído visível; Ativada pede uma redução mais forte. Original restaura os valores capturados antes de o ASB assumir o controlo. As propriedades são aplicadas e lidas de imediato, mas uma escrita bem-sucedida não prova que todos os modos HAL as respeitem. A qualidade ou fluidez do vídeo gravado não é diretamente alterada nem garantida."
     }
   },
   "nav_live": "Monitor",
@@ -1122,7 +1127,8 @@
     },
     "kernel_sched_stats": {
       "stock": "Stock",
-      "off": "Off"
+      "off": "Off",
+      "auto": "Auto"
     },
     "kernel_sched_autogroup": {
       "stock": "Stock",
@@ -1172,6 +1178,11 @@
     "io_scheduler": {
       "stock": "Stock",
       "auto": "Auto"
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "stock": "Original",
+      "off": "Desativada",
+      "on": "Ativada"
     }
   },
   "prof_none": "não selecionado",
@@ -3675,7 +3686,6 @@
   "junk_cat_installer": "Cache do instalador",
   "junk_cat_logs": "Registos de diagnóstico",
   "junk_cat_backup": "Diários antigos de cópia de segurança",
-  "junk_cat_local": "Relatórios temporários do ASB",
   "junk_cat_trash": "Lixo do Linux",
   "junk_cat_screenshots": "Capturas no lixo",
   "junk_cat_coloros": "Registos de falhas do ColorOS",

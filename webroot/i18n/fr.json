@@ -715,10 +715,11 @@
     },
     "kernel_sched_stats": {
       "name": "Statistiques de débogage du planificateur",
-      "desc": "Statistiques supplémentaires que l’ordonnanceur collecte pour les outils de débogage. L’usage quotidien n’en a pas besoin. La plupart des noyaux les ont déjà désactivées ; les deux choix sont alors identiques.\n\n🔋 Autonomie : Off\n⚡ Performances : Off\n✋ Dans le doute : Off",
+      "desc": "Statistiques supplémentaires que l’ordonnanceur collecte pour les outils de débogage. L’usage quotidien n’en a pas besoin. La plupart des noyaux les ont déjà désactivées ; les deux choix sont alors identiques.\n\n🔋 Autonomie : Off\n⚡ Performances : Off\n✋ Dans le doute : Off Auto les désactive uniquement lorsque Smart est actif et restaure la valeur initiale exacte dans les autres profils ; Désactivé les désactive partout. Aucun gain de batterie mesurable n’est promis.",
       "descOpt": {
         "stock": "La valeur propre du noyau. À choisir pendant la recherche de saccades ou de problèmes d’ordonnanceur.",
-        "off": "Pas de statistiques de débogage, donc pas leur petit surcoût. Rétabli avec Stock ou à la désinstallation."
+        "off": "Pas de statistiques de débogage, donc pas leur petit surcoût. Rétabli avec Stock ou à la désinstallation.",
+        "auto": "Auto désactive les statistiques de débogage uniquement dans Smart et restaure exactement la valeur initiale avec les autres profils."
       }
     },
     "heytap_mcs": {
@@ -994,6 +995,10 @@
         "none": "Aucun réordonnancement I/O; pas universellement plus rapide.",
         "adios": "Ordonnanceur I/O à échéances adaptatives, choisi seulement après détection, sans gain UFS, de débit ou de batterie supposé."
       }
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "name": "Réduction du bruit de l’aperçu",
+      "desc": "Contrôle les propriétés existantes de réduction temporelle du bruit dans l’aperçu de l’appareil photo. Désactivée peut réduire le traitement au prix d’un bruit plus visible ; Activée demande une réduction plus forte. Origine restaure les valeurs capturées avant leur prise en charge par ASB. Les propriétés sont appliquées et relues immédiatement, mais une écriture réussie ne prouve pas que chaque mode HAL les respecte. La qualité ou la fluidité de la vidéo enregistrée n’est ni modifiée ni garantie directement."
     }
   },
   "opt": {
@@ -1225,7 +1230,8 @@
     },
     "kernel_sched_stats": {
       "stock": "Stock",
-      "off": "Off"
+      "off": "Off",
+      "auto": "Auto"
     },
     "kernel_sched_autogroup": {
       "stock": "Stock",
@@ -1275,6 +1281,11 @@
     "io_scheduler": {
       "stock": "Stock",
       "auto": "Auto"
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "stock": "Origine",
+      "off": "Désactivée",
+      "on": "Activée"
     }
   },
   "prof_none": "non sélectionné",
@@ -3675,7 +3686,6 @@
   "junk_cat_installer": "Cache du programme d’installation",
   "junk_cat_logs": "Journaux de diagnostic",
   "junk_cat_backup": "Anciens journaux de sauvegarde",
-  "junk_cat_local": "Rapports temporaires ASB",
   "junk_cat_trash": "Corbeille Linux",
   "junk_cat_screenshots": "Captures dans la corbeille",
   "junk_cat_coloros": "Journaux de plantage ColorOS",

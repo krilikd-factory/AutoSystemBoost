@@ -634,10 +634,11 @@
     },
     "kernel_sched_stats": {
       "name": "Statistiche di debug dello scheduler",
-      "desc": "Statistiche aggiuntive che lo scheduler raccoglie per gli strumenti di debug. L’uso quotidiano non ne ha bisogno. La maggior parte dei kernel le ha già disattivate; allora le due scelte si equivalgono.\n\n🔋 Autonomia: Off\n⚡ Prestazioni: Off\n✋ Nel dubbio: Off",
+      "desc": "Statistiche aggiuntive che lo scheduler raccoglie per gli strumenti di debug. L’uso quotidiano non ne ha bisogno. La maggior parte dei kernel le ha già disattivate; allora le due scelte si equivalgono.\n\n🔋 Autonomia: Off\n⚡ Prestazioni: Off\n✋ Nel dubbio: Off Auto le disattiva solo con Smart attivo e ripristina il valore iniziale esatto negli altri profili; Disattivato le disattiva sempre. Non è promesso alcun risparmio misurabile.",
       "descOpt": {
         "stock": "Il valore proprio del kernel. Sceglilo mentre indaghi su scatti o problemi dello scheduler.",
-        "off": "Nessuna statistica di debug, quindi nemmeno il loro piccolo costo. Ripristinato con Stock o alla disinstallazione."
+        "off": "Nessuna statistica di debug, quindi nemmeno il loro piccolo costo. Ripristinato con Stock o alla disinstallazione.",
+        "auto": "Auto disattiva le statistiche di debug solo in Smart e ripristina il valore iniziale esatto con gli altri profili."
       }
     },
     "heytap_mcs": {
@@ -913,6 +914,10 @@
         "none": "Nessun riordino I/O; non è sempre più veloce.",
         "adios": "Scheduler I/O a deadline adattive, selezionato solo dopo rilevamento, senza presumere guadagni UFS, velocità o batteria."
       }
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "name": "Riduzione rumore anteprima",
+      "desc": "Controlla le proprietà esistenti di riduzione temporale del rumore nell’anteprima della fotocamera. Disattivata può ridurre l’elaborazione a costo di più rumore visibile; Attivata richiede una riduzione più forte. Originale ripristina i valori acquisiti prima del controllo di ASB. Le proprietà vengono applicate e rilette subito, ma una scrittura riuscita non dimostra che ogni modalità HAL le rispetti. Qualità o fluidità del video registrato non vengono modificate o garantite direttamente."
     }
   },
   "optFor": {
@@ -1122,7 +1127,8 @@
     },
     "kernel_sched_stats": {
       "stock": "Stock",
-      "off": "Off"
+      "off": "Off",
+      "auto": "Auto"
     },
     "kernel_sched_autogroup": {
       "stock": "Stock",
@@ -1172,6 +1178,11 @@
     "io_scheduler": {
       "stock": "Stock",
       "auto": "Auto"
+    },
+    "CAMERA_PREVIEW_TNR": {
+      "stock": "Originale",
+      "off": "Disattivata",
+      "on": "Attivata"
     }
   },
   "prof_none": "non selezionato",
@@ -3675,7 +3686,6 @@
   "junk_cat_installer": "Cache del programma di installazione",
   "junk_cat_logs": "Log diagnostici",
   "junk_cat_backup": "Vecchi journal di backup",
-  "junk_cat_local": "Rapporti temporanei ASB",
   "junk_cat_trash": "Cestino Linux",
   "junk_cat_screenshots": "Screenshot nel cestino",
   "junk_cat_coloros": "Log di arresto ColorOS",
