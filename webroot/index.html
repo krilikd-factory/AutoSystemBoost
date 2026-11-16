@@ -12840,12 +12840,20 @@ function cfgScanLabel(v) {
 function cfgSmartOwner(it, cur) {
   if (_selectedProfile !== 'smart' || !it) return null;
   const v = String(cur == null ? '' : cur);
+  if (it.key === 'auto_battery_enable' && v === '1') return 'dynamic';
+  if (it.key === 'sustained_temp_mode' && v === 'smart') return 'thermal';
   if (it.key === 'mglru_mode' && v === 'smart') return 'dynamic';
   if (it.key === 'wifi_powersave' && (v === 'screen_off' || v === 'always')) return 'dynamic';
   if ((it.key === 'net_screen_off_lte' || it.key === 'net_lte_light') && v === '1') return 'radio';
   if (it.key === 'dsp_loudness' && /^([1-9]|[12][0-9]|30)$/.test(v) &&
       String(_cfgVals.dsp_outputs || 'all') !== 'off' &&
-      String(_cfgVals.audio_profile || 'stock') !== 'eq_compat') return 'thermal';
+      String(_cfgVals.audio_profile || 'stock') !== 'eq_compat') return 'dsp_thermal';
+  const profileAuto = ['io_scheduler','kernel_timer_migration','kernel_hrtimer_migration',
+    'kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_mglru_min_ttl',
+    'kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend',
+    'kernel_rt_boost','kernel_bore','net_congestion','net_congestion_wifi','net_congestion_mobile',
+    'net_qdisc','net_qdisc_wifi','net_qdisc_mobile'];
+  if (v === 'auto' && profileAuto.indexOf(it.key) >= 0) return 'profile';
   return null;
 }
 function cfgStatus(it, cur) {
@@ -13466,11 +13474,14 @@ const _unav = ASB_CAP_REQUIRES[it.key];
     if (_smartOwner) {
       const so = document.createElement('span');
       so.className = 'cfg-smart-owner';
-      so.textContent = T('cfg_smart_owner', 'SMART · AUTO');
+      so.textContent = T(_smartOwner === 'profile' ? 'cfg_smart_profile' : 'cfg_smart_owner',
+        _smartOwner === 'profile' ? 'SMART · PROFILE' : 'SMART · AUTO');
       const _smartWhy = {
         dynamic:'Smart dynamically changes this live value within the mode you selected. Do not force it manually: that would fight the governor. Choose a manual value or another profile to take ownership back.',
         radio:'Smart performs this opted-in radio transition with screen and traffic state. Keep the policy enabled rather than repeatedly toggling it; turn it off or leave Smart to take ownership back.',
-        thermal:'Your gain is the requested level; Smart may temporarily reduce it on the speaker when the battery is hot. Do not raise it to compensate for thermal protection. Leave Smart or set DSP Loudness to 0 to take ownership back.'
+        thermal:'Smart may temporarily reduce a live value for thermal protection while preserving your requested setting. Leave Smart or choose Stock/manual to take ownership back.',
+        dsp_thermal:'Your gain is the requested level; Smart may temporarily reduce it on the speaker when the battery is hot. Do not raise it to compensate for thermal protection. Leave Smart or set DSP Loudness to 0 to take ownership back.',
+        profile:'Smart applies the value belonging to its current Battery/Balanced profile. Your Auto choice is preserved; choose an explicit value or leave Smart to take ownership back.'
       };
       so.title = T('cfg_smart_owner_' + _smartOwner, _smartWhy[_smartOwner]);
       main.appendChild(so);
