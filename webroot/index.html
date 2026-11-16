@@ -403,21 +403,18 @@ body.live-active .page:not(.live-page) .app-name, body.live-active .page:not(.li
 body.live-active .page:not(.live-page) .dot::after, body.live-active .page:not(.live-page) .ai-glow {
   animation-play-state: paused !important;
 }
-/* On a closed page the sweep and dot stop at rest rather than mid-stroke: no band frozen
- * across the wordmark and no dot frozen half-faded when the page is reopened. */
-.live-page:not(.open) .app-name, body.live-active .page:not(.live-page) .app-name {
-  animation: none !important; background-position: -70% 0, 0 0;
-}
-.live-page:not(.open) .dot, .live-page:not(.open) .dot::after, body.live-active .page:not(.live-page) .dot,
-body.live-active .page:not(.live-page) .dot::after {
-  animation: none !important;
+/* Pause preserves each native animation timeline. Removing and recreating animations during
+ * rapid navigation made WebView occasionally leave the reopened header on a stale frame. */
+.live-page.open .logo-sphere-a, .live-page.open .logo-sphere-b, .live-page.open .logo-inner,
+.live-page.open .app-name, .live-page.open .dot, .live-page.open .dot::after {
+  animation-play-state: running !important;
 }
 
 /* dev66/buildfix3: calm never changes any visible header animation clock. The dev61 ticker
  * made the UFO and status dots judder, while the remaining calm rule still removed the
- * wordmark sweep after exactly ten seconds. Only the Smart card's decorative glow uses the
- * ambient ticker. All header loops remain on the native CSS clock and are stopped only by
- * closed-page, reduced-effects and reduced-motion rules. */
+ * wordmark sweep after exactly ten seconds. The Smart card's decorative glow now pauses
+ * directly through CSS; there is no Web Animations ticker. All header loops remain on the
+ * native CSS clock and are paused only by closed-page, reduced-effects and reduced-motion rules. */
 html.asb-calm .pico-smart .ai-glow {
   animation-play-state: paused !important;
 }
@@ -2323,6 +2320,8 @@ body.config-category-active #configPage .cfg-list {
 #zygiskPage .zy-auto-current { color: var(--text-tertiary); }
 #zygiskPage .dev-zygisk-metrics .lgr-hero-val { font-size: 16px; line-height: 1.25; letter-spacing: normal; }
 #zygiskPage .dev-zygisk-metrics .lgr-hero-lbl { font-size: 9.5px; }
+#zygiskPage .dev-zygisk-metrics .dev-snapshot-emo { display:block; margin-bottom:7px; font-size:22px; line-height:1; }
+#zygiskPage .dev-zygisk-metrics .has-emoji { border-color:color-mix(in srgb,var(--accent) 22%,var(--border)); }
 #zygiskPage .zy-evidence summary { line-height: 1.45; padding: 2px 0; }
 html[data-asb-theme="light"] .report-nav, html[data-asb-theme="light"] .zy-page-nav { background: var(--bg); }
 html[data-asb-theme="light"] .lgr-sec { background: #fff; box-shadow: 0 1px 2px rgba(16,24,32,.05); }
@@ -3765,6 +3764,9 @@ html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disa
 .kernel-source-main { min-width:0; flex:1 1 auto; }
 .kernel-source-name { color:var(--text); font:600 11px/1.35 var(--mono); overflow-wrap:anywhere; }
 .kernel-source-metrics { margin-top:3px; color:var(--text-secondary); font-size:10.5px; line-height:1.35; }
+.kernel-source-purpose { margin-top:6px; color:var(--text-secondary); font-size:11px; line-height:1.42; }
+.kernel-source-risk { margin-top:3px; color:var(--text-tertiary); font-size:10.5px; line-height:1.4; }
+.kernel-source-risk.is-high,.kernel-source-risk.is-critical { color:var(--m-warm); }
 .kernel-source-block { flex:0 0 auto; min-height:32px; padding:6px 9px; font-size:10.5px; }
 .kernel-source-block.is-blocked { opacity:.62; }
 .kernel-source-tags { margin-top:3px; color:var(--text-secondary); font-size:10.5px; line-height:1.35; }
@@ -3783,7 +3785,7 @@ html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disa
 .kernel-sources-sort { width:100%; min-height:38px; box-sizing:border-box; }
 .kernel-sources-scroll { min-height:0; max-height:52vh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:7px; padding-right:2px; }
 /* dev55: up to 1024 observed sources; only the rows near the visible part of the list are laid out. */
-.kernel-sources-scroll > .kernel-source { content-visibility:auto; contain-intrinsic-height:auto 58px; }
+.kernel-sources-scroll > .kernel-source { content-visibility:auto; contain-intrinsic-height:auto 126px; }
 .kernel-sources-empty { padding:22px 10px; text-align:center; color:var(--text-secondary); font-size:12px; }
 
 .kernel-meta { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:11px; color:var(--text-secondary); font-size:11px; }
@@ -4124,9 +4126,7 @@ html[data-asb-glass="1"] {
   color-scheme:dark;
 }
 html[data-asb-glass="1"] body {
-  background:
-    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,240,180,.10),transparent 68%),
-    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(36,58,49,.20),transparent 72%),#000;
+  background:var(--bg);
 }
 html[data-asb-glass="1"] .page,
 html[data-asb-glass="1"] .live-page,
@@ -7300,39 +7300,9 @@ function asbFirstFrameMark() {
 let _asbInputAt = -1e9;
 /* V66 dev6/dev66 buildfix3: only the Smart glow calms ten seconds after the last touch.
  * Visible header animations never enter calm. One timer is re-armed only after it has fired,
- * so a scroll does not set a timer per event. */
+ * so a scroll does not set a timer per event. CSS alone owns animation play state. */
 const ASB_CALM_MS = 10000;
 let _asbCalmTimer = 0;
-/* Only non-header ambient decoration is manually stepped. Visible UFO/orbit/status loops are
- * deliberately absent: native CSS animation is smooth, while 100 ms currentTime steps are not. */
-const ASB_AMBIENT_STEP_MS = 100;
-const ASB_AMBIENT_NAMES = ['ai-spin'];
-let _asbCalmOn = false, _asbAmbientTimer = 0;
-function asbAmbientAnims() {
-  if (typeof document.getAnimations !== 'function') return [];
-  const vw = window.innerWidth || 0, vh = window.innerHeight || 0;
-  return document.getAnimations().filter(function (a) {
-    if (ASB_AMBIENT_NAMES.indexOf(a.animationName) < 0) return false;
-    const el = a.effect && a.effect.target;
-    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
-    if (el.closest && el.closest('.asb-boot-intro, .header')) return false;
-    if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
-    const r = el.getBoundingClientRect();
-    return r.width > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
-  });
-}
-function asbAmbientTick() {
-  _asbAmbientTimer = 0;
-  if (!_asbCalmOn || document.hidden) return;
-  const list = asbAmbientAnims();
-  if (!list.length) return;
-  list.forEach(function (a) { try { a.currentTime = (Number(a.currentTime) || 0) + ASB_AMBIENT_STEP_MS; } catch (e) {} });
-  _asbAmbientTimer = setTimeout(asbAmbientTick, ASB_AMBIENT_STEP_MS);
-}
-function asbAmbientStop() {
-  _asbCalmOn = false;
-  if (_asbAmbientTimer) { clearTimeout(_asbAmbientTimer); _asbAmbientTimer = 0; }
-}
 function asbCalmArm() {
   if (_asbCalmTimer) return;
   _asbCalmTimer = setTimeout(function calmCheck() {
@@ -7340,24 +7310,16 @@ function asbCalmArm() {
     if (idle < ASB_CALM_MS) { _asbCalmTimer = setTimeout(calmCheck, ASB_CALM_MS - idle + 50); return; }
     _asbCalmTimer = 0;
     try { document.documentElement.classList.add('asb-calm'); } catch (e) {}
-    _asbCalmOn = true;
-    asbAmbientTick();
   }, ASB_CALM_MS);
 }
 function asbCalmWake() {
   _asbInputAt = performance.now();
-  asbAmbientStop();
   try { document.documentElement.classList.remove('asb-calm'); } catch (e) {}
   asbCalmArm();
 }
 ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach(function (t) {
   try { window.addEventListener(t, asbCalmWake, { passive: true, capture: true }); } catch (e) {}
 });
-try {
-  if (typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && _asbCalmOn && !_asbAmbientTimer) asbAmbientTick();
-  });
-} catch (e) {}
 asbCalmArm();
 /* dev4: a job never runs while another page is open or opening. In dev2 the Live pass and the
  * Zygisk header waited for gaps that ended right when the user tapped MONITOR or SETTINGS, and
@@ -10172,32 +10134,32 @@ const CFG_ITEMS = [
   { key:'camera_hold_enable', type:'bool', def:'1', name:'Hold Performance While Camera Runs',
     desc:'While the camera is streaming, the governor keeps the CPU ceiling and cores instead of lowering them. Thermal and vendor limits still apply.\n\n🔋 Battery life: Off\n⚡ Performance: On\n✋ Not sure: On' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
-    desc:'Lets the power profile manage interface timing: Performance shortens animations and the long-press and multi-tap windows, Battery keeps stock timing.\n\n🔋 Battery life: no effect\n⚡ Feels faster: On\n✋ Not sure: Off' },
+    desc:'Lets the ASB profile own two groups of timings: system animation duration and long-press/multi-tap windows. Performance shortens them; Battery restores stock values. This changes how quickly the UI responds visually, not app launch or computation speed. The separate Animation speed setting still works while this control is off.\n\n🔋 Measured battery saving: not claimed\n⚡ Shorter UI response: On\n✋ Unsure: Off' },
   { key:'anim_speed', type:'range', def:'-1', min:-1, max:8, step:1, stock:'-1', name:'Animation Speed',
-    desc:'A fixed Android animation speed. By profile lets the power profile choose; to the left is faster, to the right slower, the far left turns animations off. Shorter animations make the phone feel quicker but do not make apps process faster.\n\n🔋 Battery life: By profile\n⚡ Feels faster: Faster or Fastest\n✋ Not sure: By profile' },
+    desc:'Sets Android’s window, transition and Animator animation scales. Profile delegates the choice to the active profile; a manual value applies independently. A smaller scale shortens visible transitions and zero disables animations; it does not accelerate apps or their rendering. If the ROM does not apply a change live, verify the readback before using the separate forced-restart option.\n\n🔋 Battery: no guaranteed effect\n⚡ Perceived speed: smaller scale\n✋ Unsure: Profile' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Fallback for ROMs that ignore live animation-scale changes. When enabled, a manual profile switch also restarts SystemUI: the screen may blink, the lock screen may return, and overlays from other modules can be torn down. It does not run on every automatic profile change. Leave this off unless you have confirmed that ordinary scale changes do not apply.' },
+    desc:'A fallback for ROMs that ignore ordinary live animation-scale changes. Only a manual profile switch additionally restarts SystemUI; automatic profile changes do not. The screen may blink, the lock screen may appear, and overlays from other modules may close. It does not repair the scale value itself and is unnecessary when the ordinary path already has a matching readback.' },
   // --- Display ---,
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
-    desc:'Turns off window blur in the shade, notifications, the volume panel and transitions; backgrounds become solid.\n\n🔋 Battery life: On\n⚡ Performance: On\n✋ Not sure: Off' },
+    desc:'Disables system window blur in the notification shade, notifications, volume panel and supported transitions, using an opaque background instead of live blur. This removes some compositor/GPU work, but the amount of saving depends on the scene and is not promised. Colors, transparency, refresh rate and animation timing are not directly changed. Some ColorOS builds need a reboot for every surface.\n\n🔋 Less GPU work in supported windows: On\n🎨 Original ColorOS material: Off\n✋ Unsure: Off' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
-    desc:'How rich system transitions and the Recents effects are.\n\n🔋 Battery life: Simplified\n⚡ Performance: Simplified\n✋ Not sure: Auto' },
+    desc:'Chooses system-effect richness and the Recents presentation without changing screen resolution or refresh rate. Auto leaves the ROM alone; Stock uses its normal effects; Simplified reduces decoration and, on the supported OnePlus 15 build, switches Recents to a list and hides Cards/Simple. Availability depends on ColorOS; a successful settings write does not prove that the launcher accepted the presentation.\n\n🔋 Fewer decorative effects: Simplified\n🎨 Full ROM interface: Stock\n✋ Unsure: Auto' },
   { key:'ui_recents_memory', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Recents Memory Indicator',
-    desc:'Controls the ColorOS memory readout in Recents through display_memory_information_recent_task. Stock leaves the ROM/user setting alone; after an ASB override it restores the exact previous value. Applies live only when Settings read-back confirms the write.' },
+    desc:'Shows or hides the memory-information line in Recents through secure/display_memory_information_recent_task. It only changes the displayed reading: it does not free RAM, evict apps or alter memory limits. Stock leaves another owner’s value alone; after an explicit change, ASB restores its saved original. Success requires a Settings readback, while actual visibility still depends on the ColorOS Recents panel.' },
   { key:'ui_recents_corner_radius', type:'seg', def:'stock', stock:'stock', opts:['stock','0','8','12','16','20','24','28','32'], name:'Recents Corner Radius',
-    desc:'Sets the ColorOS Recents card radius in dp and its matching oost_recent_task_radius master. Both values are captured and restored together. A ROM or launcher that ignores these keys can still retain its own appearance; ASB reports only verified Settings writes, not a visual guarantee.' },
+    desc:'Changes Recents card rounding through the linked global/oost_recent_task_radius and oost_recent_task_radius_dp keys. 0 dp gives square corners; 32 dp is the strongest offered rounding. The master switch and dp value are applied and restored together; Stock restores the exact pair saved before ASB’s first change. ASB verifies Settings, not screen pixels: the active launcher may ignore these keys.' },
   { key:'ui_smooth_corners', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Smooth Screen Corners',
-    desc:'Controls the ColorOS smooth_corner_enabled setting for rounded interface geometry. This is not a display-panel overclock or a rendering bypass. Stock preserves the existing value; unsupported visual behaviour is not claimed merely because the setting was stored.' },
+    desc:'Controls the software smooth-screen-corner outline through global/smooth_corner_enabled. It changes corner styling, not the panel’s physical shape, refresh rate, brightness or touch response. Stock leaves another owner’s setting alone and restores the saved original after an explicit ASB change. Settings readback is verified; the visible outline depends on SystemUI, the theme and ColorOS support.' },
   { key:'ui_nav_handle_autohide', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Auto-hide Navigation Handle',
-    desc:'Controls oost_navigation_handle_auto_hide for the gesture navigation handle. It does not switch navigation mode or hide the handle permanently. The original setting is restored when returned to Stock.' },
+    desc:'Controls automatic hiding of the bottom gesture handle through global/oost_navigation_handle_auto_hide. When enabled, the handle can disappear while unused; gestures, navigation buttons and touchscreen response are not changed by this setting. Stock leaves the ROM alone, while an explicit ASB change can be restored to its saved original. Success means a matching Settings readback; hiding behavior and support remain owned by ColorOS.' },
   { key:'feel_pointer_speed', type:'range', def:'stock', stock:'stock', stockAt:-8, min:-8, max:7, step:1, name:'Pointer Speed',
-    desc:'Sets Android pointer_speed from -7 to 7 for a mouse, trackpad or other pointer; it is not a touchscreen sensitivity or polling-rate hack. Stock leaves the current value untouched and restores the exact pre-ASB value after an override. The saved baseline is the value captured when ASB first applied an override, not necessarily the factory default.' },
+    desc:'Changes system/pointer_speed, which controls pointer movement for a mouse or trackpad connected to the phone. It does not change touchscreen sensitivity, touch sampling, gesture recognition or game speed. Stock does not overwrite another owner’s setting. On first explicit use ASB saves the current value and later restores that value; it is not necessarily the factory default. The result is verified through Settings. The saved baseline is the value captured when ASB first applied an override, not necessarily the factory default.' },
   { key:'feel_gesture_mistouch', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Gesture Mistouch Prevention',
-    desc:'Controls the ColorOS gesture_mistouch_prevention_enable switch. On may reject some edge touches; Off deliberately disables that protection. Game-specific OEM rules can still apply. No touch sampling-rate change is claimed.' },
+    desc:'Controls ColorOS accidental-touch protection through secure/gesture_mistouch_prevention_enable. It can reject some touches near curved-screen edges, for example when a palm holds the phone. This is not touchscreen calibration or a sampling-rate change; an aggressive ROM policy can also delay intended edge gestures. Stock restores the saved original, and readback confirms the write rather than recognition quality.' },
   { key:'feel_game_memc', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'Game MEMC',
-    desc:'Controls display_memc_game_enable, the ColorOS game motion-interpolation setting. Actual interpolation depends on the panel, supported games and OEM display service; it can add latency or power use. ASB verifies the setting write, not MEMC activation in every game.' },
+    desc:'Controls the stock game frame-interpolation switch secure/display_memc_game_enable. When the game and firmware support it, MEMC inserts intermediate displayed frames; it does not increase the game engine’s actual rendering FPS. Interpolation can add input latency, artifacts and energy use. Stock restores the saved original. A confirmed Settings write does not prove MEMC is active in every game.' },
   { key:'feel_dc_dimming', type:'seg', def:'stock', stock:'stock', opts:['stock','on','off'], name:'DC Dimming System Switch',
-    desc:'Controls display_dc_settings_switch where ColorOS exposes DC dimming. Panel and brightness restrictions still belong to the OEM; this does not force an unsupported panel mode or bypass thermal/display drivers. Stock restores the exact previous setting.' },
+    desc:'Controls the stock DC-dimming switch secure/display_dc_settings_switch. On a supported panel it can change low-brightness regulation and reduce visible PWM flicker; on an unsupported panel a successful key write proves nothing. ASB neither bypasses the brightness driver nor forces the panel. Low-brightness tint or gradient changes are possible and depend on ColorOS. Stock restores the saved original after readback.' },
   // ---- Network ----------------------------------------------------------------,
   // The explicit radio master belongs first: every ASB modem/handover choice below depends on it.
   { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls',
@@ -10884,6 +10846,9 @@ function bfxPaintFrom(f) {
       artText += ' · ' + bfxT('bfx_art_eta', 'about {min} min left', { min: left });
     }
     if (f.cur && f.cur !== '-') nowText = bfxT('bfx_art_now', 'Now: {pkg}', { pkg: f.cur });
+  } else if (cs === 'scheduled') {
+    artState = 'wait'; ratio = -1;
+    artText = bfxT('bfx_art_scheduled', 'Immediate recompilation was rejected, so Android’s background optimisation job was started instead. This does not confirm speed-profile compilation; its result will be decided by Android. The battery reset remains scheduled.');
   } else if (cs === 'done') {
     artState = 'ok'; ratio = 1;
     artText = bfxT('bfx_art_done', 'Done: {ok} succeeded, failed: {fail} · {min} min', { ok: ok, fail: fail, min: Math.max(1, Math.round((finished - started) / 60)) });
@@ -12049,6 +12014,21 @@ function kernelWakeupRisk(name, shared) {
   const n = Math.max(1, Number(shared || 1));
   return { critical: KERNEL_WB_CRITICAL.test(String(name || '')), shared: n };
 }
+function kernelWakeupInfo(name) {
+  const n = String(name || '');
+  if (/^(eventpoll|eventfd)$/.test(n)) return { risk:'high', key:'event' };
+  if (/thermal|watchdog|wdog/i.test(n)) return { risk:'critical', key:'safety' };
+  if (/alarmtimer|PowerManagerService|alarm|rtc/i.test(n)) return { risk:'critical', key:'timing' };
+  if (/battery|charg|usb|pwrkey|power_?key|gpio.?keys?|input|touch|finger/i.test(n)) return { risk:'critical', key:'power_input' };
+  if (/^IPA_|ipa[_-]|modem|msm.*ipc|qmi|rmnet/i.test(n)) return { risk:'high', key:'mobile' };
+  if (/wlan|wifi|qca|cnss|wcnss/i.test(n)) return { risk:'high', key:'wifi' };
+  if (/mmc|sdhc|ufs|scsi|block/i.test(n)) return { risk:'high', key:'storage' };
+  if (/glink|rpmsg|smem|ipc_router|ipc/i.test(n)) return { risk:'high', key:'ipc' };
+  if (/dsi|drm|display|mdss|mipi/i.test(n)) return { risk:'high', key:'display' };
+  if (/adsp|cdsp|slpi|audio|sound/i.test(n)) return { risk:'medium', key:'dsp' };
+  if (/kgsl|gpu|gfx/i.test(n)) return { risk:'medium', key:'gpu' };
+  return { risk:'unknown', key:'unknown' };
+}
 let _wbConfirm = '';
 function kernelWakeupConfirmText(name, risk) {
   const parts = [];
@@ -12102,6 +12082,9 @@ function kernelWakeupSourcesDrawList(m) {
     main.appendChild(bfxEl('div', 'kernel-source-name', src.name));
     const metric = T('kernel_wb_source_metrics', '+{events} events · +{active} activations · +{time} active').replace('{events}', src.events).replace('{active}', src.active).replace('{time}', kernelWakeupDuration(src.time));
     main.appendChild(bfxEl('div', 'kernel-source-metrics', metric + (src.reset ? ' · ' + T('kernel_wb_reset_short', 'counter reset') : '')));
+    const info = kernelWakeupInfo(src.name);
+    main.appendChild(bfxEl('div', 'kernel-source-purpose', T('kernel_wb_info_' + info.key, 'The exact owner of this kernel name is unknown. Observe it in several idle windows before considering a rule.')));
+    main.appendChild(bfxEl('div', 'kernel-source-risk is-' + info.risk, T('kernel_wb_risk_' + info.risk, 'Blocking risk: unknown — do not block until the owner and consumers are identified.')));
     row.appendChild(main);
     const risk = kernelWakeupRisk(src.name, src.shared);
     const tags = [];
@@ -18325,9 +18308,15 @@ function deviceInfoEvidence(d) {
   });
   return out;
 }
-function deviceSnapshotCard(label, value, sub, tone) {
+function deviceSnapshotCard(label, value, sub, tone, emo) {
   const el = deviceHero(label, value, sub);
   el.classList.add('dev-snapshot-' + (tone || 'neutral'));
+  if (emo) {
+    const icon = document.createElement('span');
+    icon.className = 'lgr-hero-emo dev-snapshot-emo';
+    icon.setAttribute('aria-hidden', 'true'); icon.textContent = emo;
+    el.insertBefore(icon, el.firstChild); el.classList.add('has-emoji');
+  }
   return el;
 }
 /* A compact answer before the full evidence table. These cards describe returned readings,
@@ -18571,18 +18560,18 @@ function deviceZygiskOverview(d) {
   const val = function (key) { return deviceVal(d, 'zygisk_observer', key); };
   grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_injection', 'Validated injection'),
     deviceFill('dev_zygisk_metric_processes', '{n} live process(es)', { n: val('loaded_processes') }),
-    val('state_freshness'), deviceZygiskLinkState(d) === 'connected' ? 'good' : 'neutral'));
+    val('state_freshness'), deviceZygiskLinkState(d) === 'connected' ? 'good' : 'neutral', '🛰️'));
   grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_channel', 'Companion channel'),
     deviceFill('dev_zygisk_metric_events', '{n} events', { n: val('events_total') }),
-    deviceFill('dev_zygisk_metric_spawn_dropped', '{spawn} spawn · {dropped} dropped', { spawn: val('spawn_events'), dropped: val('events_dropped_total') }), 'neutral'));
+    deviceFill('dev_zygisk_metric_spawn_dropped', '{spawn} spawn · {dropped} dropped', { spawn: val('spawn_events'), dropped: val('events_dropped_total') }), 'neutral', '🔗'));
   grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_policy', 'Policy acknowledgement'),
     deviceFill('dev_zygisk_metric_policy_fmt', '{written} written / {seen} seen', { written: val('policy_generation'), seen: val('policy_seen_generation') }),
-    deviceFill('dev_zygisk_metric_allowlist', '{n} selected app(s)', { n: val('enabled_packages') }), 'neutral'));
+    deviceFill('dev_zygisk_metric_allowlist', '{n} selected app(s)', { n: val('enabled_packages') }), 'neutral', '✅'));
   grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_cost', 'Observer IPC cost'),
     deviceFill('dev_zygisk_metric_cpu', '{n} ms CPU', { n: val('ipc_cpu_ms') }),
-    deviceFill('dev_zygisk_metric_cost_fmt', '{wake} wakeups', { wake: val('ipc_wakeups') }), 'neutral'));
+    deviceFill('dev_zygisk_metric_cost_fmt', '{wake} wakeups', { wake: val('ipc_wakeups') }), 'neutral', '⏱️'));
   grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_rss', 'Memory of observed apps'),
-    deviceSizeKb(val('memory_kb')), T('dev_zygisk_metric_rss_sub', 'the apps themselves, not ASB overhead'), 'neutral'));
+    deviceSizeKb(val('memory_kb')), T('dev_zygisk_metric_rss_sub', 'the apps themselves, not ASB overhead'), 'neutral', '🧠'));
   wrap.appendChild(grid);
   const features = document.createElement('div'); features.className = 'dev-zygisk-features';
   [['enabled', 'dev_zygisk_feature_observer', 'Observer'], ['lifecycle_hints', 'dev_zygisk_feature_hints', 'Lifecycle hints'],
