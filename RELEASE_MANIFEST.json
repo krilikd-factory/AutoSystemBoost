@@ -1,43 +1,25 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-660-dev66-buildfix9-source",
-  "base": "AutoSystemBoost-V66-660-dev66-buildfix8-source.zip",
+  "release": "AutoSystemBoost-V66-660-dev66-buildfix10-source",
+  "base": "AutoSystemBoost-V66-660-dev66-buildfix9-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 271,
   "inventory_vs_base": {
     "changed": [
-      "README.advanced.md",
-      "README.advanced.ru.md",
       "RELEASE_MANIFEST.json",
       "docs/V66_BUILD_HISTORY.md",
-      "docs/log_schemas.md",
-      "runtime/asb_battery_fix.sh",
-      "tests/asb_features.sh",
+      "tests/asb_system.sh",
       "tests/asb_ui.sh",
-      "tools/asb_device_info.sh",
+      "tools/asb_lint.sh",
       "tools/asb_tree.sha256",
-      "tools/logkit/asb_fullday_digest.sh",
-      "webroot/i18n/ar.json",
-      "webroot/i18n/de.json",
-      "webroot/i18n/en.json",
-      "webroot/i18n/es.json",
-      "webroot/i18n/fr.json",
-      "webroot/i18n/hy.json",
-      "webroot/i18n/id.json",
-      "webroot/i18n/it.json",
-      "webroot/i18n/pt.json",
-      "webroot/i18n/ru.json",
-      "webroot/i18n/tr.json",
-      "webroot/i18n/uk.json",
-      "webroot/i18n/zh.json",
       "webroot/index.html"
     ],
     "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 25,
+      "changed": 7,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -196,13 +178,13 @@
     "uninstall.sh"
   ],
   "host_verification": {
-    "source_regression": "Full canonical source-only regression passed on the working tree: schema sync, lint, native warning budget, 413 features/package/system/Smart/UI/Zygisk host tests; 0 failed tests; 0 I/O errors; 0 Broken pipe.",
-    "targeted_runtime": "Evidence-gated Infinite Log recommendations, whitelist preview/confirmation, changed-since-preview skipping and direct saved-config read-back; Device schema 6 ADIOS/property fixtures; five-job splash and snapshot-first Device/Infinite Log/Zygisk navigation; bounded package-scoped Battery Fix Binder-refusal outcomes passed.",
-    "header_browser_runtime": "Existing Chromium host rendering contracts passed in the full suite. No physical ColorOS WebView screenshot or interaction validation was performed for this revision.",
+    "source_regression": "Full canonical source-only regression passed on the working tree: schema sync, lint, native warning budget, 414 features/package/system/Smart/UI/Zygisk host tests; 0 failed tests; 0 I/O errors; 0 Broken pipe.",
+    "targeted_runtime": "Paint-first Camera evidence with retryable skip state and live manual Refresh; continuous four-switch Zygisk card; bounded Stock/non-Stock Monitor splash prefetch, overlap preservation, 1200 ms fresh-sample reuse, stale/sequence guards, two-frame entrance and explicit profile transitions passed source and Node fixtures.",
+    "header_browser_runtime": "Existing Chromium host rendering contracts passed in the full suite. No physical ColorOS WebView screenshot, frame-time trace or interaction validation was performed for this revision.",
     "clean_unpack_regression": "Full canonical source-only regression from a clean unpack of this exact source ZIP passed; per-file SHA-256/size/mode equality, regular-file-only ZIP entries, strict tree check, executable modes and asbdiag identity verified.",
     "skip": "DSP reference staging only: optional reference prebuilt .so files absent; static DSP gates and available host-compiled DSP tests passed."
   },
-  "evidence_scope": "Host/source/Chromium-contract verification only. No physical OnePlus 15 or ColorOS WebView validation, measured responsiveness/battery gain, thermal improvement, ADIOS field gain, or proof that package-scoped speed-profile compilation completed on the device is claimed. Snapshot reuse does not replace mandatory Live/Monitor reads. ADIOS unknown/not-exposed states are not proof of absent kernel support. No ART/Dalvik wipe, aggregate all-package compile recovery, thermal bypass, persistent poller, arbitrary property dump or sensitive identifier collection was added.",
+  "evidence_scope": "Host/source/Chromium-contract verification only. No physical OnePlus 15 or ColorOS WebView validation and no measured navigation-latency, animation smoothness, responsiveness, battery or thermal improvement is claimed. Snapshot reuse remains bounded and does not replace mandatory fresh Live/Monitor reads. No persistent poller, ambient worker, thermal bypass, arbitrary property dump or sensitive identifier collection was added.",
   "files": [
     {
       "path": ".github/workflows/build-dsp-aidl.yml",
@@ -458,9 +440,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 189998,
+      "bytes": 192383,
       "mode": "0644",
-      "sha256": "15dca9021f28e5bdec894a7aed2a6bc47409271e1529a06f5821e406ab90de42"
+      "sha256": "e31357404ca17abc8de949e19b4ac9677c28f2d313394355b101dabe261c32ac"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -1382,15 +1364,15 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 648514,
+      "bytes": 648554,
       "mode": "0755",
-      "sha256": "a725864c92b1d6259af91a4a664344375d3543ab6fead07144b6cd941fec9b6d"
+      "sha256": "1d479bb0693bf168746606d08017e147df1548ac66c1787146820621dbcea2ed"
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1150560,
+      "bytes": 1160291,
       "mode": "0755",
-      "sha256": "fb827401fc46fd2568eb47f8a7a0c97dae0a88483a7d4687fd2100c1b2acd33e"
+      "sha256": "2a3e3335cb5e7703a7b8a7686c1c0c5d13ea8a415caef0a3a627ee7d1085c83a"
     },
     {
       "path": "tests/asb_zygisk.sh",
@@ -1522,7 +1504,7 @@
       "path": "tools/asb_lint.sh",
       "bytes": 58788,
       "mode": "0755",
-      "sha256": "82364f7101b4b7a7c69b5929c762aaa31f520df0aff0823250eca510e0572626"
+      "sha256": "181b35a31211fe80962663cf726c5775deff84f0961c5b1d8fd243996888496e"
     },
     {
       "path": "tools/asb_native_warning_baseline.txt",
@@ -1606,7 +1588,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24044,
       "mode": "0644",
-      "sha256": "88bfde033e15847007f83ab5c6ac1f7c6377dd6dfd72b833f2d80dcb3d11c23b"
+      "sha256": "1e1b7f59e7f3689a4831026dd57e7b0918a9292d2a1fe302d58020cc6f17d9f5"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1814,9 +1796,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1648362,
+      "bytes": 1649674,
       "mode": "0644",
-      "sha256": "2a7c04618acb907fc256dd9b481b7a5bf1bbd91f7e4ecc67c4ed9715999cd3d2"
+      "sha256": "cf2268c23d1017e1b3f62967c9d157862d07b212e9213c9497461d77a50c4d2d"
     },
     {
       "path": "zygisk/arm64-v8a.so",
