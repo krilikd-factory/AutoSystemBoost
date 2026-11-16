@@ -85,17 +85,6 @@ _bf_compile_one() {
   [ -n "$_bf_err" ] || _bf_err=no_output
   return 1
 }
-_bf_compile_bulk() {
-  _bo="$(cmd package compile -m speed-profile -f -a 2>&1)"
-  case "$_bo" in *Success*) return 0 ;; esac
-  if command -v pm >/dev/null 2>&1; then
-    _bpo="$(pm compile -m speed-profile -f -a 2>&1)"
-    case "$_bpo" in *Success*) return 0 ;; *) _bo="$(printf '%s\n%s\n' "$_bo" "$_bpo" | grep -m1 .)" ;; esac
-  fi
-  _bf_err="$(_bf_clean "$(printf '%s\n' "$_bo" | grep -m1 . )")"
-  [ -n "$_bf_err" ] || _bf_err=no_output
-  return 1
-}
 _bf_schedule_bgjob() {
   [ "${ASB_BFIX_NO_BGJOB:-0}" != 1 ] || return 1
   command -v cmd >/dev/null 2>&1 || return 1
@@ -145,32 +134,31 @@ _bf_worker() {
     _prog_write failed no_packages 0 0 0 0 - "$_st" "$(_now)"
     exit 0
   fi
-  _d=0; _ok=0; _f=0; _state=done
+  _d=0; _ok=0; _f=0; _binder_streak=0; _state=done
   _prog_write running compile "$_total" 0 0 0 - "$_st" -
   while IFS= read -r _p; do
     [ -n "$_p" ] || continue
     if [ -f "$STOPF" ]; then _state=stopped; break; fi
     _prog_write running compile "$_total" "$_d" "$_ok" "$_f" "$_p" "$_st" -
     if _bf_compile_one "$_p"; then
-      _ok=$((_ok + 1)); _d=$((_d + 1))
-    elif [ "${_bf_binder:-0}" = 1 ]; then
-      _prog_write running bulk "$_total" "$_d" "$_ok" "$_f" - "$_st" -
-      if _bf_compile_bulk; then
-        _d="$_total"; _ok="$_total"; _f=0; _bf_err=""; _state=done
-      elif _bf_schedule_bgjob; then
-        _d=$((_d + 1)); _f=0; _bf_err=""; _state=scheduled
-      else
-        _f=$((_f + 1)); _d=$((_d + 1)); _state=refused
-      fi
-      break
+      _ok=$((_ok + 1)); _d=$((_d + 1)); _binder_streak=0
     else
       _f=$((_f + 1)); _d=$((_d + 1))
+      if [ "${_bf_binder:-0}" = 1 ]; then _binder_streak=$((_binder_streak + 1)); else _binder_streak=0; fi
+    fi
+    if [ "${_bf_binder:-0}" = 1 ] && [ "$_binder_streak" -ge "${ASB_BFIX_BINDER_REFUSE_AFTER:-3}" ]; then
+      if [ "$_ok" -eq 0 ]; then
+        if _bf_schedule_bgjob; then _state=scheduled; else _state=refused; fi
+      else
+        _state=partial
+      fi
+      break
     fi
     if [ "$_ok" -eq 0 ] && [ "$_f" -ge "${ASB_BFIX_REFUSE_AFTER:-12}" ]; then _state=refused; break; fi
   done < "$_pk"
   rm -f "$_pk" "$STOPF" 2>/dev/null
   [ "$_state" = done ] && [ "$_ok" -eq 0 ] && [ "$_f" -gt 0 ] && _state=refused
-  if [ "$_state" = done ]; then
+  if [ "$_state" = done ] || [ "$_state" = partial ]; then
     _prog_write running finishing "$_total" "$_d" "$_ok" "$_f" - "$_st" -
     if [ "${ASB_BFIX_NO_BGJOB:-0}" != 1 ] && command -v cmd >/dev/null 2>&1; then
       cmd package bg-dexopt-job >/dev/null 2>&1
