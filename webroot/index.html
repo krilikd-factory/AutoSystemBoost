@@ -1936,6 +1936,19 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .cfg-zygisk-preset { margin:9px 2px 10px; padding:9px 11px; border:1px solid var(--border); border-radius:12px; color:var(--text-secondary); font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
 .cfg-zygisk-preset strong { color:var(--text); }
 .zygisk-page .zy-fine { margin-top: 10px; }
+.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 0 !important; }
+.cfg-zygisk-card > .cfg-row + .cfg-row::before {
+  content:''; display:block; height:1px; margin:-4px 0 7px;
+  background:color-mix(in srgb,var(--border) 52%,transparent);
+}
+html[data-asb-glass="1"]:not([data-asb-theme="light"]) .cfg-zygisk-card > .cfg-row + .cfg-row::before {
+  background:rgba(255,255,255,.055);
+}
+body.config-category-active #configPage.cfg-short-fit .cfg-list { padding-bottom:0; }
+#configPage.cfg-short-fit > *:last-child {
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
+}
+#configPage.cfg-short-fit { overflow-y:hidden !important; overscroll-behavior-y:none; }
 .cfg-zygisk-card > .cfg-zygisk-open { margin:10px 14px 12px; max-width:calc(100% - 28px); }
 .cfg-row.zy-master-off .cfg-switch { opacity:.38; filter:saturate(.45); cursor:default; }
 .cfg-row.zy-master-off .cfg-status { opacity:.82; }
@@ -2136,7 +2149,10 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
  * accent line has (dev4's "padding: 0" put that text against the line again). */
 #zygiskPage .lgr-note.dev-evidence.zy-clamp { padding-inline-start: 12px; }
 #zygiskPage .zy-btn-inline { margin-top: 6px; padding: 5px 12px; font-size: 12px; min-height: 0; }
-#zygiskPage .lgr-note.zy-clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+#zygiskPage .lgr-note.zy-clamp.open,
+#zygiskPage .zy-mode-desc.zy-clamp.open,
+#zygiskPage .zy-auto-desc.zy-clamp.open,
+#zygiskPage .zy-auto-current.zy-clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
 #zygiskPage .zy-fold[hidden] { display: none !important; }
 #zygiskPage .zy-more { display: block; margin: 6px 0 2px auto; }
 #zygiskPage .zy-lsp-why > summary { font-size: 12.5px; color: var(--text-secondary); cursor: pointer; padding: 2px 0; }
@@ -2600,7 +2616,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   background: transparent !important;
   box-shadow: none !important;
 }
-.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 1px solid var(--border) !important; }
+.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 0 !important; }
 .cfg-zygisk-card > .dev-zygisk-link {
   margin: 0;
   padding: 12px 14px;
@@ -10803,7 +10819,8 @@ function cfgRenderBatteryFixCard(list) {
   titles.appendChild(chip);
   head.appendChild(titles);
   card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', T('bfx_desc', 'Two steps. First every app is recompiled in place (speed-profile), with progress shown below app by app. Then, on the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and the learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.')));
+  card.appendChild(bfxEl('div', 'bfx-desc', T('bfx_summary', "Recompiles apps, then resets Android battery statistics after reboot. Available at 100% on charge; it does not add capacity.")));
+  kernelMoreBlock(card, 'bfx', [bfxEl('div', 'bfx-desc', T('bfx_desc', 'Two steps. First every app is recompiled in place (speed-profile), with progress shown below app by app. Then, on the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and the learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.'))]);
   const steps = bfxEl('ol', 'bfx-steps');
   steps.appendChild(bfxStep('bfxStepCond', 'bfx_step_cond', 'Condition: 100% on charge'));
   const art = bfxStep('bfxStepArt', 'bfx_step_art', 'Recompile apps (ART)');
@@ -11156,7 +11173,8 @@ function cfgRenderSoterFixCard(list) {
   titles.appendChild(bfxEl('div', 'bfx-title', T('soter_title', 'SOTER Repair')));
   const chip = bfxEl('span', 'bfx-chip is-off', T('junk_scan', 'Scanning…')); chip.id = 'soterChip'; titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', T('soter_desc', 'SOTER is the Tencent key server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps. If those apps report a failed device check although everything else works, the repair stops the SOTER service, clears only the SOTER server data so it creates fresh keys, and starts the service again. Afterwards switch fingerprint payment on again in those apps. It does not hide root or an unlocked bootloader. One run makes two passes in a row, because a single pass was not always enough.')));
+  card.appendChild(bfxEl('div', 'bfx-desc', T('soter_summary', "Rebuilds SOTER keys for fingerprint payments when supported apps fail their device check. Root and bootloader state are not hidden.")));
+  kernelMoreBlock(card, 'soter', [bfxEl('div', 'bfx-desc', T('soter_desc', 'SOTER is the Tencent key server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps. If those apps report a failed device check although everything else works, the repair stops the SOTER service, clears only the SOTER server data so it creates fresh keys, and starts the service again. Afterwards switch fingerprint payment on again in those apps. It does not hide root or an unlocked bootloader. One run makes two passes in a row, because a single pass was not always enough.'))]);
   const rows = bfxEl('div', 'junk-cats'); rows.id = 'soterRows'; card.appendChild(rows);
   const actions = bfxEl('div', 'bfx-actions');
   const runBtn = bfxEl('button', 'bfx-btn bfx-primary', T('soter_run', 'Repair SOTER'));
@@ -11168,7 +11186,8 @@ function cfgRenderSoterFixCard(list) {
   const auto = bfxEl('div', 'soter-auto');
   const autoText = bfxEl('div', 'soter-auto-text');
   autoText.appendChild(bfxEl('div', 'soter-auto-title', T('soter_auto', 'Repair automatically after every reboot')));
-  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair after each reboot, about ten minutes after you first unlock the phone: SOTER keys need the unlocked storage, and keys created in the first minutes after a reboot did not work on this phone while a repair made later did. A notification comes when it has finished. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.')));
+  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note_short', "After each reboot, runs the repair once storage is unlocked. Fingerprint payment must be enabled again in affected apps.")));
+  kernelMoreBlock(card, 'soter_auto', [bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair after each reboot, about ten minutes after you first unlock the phone: SOTER keys need the unlocked storage, and keys created in the first minutes after a reboot did not work on this phone while a repair made later did. A notification comes when it has finished. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.'))]);
   auto.appendChild(autoText);
   const sw = bfxEl('div', 'cfg-switch'); sw.id = 'soterAuto';
   sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', 'false'); sw.setAttribute('aria-disabled', 'true');
@@ -11310,7 +11329,8 @@ function cfgRenderJunkCleanupCard(list) {
   titles.appendChild(bfxEl('div', 'bfx-title', T('junk_title', 'Junk Cleanup')));
   const chip = bfxEl('span', 'bfx-chip is-off'); chip.id = 'junkChip'; titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', T('junk_desc', 'Removes crash reports, ANR traces, diagnostic and installer caches, stale backup journals and files already in a trash state. Ordinary screenshots, recent tasks, module settings and working files are preserved. This frees storage; it does not prove or guarantee a fix for lag.')));
+  card.appendChild(bfxEl('div', 'bfx-desc', T('junk_summary', "Removes crash, diagnostic and installer caches while preserving photos, settings and working files. Frees storage; does not guarantee smoother performance.")));
+  kernelMoreBlock(card, 'junk', [bfxEl('div', 'bfx-desc', T('junk_desc', 'Removes crash reports, ANR traces, diagnostic and installer caches, stale backup journals and files already in a trash state. Ordinary screenshots, recent tasks, module settings and working files are preserved. This frees storage; it does not prove or guarantee a fix for lag.'))]);
   const total = bfxEl('div', 'junk-total', T('junk_scan', 'Scanning…')); total.id = 'junkTotal'; card.appendChild(total);
   const cats = bfxEl('div', 'junk-cats'); cats.id = 'junkCats'; card.appendChild(cats);
   const actions = bfxEl('div', 'bfx-actions');
@@ -11650,7 +11670,6 @@ function cfgRenderCameraToolsCards(list) {
   wr.disabled = false;
   wc.appendChild(wa);
   const wn = bfxEl('div', 'bfx-note'); wn.id = 'ctWcNote'; wc.appendChild(wn);
-  list.appendChild(wc);
   const la = ctCard('ctLaCard', 'camera_launch', T('ct_la_title', 'Fast Camera Start'),
     T('ct_la_summary', 'Keeps the camera app fully compiled. Measure the cold start before and after to see the difference.'),
     T('ct_la_desc', 'Compiles the camera app completely ahead of time (ART speed mode instead of Android’s profile-guided default), so its code is not interpreted or compiled while it starts. It costs extra storage, often 100-300 MB, and a minute or two of compiling. Measure closes the camera and opens it cold, recording Android’s launch time - measure before and after to see what it changes on this phone. After an app update ASB compiles again about ten minutes after boot.'),
@@ -11664,6 +11683,7 @@ function cfgRenderCameraToolsCards(list) {
   la.appendChild(lb);
   const ln = bfxEl('div', 'bfx-note'); ln.id = 'ctLaNote'; la.appendChild(ln);
   list.appendChild(la);
+  list.appendChild(wc);
   ctLoad(false);
 }
 
@@ -12835,7 +12855,8 @@ function cfgScanLabel(v) {
 /* Smart ownership is deliberately narrower than "a setting Smart reads". Policy switches,
  * limits and guards remain user-controlled. This badge appears only where the running Smart
  * runtime actually changes a live value after the user's selection: dynamic MGLRU, the
- * opted-in Wi-Fi/LTE screen state transitions and DSP thermal back-off. It is separate from
+ * opted-in Wi-Fi/LTE screen state transitions. Fixed user limits are marked separately.
+ * It is separate from
  * cfgStatus/kernel evidence, so an apply failure can never be hidden by a green Smart tag. */
 function cfgSmartOwner(it, cur) {
   if (_selectedProfile !== 'smart' || !it) return null;
@@ -12845,9 +12866,10 @@ function cfgSmartOwner(it, cur) {
   if (it.key === 'mglru_mode' && v === 'smart') return 'dynamic';
   if (it.key === 'wifi_powersave' && (v === 'screen_off' || v === 'always')) return 'dynamic';
   if ((it.key === 'net_screen_off_lte' || it.key === 'net_lte_light') && v === '1') return 'radio';
-  if (it.key === 'dsp_loudness' && /^([1-9]|[12][0-9]|30)$/.test(v) &&
-      String(_cfgVals.dsp_outputs || 'all') !== 'off' &&
-      String(_cfgVals.audio_profile || 'stock') !== 'eq_compat') return 'dsp_thermal';
+  if (it.key === 'perf_ceiling_pct' && v !== '100') return 'limit';
+  if (it.key === 'heavy_prime_escape' && v === '1') return 'dynamic';
+  if ((it.key === 'prime_escape_burst_s' || it.key === 'prime_escape_rest_s') &&
+      String(_cfgVals.heavy_prime_escape || '0') === '1') return 'limit';
   const profileAuto = ['io_scheduler','kernel_timer_migration','kernel_hrtimer_migration',
     'kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_mglru_min_ttl',
     'kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend',
@@ -13474,16 +13496,19 @@ const _unav = ASB_CAP_REQUIRES[it.key];
     if (_smartOwner) {
       const so = document.createElement('span');
       so.className = 'cfg-smart-owner';
-      so.textContent = T(_smartOwner === 'profile' ? 'cfg_smart_profile' : 'cfg_smart_owner',
-        _smartOwner === 'profile' ? 'SMART · PROFILE' : 'SMART · AUTO');
+      const _smartLabel = _smartOwner === 'profile' ? 'cfg_smart_owner_profile' :
+        (_smartOwner === 'limit' ? 'cfg_smart_owner_limit' : 'cfg_smart_owner');
+      so.textContent = T(_smartLabel,
+        _smartOwner === 'profile' ? 'SMART · PROFILE' :
+        (_smartOwner === 'limit' ? 'SMART · LIMIT' : 'SMART · AUTO'));
       const _smartWhy = {
         dynamic:'Smart dynamically changes this live value within the mode you selected. Do not force it manually: that would fight the governor. Choose a manual value or another profile to take ownership back.',
         radio:'Smart performs this opted-in radio transition with screen and traffic state. Keep the policy enabled rather than repeatedly toggling it; turn it off or leave Smart to take ownership back.',
         thermal:'Smart may temporarily reduce a live value for thermal protection while preserving your requested setting. Leave Smart or choose Stock/manual to take ownership back.',
-        dsp_thermal:'Your gain is the requested level; Smart may temporarily reduce it on the speaker when the battery is hot. Do not raise it to compensate for thermal protection. Leave Smart or set DSP Loudness to 0 to take ownership back.',
-        profile:'Smart applies the value belonging to its current Battery/Balanced profile. Your Auto choice is preserved; choose an explicit value or leave Smart to take ownership back.'
+        profile:'Auto uses the value of the current Smart Battery/Balanced profile. Choose an explicit value or leave Smart for manual control.',
+        limit:'Smart uses this as your fixed limit or guard. It does not choose a new value by itself; change the value or leave Smart to take ownership back.'
       };
-      so.title = T('cfg_smart_owner_' + _smartOwner, _smartWhy[_smartOwner]);
+      so.title = T(_smartOwner === 'profile' ? 'cfg_smart_profile' : 'cfg_smart_owner_' + _smartOwner, _smartWhy[_smartOwner]);
       main.appendChild(so);
     }
     top.appendChild(main);
@@ -13969,7 +13994,27 @@ function asbTabbarVisibility() {
   if (!hideBar && typeof asbNavIndicator === 'function') asbNavIndicator();
 }
 
+let _cfgShortFitBound = false;
+function cfgShortCategoryFit() {
+  const page = _el('configPage');
+  if (!page) return;
+  page.classList.remove('cfg-short-fit');
+  if (_cfgGroup !== 'zygisk' || _cfgSearch || !page.classList.contains('open')) return;
+  const raf = window.requestAnimationFrame || function (fn) { return setTimeout(fn, 0); };
+  raf(function () {
+    if (_cfgGroup !== 'zygisk' || _cfgSearch || !page.classList.contains('open')) return;
+    page.classList.add('cfg-short-fit');
+    if (page.scrollHeight > page.clientHeight + 2) page.classList.remove('cfg-short-fit');
+  });
+  if (!_cfgShortFitBound && window.addEventListener) {
+    _cfgShortFitBound = true;
+    window.addEventListener('resize', cfgShortCategoryFit, { passive:true });
+  }
+}
+
 function cfgRender() {
+  const cfgPage = _el('configPage');
+  if (cfgPage) cfgPage.classList.remove('cfg-short-fit');
   /* Hide the tab bar while a settings category is open.
    *
    * The hub lists six categories and the bar belongs there - it is a top-level screen.
@@ -14025,6 +14070,7 @@ function cfgRender() {
   _cfgShownScreen = _screen;
   if (!_cfgGroup) { cfgRenderHub(list); _cfgHubSig = cfgHubSig(); return; }
   cfgRenderGroup(list, _cfgGroup);
+  cfgShortCategoryFit();
 }
 // The screen the list last showed ('hub' or a category id); null before the first paint.
 var _cfgShownScreen = null;
@@ -19174,14 +19220,18 @@ const _zyFoldOpen = new Set();
 const ZY_NOTE_CLAMP = 90;
 function zyCompact(body) {
   if (!body || !body.querySelectorAll) return;
-  Array.prototype.forEach.call(body.querySelectorAll('.lgr-note'), function (n, i) {
+  Array.prototype.forEach.call(body.querySelectorAll('.lgr-note,.zy-mode-desc,.zy-auto-desc,.zy-auto-current'), function (n, i) {
     if (n.classList.contains('zy-clamp') || String(n.textContent || '').length <= ZY_NOTE_CLAMP) return;
     const sec = n.closest ? n.closest('.lgr-sec') : null;
     const key = 'n:' + (sec && sec.id ? sec.id : '') + ':' + String(n.textContent).slice(0, 40);
     n.classList.add('zy-clamp');
     n.setAttribute('role', 'button'); n.tabIndex = 0;
     const paint = function () { const o = _zyFoldOpen.has(key); n.classList.toggle('open', o); n.setAttribute('aria-expanded', o ? 'true' : 'false'); };
-    n.addEventListener('click', function () { if (_zyFoldOpen.has(key)) _zyFoldOpen.delete(key); else _zyFoldOpen.add(key); paint(); });
+    const toggle = function () { if (_zyFoldOpen.has(key)) _zyFoldOpen.delete(key); else _zyFoldOpen.add(key); paint(); };
+    n.addEventListener('click', toggle);
+    n.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); toggle(); }
+    });
     paint();
   });
   Array.prototype.forEach.call(body.querySelectorAll('.lgr-sec'), function (sec, si) {
