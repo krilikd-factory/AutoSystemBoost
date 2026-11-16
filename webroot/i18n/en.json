@@ -385,7 +385,7 @@
         "stock": "Use the device's normal effects and Recents presentation.",
         "flat": "Simplify effects. Recents becomes a plain list and OxygenOS hides the Cards/Simple selector; OnePlus 15 only."
       },
-      "desc": "How rich system transitions and the Recents effects are.\n\n🔋 Battery life: Simplified\n⚡ Performance: Simplified\n✋ Not sure: Auto"
+      "desc": "Chooses system-effect richness and the Recents presentation without changing screen resolution or refresh rate. Auto leaves the ROM alone; Stock uses its normal effects; Simplified reduces decoration and, on the supported OnePlus 15 build, switches Recents to a list and hides Cards/Simple. Availability depends on ColorOS; a successful settings write does not prove that the launcher accepted the presentation.\n\n🔋 Fewer decorative effects: Simplified\n🎨 Full ROM interface: Stock\n✋ Unsure: Auto"
     },
     "net_route_tune": {
       "descOpt": {
@@ -600,20 +600,20 @@
       }
     },
     "UX_MANAGE_TIMEOUTS": {
-      "desc": "Lets the power profile manage interface timing: Performance shortens animations and the long-press and multi-tap windows, Battery keeps stock timing.\n\n🔋 Battery life: no effect\n⚡ Feels faster: On\n✋ Not sure: Off",
+      "desc": "Lets the ASB profile own two groups of timings: system animation duration and long-press/multi-tap windows. Performance shortens them; Battery restores stock values. This changes how quickly the UI responds visually, not app launch or computation speed. The separate Animation speed setting still works while this control is off.\n\n🔋 Measured battery saving: not claimed\n⚡ Shorter UI response: On\n✋ Unsure: Off",
       "descOpt": {
         "1": "Animation and touch timing follow the profile.",
         "0": "The ROM keeps its own timing; Animation Speed still works."
       }
     },
     "anim_speed": {
-      "desc": "A fixed Android animation speed. By profile lets the power profile choose; to the left is faster, to the right slower, the far left turns animations off. Shorter animations make the phone feel quicker but do not make apps process faster.\n\n🔋 Battery life: By profile\n⚡ Feels faster: Faster or Fastest\n✋ Not sure: By profile"
+      "desc": "Sets Android’s window, transition and Animator animation scales. Profile delegates the choice to the active profile; a manual value applies independently. A smaller scale shortens visible transitions and zero disables animations; it does not accelerate apps or their rendering. If the ROM does not apply a change live, verify the readback before using the separate forced-restart option.\n\n🔋 Battery: no guaranteed effect\n⚡ Perceived speed: smaller scale\n✋ Unsure: Profile"
     },
     "UX_ANIM_FORCE_RESTART": {
-      "desc": "Fallback for ROMs that ignore live animation-scale changes. When enabled, a manual profile switch also restarts SystemUI: the screen may blink, the lock screen may return, and overlays from other modules can be torn down. It does not run on every automatic profile change. Leave this off unless you have confirmed that ordinary scale changes do not apply."
+      "desc": "A fallback for ROMs that ignore ordinary live animation-scale changes. Only a manual profile switch additionally restarts SystemUI; automatic profile changes do not. The screen may blink, the lock screen may appear, and overlays from other modules may close. It does not repair the scale value itself and is unnecessary when the ordinary path already has a matching readback."
     },
     "disable_blur": {
-      "desc": "Turns off window blur in the shade, notifications, the volume panel and transitions; backgrounds become solid.\n\n🔋 Battery life: On\n⚡ Performance: On\n✋ Not sure: Off",
+      "desc": "Disables system window blur in the notification shade, notifications, volume panel and supported transitions, using an opaque background instead of live blur. This removes some compositor/GPU work, but the amount of saving depends on the scene and is not promised. Colors, transparency, refresh rate and animation timing are not directly changed. Some ColorOS builds need a reboot for every surface.\n\n🔋 Less GPU work in supported windows: On\n🎨 Original ColorOS material: Off\n✋ Unsure: Off",
       "descOpt": {
         "1": "Solid backgrounds and slightly less GPU work; the compositor part may need a reboot.",
         "0": "The ROM's blur stays."
@@ -920,7 +920,7 @@
     },
     "ui_recents_memory": {
       "name": "Recents Memory Indicator",
-      "desc": "Controls the ColorOS memory readout in Recents through display_memory_information_recent_task. Stock leaves the ROM/user setting alone; after an ASB override it restores the exact previous value. Applies live only when Settings read-back confirms the write.",
+      "desc": "Shows or hides the memory-information line in Recents through secure/display_memory_information_recent_task. It only changes the displayed reading: it does not free RAM, evict apps or alter memory limits. Stock leaves another owner’s value alone; after an explicit change, ASB restores its saved original. Success requires a Settings readback, while actual visibility still depends on the ColorOS Recents panel.",
       "descOpt": {
         "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
         "on": "Enable this setting and verify the write by read-back.",
@@ -929,7 +929,7 @@
     },
     "ui_recents_corner_radius": {
       "name": "Recents Corner Radius",
-      "desc": "Sets the ColorOS Recents card radius in dp and its matching oost_recent_task_radius master. Both values are captured and restored together. A ROM or launcher that ignores these keys can still retain its own appearance; ASB reports only verified Settings writes, not a visual guarantee.",
+      "desc": "Changes Recents card rounding through the linked global/oost_recent_task_radius and oost_recent_task_radius_dp keys. 0 dp gives square corners; 32 dp is the strongest offered rounding. The master switch and dp value are applied and restored together; Stock restores the exact pair saved before ASB’s first change. ASB verifies Settings, not screen pixels: the active launcher may ignore these keys.",
       "descOpt": {
         "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
         "0": "Set the radius to 0 dp and enable the paired ColorOS radius master.",
@@ -944,7 +944,7 @@
     },
     "ui_smooth_corners": {
       "name": "Smooth Screen Corners",
-      "desc": "Controls the ColorOS smooth_corner_enabled setting for rounded interface geometry. This is not a display-panel overclock or a rendering bypass. Stock preserves the existing value; unsupported visual behaviour is not claimed merely because the setting was stored.",
+      "desc": "Controls the software smooth-screen-corner outline through global/smooth_corner_enabled. It changes corner styling, not the panel’s physical shape, refresh rate, brightness or touch response. Stock leaves another owner’s setting alone and restores the saved original after an explicit ASB change. Settings readback is verified; the visible outline depends on SystemUI, the theme and ColorOS support.",
       "descOpt": {
         "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
         "on": "Enable this setting and verify the write by read-back.",
@@ -953,7 +953,7 @@
     },
     "ui_nav_handle_autohide": {
       "name": "Auto-hide Navigation Handle",
-      "desc": "Controls oost_navigation_handle_auto_hide for the gesture navigation handle. It does not switch navigation mode or hide the handle permanently. The original setting is restored when returned to Stock.",
+      "desc": "Controls automatic hiding of the bottom gesture handle through global/oost_navigation_handle_auto_hide. When enabled, the handle can disappear while unused; gestures, navigation buttons and touchscreen response are not changed by this setting. Stock leaves the ROM alone, while an explicit ASB change can be restored to its saved original. Success means a matching Settings readback; hiding behavior and support remain owned by ColorOS.",
       "descOpt": {
         "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
         "on": "Enable this setting and verify the write by read-back.",
@@ -962,11 +962,11 @@
     },
     "feel_pointer_speed": {
       "name": "Pointer Speed",
-      "desc": "Sets Android pointer_speed from -7 to 7 for a mouse, trackpad or other pointer; it is not a touchscreen sensitivity or polling-rate hack. Stock leaves the current value untouched and restores the exact pre-ASB value after an override. The saved baseline is the value captured when ASB first applied an override, not necessarily the factory default."
+      "desc": "Changes system/pointer_speed, which controls pointer movement for a mouse or trackpad connected to the phone. It does not change touchscreen sensitivity, touch sampling, gesture recognition or game speed. Stock does not overwrite another owner’s setting. On first explicit use ASB saves the current value and later restores that value; it is not necessarily the factory default. The result is verified through Settings. The saved baseline is the value captured when ASB first applied an override, not necessarily the factory default."
     },
     "feel_gesture_mistouch": {
       "name": "Gesture Mistouch Prevention",
-      "desc": "Controls the ColorOS gesture_mistouch_prevention_enable switch. On may reject some edge touches; Off deliberately disables that protection. Game-specific OEM rules can still apply. No touch sampling-rate change is claimed.",
+      "desc": "Controls ColorOS accidental-touch protection through secure/gesture_mistouch_prevention_enable. It can reject some touches near curved-screen edges, for example when a palm holds the phone. This is not touchscreen calibration or a sampling-rate change; an aggressive ROM policy can also delay intended edge gestures. Stock restores the saved original, and readback confirms the write rather than recognition quality.",
       "descOpt": {
         "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
         "on": "Enable this setting and verify the write by read-back.",
@@ -975,7 +975,7 @@
     },
     "feel_game_memc": {
       "name": "Game MEMC",
-      "desc": "Controls display_memc_game_enable, the ColorOS game motion-interpolation setting. Actual interpolation depends on the panel, supported games and OEM display service; it can add latency or power use. ASB verifies the setting write, not MEMC activation in every game.",
+      "desc": "Controls the stock game frame-interpolation switch secure/display_memc_game_enable. When the game and firmware support it, MEMC inserts intermediate displayed frames; it does not increase the game engine’s actual rendering FPS. Interpolation can add input latency, artifacts and energy use. Stock restores the saved original. A confirmed Settings write does not prove MEMC is active in every game.",
       "descOpt": {
         "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
         "on": "Enable this setting and verify the write by read-back.",
@@ -984,7 +984,7 @@
     },
     "feel_dc_dimming": {
       "name": "DC Dimming System Switch",
-      "desc": "Controls display_dc_settings_switch where ColorOS exposes DC dimming. Panel and brightness restrictions still belong to the OEM; this does not force an unsupported panel mode or bypass thermal/display drivers. Stock restores the exact previous setting.",
+      "desc": "Controls the stock DC-dimming switch secure/display_dc_settings_switch. On a supported panel it can change low-brightness regulation and reduce visible PWM flicker; on an unsupported panel a successful key write proves nothing. ASB neither bypasses the brightness driver nor forces the panel. Low-brightness tint or gradient changes are possible and depend on ColorOS. Stock restores the saved original after readback.",
       "descOpt": {
         "stock": "Leave the ROM value untouched; after an ASB override restore the exact previous value.",
         "on": "Enable this setting and verify the write by read-back.",
@@ -3804,5 +3804,22 @@
   "t_cfg_write_rejected": "the ROM did not confirm the setting",
   "lvp_system_band": "System: {band}",
   "lvi_trend_chart_wait": "The diagram appears after two temperature readings in the same window.",
-  "lvi_trend_chart_range": "%1 °C → %2 °C"
+  "lvi_trend_chart_range": "%1 °C → %2 °C",
+  "bfx_art_scheduled": "Immediate recompilation was rejected, so Android’s background optimisation job was started instead. This does not confirm speed-profile compilation; its result will be decided by Android. The battery reset remains scheduled.",
+  "kernel_wb_info_event": "Approximate role: a process event-wait mechanism (epoll/eventfd), not a separate radio or sensor. The same name can belong to many processes.",
+  "kernel_wb_info_safety": "Approximate role: thermal protection or watchdog supervision. These sources help prevent overheating or detect a stalled system.",
+  "kernel_wb_info_timing": "Approximate role: alarms, RTC or Android power-manager scheduling. They wake the device for timers, alarms and maintenance.",
+  "kernel_wb_info_power_input": "Approximate role: charging, USB, power buttons, touchscreen, fingerprint or another input path.",
+  "kernel_wb_info_mobile": "Approximate role: cellular modem or Qualcomm IPA mobile-data offload, including low-latency WAN traffic. The exact consumer cannot be inferred from the name alone.",
+  "kernel_wb_info_wifi": "Approximate role: Wi-Fi firmware, radio transport or its driver. Network activity and notifications may use this source.",
+  "kernel_wb_info_storage": "Approximate role: internal storage, UFS/SD/MMC or the block I/O path. Apps and Android may be waiting for it.",
+  "kernel_wb_info_ipc": "Approximate role: communication between the main CPU and a modem/DSP or another processor. The name does not identify the ultimate app.",
+  "kernel_wb_info_display": "Approximate role: display controller, panel or MIPI/DSI transport. It can participate in screen refresh and wake-up.",
+  "kernel_wb_info_dsp": "Approximate role: audio, sensors or a low-power DSP. Voice, sound and sensor features may depend on it.",
+  "kernel_wb_info_gpu": "Approximate role: GPU/graphics activity. Games, the launcher and system rendering can produce these events.",
+  "kernel_wb_info_unknown": "The exact owner of this kernel name is unknown. Treat the label only as a clue and observe it in several idle windows before considering a rule.",
+  "kernel_wb_risk_critical": "Blocking risk: critical — alarms, input, charging, unlock, thermal protection or system recovery may stop working. Do not block for an experiment.",
+  "kernel_wb_risk_high": "Blocking risk: high — networking, storage, display, event delivery or interprocessor communication may stall. Block only with a measured reason and a recovery plan.",
+  "kernel_wb_risk_medium": "Blocking risk: elevated — sound, sensors or graphics may be delayed. This does not prove a battery saving; test with the screen off.",
+  "kernel_wb_risk_unknown": "Blocking risk: unknown — do not block until the owner and consumers are identified. A high event count alone is not evidence of wasted energy."
 }

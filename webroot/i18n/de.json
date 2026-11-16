@@ -3911,5 +3911,22 @@
   "t_cfg_write_rejected": "das ROM hat die Einstellung nicht bestätigt",
   "lvp_system_band": "System: {band}",
   "lvi_trend_chart_wait": "Das Diagramm erscheint nach zwei Temperaturmessungen im selben Zeitfenster.",
-  "lvi_trend_chart_range": "%1 °C → %2 °C"
+  "lvi_trend_chart_range": "%1 °C → %2 °C",
+  "bfx_art_scheduled": "Android hat die sofortige Neukompilierung abgelehnt; stattdessen wurde die systemeigene Hintergrundoptimierung gestartet. Dies bestätigt keine speed-profile-Kompilierung: Ergebnis und Zeitpunkt bestimmt Android. Das Zurücksetzen der Batteriestatistik bleibt für den Neustart geplant.",
+  "kernel_wb_info_event": "Ungefähre Rolle: Mechanismus zum Warten auf Prozessereignisse (epoll/eventfd), kein eigenes Funkmodul oder Sensormodul. Denselben Namen können viele Prozesse verwenden.",
+  "kernel_wb_info_safety": "Ungefähre Rolle: Hitzeschutz oder Watchdog-Überwachung. Diese Quellen helfen, Überhitzung zu verhindern oder ein blockiertes System zu erkennen.",
+  "kernel_wb_info_timing": "Ungefähre Rolle: Alarme, RTC oder Planung durch den Android-PowerManager. Sie wecken das Gerät für Timer, Wecker und Wartung.",
+  "kernel_wb_info_power_input": "Ungefähre Rolle: Laden, USB, Einschalttasten, Touchscreen, Fingerabdruck oder ein anderer Eingabepfad.",
+  "kernel_wb_info_mobile": "Ungefähre Rolle: Mobilfunkmodem oder Qualcomm-IPA-Offload für mobile Daten, einschließlich latenzarmer WAN-Übertragung. Der genaue Verbraucher lässt sich nicht allein am Namen erkennen.",
+  "kernel_wb_info_wifi": "Ungefähre Rolle: WLAN-Firmware, Funktransport oder dessen Treiber. Netzwerkaktivität und Benachrichtigungen können diese Quelle nutzen.",
+  "kernel_wb_info_storage": "Ungefähre Rolle: interner Speicher, UFS/SD/MMC oder der Block-E/A-Pfad. Apps und Android können darauf warten.",
+  "kernel_wb_info_ipc": "Ungefähre Rolle: Kommunikation zwischen der Haupt-CPU und einem Modem, DSP oder einem anderen Prozessor. Der Name nennt nicht die letztlich beteiligte App.",
+  "kernel_wb_info_display": "Ungefähre Rolle: Display-Controller, Panel oder MIPI/DSI-Transport. Die Quelle kann an Bildaktualisierung und Aufwecken beteiligt sein.",
+  "kernel_wb_info_dsp": "Ungefähre Rolle: Audio, Sensoren oder ein stromsparender DSP. Sprach-, Klang- und Sensorfunktionen können davon abhängen.",
+  "kernel_wb_info_gpu": "Ungefähre Rolle: GPU-/Grafikaktivität. Spiele, Launcher und System-Rendering können diese Ereignisse erzeugen.",
+  "kernel_wb_info_unknown": "Der genaue Eigentümer dieses Kernel-Namens ist unbekannt. Betrachte die Bezeichnung nur als Hinweis und beobachte die Quelle in mehreren Ruhephasen, bevor du eine Regel erwägst.",
+  "kernel_wb_risk_critical": "Blockierungsrisiko: kritisch — Alarme, Eingabe, Laden, Entsperren, Hitzeschutz oder Systemwiederherstellung können ausfallen. Nicht zum Experimentieren blockieren.",
+  "kernel_wb_risk_high": "Blockierungsrisiko: hoch — Netzwerk, Speicher, Display, Ereigniszustellung oder Interprozessorkommunikation können hängen bleiben. Nur mit gemessener Ursache und Rückfallplan blockieren.",
+  "kernel_wb_risk_medium": "Blockierungsrisiko: erhöht — Ton, Sensoren oder Grafik können verzögert werden. Eine Akkuersparnis ist nicht bewiesen; bei ausgeschaltetem Bildschirm testen.",
+  "kernel_wb_risk_unknown": "Blockierungsrisiko: unbekannt — nicht blockieren, bevor Eigentümer und Verbraucher bekannt sind. Eine hohe Ereigniszahl allein beweist keine Energieverschwendung."
 }

@@ -3911,5 +3911,22 @@
   "t_cfg_write_rejected": "ROM ayarı doğrulamadı",
   "lvp_system_band": "Sistem: {band}",
   "lvi_trend_chart_wait": "Grafik, aynı zaman penceresinde iki sıcaklık ölçümünden sonra görünür.",
-  "lvi_trend_chart_range": "%1 °C → %2 °C"
+  "lvi_trend_chart_range": "%1 °C → %2 °C",
+  "bfx_art_scheduled": "Android anında yeniden derlemeyi reddetti; bunun yerine sistemin arka plan optimizasyonu başlatıldı. Bu, speed-profile derlemesini doğrulamaz: sonucu ve zamanı Android belirler. Pil istatistiklerini sıfırlama yine yeniden başlatmada uygulanacak.",
+  "kernel_wb_info_event": "Yaklaşık rol: bir işlem olay bekleme mekanizması (epoll/eventfd); ayrı bir radyo veya sensör değildir. Aynı adı birçok işlem kullanabilir.",
+  "kernel_wb_info_safety": "Yaklaşık rol: termal koruma veya watchdog denetimi. Bu kaynaklar aşırı ısınmayı önlemeye veya takılan sistemi algılamaya yardımcı olur.",
+  "kernel_wb_info_timing": "Yaklaşık rol: alarmlar, RTC veya Android güç yöneticisi zamanlaması. Zamanlayıcılar, alarmlar ve bakım için cihazı uyandırırlar.",
+  "kernel_wb_info_power_input": "Yaklaşık rol: şarj, USB, güç düğmeleri, dokunmatik ekran, parmak izi veya başka bir giriş yolu.",
+  "kernel_wb_info_mobile": "Yaklaşık rol: hücresel modem veya düşük gecikmeli WAN trafiği dahil Qualcomm IPA mobil veri yük aktarımı. Tam tüketici yalnızca addan anlaşılamaz.",
+  "kernel_wb_info_wifi": "Yaklaşık rol: Wi-Fi üretici yazılımı, radyo aktarımı veya sürücüsü. Ağ etkinliği ve bildirimler bu kaynağı kullanabilir.",
+  "kernel_wb_info_storage": "Yaklaşık rol: dahili depolama, UFS/SD/MMC veya blok G/Ç yolu. Uygulamalar ve Android bunu bekliyor olabilir.",
+  "kernel_wb_info_ipc": "Yaklaşık rol: ana CPU ile modem, DSP veya başka bir işlemci arasındaki iletişim. Ad, nihai uygulamayı belirtmez.",
+  "kernel_wb_info_display": "Yaklaşık rol: ekran denetleyicisi, panel veya MIPI/DSI aktarımı. Ekran yenileme ve uyandırma işlemlerine katılabilir.",
+  "kernel_wb_info_dsp": "Yaklaşık rol: ses, sensörler veya düşük güçlü DSP. Sesli işlevler ve sensörler buna bağlı olabilir.",
+  "kernel_wb_info_gpu": "Yaklaşık rol: GPU/grafik etkinliği. Oyunlar, başlatıcı ve sistem görüntüleme işlemleri bu olayları oluşturabilir.",
+  "kernel_wb_info_unknown": "Bu çekirdek adının tam sahibi bilinmiyor. Etiketi yalnızca ipucu olarak görün ve bir kural düşünmeden önce kaynağı birkaç boşta bekleme penceresinde gözleyin.",
+  "kernel_wb_risk_critical": "Engelleme riski: kritik — alarmlar, giriş, şarj, kilit açma, termal koruma veya sistem kurtarma çalışmayabilir. Denemek için engellemeyin.",
+  "kernel_wb_risk_high": "Engelleme riski: yüksek — ağ, depolama, ekran, olay iletimi veya işlemciler arası iletişim takılabilir. Yalnızca ölçülmüş bir neden ve geri dönüş planıyla engelleyin.",
+  "kernel_wb_risk_medium": "Engelleme riski: artmış — ses, sensörler veya grafikler gecikebilir. Pil tasarrufu kanıtlanmamıştır; ekran kapalıyken test edin.",
+  "kernel_wb_risk_unknown": "Engelleme riski: bilinmiyor — sahibi ve tüketicileri belirlenmeden engellemeyin. Yüksek olay sayısı tek başına enerji israfını kanıtlamaz."
 }

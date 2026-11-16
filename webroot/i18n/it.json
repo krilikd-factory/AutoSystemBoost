@@ -3911,5 +3911,22 @@
   "t_cfg_write_rejected": "la ROM non ha confermato l’impostazione",
   "lvp_system_band": "Sistema: {band}",
   "lvi_trend_chart_wait": "Il grafico appare dopo due letture della temperatura nella stessa finestra.",
-  "lvi_trend_chart_range": "%1 °C → %2 °C"
+  "lvi_trend_chart_range": "%1 °C → %2 °C",
+  "bfx_art_scheduled": "Android ha rifiutato la ricompilazione immediata, quindi è stata avviata l’ottimizzazione in background del sistema. Ciò non conferma la compilazione speed-profile: risultato e tempi dipendono da Android. Il ripristino delle statistiche della batteria resta programmato al riavvio.",
+  "kernel_wb_info_event": "Ruolo approssimativo: meccanismo di attesa degli eventi dei processi (epoll/eventfd), non una radio o un sensore separato. Molti processi possono usare lo stesso nome.",
+  "kernel_wb_info_safety": "Ruolo approssimativo: protezione termica o supervisione watchdog. Queste sorgenti aiutano a prevenire il surriscaldamento o a rilevare un sistema bloccato.",
+  "kernel_wb_info_timing": "Ruolo approssimativo: allarmi, RTC o pianificazione del gestore energetico di Android. Riattivano il dispositivo per timer, sveglie e manutenzione.",
+  "kernel_wb_info_power_input": "Ruolo approssimativo: ricarica, USB, pulsanti di accensione, touchscreen, impronta digitale o un altro percorso di input.",
+  "kernel_wb_info_mobile": "Ruolo approssimativo: modem cellulare o offload dati mobili Qualcomm IPA, incluso traffico WAN a bassa latenza. Il nome da solo non identifica il consumatore esatto.",
+  "kernel_wb_info_wifi": "Ruolo approssimativo: firmware Wi-Fi, trasporto radio o relativo driver. Attività di rete e notifiche possono usare questa sorgente.",
+  "kernel_wb_info_storage": "Ruolo approssimativo: archiviazione interna, UFS/SD/MMC o percorso I/O a blocchi. App e Android possono essere in attesa di questa sorgente.",
+  "kernel_wb_info_ipc": "Ruolo approssimativo: comunicazione tra CPU principale e modem, DSP o un altro processore. Il nome non identifica l’app finale.",
+  "kernel_wb_info_display": "Ruolo approssimativo: controller del display, pannello o trasporto MIPI/DSI. Può partecipare all’aggiornamento e alla riattivazione dello schermo.",
+  "kernel_wb_info_dsp": "Ruolo approssimativo: audio, sensori o DSP a basso consumo. Funzioni vocali, sonore e dei sensori possono dipenderne.",
+  "kernel_wb_info_gpu": "Ruolo approssimativo: attività GPU o grafica. Giochi, launcher e rendering di sistema possono generare questi eventi.",
+  "kernel_wb_info_unknown": "Il proprietario esatto di questo nome del kernel è sconosciuto. Considera l’etichetta solo un indizio e osserva la sorgente in più finestre di inattività prima di valutare una regola.",
+  "kernel_wb_risk_critical": "Rischio di blocco: critico — allarmi, input, ricarica, sblocco, protezione termica o ripristino del sistema possono smettere di funzionare. Non bloccare per esperimento.",
+  "kernel_wb_risk_high": "Rischio di blocco: alto — rete, archiviazione, display, consegna eventi o comunicazione tra processori possono bloccarsi. Blocca solo con una causa misurata e un piano di ripristino.",
+  "kernel_wb_risk_medium": "Rischio di blocco: elevato — audio, sensori o grafica possono subire ritardi. Il risparmio energetico non è dimostrato; prova con lo schermo spento.",
+  "kernel_wb_risk_unknown": "Rischio di blocco: sconosciuto — non bloccare finché proprietario e consumatori non sono identificati. Un elevato numero di eventi non dimostra da solo energia sprecata."
 }

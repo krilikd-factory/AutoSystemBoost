@@ -3911,5 +3911,22 @@
   "t_cfg_write_rejected": "系统未确认该设置",
   "lvp_system_band": "系统：{band}",
   "lvi_trend_chart_wait": "在同一时间窗口内完成两次温度测量后显示图表。",
-  "lvi_trend_chart_range": "%1 °C → %2 °C"
+  "lvi_trend_chart_range": "%1 °C → %2 °C",
+  "bfx_art_scheduled": "Android 拒绝了立即重新编译，因此改为启动系统后台优化。这并不表示已完成 speed-profile 编译：结果和时间由 Android 决定。电池统计信息仍会在重启时重置。",
+  "kernel_wb_info_event": "大致作用：进程等待事件的机制（epoll/eventfd），并非独立的无线电模块或传感器。同一名称可能被许多进程使用。",
+  "kernel_wb_info_safety": "大致作用：热保护或看门狗监控。这些来源有助于防止过热或发现系统卡死。",
+  "kernel_wb_info_timing": "大致作用：闹钟、RTC 或 Android 电源管理调度。它们会为定时器、闹钟和维护任务唤醒设备。",
+  "kernel_wb_info_power_input": "大致作用：充电、USB、电源键、触摸屏、指纹或其他输入路径。",
+  "kernel_wb_info_mobile": "大致作用：蜂窝调制解调器或 Qualcomm IPA 移动数据卸载，包括低延迟 WAN 流量。仅凭名称无法判断具体使用者。",
+  "kernel_wb_info_wifi": "大致作用：Wi-Fi 固件、无线传输或其驱动程序。网络活动和通知可能使用此来源。",
+  "kernel_wb_info_storage": "大致作用：内部存储、UFS/SD/MMC 或块 I/O 路径。应用和 Android 可能正在等待它。",
+  "kernel_wb_info_ipc": "大致作用：主 CPU 与调制解调器、DSP 或其他处理器之间的通信。名称并不指明最终应用。",
+  "kernel_wb_info_display": "大致作用：显示控制器、面板或 MIPI/DSI 传输。它可能参与屏幕刷新和唤醒。",
+  "kernel_wb_info_dsp": "大致作用：音频、传感器或低功耗 DSP。语音、声音和传感器功能可能依赖它。",
+  "kernel_wb_info_gpu": "大致作用：GPU 或图形活动。游戏、启动器和系统渲染都可能产生这些事件。",
+  "kernel_wb_info_unknown": "此内核名称的确切所有者未知。请仅将标签视为线索，在考虑添加规则前，先通过多个空闲窗口观察它。",
+  "kernel_wb_risk_critical": "阻止风险：严重——闹钟、输入、充电、解锁、热保护或系统恢复可能失效。不要为了试验而阻止。",
+  "kernel_wb_risk_high": "阻止风险：高——网络、存储、显示、事件传递或处理器间通信可能卡住。只有具备实测依据和恢复方案时才可阻止。",
+  "kernel_wb_risk_medium": "阻止风险：较高——声音、传感器或图形可能延迟。并未证明能节省电量；请熄屏测试。",
+  "kernel_wb_risk_unknown": "阻止风险：未知——在确定所有者和使用者之前不要阻止。事件数量多本身并不能证明浪费了电量。"
 }

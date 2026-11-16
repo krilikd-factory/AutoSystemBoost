@@ -3911,5 +3911,22 @@
   "t_cfg_write_rejected": "a ROM não confirmou a definição",
   "lvp_system_band": "Sistema: {band}",
   "lvi_trend_chart_wait": "O gráfico aparece após duas leituras de temperatura na mesma janela.",
-  "lvi_trend_chart_range": "%1 °C → %2 °C"
+  "lvi_trend_chart_range": "%1 °C → %2 °C",
+  "bfx_art_scheduled": "O Android recusou a recompilação imediata, por isso a otimização em segundo plano do sistema foi iniciada. Isso não confirma a compilação speed-profile: o resultado e o momento dependem do Android. A redefinição das estatísticas da bateria continua agendada para a reinicialização.",
+  "kernel_wb_info_event": "Função aproximada: mecanismo de espera de eventos de processos (epoll/eventfd), não uma rádio ou um sensor separado. Muitos processos podem usar o mesmo nome.",
+  "kernel_wb_info_safety": "Função aproximada: proteção térmica ou supervisão watchdog. Estas fontes ajudam a evitar sobreaquecimento ou a detetar um sistema bloqueado.",
+  "kernel_wb_info_timing": "Função aproximada: alarmes, RTC ou agendamento do gestor de energia do Android. Despertam o dispositivo para temporizadores, alarmes e manutenção.",
+  "kernel_wb_info_power_input": "Função aproximada: carregamento, USB, botões de energia, ecrã tátil, impressão digital ou outro caminho de entrada.",
+  "kernel_wb_info_mobile": "Função aproximada: modem celular ou offload de dados móveis Qualcomm IPA, incluindo tráfego WAN de baixa latência. O nome por si só não identifica o consumidor exato.",
+  "kernel_wb_info_wifi": "Função aproximada: firmware Wi-Fi, transporte de rádio ou o respetivo controlador. A atividade de rede e as notificações podem usar esta fonte.",
+  "kernel_wb_info_storage": "Função aproximada: armazenamento interno, UFS/SD/MMC ou caminho de E/S de blocos. As aplicações e o Android podem estar à espera dele.",
+  "kernel_wb_info_ipc": "Função aproximada: comunicação entre a CPU principal e um modem, DSP ou outro processador. O nome não identifica a aplicação final.",
+  "kernel_wb_info_display": "Função aproximada: controlador do ecrã, painel ou transporte MIPI/DSI. Pode participar na atualização e no despertar do ecrã.",
+  "kernel_wb_info_dsp": "Função aproximada: áudio, sensores ou DSP de baixo consumo. As funções de voz, som e sensores podem depender dele.",
+  "kernel_wb_info_gpu": "Função aproximada: atividade de GPU ou gráficos. Jogos, launcher e renderização do sistema podem produzir estes eventos.",
+  "kernel_wb_info_unknown": "O proprietário exato deste nome do kernel é desconhecido. Trate a etiqueta apenas como uma pista e observe a fonte em várias janelas de inatividade antes de considerar uma regra.",
+  "kernel_wb_risk_critical": "Risco de bloqueio: crítico — alarmes, entrada, carregamento, desbloqueio, proteção térmica ou recuperação do sistema podem deixar de funcionar. Não bloqueie para experimentar.",
+  "kernel_wb_risk_high": "Risco de bloqueio: alto — rede, armazenamento, ecrã, entrega de eventos ou comunicação entre processadores podem bloquear. Bloqueie apenas com uma causa medida e um plano de recuperação.",
+  "kernel_wb_risk_medium": "Risco de bloqueio: elevado — som, sensores ou gráficos podem sofrer atrasos. Não há poupança de bateria comprovada; teste com o ecrã desligado.",
+  "kernel_wb_risk_unknown": "Risco de bloqueio: desconhecido — não bloqueie até identificar o proprietário e os consumidores. Um número elevado de eventos, por si só, não prova desperdício de energia."
 }

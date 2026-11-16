@@ -3911,5 +3911,22 @@
   "t_cfg_write_rejected": "ROM tidak mengonfirmasi setelan",
   "lvp_system_band": "Sistem: {band}",
   "lvi_trend_chart_wait": "Diagram muncul setelah dua pembacaan suhu dalam jendela yang sama.",
-  "lvi_trend_chart_range": "%1 °C → %2 °C"
+  "lvi_trend_chart_range": "%1 °C → %2 °C",
+  "bfx_art_scheduled": "Android menolak kompilasi ulang langsung, sehingga pengoptimalan latar belakang sistem dijalankan sebagai gantinya. Ini tidak membuktikan kompilasi speed-profile: hasil dan waktunya ditentukan Android. Pengaturan ulang statistik baterai tetap dijadwalkan saat perangkat dimulai ulang.",
+  "kernel_wb_info_event": "Perkiraan fungsi: mekanisme menunggu peristiwa proses (epoll/eventfd), bukan radio atau sensor terpisah. Nama yang sama dapat dipakai banyak proses.",
+  "kernel_wb_info_safety": "Perkiraan fungsi: perlindungan termal atau pengawasan watchdog. Sumber ini membantu mencegah panas berlebih atau mendeteksi sistem yang macet.",
+  "kernel_wb_info_timing": "Perkiraan fungsi: alarm, RTC, atau penjadwalan pengelola daya Android. Sumber ini membangunkan perangkat untuk timer, alarm, dan pemeliharaan.",
+  "kernel_wb_info_power_input": "Perkiraan fungsi: pengisian daya, USB, tombol daya, layar sentuh, sidik jari, atau jalur input lainnya.",
+  "kernel_wb_info_mobile": "Perkiraan fungsi: modem seluler atau offload data seluler Qualcomm IPA, termasuk lalu lintas WAN latensi rendah. Konsumen pastinya tidak dapat diketahui hanya dari nama.",
+  "kernel_wb_info_wifi": "Perkiraan fungsi: firmware Wi-Fi, transportasi radio, atau driver-nya. Aktivitas jaringan dan notifikasi dapat memakai sumber ini.",
+  "kernel_wb_info_storage": "Perkiraan fungsi: penyimpanan internal, UFS/SD/MMC, atau jalur I/O blok. Aplikasi dan Android mungkin menunggunya.",
+  "kernel_wb_info_ipc": "Perkiraan fungsi: komunikasi antara CPU utama dan modem, DSP, atau prosesor lain. Nama tidak menunjukkan aplikasi akhirnya.",
+  "kernel_wb_info_display": "Perkiraan fungsi: pengontrol layar, panel, atau transportasi MIPI/DSI. Sumber ini dapat terlibat dalam penyegaran dan membangunkan layar.",
+  "kernel_wb_info_dsp": "Perkiraan fungsi: audio, sensor, atau DSP berdaya rendah. Fitur suara dan sensor dapat bergantung padanya.",
+  "kernel_wb_info_gpu": "Perkiraan fungsi: aktivitas GPU atau grafis. Game, launcher, dan rendering sistem dapat menghasilkan peristiwa ini.",
+  "kernel_wb_info_unknown": "Pemilik pasti nama kernel ini tidak diketahui. Anggap label hanya sebagai petunjuk dan amati sumbernya dalam beberapa jendela idle sebelum mempertimbangkan aturan.",
+  "kernel_wb_risk_critical": "Risiko pemblokiran: kritis — alarm, input, pengisian daya, membuka kunci, perlindungan termal, atau pemulihan sistem dapat berhenti bekerja. Jangan blokir untuk bereksperimen.",
+  "kernel_wb_risk_high": "Risiko pemblokiran: tinggi — jaringan, penyimpanan, layar, pengiriman peristiwa, atau komunikasi antarprosesor dapat macet. Blokir hanya dengan alasan terukur dan rencana pemulihan.",
+  "kernel_wb_risk_medium": "Risiko pemblokiran: meningkat — suara, sensor, atau grafis dapat tertunda. Penghematan baterai tidak terbukti; uji dengan layar mati.",
+  "kernel_wb_risk_unknown": "Risiko pemblokiran: tidak diketahui — jangan blokir sampai pemilik dan konsumennya diketahui. Jumlah peristiwa yang tinggi saja tidak membuktikan pemborosan energi."
 }
