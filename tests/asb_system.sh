@@ -10039,6 +10039,22 @@ PY
 echo 'PASS scheduler A/B evidence dev65: null-safe measured-only validation, exact kernel/root/SUSFS/ASB/workload identity, numeric deltas without improvement claims'
 )
 
+
+t_logkit_output_hierarchy() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+F="$ROOT/tools/logkit/asb_log_full_day.sh"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL logkit output hierarchy: $*" >&2; exit 1; }
+grep -Fq 'LK_OUT_DIR="$(lk_resolve_outbase)/ASB/logs/asb_log_${LK_SCENARIO}_$$"' "$F" || fail 'new captures are not under ASB/logs'
+! grep -Fq 'LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"' "$F" || fail 'old root-level output assignment remains'
+grep -Fq 'for _b in /sdcard/ASB/logs /storage/emulated/0/ASB/logs /data/local/tmp/ASB/logs /sdcard /storage/emulated/0 /data/local/tmp; do' "$D" || fail 'digest does not prefer ASB/logs with legacy fallback'
+grep -Fq '*/asb_log_full_day_*)' "$F" || fail 'nested resume directories are rejected'
+grep -Fq 'mkdir -p "$LK_OUT_DIR"' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail 'nested output parents are not created'
+sh -n "$F" && sh -n "$D" || fail 'shell syntax'
+echo 'PASS logkit output hierarchy: new full-day captures use ASB/logs/asb_log_full_day_*, nested parents are created, resume accepts them, digest prefers new paths and retains legacy root captures'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

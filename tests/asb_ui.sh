@@ -8839,6 +8839,8 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
   await paint(B + 'reset=pending compile=refused phase=refused total=560 done=1 ok=0 fail=1 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
   chk(/per-package Binder call, its pm fallback and the all-package compile fallback/.test(step('bfxStepArt').text) && /No verified recompilation/.test(step('bfxStepArt').text), 'total Binder refusal still describes the old twelve-attempt path: ' + step('bfxStepArt').text);
 
+  await paint(B + 'reset=pending compile=scheduled phase=scheduled total=560 done=1 ok=0 fail=0 cur=- started=1000 finished=1002' + tail);
+  chk(step('bfxStepArt').cls === 'bfx-step is-wait' && /background optimisation job was started/.test(step('bfxStepArt').text) && /does not confirm speed-profile/.test(step('bfxStepArt').text), 'background scheduling was presented as verified compilation: ' + step('bfxStepArt').text);
   await paint(B + 'reset=none compile=interrupted phase=compile total=300 done=40 ok=40 fail=0 cur=x started=1000 finished=-' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-wait' && step('bfxStepArt').text === 'Interrupted at 40 of 300' && reg.bfxArtNow.textContent === '', 'interrupted run not shown');
   await paint(B + 'reset=none compile=stopped phase=stopped total=300 done=70 ok=70 fail=0 cur=- started=1000 finished=1200' + tail);
@@ -9787,7 +9789,7 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 88, len(new)
+assert len(new) == 104, len(new)
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -13244,7 +13246,8 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 {
   cat <<'JS'
 const T = (k, f) => f; const ASB_LANG = 'en';
-function mk(tag) { const e = { tag, children: [], className: '', _t: '', appendChild(c) { this.children.push(c); return c; },
+function mk(tag) { const e = { tag, children: [], className: '', _t: '', attrs: {}, appendChild(c) { this.children.push(c); return c; },
+  insertBefore(c, before) { const i = this.children.indexOf(before); this.children.splice(i < 0 ? 0 : i, 0, c); return c; }, setAttribute(k, v) { this.attrs[k] = String(v); },
   get textContent() { return this._t + this.children.map(c => c.textContent).join(' '); }, set textContent(v) { this._t = String(v); this.children = []; } };
   e.classList = { add(c) { e.className = (e.className + ' ' + c).trim(); } }; return e; }
 const document = { createElement: mk };
@@ -13268,7 +13271,10 @@ chk(deviceBatteryWearMirrored(bat(7300000, 7300000, 12)) === false, 'a young bat
 chk(deviceBatteryWearMirrored(bat(6650000, 7300000, 391)) === false, 'a measured capacity flagged');
 const zy = parseDeviceInfo(['enabled\t1', 'loaded_processes\t17', 'state_freshness\tcurrent', 'events_total\t217', 'spawn_events\t439', 'events_dropped_total\t0',
   'policy_generation\t1', 'policy_seen_generation\t1', 'enabled_packages\t64', 'ipc_cpu_ms\t125', 'ipc_wakeups\t972', 'memory_kb\t3451508'].map(x => 'D\tzygisk_observer\t' + x).join('\n'));
-const ov = deviceZygiskOverview(zy).textContent;
+const overview = deviceZygiskOverview(zy), ov = overview.textContent;
+const flatten = n => [n].concat(...n.children.map(flatten));
+chk(flatten(overview).filter(n => /dev-snapshot-emo/.test(n.className)).length === 5, 'five Zygisk metric emoji are missing');
+chk(flatten(overview).filter(n => /dev-snapshot-emo/.test(n.className)).every(n => n.attrs['aria-hidden'] === 'true'), 'decorative Zygisk emoji pollute accessibility labels');
 chk(/972 wakeups/.test(ov) && !/wakeups · RSS/.test(ov), 'IPC cost still carries the apps RSS: ' + ov);
 chk(/Memory of observed apps/.test(ov) && /not ASB overhead/.test(ov), 'observed-app memory is not its own card: ' + ov);
 process.exit(bad ? 1 : 0);
@@ -13278,7 +13284,7 @@ node "$T/t.js" || fail 'renderer'
 grep -Fq "if (wear !== null && deviceBatteryWearMirrored(d)) parts.push(T('dev_bat_wear_mirrored', 'wear not reported by the firmware'));" "$H" || fail 'the battery summary still prints a mirrored 100% as wear'
 grep -Fq "'dev_battery_wear_mirrored_note'" "$H" || fail 'the battery row does not explain a mirrored design value'
 grep -Fq "if (spec[0] === 'zygisk_observer' && key === 'enabled_package_list') return;" "$H" || fail 'the 64-name list is printed twice (row and editor)'
-echo "PASS webui device page dev48: every collector key has a label in 13 locales, event age/CPU window/epochs carry units, observed-app RSS is its own card, a mirrored design capacity is not shown as wear"
+echo "PASS webui device page dev48: every collector key has a label in 13 locales, five decorative emoji improve Zygisk activity/cost cards without changing evidence, observed-app RSS remains separate, mirrored design capacity is not shown as wear"
 )
 
 
@@ -13485,7 +13491,8 @@ cat > "$T/t.js" <<'JS'
 const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
 function grab(name) { const m = h.match(new RegExp('\\n(?:async )?function ' + name + '\\([^)]*\\) \\{[\\s\\S]*?\\n\\}')); if (!m) throw Error('missing ' + name); return m[0]; }
 const crit = h.match(/\nconst KERNEL_WB_CRITICAL = [^\n]*/); if (!crit) throw Error('missing KERNEL_WB_CRITICAL');
-const T = (k, f) => f; const uiSound = () => {}; const cfgRender = () => {};
+const EN = JSON.parse(fs.readFileSync(require('path').join(process.argv[2], '../i18n/en.json'), 'utf8'));
+const T = (k, f) => EN[k] || f; const uiSound = () => {}; const cfgRender = () => {};
 const toasts = []; const toast = (m, t) => toasts.push([m, t]);
 function mk(tag) {
   return { tag, className:'', _t:'', children:[], attrs:{}, disabled:false, type:'', onclick:null, hidden:false,
@@ -13497,7 +13504,7 @@ const document = { createElement: mk };
 let _wbDraft = null, _wbBusy = false, _wbSourceView = { open:true, query:'', filter:'all', sort:'events' }, _kernelPanel = { wakeup:null }, _wbConfirm = '';
 const blockedCalls = []; function kernelWakeupBlockObserved(n) { blockedCalls.push(n); }
 eval(grab('bfxEl') + crit[0] + grab('kernelWakeupParse') + grab('kernelWakeupValidName') + grab('kernelWakeupDraft') + grab('kernelWakeupDuration')
-  + grab('kernelWakeupRisk') + grab('kernelWakeupConfirmText') + grab('kernelWakeupSelectSources') + grab('kernelWakeupSourcesDrawList') + grab('kernelWakeupAdd'));
+  + grab('kernelWakeupRisk') + grab('kernelWakeupInfo') + grab('kernelWakeupConfirmText') + grab('kernelWakeupSelectSources') + grab('kernelWakeupSourcesDrawList') + grab('kernelWakeupAdd'));
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const wb = kernelWakeupParse('wakeup_blocker|status|blocked_events=0|node=writable|policy=ready|saved_count=0|current_count=0\n'
   + 'wakeup_source|eventpoll|events=40|active=40|time_ms=10|reset=0|shared=2|new=0\n'
@@ -13518,6 +13525,10 @@ chk(tags.some(t => /shared name ×2/.test(t) && /system source/.test(t)), 'event
 chk(tags.some(t => t === 'new source'), 'radio new tag ' + JSON.stringify(tags));
 chk(tags.length === 2, 'legacy source tagged ' + JSON.stringify(tags));
 chk(byClass('kernel-source-tags').filter(n => /is-critical/.test(n.className)).length === 1, 'critical class');
+chk(byClass('kernel-source-purpose').length === 3 && byClass('kernel-source-risk').length === 3, 'a source lacks its purpose/risk explanation');
+chk(/epoll\/eventfd/.test(byClass('kernel-source-purpose')[0].textContent) && /Blocking risk: high/.test(byClass('kernel-source-risk')[0].textContent), 'eventpoll explanation is wrong');
+chk(/exact owner/.test(byClass('kernel-source-purpose')[1].textContent) && /risk: unknown/.test(byClass('kernel-source-risk')[1].textContent), 'unknown source was presented as known or safe');
+chk(kernelWakeupInfo('IPA_WS').key === 'mobile' && kernelWakeupInfo('IPA_CLIENT_APPS_WAN_LOW_LAT_CONS').key === 'mobile', 'Qualcomm IPA source not explained');
 chk(byClass('kernel-source-confirm').length === 0, 'confirm shown before Block');
 blockBtn('eventpoll').onclick();
 chk(blockedCalls.length === 0, 'Block wrote before confirmation');
@@ -13546,7 +13557,7 @@ toasts.length = 0; kernelWakeupAdd('NETLINK'); chk(toasts.length === 0, 'plain m
 process.exit(bad ? 1 : 0);
 JS
 node "$T/t.js" "$H" || fail 'dialog runtime'
-echo 'PASS webui wakeup confirm: shared/new/system-source tags, inline confirmation names the shared count and system risk, Cancel writes nothing, Yes blocks once, manual system names warn; 13 locales'
+echo 'PASS webui wakeup confirm: every observed source has a conservative purpose and graded blocking-risk explanation, IPA and unknown names covered; shared/new/system tags and confirmation remain intact; 13 locales'
 )
 
 t_webui_render_cost_dev55() (
@@ -14027,12 +14038,9 @@ assert 'html.asb-calm .app-name' not in h, 'calm still removes the wordmark anim
 for header in ('.app-name', '.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot',
                '.zygisk-header-dot', '.dev-zygisk-link-dot'):
     assert header not in blk, 'header returned to the 100 ms idle ticker: ' + header
-assert "el.closest('.asb-boot-intro, .header')" in h
+assert 'document.getAnimations' not in h and 'ASB_AMBIENT_' not in h and 'asbAmbientTick' not in h
 for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'stock-restoring', 'is-recording'):
     assert spinner not in blk, 'a progress indicator would stop: ' + spinner
-names = re.search(r"const ASB_AMBIENT_NAMES = \[([^\]]*)\];", h).group(1)
-for kf in re.findall(r"'([^']+)'", names):
-    assert '@keyframes ' + kf + ' ' in h or '@keyframes ' + kf + '{' in h, 'ambient name without keyframes: ' + kf
 assert '.live-cell-value .lv-sub {' in h and '-webkit-text-fill-color: currentColor;' in h[h.index('.live-cell-value .lv-sub {'):][:300]
 assert "'vendor_raised': 'Vendor \\u2191'" in h
 assert "else if (capSrc === 'vendor_raised') asbMetricPaint('liveCapSrc', 'metric-info');" in h
@@ -14068,30 +14076,14 @@ cat > "$T/t.js" <<'JS'
 const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const slice = (a, b) => { const i = h.indexOf(a); const j = h.indexOf(b, i); if (i < 0 || j < 0) throw Error('marker ' + a); return h.slice(i, j); };
-/* 1. calm + ambient ticker over fake timers */
+/* 1. calm uses one bounded timer and CSS owns every animation clock. */
 (function () {
-  let now = 0; const timers = []; const listeners = {}; const docl = {};
+  let now = 0; const timers = []; const listeners = {};
   const setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn, live: true }); return timers.length; };
-  const clearTimeout = id => { if (timers[id - 1]) timers[id - 1].live = false; };
   const performance = { now: () => now };
   const cls = new Set();
-  const el = (top, opts) => Object.assign({ getBoundingClientRect: () => ({ top, bottom: top + 40, left: 10, right: 50, width: 40 }),
-    closest: () => null, checkVisibility: () => true }, opts || {});
-  const A = [
-    { animationName: 'asbBootSpin', currentTime: 0, effect: { target: el(10) } },
-    { animationName: 'ai-spin', currentTime: 500, effect: { target: el(20) } },
-    { animationName: 'ai-spin', currentTime: 0, effect: { target: el(5000) } },
-    { animationName: 'ai-spin', currentTime: 0, effect: { target: el(10, { checkVisibility: () => false }) } },
-    { animationName: 'ai-spin', currentTime: 0, effect: { target: el(10, { closest: s => s.includes('.asb-boot-intro') ? {} : null }) } },
-    { animationName: 'asbSweep', currentTime: 0, effect: { target: el(10) } },
-    { animationName: 'spin', currentTime: 0, effect: { target: el(10) } },
-    { animationName: 'ai-spin', currentTime: 0, effect: { target: el(10, { closest: s => s.includes('.header') ? {} : null }) } }
-  ];
-  let anims = A;
-  const document = { hidden: false, getAnimations: () => anims,
-    documentElement: { classList: { add: c => cls.add(c), remove: c => cls.delete(c) } },
-    addEventListener: (t, fn) => { docl[t] = fn; } };
-  const window = { innerWidth: 400, innerHeight: 900, addEventListener: (t, fn) => { listeners[t] = fn; } };
+  const document = { documentElement: { classList: { add: c => cls.add(c), remove: c => cls.delete(c) } } };
+  const window = { addEventListener: (t, fn) => { listeners[t] = fn; } };
   function advance(ms) {
     const end = now + ms;
     for (;;) {
@@ -14103,28 +14095,10 @@ const slice = (a, b) => { const i = h.indexOf(a); const j = h.indexOf(b, i); if 
   }
   const live = () => timers.filter(t => t.live).length;
   eval(slice('let _asbInputAt = -1e9;', '\n/* dev4: a job never runs while another page is open or opening.'));
-  chk(typeof docl.visibilitychange === 'function', 'no visibility listener');
-  advance(9900); chk(!cls.has('asb-calm') && A[0].currentTime === 0, 'stepped before calm');
-  advance(100); chk(cls.has('asb-calm'), 'not calm after ten seconds');
-  chk(A[0].currentTime === 0 && A[1].currentTime === 600, 'header was stepped or Smart glow was not: ' + A[0].currentTime + '/' + A[1].currentTime);
-  chk(live() === 1, 'one ambient timer, got ' + live());
-  advance(1000);
-  chk(A[1].currentTime === 1600, 'ten steps a second: ' + A[1].currentTime);
-  chk(A[2].currentTime === 0 && A[3].currentTime === 0 && A[4].currentTime === 0, 'off-screen, invisible or boot-intro loops were stepped');
-  chk(A[5].currentTime === 0 && A[6].currentTime === 0 && A[7].currentTime === 0, 'wordmark, spinner or header loops were stepped');
-  document.hidden = true; advance(500);
-  const frozen = A[1].currentTime;
-  chk(live() === 0 && frozen <= 1700, 'a hidden page kept stepping');
-  document.hidden = false; docl.visibilitychange();
-  chk(A[1].currentTime === frozen + 100 && live() === 1, 'showing the page did not resume the steps');
-  docl.visibilitychange(); chk(live() === 1, 'a second visibility event doubled the ticker');
-  listeners.touchstart();
-  chk(!cls.has('asb-calm') && live() === 1, 'a touch left the ticker running or did not re-arm calm (' + live() + ')');
-  const atWake = A[1].currentTime; advance(5000); chk(A[1].currentTime === atWake, 'stepped while awake');
-  anims = []; advance(6000);
-  chk(cls.has('asb-calm') && live() === 0, 'nothing on screen still left a timer (' + live() + ')');
-  document.getAnimations = undefined; listeners.touchstart(); advance(10100);
-  chk(cls.has('asb-calm') && live() === 0, 'no Web Animations API still left a timer');
+  chk(live() === 1 && !cls.has('asb-calm'), 'one calm timer at startup');
+  advance(10100); chk(cls.has('asb-calm') && live() === 0, 'calm left an ambient worker running');
+  listeners.touchstart(); chk(!cls.has('asb-calm') && live() === 1, 'wake did not restore the single calm timer');
+  advance(10100); chk(cls.has('asb-calm') && live() === 0, 'second calm cycle left a worker');
 })();
 /* 1b. a clamp or thermal overlay on either cluster outranks a boost on the other */
 (function () {
@@ -14217,7 +14191,7 @@ console.log(bad ? 'bad ' + bad : 'ok');
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS webui dev66 ambient/dev61 GPU-pressure: header loops never enter the 100 ms ticker, Smart glow alone steps only on screen (stops hidden, on touch, with nothing to step), GPU tile shows the clock and colours busy x clock, pressure sheet on PSI, Vendor ↑ stays neutral, 13 locales'
+echo 'PASS webui dev66 ambient/dev61 GPU-pressure: no Web Animations ticker exists, native header loops keep their timelines, Smart glow pauses directly through CSS, GPU tile shows the clock and colours busy x clock, pressure sheet on PSI, Vendor ↑ stays neutral, 13 locales'
 )
 
 
@@ -14533,13 +14507,20 @@ fail() { echo "FAIL WebUI dev66 navigation/trend/material: $*" >&2; exit 1; }
 python3 - "$ROOT" <<'PY' || fail 'static contract'
 import json, pathlib, re, sys
 r = pathlib.Path(sys.argv[1]); h = (r/'webroot/index.html').read_text(encoding='utf-8')
-assert "const ASB_AMBIENT_NAMES = ['ai-spin'];" in h
+assert 'ASB_AMBIENT_' not in h and 'document.getAnimations' not in h and 'asbAmbientTick' not in h
 calm = h[h.index('/* dev66/buildfix3: calm never changes any visible header'):]
 calm = calm[:calm.index('}')+1]
 assert 'html.asb-calm .app-name' not in h
 for x in ('.app-name', '.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot', '.zygisk-header-dot'):
     assert x not in calm, x
-assert "el.closest('.asb-boot-intro, .header')" in h
+assert 'animation: none !important; background-position: -70% 0, 0 0;' not in h
+assert '.live-page.open .logo-sphere-a' in h and 'animation-play-state: running !important;' in h
+body = re.search(r'html\[data-asb-glass="1"\] body \{([^}]*)\}', h)
+assert body and 'background:var(--bg);' in body.group(1) and 'gradient' not in body.group(1), 'dark glass still paints a non-uniform body canvas'
+for lang in ('en', 'ru'):
+    d = json.loads((r/f'webroot/i18n/{lang}.json').read_text(encoding='utf-8'))
+    for key in ('ui_recents_memory', 'feel_pointer_speed', 'feel_game_memc', 'feel_dc_dimming'):
+        assert len(d['cfg'][key]['desc']) > 250, (lang, key, 'description too terse')
 mon = h[h.index('function liveMonitorSchedule(delay) {'):h.index('function livePollTrack(')]
 assert mon.count('asbNavReadDelay()') >= 4
 assert 'const navWait = asbNavReadDelay();' in mon

@@ -4347,6 +4347,7 @@ cat > "$T/bin/cmd" <<'EOF'
 #!/bin/sh
 printf 'cmd %s\n' "$*" >> "$BINDER_LOG"
 case "$*" in
+  'package bg-dexopt-job') [ "${BG_JOB:-fail}" = success ] && exit 0 || { echo 'cmd: Failure calling service package: Failed transaction (2147483646)'; exit 1; } ;;
   *' -a') [ "${BULK_CMD:-fail}" = success ] && echo 'Success' || echo 'cmd: Failure calling service package: Failed transaction (2147483646)' ;;
   *) echo 'cmd: Failure calling service package: Failed transaction (2147483646)' ;;
 esac
@@ -11623,8 +11624,8 @@ t_soter_boot_sequence_dev59() (
 # evidence: a persistent per-boot record (boot_id) shown by `status`, a log line for every
 # phase, a verification pass a few minutes later (stopped services restarted, SOTER logcat
 # lines kept), and a notification text the WebUI stores in the user's language. The unlock is
-# detected by sys.user.0.ce_available, by the SOTER server's credential-encrypted data
-# directory becoming visible, or (every 60 s) by the activity manager's RUNNING_UNLOCKED.
+# detected by sys.user.0.ce_available or (every 60 s) by RUNNING_UNLOCKED. A pre-existing
+# credential-encrypted data directory alone is not unlock evidence and must not start repair.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 S="$ROOT/runtime/asb_soter_fix.sh"
@@ -11648,6 +11649,8 @@ cat > "$T/bin/sleep" <<'SH'
 #!/bin/sh
 echo "sleep $1" >> "$Q/log"
 if [ "$1" = "$VERIFY" ] && [ -f "$Q/crash_before_verify" ]; then printf 'stopped' > "$PROPS/init.svc.vendor.soter"; fi
+if [ "$1" = "${ASB_SOTER_SETTLE:-600}" ] && [ -f "$Q/relock_during_settle" ]; then printf '9999
+' > "$Q/unlock_at"; rm -f "$Q/am_unlocked"; fi
 if [ -f "$Q/dir_at" ]; then
   n=$(cat "$Q/sleeps" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$Q/sleeps"
   [ "$n" -ge "$(cat "$Q/dir_at")" ] && mkdir -p "$CE/com.tencent.soter.soterserver/shared_prefs"
@@ -11698,7 +11701,7 @@ export PATH="$T/bin:$PATH" PROPS="$T/props" Q="$T" CE="$T/ce" VERIFY=7 \
 ! grep -q '^[[:space:]]*#' <(tail -n +2 "$S") || fail 'comment lines in module shell code'
 reset_case() {
   rm -rf "$T/state" "$T/ce"; mkdir -p "$T/state" "$T/ce"; : > "$T/state/auto"
-  rm -f "$T/log" "$T/notify" "$T/polls" "$T/sleeps" "$T/unlock_at" "$T/dir_at" "$T/am_unlocked" "$T/crash_before_verify" "$T/clear"
+  rm -f "$T/log" "$T/notify" "$T/polls" "$T/sleeps" "$T/unlock_at" "$T/dir_at" "$T/am_unlocked" "$T/crash_before_verify" "$T/relock_during_settle" "$T/clear"
   printf '1' > "$T/props/sys.boot_completed"; printf 'running' > "$T/props/init.svc.vendor.soter"; : > "$T/log"
 }
 reset_case; printf '4\n' > "$T/unlock_at"
@@ -11715,12 +11718,14 @@ grep -qx 'boot_id=boot-1' "$T/state/boot" && grep -qx 'state=done' "$T/state/boo
 grep -q '|boot_state=done|boot_result=done|boot_unlock=15|boot_via=ce_available|boot_time=[0-9]*|boot_first=none|' <<<"$(sh "$S" status)" || fail "status boot fields: $(sh "$S" status)"
 grep -q '^notification post -S bigtext -t SOTER asb_soter SOTER server data were cleared after the reboot; app functionality was not tested' "$T/notify" || fail "default notification: $(cat "$T/notify" 2>/dev/null)"
 grep -q 'trigger=boot' "$T/state/last" || fail 'trigger not recorded'
-reset_case; mkdir -p "$T/ce"; printf '3\n' > "$T/dir_at"
+reset_case; mkdir -p "$T/ce/com.tencent.soter.soterserver/shared_prefs"; printf '3\n' > "$T/dir_at"; touch "$T/am_unlocked"
 OUT="$(sh "$S" texts ru 'Ремонт SOTER' 'SOTER восстановлен|снова' 'Не удалось')"
 [ "$OUT" = 'soter|texts|state=1' ] || fail "texts: $OUT"
 grep -q '|notify_lang=ru$' <<<"$(sh "$S" status)" || fail 'stored language not reported'
 OUT="$(sh "$S" boot)"
-grep -q 'via ce_storage' "$T/state/log" || fail "CE directory unlock not detected: $(cat "$T/state/log")"
+grep -q 'via user_state' "$T/state/log" || fail "authoritative unlock not detected with a pre-existing CE directory: $(cat "$T/state/log")"
+! grep -q 'via ce_storage' "$T/state/log" || fail 'CE directory existence was still treated as unlock evidence'
+grep -q 'unlocked 60s after' "$T/state/log" || fail 'CE directory existence started the settle before authoritative unlock' 
 grep -qx 'notification post -S bigtext -t Ремонт SOTER asb_soter SOTER восстановлен снова' "$T/notify" || fail "localized notification: $(cat "$T/notify")"
 reset_case; printf '1\n' > "$T/unlock_at"; printf 'fail\nok\nok\n' > "$T/clear"
 OUT="$(sh "$S" boot)"
@@ -11777,7 +11782,7 @@ grep -q '^soter|result|state=skipped_recent_manual|' <<<"$OUT" || fail "manual r
 ! grep -q '^pm clear' "$T/log" || fail 'boot repair cleared SOTER again after a manual repair in the same boot'
 grep -q '|boot_state=skipped|boot_result=recent_manual|' <<<"$(sh "$S" status)" || fail 'manual-skip boot state is not visible'
 grep -q '^boot_id=boot-1$' "$T/state/last" && grep -q '^up=' "$T/state/last" || fail 'manual repair lacks same-boot evidence'
-echo 'PASS soter boot sequence: boot_completed then the first unlock (ce_available, CE data directory, RUNNING_UNLOCKED once a minute), settle (600 s by default since dev60), one bounded retry, per-boot record in status, phase log, verify pass with service restart and SOTER logcat lines, localized notification, opt-in only, no duplicate clear after a same-boot manual repair'
+echo 'PASS soter boot sequence: boot_completed then the first unlock (ce_available or RUNNING_UNLOCKED once a minute; CE directory alone rejected), post-settle relock fail-closed, settle (600 s by default since dev60), one bounded retry, per-boot record in status, phase log, verify pass with service restart and SOTER logcat lines, localized notification, opt-in only, no duplicate clear after a same-boot manual repair'
 )
 
 t_camera_tools_flags_dev60() (
