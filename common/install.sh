@@ -3102,7 +3102,7 @@ asb_preserve_user_config() {
   #
   # The ownership registry test counts cards against config keys; it does not check this
   # list, so nothing caught it. There is a check for that below now.
-  _user_keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+  _user_keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_PREVIEW_TNR CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
 bt_absvol_mode mglru_hold mglru_mode io_scheduler kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore kernel_sched_stats BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_charge_enable night_charge_start night_charge_end \
@@ -3228,7 +3228,7 @@ asb_snapshot_user_config() {
   _snap_conf="/data/adb/asb/governor.conf.snapshot"
   [ -f "$_new_conf" ] || return 0
   mkdir -p "$(dirname "$_snap_conf")" 2>/dev/null || true
-  _keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+  _keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_PREVIEW_TNR CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias bt_absvol_mode mglru_hold mglru_mode io_scheduler kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_charge_enable night_charge_start night_charge_end night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
