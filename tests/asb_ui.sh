@@ -2687,6 +2687,59 @@ grep -Fq '  lk_phase_ledger_live' "$FD" || fail "the open phase is not kept on d
 echo "PASS logkit resume: the open phase is kept each poll and folded in on resume, a shutdown keeps the marker without finalising, any other TERM finalises and clears it, the start and environment of the capture survive, the digest counts the reboots"
 )
 
+t_logkit_epoch_identity_runtime() (
+# Multi-day capture: charging and reboots remain separate phases/gaps, while an actual ASB or
+# kernel identity change gets a physically separate epoch with its own report and baselines.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+FD="$ROOT/tools/logkit/asb_log_full_day.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL logkit epochs: $*" >&2; exit 1; }
+for fn in lk_epoch_identity lk_epoch_archive lk_epoch_begin; do
+ sed -n "/^$fn() {\$/,/^}\$/p" "$FD" >> "$T/epoch.sh"
+ grep -q "^$fn() {\$" "$T/epoch.sh" || fail "$fn not found"
+done
+mkdir -p "$T/mod/bin" "$T/out"
+printf 'version=V66-test1\n' > "$T/mod/module.prop"
+printf 'binary-a\n' > "$T/mod/bin/asb"
+printf 'Linux version test-a\n' > "$T/kernel_version"
+run_identity() {
+ LK_MODDIR="$T/mod" ASB_LK_KERNEL_VERSION_FILE="$T/kernel_version" ASB_LK_KERNEL_RELEASE=6.12-test \
+   sh -c '. "$1"; lk_epoch_identity' sh "$T/epoch.sh"
+}
+a="$(run_identity)"; b="$(run_identity)"
+[ "$a" = "$b" ] && [ -n "$a" ] || fail "identity is not stable"
+printf 'Linux version test-b\n' > "$T/kernel_version"
+c="$(run_identity)"; [ "$c" != "$a" ] || fail "kernel replacement kept the old identity"
+printf 'binary-b\n' > "$T/mod/bin/asb"
+d="$(run_identity)"; [ "$d" != "$c" ] || fail "module replacement kept the old identity"
+O="$T/out"
+printf '1000\n' > "$O/.capture_start_epoch"; printf '1\n' > "$O/.epoch_id"; printf '%s\n' "$a" > "$O/.capture_identity"
+printf '# phase\nactive\t1000\t1100\n' > "$O/phase_ledger.tsv"
+printf 'old jank baseline\n' > "$O/.jank_pkg_prev"; printf 'old report\n' > "$O/_full_day_report.txt"
+LK_OUT_DIR="$O" sh -c '. "$1"; lk_epoch_archive identity_change' sh "$T/epoch.sh"
+[ -f "$O/epochs/epoch-001/_full_day_report.txt" ] || fail "old report was not archived"
+[ -f "$O/epochs/epoch-001/.jank_pkg_prev" ] || fail "old hidden baseline was not archived"
+[ ! -e "$O/.jank_pkg_prev" ] && [ ! -e "$O/phase_ledger.tsv" ] || fail "old counters survived in the new root"
+grep -q $'^1\t1000\t[0-9][0-9]*\tidentity_change\t'"$a"$'\tepochs/epoch-001/_full_day_report.txt$' "$O/epoch_history.tsv" || fail "history row"
+LK_OUT_DIR="$O" LK_MODDIR="$T/mod" ASB_LK_KERNEL_VERSION_FILE="$T/kernel_version" ASB_LK_KERNEL_RELEASE=6.12-test \
+ sh -c '. "$1"; lk_epoch_begin; [ "$LK_EPOCH_ID" = 2 ] && [ "$LK_CAPTURE_IDENTITY" != "unknown" ]' sh "$T/epoch.sh" || fail "new epoch did not start cleanly"
+[ "$(cat "$O/.epoch_id")" = 2 ] || fail "wrong epoch id"
+python3 - "$FD" <<'PY'
+import sys
+from pathlib import Path
+s=Path(sys.argv[1]).read_text()
+assert 'lk_epoch_prepare_resume\nlk_init\nlk_epoch_begin' in s
+loop=s[s.index('while : ; do'):]
+assert loop.index('lk_epoch_runtime_guard') < loop.index('lk_capture_battery_trace_row') < loop.index('lk_capture_jank_row')
+assert 'ASB_LK_EPOCH_ROTATED=1' in s and 'exec sh "$0" "$LK_HOURS"' in s
+assert 'charging_active|charging_idle' in s
+assert 'lk_resume_merge' in s and 'lk_wakelock_batterystats_reset' in s
+assert 'this report contains only this ASB/kernel identity' in s
+PY
+echo "PASS logkit epochs: module/kernel changes rotate reports and all counters; stable identity, charging/reboot/stop boundaries remain owned by existing recorder"
+)
+
 t_logkit_stale_temp_runtime() (
 # Runtime (fix141): the per-phase cpuT/surfT do not carry a governor reading hours old.
 #
@@ -3931,7 +3984,8 @@ for t in ("String(n.textContent || '').length <= ZY_NOTE_CLAMP", "if (run.length
           "_zyFoldOpen.has(key)", "T('zy_more', 'Show %s more')", "T('zy_less', 'Show less')", "fold.hidden = !o;"):
     assert t in c, t
 assert 'remove()' not in c and 'removeChild' not in c and 'textContent = ' not in c.replace('btn.textContent = ', ''), 'compaction must not cut content'
-assert '#zygiskPage .lgr-note.zy-clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }' in s
+assert '#zygiskPage .lgr-note.zy-clamp.open,' in s
+assert '#zygiskPage .zy-auto-current.zy-clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }' in s
 g = s[s.index('function zygiskGuardActionRow('):s.index('function zygiskGuardCard()')]
 assert "k.appendChild(b);" in g and 'zy-btn-inline' in g
 PY
@@ -8752,6 +8806,7 @@ function mk(tag) {
   return e;
 }
 let onScreen = true;
+function kernelMoreBlock(card,id,nodes){const btn=mk('button');btn.className='kernel-more';card.appendChild(btn);const body=mk('div');body.className='kernel-more-body';body.hidden=true;nodes.forEach(n=>{if(n)body.appendChild(n);});card.appendChild(body);return body;}
 global.document = { createElement: mk, body: { contains: function () { return onScreen; } } };
 function _el(id) { return reg[id] || null; }
 const timers = [];
@@ -12540,6 +12595,7 @@ function mk(tag){
   return e;
 }
 function bfxEl(tag,cls,text){const e=mk(tag);e.className=cls||'';if(text!=null)e.textContent=text;return e;}
+function kernelMoreBlock(card,id,nodes){const btn=mk('button');btn.className='kernel-more';card.appendChild(btn);const body=mk('div');body.className='kernel-more-body';body.hidden=true;nodes.forEach(n=>{if(n)body.appendChild(n);});card.appendChild(body);return body;}
 function _el(id){return reg[id]||null;}
 const cats=['dropbox','tombstones','anr','environment','installer','logs','backup','local','trash','screenshots','coloros'];
 function status(count){
@@ -13040,7 +13096,7 @@ fbm = dict(re.findall(r"\n    ([a-z_]+): '([^']*)'", b[b.index('const fb = {'):b
 assert set(fbm) == {'done','done_no_service','service_down','clear_failed','not_installed','busy','lock_error','unknown'}
 for k, v in fbm.items(): assert en['soter_res_' + k] == v, k
 keys = sorted(k for k in en if k.startswith('soter_'))
-assert len(keys) == 46, len(keys)
+assert len(keys) == 48, len(keys)
 assert {'soter_boot_recent_manual','soter_boot_auto_off'} <= set(keys)
 assert 'soter_confirm' not in en
 for p in sorted((root / 'webroot/i18n').glob('*.json')):
@@ -13062,6 +13118,7 @@ function el(tag){const n={tag,children:[],className:'',hidden:false,disabled:fal
 global.document={createElement:el};
 const T=(k,f)=>f;
 function bfxEl(tag,cls,text){const e=el(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function kernelMoreBlock(card,id,nodes){const btn=el('button');btn.className='kernel-more';card.appendChild(btn);const body=el('div');body.className='kernel-more-body';body.hidden=true;nodes.forEach(n=>{if(n)body.appendChild(n);});card.appendChild(body);return body;}
 function techIcon(){return '<svg/>';} function uiSound(){} let toasts=[];function toast(t,k){toasts.push([t,k]);}
 function shQuote(v){return "'"+v+"'";} const MD='/m';
 let cmds=[],replies={};async function run(c){cmds.push(c);return {stdout:replies[c.split(' ').pop()]||''};}
@@ -13179,6 +13236,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
  cfgRenderCameraToolsCards(list); await settle();
  const wcRows=_el('ctWcRows').textContent, laRows=_el('ctLaRows').textContent;
  if(!/included, disabled/.test(wcRows)||!/UVC gadget driver available/.test(wcRows)||!/not created yet/.test(wcRows))throw Error('webcam rows: '+wcRows);
+ if(list.children.map(x=>x.id).join(',')!=='ctLaCard,ctWcCard')throw Error('camera order '+list.children.map(x=>x.id));
  if(_el('ctWcChip').textContent!=='Off'||!_el('ctWcStart').disabled)throw Error('webcam off chip/start');
  if(_el('ctWcSwitch').getAttribute('aria-disabled')!=='false')throw Error('webcam switch locked with the app present');
  if(!/com\.oplus\.camera/.test(laRows)||!/profile-guided/.test(laRows)||!/none yet/.test(laRows))throw Error('launch rows: '+laRows);
@@ -14658,7 +14716,8 @@ for p in (root/'webroot/i18n').glob('*.json'):
  d=json.loads(p.read_text()); c=d['cfg']['io_scheduler']
  assert c['name'] and c['desc'] and all(k in c['descOpt'] for k in ('stock','auto','adios','mq-deadline','kyber','bfq','none')),p.name
  assert d['optFor']['io_scheduler']['stock'] and d['optFor']['io_scheduler']['auto']
- assert d.get('cfg_smart_profile') and d.get('cfg_smart_owner_profile') and d.get('cfg_smart_owner_dsp_thermal')
+ assert d.get('cfg_smart_profile') and d.get('cfg_smart_owner_profile') and d.get('cfg_smart_limit') and d.get('cfg_smart_owner_limit')
+ assert 'cfg_smart_owner_dsp_thermal' not in d
 PY
 command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI Smart/scheduler runtime: no node'; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
@@ -14678,8 +14737,11 @@ if(own('mglru_mode','smart')!=='dynamic')throw Error('Smart MGLRU owner missing'
 for(const v of ['on','off','stock'])if(own('mglru_mode',v)!==null)throw Error('manual MGLRU incorrectly owned '+v);
 if(own('wifi_powersave','screen_off')!=='dynamic'||own('wifi_powersave','always')!=='dynamic'||own('wifi_powersave','off')!==null)throw Error('Wi-Fi ownership');
 for(const k of ['net_screen_off_lte','net_lte_light'])if(own(k,'1')!=='radio'||own(k,'0')!==null)throw Error('radio ownership '+k);
-if(own('dsp_loudness','30')!=='dsp_thermal'||own('dsp_loudness','0')!==null||own('dsp_loudness','31')!==null)throw Error('DSP ownership');
-_cfgVals.dsp_outputs='off';if(own('dsp_loudness','30')!==null)throw Error('disabled DSP has owner');_cfgVals.dsp_outputs='speaker';_cfgVals.audio_profile='eq_compat';if(own('dsp_loudness','30')!==null)throw Error('EQ compatibility has owner');
+for(const v of ['0','1','30'])if(own('dsp_loudness',v)!==null)throw Error('DSP must stay manual');
+if(own('perf_ceiling_pct','85')!=='limit'||own('perf_ceiling_pct','100')!==null)throw Error('ceiling ownership');
+if(own('heavy_prime_escape','1')!=='dynamic'||own('heavy_prime_escape','0')!==null)throw Error('prime master ownership');
+_cfgVals.heavy_prime_escape='1';if(own('prime_escape_burst_s','20')!=='limit'||own('prime_escape_rest_s','40')!=='limit')throw Error('prime guard ownership');
+_cfgVals.heavy_prime_escape='0';if(own('prime_escape_burst_s','20')!==null||own('prime_escape_rest_s','40')!==null)throw Error('disabled prime guards owned');
 if(own('io_scheduler','auto')!=='profile'||own('kernel_bore','auto')!=='profile')throw Error('Smart profile ownership missing');
 if(own('io_scheduler','mq-deadline')!==null||own('auto_battery_enable','1')!=='dynamic'||own('auto_battery_enable','0')!==null)throw Error('manual/Auto Battery ownership');
 if(own('sustained_temp_mode','smart')!=='thermal'||own('doze_level','night')!==null)throw Error('battery ownership is too broad');
@@ -14736,6 +14798,38 @@ JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI TCP congestion discovery: BIC, Westwood and other kernel-exposed algorithms on all three cards, unsafe names filtered, one read-only probe, localized path/qdisc caveats'
+)
+
+t_webui_compact_ownership_release10() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PY'
+import json,sys
+from pathlib import Path
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text(); f=(r/'runtime/smart_dynamic_tune.sh').read_text()
+a=h.index('function cfgSmartOwner'); b=h.index('function cfgStatus',a); own=h[a:b]
+assert 'dsp_loudness' not in own
+assert "return 'limit'" in own and "heavy_prime_escape" in own
+assert "const _smartLabel = _smartOwner === 'profile' ? 'cfg_smart_owner_profile'" in h
+assert "so.title = T(_smartOwner === 'profile' ? 'cfg_smart_profile'" in h
+assert 'function cfgShortCategoryFit()' in h and 'page.scrollHeight > page.clientHeight + 2' in h
+assert "if (cfgPage) cfgPage.classList.remove('cfg-short-fit');" in h
+assert '.config-page' in h and 'overflow-y:auto' in h
+assert '.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 1px solid var(--border) !important; }' not in h
+assert ".lgr-note,.zy-mode-desc,.zy-auto-desc,.zy-auto-current" in h
+assert "e.key === 'Enter'" in h
+for key in ('bfx','soter','junk'):
+ assert f"kernelMoreBlock(card, '{key}'" in h
+assert "kernelMoreBlock(card, 'soter_auto'" in h
+assert h.index('list.appendChild(la);') < h.index('list.appendChild(wc);') < h.rindex('ctLoad(false);')
+assert 'asb_audio_apply.sh mirror' not in f
+for p in (r/'webroot/i18n').glob('*.json'):
+ d=json.loads(p.read_text())
+ for k in ('cfg_smart_limit','cfg_smart_owner_limit','bfx_summary','soter_summary','soter_auto_note_short','junk_summary'):
+  assert isinstance(d.get(k),str) and d[k].strip(),(p.name,k)
+ assert 'cfg_smart_owner_dsp_thermal' not in d
+print('PASS WebUI release10 compact UI, ownership, ordering and manual DSP contract')
+PY
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

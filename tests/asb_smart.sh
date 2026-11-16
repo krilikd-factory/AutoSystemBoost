@@ -6928,7 +6928,7 @@ C
 "$T/t" || fail "native parser/consumer behaviour"
 
 # The REAL shell publisher: two rows, then dedup/reset and owner-only cleanup.
-sed -n '/^LK_SF_FILE=/,/^lk_init$/p' "$F" | sed '$d' > "$T/publisher.sh"
+sed -n '/^LK_SF_FILE=/,/^lk_epoch_prepare_resume$/p' "$F" | sed '$d' > "$T/publisher.sh"
 cat > "$T/publisher_test.sh" <<'SH'
 set -eu
 T="$1"; . "$T/publisher.sh"
@@ -7981,6 +7981,39 @@ echo "$out" | grep '^lab bus: bus_dcvs voters=10' >/dev/null || fail "the bus li
 echo "$out" | grep '^lab now: .*radio_set_aside=3 early_stops=1' >/dev/null || fail "the now line is missing: $out"
 echo "$out" | grep -x 'lab voters: DDR:soc:qcom,memlat:ddr:gold (free), LLCC:soc:qcom,memlat:llcc:gold (capped)' >/dev/null || fail "the voters line is missing: $out"
 echo "PASS smart lab native: radio, wake lift, apps and memory bus tried in pairs with ceiling/frame/heat guards, dynamics re-open, owned bus writes with yield, store reload"
+)
+
+t_gpu_interactive_trim_guard_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+python3 - "$ROOT/src/asb_fsm.h" "$T/helper.c" <<'PY'
+import re,sys
+from pathlib import Path
+s=Path(sys.argv[1]).read_text(); m=re.search(r'static int asb_gpu_idle_trim_interactive\(const asb_metrics_t \*m\) \{.*?\n\}',s,re.S)
+assert m
+fixture='''#include <stdio.h>
+#include <time.h>
+#define ASB_TOUCH_RECENT_S 20
+static long g_touch_last_ts;
+typedef struct { struct { int screen_on, camera_active; } misc; struct { int load_pct; } gpu; } asb_metrics_t;
+'''+m.group(0)+'''
+int main(void) {
+ asb_metrics_t m={0}; m.misc.screen_on=1; g_touch_last_ts=0;
+ if (asb_gpu_idle_trim_interactive(&m)) return 1;
+ m.gpu.load_pct=12; if (!asb_gpu_idle_trim_interactive(&m)) return 2;
+ m.gpu.load_pct=0; g_touch_last_ts=time(0); if (!asb_gpu_idle_trim_interactive(&m)) return 3;
+ m.misc.camera_active=1; if (asb_gpu_idle_trim_interactive(&m)) return 4;
+ m.misc.camera_active=0; m.misc.screen_on=0; if (asb_gpu_idle_trim_interactive(&m)) return 5;
+ puts("PASS GPU idle trim: idle retained, visible load/touch guarded, camera/screen-off unchanged"); return 0;
+}
+'''
+Path(sys.argv[2]).write_text(fixture)
+s=s[s.index('int trim = g_asb_cfg.gpu_idle_trim_pct;'):]
+assert '!asb_gpu_idle_trim_interactive(m)' in s[:s.index('int vmax =')]
+PY
+cc -std=c11 -Wall -Wextra -Werror "$T/helper.c" -o "$T/helper"
+"$T/helper"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
