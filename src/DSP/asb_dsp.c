@@ -53,6 +53,8 @@
 
 #define ASB_DSP_NAME       "ASB Loudness"
 #define ASB_DSP_IMPLEMENTOR "AutoSystemBoost"
+/* Retained for binary capability inspection without adding a host-only logging dependency. */
+static const char asb_gain_capability[] __attribute__((used)) = ASB_GAIN_CAP_MARKER;
 
 /* android/system/audio_effects/effect_loudnessenhancer.h: the only parameter of that type. */
 #define ASB_LE_PARAM_TARGET_GAIN_MB 0
