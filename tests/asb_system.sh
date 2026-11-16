@@ -2460,7 +2460,7 @@ exit "$fail"
 set -u
 H="$(cd "$(dirname "$0")/.." && pwd)/webroot/index.html"
 fail=0
-sed -n '/^async function pollLive(visible) {/,/^  try {/p' "$H" | grep 'if (document.hidden) return;' >/dev/null \
+sed -n '/^async function pollLive(visible, prefetch) {/,/^  try {/p' "$H" | grep 'if (document.hidden) return;' >/dev/null \
   || { echo "FAIL webui: pollLive runs while hidden" >&2; fail=1; }
 VIS="$(sed -n "/^document.addEventListener('visibilitychange', () => {/,/^});/p" "$H")"
 printf '%s\n' "$VIS" | grep -F 'if (_liveOpen) liveMonitorSchedule(0);' >/dev/null \
@@ -6944,7 +6944,7 @@ before('ui(p);', 'await profilePaintFrame();')
 before('await profilePaintFrame();', "const r = await run('sh ' + MD + '/apply_profile.sh ' + p);")
 before("const r = await run('sh ' + MD + '/apply_profile.sh ' + p);", 'ui(previousProfile);')
 # Stock must return from pollLive before it can parse stale governor state or learner data.
-poll = s[s.index('async function pollLive(visible) {'):s.index('\nfunction fmtStock', s.index('async function pollLive(visible) {')) if '\nfunction fmtStock' in s[s.index('async function pollLive(visible) {'):] else len(s)]
+poll = s[s.index('async function pollLive(visible, prefetch) {'):s.index('\nfunction fmtStock', s.index('async function pollLive(visible, prefetch) {')) if '\nfunction fmtStock' in s[s.index('async function pollLive(visible, prefetch) {'):] else len(s)]
 terminal = poll.index("if (_selectedProfile === 'stock') {")
 # fix278: the governor state is read in the pass's one batched shell (liveBatchParts).
 state_read = poll.index("const _lb = await runBatch(liveBatchParts(visible, prime));")

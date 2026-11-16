@@ -4428,7 +4428,7 @@ fail() { echo "FAIL webui stock monitor: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "SKIP webui stock monitor: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -Fq "if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);" "$H" || fail "a throttled read still leaves the cells empty"
-grep -Fq "  liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);" "$H" || fail "opening Monitor no longer uses the scheduled freshness-aware read"
+grep -Fq "  liveMonitorSchedule(liveOpenRefreshDelay());" "$H" || fail "opening Monitor no longer uses the scheduled freshness-aware read"
 grep -Fq "    } else paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
 # fix287: a new WebView paints the last visit's ROM snapshot at once, dimmed until fresh.
 grep -Fq "      paintStockLive(_lvMonCache.rom);" "$H" && grep -Fq "      lvStale(true);" "$H" || fail "a fresh page opens Monitor without the cached card"
@@ -4437,7 +4437,7 @@ python3 - "$H" <<'P' || fail "Monitor open order / ROM read"
 import sys
 s = open(sys.argv[1], encoding='utf-8').read()
 o = s[s.index('function openLivePage() {'):s.index('function closeLivePage() {')]
-assert o.index("paintStockLive(_stockTelemetryKv)") < o.index('liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);'), 'the freshness-aware read is scheduled before the cached ROM sample is painted'
+assert o.index("paintStockLive(_stockTelemetryKv)") < o.index('liveMonitorSchedule(liveOpenRefreshDelay());'), 'the freshness-aware read is scheduled before the cached ROM sample is painted'
 m = s[s.index('function liveMonitorSchedule(delay) {'):s.index('function liveBackgroundSchedule(')]
 assert m.index('setTimeout(function () {') < m.index('pollStockTelemetry(true)'), 'the Stock freshness-aware read runs before the page has slid in'
 assert 'pollStockTelemetry(true, true)' not in o, 'a recent Stock sample is forced again on every opening'
@@ -10587,7 +10587,7 @@ assert 'asbBootIntroSeen(boot)' in js and 'asbBootIntroRemember(boot);' in js
 assert js.index('asbBootIntroRemember(boot);') < js.index('const jobs = [')
 assert 'Promise.race([' in js and '} finally {' in js and 'window._asbBootIntroActive = false;' in js
 assert 'setInterval(' not in js and 'setTimeout(() => pollLive' not in js
-for token in ('Promise.resolve(pollLive(true))','return cfgLoad();',
+for token in ('Promise.resolve(pollLive(true, true))','return cfgLoad();',
               'Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)])',
               'return asbLogReportLoad(true);','return zygiskPageLoad(false);','asbBootIntroPaint(done, jobs.length)',
               "T('boot_intro_warm'","T('boot_intro_ready'"):
@@ -10620,7 +10620,7 @@ const local={},session={};global.localStorage={getItem:k=>local[k]||null,setItem
 let boot='11111111-1111-4111-8111-111111111111',failBoot=false,hang=false,calls=[];
 global.run=async c=>{calls.push('boot-id');return{errno:failBoot?1:0,stdout:failBoot?'':boot,stderr:''}};
 global.asbStartupSnapshot=async()=>({boot:await run('boot-id')});
-global.pollLive=async v=>{calls.push('live:'+v)};global.homeMeterPaint=()=>calls.push('home-paint');global.cfgLoad=()=>{calls.push('config');return hang?new Promise(()=>{}):Promise.resolve()};
+global.pollLive=async(v,prefetch)=>{calls.push('live:'+v+':'+!!prefetch)};global.homeMeterPaint=()=>calls.push('home-paint');global.cfgLoad=()=>{calls.push('config');return hang?new Promise(()=>{}):Promise.resolve()};
 global.loadDeviceInfo=async()=>{calls.push('device-info')};global.asbDeviceInfoLoad=async bg=>{calls.push('device:'+bg)};
 global.asbLogReportLoad=async bg=>{calls.push('log:'+bg)};global.zygiskPageLoad=async user=>{calls.push('zygisk:'+user)};
 let src=h.slice(h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'"),h.indexOf('let _asbHomeRevealed = false;',h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'")));
@@ -10630,7 +10630,7 @@ eval(src+`\n(async()=>{
  let p=asbBootIntroStart();await sleep(2);
  if(overlay.hidden||!window._asbBootIntroActive||body.attrs['aria-busy']!=='true')throw Error('first boot did not paint');
  if(!await p||!overlay.hidden||window._asbBootIntroActive||body.getAttribute('aria-busy')!==null)throw Error('first boot did not clean up');
- for(const x of ['live:true','config','device-info','device:true','log:true','zygisk:false','home-paint'])if(!calls.includes(x))throw Error('missing warmer '+x);
+ for(const x of ['live:true:true','config','device-info','device:true','log:true','zygisk:false','home-paint'])if(!calls.includes(x))throw Error('missing warmer '+x);
  if(progress.attrs['aria-valuenow']!=='100'||local[ASB_BOOT_INTRO_KEY]!==boot)throw Error('progress/marker failed');
  const n=calls.length;if(await asbBootIntroStart()||calls.length!==n+1||!overlay.hidden)throw Error('same boot replayed or started a warmer');
  boot='22222222-2222-4222-8222-222222222222';if(!await asbBootIntroStart())throw Error('new boot skipped');
@@ -10711,12 +10711,12 @@ for token in ('let _deviceHeaderLoad = null;', 'if (cached) { deviceHeaderPaint(
     assert token in header, token
 assert header.index('if (cached)') < header.index("await fetch(")
 open_live=body('function openLivePage() {')
-assert 'liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);' in open_live
+assert 'liveMonitorSchedule(liveOpenRefreshDelay());' in open_live
 monitor_schedule=body('function liveMonitorSchedule(delay) {')
 assert 'pollStockTelemetry(true);' in monitor_schedule and 'pollStockTelemetry(true, true)' not in monitor_schedule
-poll=body('async function pollLive(visible) {')
+poll=body('async function pollLive(visible, prefetch) {')
 for token in ('if (_livePollRun) {','if (!visible || (_livePollVisible && _livePollSeq === _livePageSeq)) return _livePollRun;',
-              'if (!_livePollFollow) {','return pollLive(true);','} finally {',
+              'if (!_livePollFollow) {','return pollLive(true, prefetch);','} finally {',
               '_livePollRun = null;','if (releasePoll) releasePoll();',
               'else await pollStockTelemetry(false);'):
     assert token in poll, token
@@ -10784,7 +10784,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
   global.pollStockTelemetry=v=>{starts.push(v);let resolve;const promise=new Promise(r=>resolve=r);gates.push({resolve});return promise;};
   global._liveOpen=true;global._stockTelemetryKv={};
   const decl=h.slice(h.indexOf('let _livePollRun = null,'),h.indexOf('/* Declared up here with the other page flags'));
-  eval(decl+'\n'+grab('async function pollLive(visible) {')+';globalThis.poll=pollLive;');
+  eval(decl+'\n'+grab('async function pollLive(visible, prefetch) {')+';globalThis.poll=pollLive;');
   const bg=poll(false),bgJoin=poll(false),vis=poll(true),visJoin=poll(true);
   chk(starts.length===1&&starts[0]===false,'background pass was duplicated');
   gates[0].resolve();await flush();await flush();
@@ -11632,7 +11632,7 @@ nav = body('function asbNavGo(target) {')
 assert 'zygiskHeaderRefresh()' not in nav and 'zygiskHeaderRefreshLazy();' in nav, 'every tab tap still probes the Zygisk header'
 live = body('function openLivePage() {')
 assert 'run(' not in live and 'zygiskHeaderRefresh' not in live, 'opening Monitor starts a root shell on the tap'
-assert 'liveMonitorSchedule(LIVE_OPEN_SETTLE_MS);' in live, 'Monitor no longer schedules its read after the slide'
+assert 'liveMonitorSchedule(liveOpenRefreshDelay());' in live, 'Monitor no longer schedules its read after the slide'
 monitor_schedule = body('function liveMonitorSchedule(delay) {')
 assert 'setTimeout(function () {' in monitor_schedule and 'pollLive(true)' in monitor_schedule, 'Monitor scheduler lost its deferred read'
 cfg = body('function openConfigPage() {')
@@ -11648,7 +11648,7 @@ for k in ("['conf', 'cat ' + CFG_FILE]", "['ledger', CFG_LEDGER_CMD]", "['trials
     assert k in parts, 'Settings batch lost ' + k
 assert 'const CFG_FRESH_MS = 30000;' in h and 'function cfgLoad(force) {' in h
 assert h.count('await cfgLoad(true); cfgRender();') == 2, 'reset/import must force a fresh read'
-poll = body('async function pollLive(visible) {')
+poll = body('async function pollLive(visible, prefetch) {')
 assert poll.count('runBatch(') == 1, 'Monitor poll is not one batch'
 for old in ("await run('cat /dev/.asb/learner_state.json", "await run('/data/adb/modules/AutoSystemBoost/bin/asb status", "await run('cat /dev/.asb/recovery.json"):
     assert old not in poll.replace('_lb.learner || ' + old, ''), 'Monitor poll still reads separately: ' + old
@@ -13531,6 +13531,9 @@ function bfxEl(tag,cls,text){const e=el(tag);if(cls)e.className=cls;if(text!=nul
 function techIcon(){return '<svg/>';} function uiSound(){} let toasts=[];function toast(t,k){toasts.push([t,k]);}
 function kernelMoreBlock(card,id,nodes){const b=el('button');b.className='kernel-more';card.appendChild(b);const body=el('div');body.className='kernel-more-body';body.hidden=true;nodes.forEach(n=>{if(n)body.appendChild(n);});card.appendChild(body);return body;}
 function cfgHubRepaintIfShowing(){}
+/* Isolated card fixture: production defers this call until after the category entrance;
+ * the card-state runtime below exercises the already-deferred callback synchronously. */
+function cfgAfterEnter(fn){ fn(); }
 function shQuote(v){return "'"+v+"'";} const MD='/m'; var ASB_LANG='ru';
 let cmds=[],replies={};async function run(c){cmds.push(c);const k=Object.keys(replies).find(x=>c.endsWith(x));return {stdout:k?replies[k]:''};}
 const list=el('div');
@@ -14799,7 +14802,8 @@ for name in ('asbFitPages','lvFitValues','asbNavIndicator'):
 assert 'runBatchCmd(missing)' in h and "cache: 'hit'" in h and "cache: 'miss'" in h
 assert '_liveTimer = setInterval' not in h and '_liveBgTimer = setInterval' not in h
 assert "_livePollMeta.nextDelay < 5000 ? 5000" in h and ': 12000);' in h and 'livePollTrack(snapshot, visible, prime, success)' in h
-assert 'pollSeq !== _livePageSeq || !_liveOpen || document.hidden' in h
+assert 'pollSeq !== _livePageSeq || !_liveOpen || document.hidden' not in h
+assert h.count('pollSeq !== _livePageSeq || (!prefetch && !_liveOpen) || document.hidden') == 2
 assert 'data-asb-effects="reduced"' in h and "asbEffectsSet('reduced', 'ui-jank')" in h
 reduced=h[h.index('/* dev63: reduced effects'):h.index('</style>',h.index('/* dev63: reduced effects'))]
 assert not re.search(r'content-visibility\s*:',reduced), 'reduced effects changed layout measurement'
@@ -14868,7 +14872,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
   global.__deferredBatch=()=>{calls++;return new Promise(r=>resolvers.push(r))};
   eval('runBatch = globalThis.__deferredBatch;');
   const resolveNext=value=>{chk(resolvers.length>0,'no deferred batch to resolve at call '+calls);resolvers.shift()(value)};
-  eval(decl+'\n'+grab('async function pollLive(visible) {')+';globalThis.poll=pollLive;globalThis.setPage=(o,s)=>{_liveOpen=o;_livePageSeq=s};globalThis.pollMeta=_livePollMeta;globalThis.pollTrack=livePollTrack;globalThis.pollState=()=>({active:!!_livePollRun,hidden:document.hidden,profile:_selectedProfile,live:_liveOpen,seq:_livePageSeq});');
+  eval(decl+'\n'+grab('async function pollLive(visible, prefetch) {')+';globalThis.poll=pollLive;globalThis.setPage=(o,s)=>{_liveOpen=o;_livePageSeq=s};globalThis.pollMeta=_livePollMeta;globalThis.pollTrack=livePollTrack;globalThis.pollState=()=>({active:!!_livePollRun,hidden:document.hidden,profile:_selectedProfile,live:_liveOpen,seq:_livePageSeq});');
   setPage(true,1);pollTrack('sentinel',true,false,true);chk(!pollState().active,'a poll was already active before the stale fixture');
   const old=poll(true);old.catch(e=>console.error('stale poll rejected',e));await flush();chk(calls===1,'stale pass did not start: '+JSON.stringify(pollState()));setPage(false,2);resolveNext({state:{errno:0,stdout:'stale'}});await old;
   chk(pollMeta.snapshots.visible==='sentinel','closed Monitor accepted a stale snapshot');
@@ -14876,6 +14880,15 @@ const flush=()=>new Promise(r=>setImmediate(r));
   resolveNext({state:{errno:0,stdout:'old-open'}});await flush();await flush();
   chk(calls===3,'reopen did not queue exactly one fresh visible pass after the earlier stale fixture: '+calls);
   resolveNext({state:{errno:0,stdout:''}});await Promise.all([previous,reopened]);
+
+  /* The explicit splash prefetch is the only closed-page read allowed to publish a complete
+   * snapshot. An ordinary visible read on the same closed page must still fail stale. */
+  setPage(false,20);pollMeta.snapshots.visible='prefetch-before';
+  const prefetch=poll(true,true);await flush();resolveNext({state:{errno:1,stdout:''}});await prefetch;
+  chk(pollMeta.snapshots.visible!=='prefetch-before','bounded splash prefetch was discarded while Monitor was closed');
+  setPage(false,21);pollMeta.snapshots.visible='ordinary-closed-before';
+  const ordinaryClosed=poll(true);await flush();resolveNext({state:{errno:1,stdout:''}});await ordinaryClosed;
+  chk(pollMeta.snapshots.visible==='ordinary-closed-before','ordinary closed-page read bypassed the stale guard');
   console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
@@ -15137,6 +15150,131 @@ for p in (r/'webroot/i18n').glob('*.json'):
  assert 'cfg_smart_owner_dsp_thermal' not in d
 print('PASS WebUI release10 compact UI, ownership, ordering and manual DSP contract')
 PY
+)
+
+t_webui_release12_navigation_performance() (
+# buildfix10: paint-first Camera evidence, a continuous four-switch Zygisk card, a real
+# bounded Monitor splash prefetch/reuse window, and compositor-friendly profile motion.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI release12 navigation/performance: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source contract'
+import re, sys
+s = open(sys.argv[1], encoding='utf-8').read()
+def body(sig):
+    i = s.index(sig)
+    return s[i:s.index('\n}\n', i) + 2]
+# Camera: all three automatic evidence paths begin only after the finished category paint.
+after = body('function cfgAfterEnter(fn, onSkip) {')
+assert 'until - performance.now()) + 16' in after and 'setTimeout(function ()' in after
+assert 'if (_cfgOpen && !document.hidden) fn();' in after and 'else if (onSkip) onSkip();' in after
+assert 'setInterval(' not in after and 'Worker(' not in after
+caps = body('function cfgEnsureCaps() {')
+assert caps.index('cfgAfterEnter(function ()') < caps.index('cfgLoadCaps()')
+assert 'function () { _capsLoaded = false; }' in caps
+section = body('function cfgRenderSection(list, section, catKey, groupId) {')
+assert 'cfgAfterEnter(function () { cfgLoadGrade()' in section
+assert 'function () { ASB_GRADE = null; }' in section
+cam = body('function cfgRenderCameraToolsCards(list) {')
+assert cam.count('ctLoad(false);') == 1
+assert 'cfgAfterEnter(function () { if (_el(\'ctWcCard\')) ctLoad(false); });' in cam
+assert cam.count('ctLoad(true);') == 2, 'manual Camera refresh must remain live'
+# Zygisk: no generated hairlines; the four rows remain one continuous native card.
+assert '.cfg-zygisk-card > .cfg-row + .cfg-row::before' not in s
+assert s.count('.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 0 !important; }') >= 2
+assert 'function cfgRenderZygiskCard(list, items) {' in s and 'ZYGISK_CONTROL_KEYS' in s
+# Monitor: cached complete tiles are painted before two frames start the entrance. No root
+# bridge is called by the tap; a fresh splash/background read is reused for at most 1200 ms.
+open_live = body('function openLivePage() {')
+assert 'run(' not in open_live and 'runBatch(' not in open_live
+assert 'const openSeq = ++_livePageSeq;' in open_live
+assert 'if (_liveOpen && openSeq === _livePageSeq) p.classList.add(\'open\');' in open_live
+assert open_live.count('requestAnimationFrame(function () {') == 2
+first_frame = open_live.index('requestAnimationFrame(function () {')
+assert open_live.index('lvMonTilesRestore()') < first_frame
+assert open_live.index('lvMonSmartRestore()') < first_frame
+assert 'liveMonitorSchedule(liveOpenRefreshDelay());' in open_live
+assert 'const LIVE_OPEN_SETTLE_MS = 320;' in s and 'const LIVE_OPEN_REUSE_MS = 1200;' in s
+delay = body('function liveOpenRefreshDelay() {')
+assert 'LIVE_OPEN_REUSE_MS - age' in delay and 'Math.max(LIVE_OPEN_SETTLE_MS' in delay
+poll = body('async function pollLive(visible, prefetch) {')
+guard = 'if (visible && (pollSeq !== _livePageSeq || (!prefetch && !_liveOpen) || document.hidden)) return;'
+assert poll.count(guard) == 2, 'Stock and non-Stock need the same narrow prefetch exception'
+assert 'return pollLive(true, prefetch);' in poll, 'an overlap must not downgrade splash prefetch'
+assert 'if (document.hidden) return;' in poll
+assert 'setInterval(' not in poll and 'Worker(' not in poll
+boot = s[s.index('async function asbBootIntroStart()'):s.index('// ── localized boot:')]
+assert 'Promise.resolve(pollLive(true, true))' in boot
+assert 'setInterval(' not in boot and 'Worker(' not in boot
+# Profile selection no longer animates every CSS property or letter spacing (layout work).
+def css(selector):
+    m = re.search(r'(?m)^' + re.escape(selector) + r'\s*\{([^}]*)\}', s)
+    assert m, selector
+    return m.group(1)
+for selector in ('.pbtn', '.pico', '.pchk', '.pchk svg'):
+    block = css(selector)
+    transition = re.search(r'transition:([^;]+);', block)
+    assert transition and 'all' not in transition.group(1), selector
+    assert 'transform' in transition.group(1), selector
+name_transition = re.search(r'transition:([^;]+);', css('.pname'))
+assert name_transition and 'letter-spacing' not in name_transition.group(1)
+assert name_transition.group(1).strip() == 'color .18s ease'
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI release12 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(sig){const i=h.indexOf(sig);if(i<0)throw Error('missing '+sig);const j=h.indexOf('\n}\n',i);if(j<0)throw Error('unterminated '+sig);return h.slice(i,j+2);}
+const chk=(c,m)=>{if(!c)throw Error(m)};
+let now=1000,timers=[],frames=[],events=[];
+global.performance={now:()=>now};
+global.setTimeout=(f,ms)=>{timers.push({f,ms});return timers.length};
+global._cfgEnterUntil=1600;global._cfgOpen=true;global.document={hidden:false};
+eval(grab('function cfgAfterEnter(fn, onSkip) {'));
+let entered=0,skipped=0;cfgAfterEnter(()=>entered++,()=>skipped++);
+chk(entered===0&&timers.length===1&&timers[0].ms===616,'Camera evidence did not wait for the category entrance');
+timers.shift().f();chk(entered===1,'deferred Camera evidence never ran');
+cfgAfterEnter(()=>entered++,()=>skipped++);global._cfgOpen=false;timers.shift().f();chk(entered===1&&skipped===1,'closed Settings started deferred evidence or lost its retry state');
+global._cfgOpen=true;document.hidden=true;cfgAfterEnter(()=>entered++,()=>skipped++);timers.shift().f();chk(entered===1&&skipped===2,'hidden WebView started deferred evidence or lost its retry state');
+document.hidden=false;
+
+const RealDate=Date;global.Date={now:()=>now};
+global._livePollMeta={lastSuccess:1000};
+const a=h.indexOf('function openLivePage() {'),b=h.indexOf('function closeLivePage() {',a);
+eval(h.slice(a,b)+';globalThis.openMonitor=openLivePage;globalThis.refreshDelay=liveOpenRefreshDelay;');
+chk(refreshDelay()===1200,'fresh Monitor snapshot was not reused for the bounded window');
+now+=500;chk(refreshDelay()===700,'remaining Monitor reuse window was calculated incorrectly');
+now+=700;chk(refreshDelay()===320,'expired Monitor snapshot delayed the mandatory fresh read');
+_livePollMeta.lastSuccess=0;chk(refreshDelay()===320,'missing fresh read delayed the first Monitor poll');
+
+const classes=new Set();
+const page={scrollTop:9,attrs:{},classList:{add:c=>{classes.add(c);events.push('class:'+c)},remove:c=>classes.delete(c),contains:c=>classes.has(c)},setAttribute:(k,v)=>page.attrs[k]=String(v)};
+global._el=id=>id==='livePage'?page:null;
+global.uiSound=()=>{};global._liveOpen=false;global._livePageSeq=4;
+global.liveBackgroundSchedule=()=>{};global.liveHeaderSync=()=>{};
+global.lvMonTilesRestore=()=>{events.push('tiles');return true};global.lvMonSmartRestore=()=>{events.push('smart');return true};
+global.lvStale=v=>events.push('stale:'+v);global._selectedProfile='stock';global._stockTelemetryKv={cpu:'1'};global._lvMonCache={rom:{}};
+global.paintStockLive=()=>events.push('paint');global.asbNavAnimMark=()=>{};
+document.body={classList:{add:()=>{},remove:()=>{}}};global.asbTabbarVisibility=()=>{};
+global.requestAnimationFrame=f=>frames.push(f);
+let scheduled=[];global.liveMonitorSchedule=ms=>scheduled.push(ms);
+global.asbUiFrame={request:()=>{}};global.asbFitPages=()=>{};
+now=2000;_livePollMeta.lastSuccess=2000;openMonitor();
+chk(page.scrollTop===0&&page.attrs['aria-hidden']==='false'&&_liveOpen&&_livePageSeq===5,'Monitor open state was not prepared synchronously');
+chk(events.indexOf('paint')>events.indexOf('tiles')&&scheduled.length===1&&scheduled[0]===1200,'Monitor snapshot/reuse scheduling regressed');
+chk(frames.length===1&&!classes.has('open'),'Monitor entrance started before its first rendered frame');
+frames.shift()();chk(frames.length===1&&!classes.has('open'),'Monitor entrance collapsed the two-frame paint boundary');
+frames.shift()();chk(classes.has('open'),'Monitor entrance never started');
+classes.delete('open');openMonitor();_liveOpen=false;_livePageSeq++;
+while(frames.length)frames.shift()();
+chk(!classes.has('open'),'stale Monitor frame reopened a closed page');
+global.Date=RealDate;
+console.log('ok');
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "runtime: $out"
+[ "$out" = ok ] || fail "runtime: $out"
+echo 'PASS WebUI release12: paint-first Camera evidence, no Zygisk pseudo hairlines, bounded Monitor prefetch/reuse with two-frame stale-safe entrance, explicit compositor-friendly profile transitions'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
