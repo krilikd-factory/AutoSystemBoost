@@ -2270,12 +2270,10 @@ apply_camera_props_static() {
   _cp_plat="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_cp_plat" ] && _cp_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
   has resetprop || return 0
-  resetprop -n persist.camera.tnr.preview 1 >/dev/null 2>&1 || true
   resetprop -n persist.camera.tnr.video 1 >/dev/null 2>&1 || true
   resetprop -n persist.camera.tnr_cds 0 >/dev/null 2>&1 || true
   resetprop -n persist.vendor.camera.mfnr.enable 1 >/dev/null 2>&1 || true
   resetprop -n persist.vendor.camera.tnr.enable 1 >/dev/null 2>&1 || true
-  resetprop -n persist.vendor.camera.tnr.preview 1 >/dev/null 2>&1 || true
   resetprop -n persist.vendor.camera.tnr.video 1 >/dev/null 2>&1 || true
   resetprop -n persist.vendor.camera.tnr_cds 0 >/dev/null 2>&1 || true
   resetprop -n persist.camera.mfnr.enable 1 >/dev/null 2>&1 || true
@@ -2351,7 +2349,7 @@ apply_camera_props_static() {
   resetprop -n vendor.camera.algo.jpeghwdecode 1 >/dev/null 2>&1 || true
   resetprop -n vendor.camera.algo.jpeghwencode 1 >/dev/null 2>&1 || true
   resetprop -n vendor.camera.picturesize.limit.enable false >/dev/null 2>&1 || true
-  asb_log "camera props: applied static set (81 props)"
+  asb_log "camera props: applied static set (79 props)"
 }
 if asb_feature_enabled CAMERA && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows camera; then
   apply_camera_props_static
@@ -2361,7 +2359,6 @@ fi
 
 apply_camera_runtime() {
   # Base camera props — safe on every device. The proven-working OP12 build set
-  asb_persist_safe persist.camera.tnr.preview 1
   asb_persist_safe persist.camera.tnr.video 1
   asb_persist_safe persist.vendor.camera.hdr.enable 1
   asb_persist_safe persist.vendor.camera.eis.enable 1
@@ -2381,6 +2378,7 @@ apply_camera_runtime() {
 }
 if asb_feature_enabled CAMERA && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows camera; then
   apply_camera_runtime
+  [ -f "$MODDIR/runtime/asb_camera_tools.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_camera_tools.sh" preview apply >/dev/null 2>&1
 fi
 tune_io_queues() {
   for _b in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
