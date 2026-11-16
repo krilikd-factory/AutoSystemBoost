@@ -4,6 +4,23 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix1 - deterministic module-card settle CI
+
+Input: the owner's three host-regression shards. `system-smart` stopped in
+`module_desc_zygisk_dev57`: the description still said Zygisk was waiting after the asynchronous
+settle fixture. The other two shards completed; this was a host-test race, not a native build or
+Zygisk runtime failure.
+
+- **Deterministic settle fixture:** a scoped `sleep` stub now publishes the connected state on the
+  second poll and records the number of waits. The bounded branch separately requires exactly five
+  waits with no published connection. It no longer depends on a background writer and wall-clock
+  scheduling on a loaded CI runner. The production helper and its default ten-second settle cadence
+  are unchanged.
+- **Clean pipeline assertion:** the Zygisk status fixture consumes its complete input instead of
+  letting an early `grep -q` match close the pipe. No status field or runtime behaviour changed.
+- **Scope:** only test/documentation metadata changed. No profile, governor, thermal, scheduler,
+  Safe-mode or WebUI code was altered. Host CI remains distinct from physical device validation.
+
 ## V66 dev66 - foreground-game provenance and WebUI motion/read coherence
 
 Input: the dev65 buildfix1 source, a full-day ASB capture and diagnostic report, and the owner's
