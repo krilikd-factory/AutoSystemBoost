@@ -200,7 +200,7 @@ run_case sm8650 1 devfreq 20
 [ "$(get reason "$TMP/active_efficiency.env")" = "missing_cpu_gpu_or_thermal_capability" ] || fail "missing capability reason"
 
 # No raw frequency/voltage writes belong in the derived policy generator.
-if sed '/^[[:space:]]*#/d' "$GEN" | grep -Eqi 'undervolt|voltage|scaling_max_freq|khz'; then
+if sed '/^[[:space:]]*#/d' "$GEN" | grep -Ei 'undervolt|voltage|scaling_max_freq|khz' >/dev/null; then
   fail "generator must remain percentage/uclamp-only"
 fi
 
@@ -664,7 +664,7 @@ grep -q 'display_state=%d' "$ROOT/src/asb_governor.c" || fail "state file lacks 
 grep -q "screen source: Android display state" "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not name source 6"
 sed -n '/^asb_screen_on() {/,/^}/p' "$ROOT/service.sh" > "$T/s.sh"
 grep -q 'debug.tracing.screen_state' "$T/s.sh" || fail "service.sh screen check ignores doze"
-grep -v '^[[:space:]]*#' "$T/s.sh" | grep -q 'card0-DSI' && fail "service.sh still trusts DRM 'connected' as screen on"
+grep -v '^[[:space:]]*#' "$T/s.sh" | grep 'card0-DSI' >/dev/null && fail "service.sh still trusts DRM 'connected' as screen on"
 mkdir -p "$T/bin"
 printf '#!/bin/sh\necho "$PROPV"\n' > "$T/bin/getprop"; chmod +x "$T/bin/getprop"
 PATH="$T/bin:$PATH" PROPV=3 sh -c '. "$1"; asb_screen_on' _ "$T/s.sh" && fail "shell: doze read as on"
@@ -802,16 +802,16 @@ act() {
 }
 o="$(act "audio_resampler=high
 media_vol_steps=30" 30 140 30)"
-printf '%s\n' "$o" | grep -q 'resampler: high (active)' || fail "action: live resampler not confirmed: $o"
-printf '%s\n' "$o" | grep -q 'media volume: 30 steps (Android confirms)' || fail "action: live steps not confirmed: $o"
+printf '%s\n' "$o" | grep 'resampler: high (active)' >/dev/null || fail "action: live resampler not confirmed: $o"
+printf '%s\n' "$o" | grep 'media volume: 30 steps (Android confirms)' >/dev/null || fail "action: live steps not confirmed: $o"
 o="$(act "audio_resampler=max
 media_vol_steps=50" 15 140 "")"
-printf '%s\n' "$o" | grep -q 'resampler: max - takes effect after the next reboot' || fail "action: pending resampler: $o"
-printf '%s\n' "$o" | grep -q 'media volume: 50 steps - takes effect after the next reboot' || fail "action: pending steps: $o"
+printf '%s\n' "$o" | grep 'resampler: max - takes effect after the next reboot' >/dev/null || fail "action: pending resampler: $o"
+printf '%s\n' "$o" | grep 'media volume: 50 steps - takes effect after the next reboot' >/dev/null || fail "action: pending steps: $o"
 o="$(act "audio_resampler=stock
 media_vol_steps=50" 16 "" 50)"
-printf '%s\n' "$o" | grep -q 'media volume: 16 steps - this ROM ignores the 50 asked for' || fail "action: ignored steps: $o"
-printf '%s\n' "$o" | grep -q resampler && fail "action: stock resampler reported: $o"
+printf '%s\n' "$o" | grep 'media volume: 16 steps - this ROM ignores the 50 asked for' >/dev/null || fail "action: ignored steps: $o"
+printf '%s\n' "$o" | grep resampler >/dev/null && fail "action: stock resampler reported: $o"
 o="$(act "audio_resampler=stock
 media_vol_steps=stock" 15 "" "")"
 [ -z "$o" ] || fail "action: stock printed lines: $o"
@@ -841,20 +841,20 @@ diag() {
 }
 o="$(diag "audio_resampler=max
 media_vol_steps=50" 50 179 320 50)"
-printf '%s\n' "$o" | grep -q '^V|resampler max .*|179/320|179/320$' || fail "asbdiag: live max not verified: $o"
-printf '%s\n' "$o" | grep -q '^V|media volume steps (STREAM_MUSIC Max)|50|50$' || fail "asbdiag: live steps not verified: $o"
+printf '%s\n' "$o" | grep '^V|resampler max .*|179/320|179/320$' >/dev/null || fail "asbdiag: live max not verified: $o"
+printf '%s\n' "$o" | grep '^V|media volume steps (STREAM_MUSIC Max)|50|50$' >/dev/null || fail "asbdiag: live steps not verified: $o"
 o="$(diag "audio_resampler=high
 media_vol_steps=30" 15 "" "" "")"
-printf '%s\n' "$o" | grep -q '^NOTE|audio_resampler=high is not live yet (stopband/halflength <ROM default>)' || fail "asbdiag: pending resampler: $o"
-printf '%s\n' "$o" | grep -q '^NOTE|media_vol_steps=30 is not live yet (Android uses 15 steps)' || fail "asbdiag: pending steps: $o"
-printf '%s\n' "$o" | grep -q '^V|' && fail "asbdiag: a pending setting counted as a check: $o"
+printf '%s\n' "$o" | grep '^NOTE|audio_resampler=high is not live yet (stopband/halflength <ROM default>)' >/dev/null || fail "asbdiag: pending resampler: $o"
+printf '%s\n' "$o" | grep '^NOTE|media_vol_steps=30 is not live yet (Android uses 15 steps)' >/dev/null || fail "asbdiag: pending steps: $o"
+printf '%s\n' "$o" | grep '^V|' >/dev/null && fail "asbdiag: a pending setting counted as a check: $o"
 o="$(diag "audio_resampler=stock
 media_vol_steps=30" 16 90 32 30)"
-printf '%s\n' "$o" | grep -q '^NOTE|ro.config.media_vol_steps=30 is set, yet the audio service uses 16 steps' || fail "asbdiag: ignored steps: $o"
-printf '%s\n' "$o" | grep -q '^OFF|resampler quality - audio_resampler=stock, stopband/halflength 90/32|audio_resampler$' || fail "asbdiag: stock resampler: $o"
+printf '%s\n' "$o" | grep '^NOTE|ro.config.media_vol_steps=30 is set, yet the audio service uses 16 steps' >/dev/null || fail "asbdiag: ignored steps: $o"
+printf '%s\n' "$o" | grep '^OFF|resampler quality - audio_resampler=stock, stopband/halflength 90/32|audio_resampler$' >/dev/null || fail "asbdiag: stock resampler: $o"
 o="$(diag "audio_resampler=stock
 media_vol_steps=stock" 15 "" "" "")"
-printf '%s\n' "$o" | grep -q '^OFF|media volume steps - media_vol_steps=stock, Android uses 15 steps|media_vol_steps$' || fail "asbdiag: stock steps: $o"
+printf '%s\n' "$o" | grep '^OFF|media volume steps - media_vol_steps=stock, Android uses 15 steps|media_vol_steps$' >/dev/null || fail "asbdiag: stock steps: $o"
 echo "PASS audio prop tweaks: stock writes nothing, high/max/30/50 write exactly their props before Android starts, action and asbdiag tell live, pending and ignored apart"
 )
 
@@ -908,7 +908,7 @@ _acl='1.0 BluetoothRemoteDevices: aclStateChangeCallback: Adapter State: ON Disc
 [ "$(lk_bt_lifecycle_kind '1.0 A2dpStateMachine: Connection state AA:BB:CC:DD:EE:FF: CONNECTING->CONNECTED')" = a2dp_profile_connect ] || fail "A2DP state machine connect"
 [ "$(lk_bt_lifecycle_kind '1.0 A2dpService: connectionStateChanged, device: AA:BB:CC:DD:EE:FF, state: 2->0')" = a2dp_profile_disconnect ] || fail "A2DP 2->0 lost link"
 [ "$(lk_bt_lifecycle_kind '1.0 HeadsetStateMachine: Connection state AA:BB:CC:DD:EE:FF: CONNECTED->DISCONNECTED')" = hfp_profile_disconnect ] || fail "headset profile disconnect"
-printf '%s\n' "$(lk_bt_lifecycle_source "$_acl")" | grep -q 'AA:BB' && fail "an address in the ACL source"
+printf '%s\n' "$(lk_bt_lifecycle_source "$_acl")" | grep 'AA:BB' >/dev/null && fail "an address in the ACL source"
 grep -q 'BluetoothRemoteDevices:V A2dpStateMachine:V' "$COMMON" || fail "the recorder does not listen to the link and state-machine tags"
 # The report's reason table, on events from a multipoint morning.
 printf '1\tx\tacl_disconnect\tACL reason=8\n2\tx\tacl_disconnect\tACL reason=0x13\n3\tx\tacl_disconnect\tACL reason=19\n4\tx\tacl_disconnect\tACL reason=?\n5\tx\ta2dp_profile_connect\tA2DP\n' > "$TMP/ev.tsv"
@@ -920,8 +920,8 @@ b = s.index("' \"$_bt_ev\"", a)
 open(sys.argv[2], 'w').write(s[a:b])
 P
 _r="$(awk -F'\t' -f "$TMP/acl.awk" "$TMP/ev.tsv")"
-printf '%s\n' "$_r" | grep -q '^link drops (ACL disconnects): 4 - lost link (timeout): 1, ended by the headset: 2, ended by this phone: 0, other/unknown: 1$' || fail "ACL reason table: $_r"
-printf '%s\n' "$_r" | grep -q 'multipoint headset switching' || fail "no reading of a headset-ended drop: $_r"
+printf '%s\n' "$_r" | grep '^link drops (ACL disconnects): 4 - lost link (timeout): 1, ended by the headset: 2, ended by this phone: 0, other/unknown: 1$' >/dev/null || fail "ACL reason table: $_r"
+printf '%s\n' "$_r" | grep 'multipoint headset switching' >/dev/null || fail "no reading of a headset-ended drop: $_r"
 # fix178: the audio mode owner as Android 16 prints it (on the line after the heading).
 _ad='Audio mode:
 - Requested mode = MODE_IN_COMMUNICATION
@@ -988,9 +988,9 @@ lk_bt_lifecycle_record '1787400090.100 A2dpService: connectionStateChanged, stat
 # fix178: device names in the AVRCP volume table are redacted with the addresses (capture
 # 30423 carried a headphone model and a car name); the volume and state stay.
 _nm="$(printf '      AA:BB:CC:DD:EE:FF : BMW 68311      :   0 : NotConnected\n      AA:BB:CC:DD:EE:01 : OnePlus Bud... : 160 : Connected\n' | lk_bt_redact_addr)"
-printf '%s\n' "$_nm" | grep -q 'BMW\|OnePlus' && fail "a device name survived redaction: $_nm"
-printf '%s\n' "$_nm" | grep -q '^      <BT_ADDR> : <name> :   0 : NotConnected$' || fail "AVRCP row lost its volume/state: $_nm"
-printf '%s\n' "$_nm" | grep -q '<name> : 160 : Connected$' || fail "second AVRCP row: $_nm"
+printf '%s\n' "$_nm" | grep 'BMW\|OnePlus' >/dev/null && fail "a device name survived redaction: $_nm"
+printf '%s\n' "$_nm" | grep '^      <BT_ADDR> : <name> :   0 : NotConnected$' >/dev/null || fail "AVRCP row lost its volume/state: $_nm"
+printf '%s\n' "$_nm" | grep '<name> : 160 : Connected$' >/dev/null || fail "second AVRCP row: $_nm"
 [ "$(printf 'mCodecConfig: {codecName:LHDC}\n' | lk_bt_redact_addr)" = 'mCodecConfig: {codecName:LHDC}' ] || fail "redaction touched a non-AVRCP line"
 
 # fix178: profile drops from the service's own state history, deduplicated across snapshots.
@@ -1021,15 +1021,15 @@ _hist_h='Profile: HeadsetService
   echo '    StateMachine: name=BondStateMachine state=Stable'
   echo '       rec[0]: time=10-19 13:00:00.000 processed=Connected org=Connected dest=Disconnected what=101(0x65) x'; } > "$_sn"
 _hd="$(lk_bt_history_drops "$_sn")"
-printf '%s\n' "$_hd" | grep -q '^media drops: 3 (stack-reported 2, asked for on the phone 1); whole device (call profile too): 1; media only (call profile kept): 1$' \
+printf '%s\n' "$_hd" | grep '^media drops: 3 (stack-reported 2, asked for on the phone 1); whole device (call profile too): 1; media only (call profile kept): 1$' >/dev/null \
   || fail "history drop summary: $_hd"
-printf '%s\n' "$_hd" | grep -q '^  10-18 20:11:48  device A  reported by the Bluetooth stack.*call profile dropped with it; back after 2s$' || fail "whole-device drop row: $_hd"
-printf '%s\n' "$_hd" | grep -q '^  10-19 12:59:43  device A .*call profile stayed connected; back after 18m09s$' || fail "media-only drop row: $_hd"
-printf '%s\n' "$_hd" | grep -q '^  10-19 08:24:08  device B  asked for on this phone; call profile not in the kept history; not back within the kept history$' || fail "phone-requested drop row: $_hd"
-printf '%s\n' "$_hd" | grep -q 'B8:86\|9D:9F' && fail "an address fragment reached the report"
+printf '%s\n' "$_hd" | grep '^  10-18 20:11:48  device A  reported by the Bluetooth stack.*call profile dropped with it; back after 2s$' >/dev/null || fail "whole-device drop row: $_hd"
+printf '%s\n' "$_hd" | grep '^  10-19 12:59:43  device A .*call profile stayed connected; back after 18m09s$' >/dev/null || fail "media-only drop row: $_hd"
+printf '%s\n' "$_hd" | grep '^  10-19 08:24:08  device B  asked for on this phone; call profile not in the kept history; not back within the kept history$' >/dev/null || fail "phone-requested drop row: $_hd"
+printf '%s\n' "$_hd" | grep 'B8:86\|9D:9F' >/dev/null && fail "an address fragment reached the report"
 # A state change with no row for it (AudioOn before, Connected after) is a hole, not "stayed".
 sed 's/12:58:00.000 processed=Connected org=Connected dest=<null>/12:58:00.000 processed=AudioOn org=AudioOn dest=<null>/' "$_sn" > "$_sn.2"
-lk_bt_history_drops "$_sn.2" | grep -q '12:59:43 .*call profile not in the kept history' || fail "a history hole read as a kept call profile"
+lk_bt_history_drops "$_sn.2" | grep '12:59:43 .*call profile not in the kept history' >/dev/null || fail "a history hole read as a kept call profile"
 [ -z "$(lk_bt_history_drops "$TMP/none.txt")" ] || fail "missing snapshots printed something"
 grep -Fq 'lk_bt_history_drops "$LK_OUT_DIR/bt_lifecycle_snapshots.txt"' "$FULL" || fail "full-day report does not read the service history"
 # fix178: the network trace's Wi-Fi link - band, signal and speed, never the SSID/BSSID.
@@ -1113,8 +1113,8 @@ st() {   # status usb wireless
 
 # --- 2. the recorder files it as a charging phase, the battery trace as charging -----------
 grep -q 'case "$(lk_power_state "$_cs")" in' "$F" && grep -q '    charging|full|held)' "$F" || f "phase classifier ignores the hold"
-sed -n '/^lk_capture_battery_trace_row\|^lk_battery_trace_row/,/^}/p' "$C" | grep -q 'case "$(lk_power_state)" in' \
-  || grep -q '  case "$(lk_power_state)" in' "$C" || f "battery trace reads the hold as discharging"
+sed -n '/^lk_capture_battery_trace_row\|^lk_battery_trace_row/,/^}/p' "$C" | grep 'case "$(lk_power_state)" in' >/dev/null \
+  || grep '  case "$(lk_power_state)" in' "$C" >/dev/null || f "battery trace reads the hold as discharging"
 
 # --- 3. night verdict from the battery phases -----------------------------------------------
 { awk '/^lk_night_chain\(\) \{/ { f = 1 } f { print } f && /^}/ { exit }' "$F"
@@ -1123,18 +1123,18 @@ grep -q '^lk_emit_capture_validity() {' "$T/v.sh" && grep -q '^lk_night_chain() 
 mkdir -p "$T/o"
 printf 'charging_idle\t1000\t13000\t28\t80\nsleep\t13000\t22660\t80\t80\nidle\t22660\t23200\t80\t79\n' > "$T/o/phase_ledger.tsv"
 out="$(LK_OUT_DIR="$T/o" LK_START_EPOCH=$(( $(date +%s) - 30000 )) LK_SCREENOFF_LONGEST_S=13560 sh -c '. "$1"; lk_emit_capture_validity' x "$T/v.sh")"
-printf '%s\n' "$out" | grep -q '^night verdict: unavailable on battery (screen off up to 226 min, but the longest stretch off the charger was 170 min; need >=180 min).$' \
+printf '%s\n' "$out" | grep '^night verdict: unavailable on battery (screen off up to 226 min, but the longest stretch off the charger was 170 min; need >=180 min).$' >/dev/null \
   || f "night on the charger read as valid: $out"
 printf 'active\t23200\t30000\t79\t70\nsleep\t30000\t42000\t90\t86\n' >> "$T/o/phase_ledger.tsv"
 out="$(LK_OUT_DIR="$T/o" LK_START_EPOCH=$(( $(date +%s) - 30000 )) LK_SCREENOFF_LONGEST_S=13560 sh -c '. "$1"; lk_emit_capture_validity' x "$T/v.sh")"
-printf '%s\n' "$out" | grep -q '^night verdict: valid (longest screen-off stretch on battery 200 min >=180 min).$' || f "a real night not valid: $out"
+printf '%s\n' "$out" | grep '^night verdict: valid (longest screen-off stretch on battery 200 min >=180 min).$' >/dev/null || f "a real night not valid: $out"
 mkdir -p "$T/n"
 printf 'active\t0\t600\t95\t94\nidle\t600\t1800\t94\t94\nidle\t1802\t3200\t94\t93\nsleep\t3202\t11600\t93\t91\n' > "$T/n/phase_ledger.tsv"
 out="$(LK_OUT_DIR="$T/n" LK_START_EPOCH=$(( $(date +%s) - 30000 )) LK_SCREENOFF_LONGEST_S=8520 sh -c '. "$1"; lk_emit_capture_validity' x "$T/v.sh")"
-printf '%s\n' "$out" | grep -q '^night verdict: valid (longest screen-off stretch on battery 183 min >=180 min).$' || f "fix167: a night split into idle and sleep phases is not one night: $out"
+printf '%s\n' "$out" | grep '^night verdict: valid (longest screen-off stretch on battery 183 min >=180 min).$' >/dev/null || f "fix167: a night split into idle and sleep phases is not one night: $out"
 printf 'active\t0\t600\t95\t94\nidle\t600\t6000\t94\t93\nactive\t6000\t6600\t93\t92\nsleep\t6600\t12000\t92\t91\n' > "$T/n/phase_ledger.tsv"
 out="$(LK_OUT_DIR="$T/n" LK_START_EPOCH=$(( $(date +%s) - 30000 )) LK_SCREENOFF_LONGEST_S=5400 sh -c '. "$1"; lk_emit_capture_validity' x "$T/v.sh")"
-printf '%s\n' "$out" | grep -q '^night verdict: unavailable (longest continuous screen-off 90 min; need >=180 min).$' || f "fix167: ten minutes on screen did not split the night: $out"
+printf '%s\n' "$out" | grep '^night verdict: unavailable (longest continuous screen-off 90 min; need >=180 min).$' >/dev/null || f "fix167: ten minutes on screen did not split the night: $out"
 
 # --- 4. charging-idle verdict names the kernel holder ---------------------------------------
 awk '/^lk_emit_charging_idle_anomaly\(\) \{/ { f = 1 } f { print } f && /^}/ { exit }' "$F" > "$T/a.sh"
@@ -1150,9 +1150,9 @@ phase=charging_idle awake=100% dur=3000s  (time gained inside this phase; kernel
   kernel: +50m 00s  wired wakelock
 X
 out="$(LK_OUT_DIR="$T/q" LK_CHG_IDLE_SAMPLES=10 LK_CHG_IDLE_AUDIO_SAMPLES=0 LK_CHG_IDLE_COALESCED=0 sh -c '. "$1"; lk_emit_charging_idle_anomaly' x "$T/a.sh")"
-printf '%s\n' "$out" | grep -q '^  kernel holder on the charger: wired wakelock 199 min$' || f "charger wakelock not summed over the charging phases: $out"
-printf '%s\n' "$out" | grep -q 'hal_bluetooth_lock' && f "an idle-phase holder counted as a charging one: $out"
-printf '%s\n' "$out" | grep -q 'the phone.s own design, nothing an app or ASB holds' || f "charger wakelock not explained: $out"
+printf '%s\n' "$out" | grep '^  kernel holder on the charger: wired wakelock 199 min$' >/dev/null || f "charger wakelock not summed over the charging phases: $out"
+printf '%s\n' "$out" | grep 'hal_bluetooth_lock' >/dev/null && f "an idle-phase holder counted as a charging one: $out"
+printf '%s\n' "$out" | grep 'the phone.s own design, nothing an app or ASB holds' >/dev/null || f "charger wakelock not explained: $out"
 grep -q 'gap|idle|sleep|charging_idle) lk_wh_kernel_snap' "$F" || f "no kernel snapshot at a charging-idle phase open"
 
 # --- 5. report line, governor, action screen -------------------------------------------------
@@ -2027,7 +2027,7 @@ EOF
 out="$(asb_dsp_live_state "$TMP/susp.txt")"
 [ "$out" = "found=1 thread=AudioOut_1D type=DIRECT rate=96000 session=0 state=IDLE enabled=y suspended=y others_enabled=1" ] \
   || fail "suspended: $out"
-asb_dsp_live_explain "$out" | grep -q '^SUSPENDED by AudioFlinger' || fail "suspension not named"
+asb_dsp_live_explain "$out" | grep '^SUSPENDED by AudioFlinger' >/dev/null || fail "suspension not named"
 
 # fix139: a call's echo canceller and noise suppressor are enabled on CAPTURE sessions. The
 # input threads come after the outputs in the dump; their effects (and their sample rate) are
@@ -2063,7 +2063,7 @@ out="$(asb_dsp_live_state "$TMP/old.txt")"
 # Released by the attach daemon (or never attached).
 grep -v 'a5b10001' "$TMP/active.txt" > "$TMP/none.txt"
 [ "$(asb_dsp_live_state "$TMP/none.txt")" = found=0 ] || fail "absent instance reported"
-asb_dsp_live_explain found=0 | grep -q '^no live instance' || fail "absent instance not explained"
+asb_dsp_live_explain found=0 | grep '^no live instance' >/dev/null || fail "absent instance not explained"
 
 # Wired into asbdiag (both copies), the action screen and the capture.
 for f in "$ROOT_DIR/tools/asb_diag.sh" "$ROOT_DIR/system/bin/asbdiag"; do
@@ -2169,17 +2169,17 @@ fi
 # does not enable any gain by itself.
 grep -qx 'AUDIO=1' "$ROOT/features.conf"
 if grep -q 'asb_device_pack_allows audio' "$ROOT/runtime/asb_dsp_abi_apply.sh" \
-   || grep -q 'asb_device_pack_allows audio' "$ROOT/runtime/asb_audio_apply.sh"; then
+   || grep 'asb_device_pack_allows audio' "$ROOT/runtime/asb_audio_apply.sh" >/dev/null; then
   echo 'FAIL: direct DSP runtime still has a fingerprint-only audio gate' >&2
   exit 1
 fi
 # service.sh owns the boot-time overlay bind and attacher. It may retain separate
 # gates for non-DSP vendor tweaks later in the file, but never around this block.
-if sed -n '/^(/,/^) >\/dev\/null 2>\&1 \&/p' "$ROOT/service.sh" | grep -q 'asb_device_pack_allows audio'; then
+if sed -n '/^(/,/^) >\/dev\/null 2>\&1 \&/p' "$ROOT/service.sh" | grep 'asb_device_pack_allows audio' >/dev/null; then
   echo 'FAIL: boot-time DSP attacher still has a fingerprint-only audio gate' >&2
   exit 1
 fi
-if sed -n '/_abi_conf=/,/^fi$/p' "$ROOT/post-fs-data.sh" | grep -q 'asb_device_pack_allows audio'; then
+if sed -n '/_abi_conf=/,/^fi$/p' "$ROOT/post-fs-data.sh" | grep 'asb_device_pack_allows audio' >/dev/null; then
   echo 'FAIL: early DSP ABI staging still has a fingerprint-only audio gate' >&2
   exit 1
 fi
@@ -3564,7 +3564,7 @@ sh "$L" arm; sleep 2.6
 [ "$(cat "$MASK")" = "$NR_ON" ] || f "mask changed on an idle phone"
 [ "$(cat "$T/st/lte_screenoff.quiet" 2>/dev/null)" -ge 1 ] 2>/dev/null || f "quiet windows not counted"
 [ -s "$T/st/lte_screenoff.pid" ] && kill -0 "$(cat "$T/st/lte_screenoff.pid")" 2>/dev/null || f "timer stopped watching after a quiet window"
-sh "$L" status | grep -q '^quiet_windows=[1-9]' || f "status does not report quiet windows"
+sh "$L" status | grep '^quiet_windows=[1-9]' >/dev/null || f "status does not report quiet windows"
 # ...then a stream starts (2 MiB in a 1 s window): the next window switches.
 rx 3200000; sleep 1.6
 [ -f "$SAVE" ] || f "a stream with the screen off did not switch to LTE"
@@ -3701,7 +3701,7 @@ echo "mCallState=0" > "$T/call"
 sh "$L" apply
 [ -f "$T/st/lte_screenoff.saved" ] || f "apply after the call did not happen"
 sleep 0.3
-ps -eo pid=,args= 2>/dev/null | grep -q "[s]leep 3601" && f "disarm left the timer sleep running"
+ps -eo pid=,args= 2>/dev/null | grep "[s]leep 3601" >/dev/null && f "disarm left the timer sleep running"
 # a stale state file (screen=1) must not block the apply when the power manager says asleep
 sh "$L" restore; echo "$NR_ON" > "$MASK"; echo screen=1 > "$T/state"
 echo "mWakefulness=Awake" > "$T/wake"; sh "$L" apply
@@ -5113,7 +5113,7 @@ printf '%s\n' 'default via 100.65.185.32 dev rmnet_data2 table bad proto static'
   'default via 192.168.1.1 dev wlan0 table good proto static' > "$TMP/routes"
 : > "$TMP/chg"
 [ "$(probe)" = 1 ] || fail "one refusing route filed the kernel as unsupported"
-head -1 "$TMP/chg" | grep -q 'dev rmnet_data2' || fail "active link not tried first"
+head -1 "$TMP/chg" | grep 'dev rmnet_data2' >/dev/null || fail "active link not tried first"
 
 # 3. Every candidate refuses: unsupported, after at most three tries.
 printf '%s\n' 'default via 1.1.1.1 dev rmnet_data2 table bad1' 'default via 1.1.1.2 dev rmnet_data1 table bad2' \
@@ -5289,7 +5289,7 @@ grep -qF 'if [ -n "$_ASB_TC" ]; then' "$SRC" || fail 'qdisc section not gated on
 grep -qF 'qdisc=$_qd-unavailable' "$SRC" || fail 'missing-tc verdict missing'
 grep -qF 'tc_binary_limited' "$SRC" || fail 'limited-tc classifier missing'
 grep -qF 'qdisc=*-unavailable)' "$SRC" || fail 'mapper: qdisc unavailable line missing'
-if grep -v '^[[:space:]]*#' "$SRC" | grep -qE '(^|[^"A-Za-z_])tc qdisc (replace|show)'; then
+if grep -v '^[[:space:]]*#' "$SRC" | grep -E '(^|[^"A-Za-z_])tc qdisc (replace|show)' >/dev/null; then
   fail 'a bare tc call survived - every qdisc call must use the resolved binary'
 fi
 # profile_core must not be a second qdisc writer. The capability/read-back owner is
@@ -5351,7 +5351,7 @@ cat > "$TMP/asb/qdisc_failures.log" <<'EOF'
 2026-09-22 11:02:27 if=wlan0 want=fq_codel why=root_qdisc_owned err=RTNETLINK answers: Device or resource busy
 EOF
 ( _nw=fq_codel; . "$TMP/raw.sh"; printf '%s\n%s\n' "$_qraw" "$_qw" ) > "$TMP/raw.out"
-head -1 "$TMP/raw.out" | grep -q 'if=rmnet_ipa0 .*why=tc_error' || fail 'raw line not captured verbatim'
+head -1 "$TMP/raw.out" | grep 'if=rmnet_ipa0 .*why=tc_error' >/dev/null || fail 'raw line not captured verbatim'
 [ "$(sed -n 2p "$TMP/raw.out")" = 'tc_error' ] || fail 'why not derived from the raw line'
 
 echo 'net verdict contract: OK'
@@ -5414,7 +5414,7 @@ need "$GOV" 'honours net_handover_fast inside asb_lpm.sh'
 # No second helper may write mobile_data_always_on. The only intended owner is LPM; normal/fast/
 # save/night capture and restore a single Android baseline.
 writers="$(grep -RIl 'mobile_data_always_on' "$ROOT/runtime" --include='*.sh' | sort)"
-printf '%s\n' "$writers" | grep -qx "$LPM" || fail 'mobile_data_always_on has a writer outside asb_lpm.sh'
+printf '%s\n' "$writers" | grep -x "$LPM" >/dev/null || fail 'mobile_data_always_on has a writer outside asb_lpm.sh'
 
 WEB="$ROOT/webroot/index.html"
 need "$WEB" "key:'radio_policy_enable'"
@@ -5485,15 +5485,15 @@ MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" normal
 # Explicit master ON permits current LPM policy. Fast may warm context while awake; save wins.
 printf 'radio_policy_enable=1\nnet_wifi_leave=weak\n' > "$TMP/mod/config/governor.conf"
 MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" normal
-tail -n 1 "$TMP/settings.log" | grep -qx 'put mobile_data_always_on 1' || fail 'explicit radio master + fast handover did not warm mobile context'
+tail -n 1 "$TMP/settings.log" | grep -x 'put mobile_data_always_on 1' >/dev/null || fail 'explicit radio master + fast handover did not warm mobile context'
 MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" save
-tail -n 1 "$TMP/settings.log" | grep -qx 'put mobile_data_always_on 0' || fail 'save mode did not override fast handover'
+tail -n 1 "$TMP/settings.log" | grep -x 'put mobile_data_always_on 0' >/dev/null || fail 'save mode did not override fast handover'
 
 # Turning the independent master OFF restores original Android baseline (mocked 0), removes LPM
 # state and makes a later profile transition a no-op rather than a new implicit radio write.
 printf 'radio_policy_enable=0\nnet_wifi_leave=1\nnet_wifi_leave=1\n' > "$TMP/mod/config/governor.conf"
 MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" refresh
-tail -n 1 "$TMP/settings.log" | grep -qx 'put mobile_data_always_on 0' || fail 'radio master OFF did not restore captured Android baseline'
+tail -n 1 "$TMP/settings.log" | grep -x 'put mobile_data_always_on 0' >/dev/null || fail 'radio master OFF did not restore captured Android baseline'
 [ ! -e "$TMP/state/lpm_base" ] || fail 'radio master OFF retained LPM baseline state'
 [ ! -e "$TMP/state/lpm_mode" ] || fail 'radio master OFF retained LPM mode state'
 lines_before="$(wc -l < "$TMP/settings.log")"
@@ -5534,8 +5534,8 @@ run() {
 }
 # The preserved upgrade request 4 can now become effective; Stock stats must not write or own it.
 out="$(run apply kernel_sched_nr_migrate; run apply kernel_sched_stats)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|applied|4|4|32$' || fail "upgrade request did not apply: $out"
-printf '%s\n' "$out" | grep -q '^kernel_sched_stats|stock_unowned|stock|unknown|none$' || fail "Stock stats was not inert: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_nr_migrate|applied|4|4|32$' >/dev/null || fail "upgrade request did not apply: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_stats|stock_unowned|stock|unknown|none$' >/dev/null || fail "Stock stats was not inert: $out"
 [ "$(cat "$T/nr")" = 4 ] && [ "$(cat "$T/stats")" = 1 ] || fail 'fixed-node apply wrote the wrong value'
 [ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] && [ ! -e "$T/state/kernel_sched_stats.prev" ] || fail 'upgrade baseline/stock ownership is wrong'
 run apply kernel_sched_nr_migrate >/dev/null
@@ -5552,22 +5552,22 @@ set +e
 out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/nr" run apply kernel_sched_nr_migrate 2>/dev/null)"
 rc=$?
 set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|readback_mismatch|4|32|32$' || fail "migration mismatch verdict: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_sched_nr_migrate|readback_mismatch|4|32|32$' >/dev/null || fail "migration mismatch verdict: $out"
 [ -f "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'migration mismatch consumed baseline'
 rm -f "$T/clamp"
 printf 'kernel_sched_nr_migrate=stock\nkernel_sched_stats=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_sched_nr_migrate)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|restored|stock|32|none$' || fail "migration exact restore: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_nr_migrate|restored|stock|32|none$' >/dev/null || fail "migration exact restore: $out"
 [ "$(cat "$T/nr")" = 32 ] && [ ! -e "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'migration restore left wrong value/state'
 # Correct paths still report absence/access honestly rather than claiming success.
 rm -f "$T/nr"; printf 'kernel_sched_nr_migrate=4\nkernel_sched_stats=stock\n' > "$T/mod/config/governor.conf"
 out="$(run status kernel_sched_nr_migrate)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|not_exposed|4|unknown|none$' || fail "missing debugfs status: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_nr_migrate|not_exposed|4|unknown|none$' >/dev/null || fail "missing debugfs status: $out"
 set +e; out="$(run apply kernel_sched_nr_migrate 2>/dev/null)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && [ ! -e "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'missing debugfs node created state or returned success'
 chmod 444 "$T/stats"
 out="$(run status kernel_sched_stats)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_stats|not_writable|stock|1|none$' || fail "read-only stats status: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_stats|not_writable|stock|1|none$' >/dev/null || fail "read-only stats status: $out"
 echo 'PASS kernel fixed nodes: debugfs/proc bindings, upgrade apply, inert Stock, stable baseline, mismatch, exact restore, honest access states and one owner'
 )
 
@@ -5627,9 +5627,9 @@ run() {
     ASB_SCHED_NR_MIGRATE_NODE="$T/nr" sh "$K" "$@"
 }
 out="$(run apply)"
-printf '%s\n' "$out" | grep -q '^mglru_mode|applied|on|7|0x0001$' || fail "MGLRU apply verdict: $out"
-printf '%s\n' "$out" | grep -q '^kernel_timer_migration|applied|off|0|1$' || fail "timer apply verdict: $out"
-printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|applied|8|8|32$' || fail "migration apply verdict: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|applied|on|7|0x0001$' >/dev/null || fail "MGLRU apply verdict: $out"
+printf '%s\n' "$out" | grep '^kernel_timer_migration|applied|off|0|1$' >/dev/null || fail "timer apply verdict: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_nr_migrate|applied|8|8|32$' >/dev/null || fail "migration apply verdict: $out"
 [ "$(cat "$T/mglru")" = 7 ] && [ "$(cat "$T/timer")" = 0 ] && [ "$(cat "$T/nr")" = 8 ] || fail 'allowlisted values were not written'
 run apply >/dev/null
 [ "$(cat "$T/state/mglru_mode.prev")" = 0x0001 ] || fail 'repeat apply replaced MGLRU baseline'
@@ -5664,27 +5664,27 @@ set +e
 out="$(clamped 0x0001 apply mglru_mode 7)"; rc=$?
 set -e
 [ "$rc" -eq 0 ] || fail "a hardware-limited MGLRU readback returned failure: $out"
-printf '%s\n' "$out" | grep -q '^mglru_mode|applied|smart|0x0001|0x0001$' || fail "hardware-limited verdict wrong: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|applied|smart|0x0001|0x0001$' >/dev/null || fail "hardware-limited verdict wrong: $out"
 out="$(clamped 0x0003 apply mglru_mode 7)"
-printf '%s\n' "$out" | grep -q '^mglru_mode|applied|smart|0x0003|' || fail "arm64 0x0003 for 7 not accepted: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|applied|smart|0x0003|' >/dev/null || fail "arm64 0x0003 for 7 not accepted: $out"
 set +e
 out="$(clamped 0x0000 apply mglru_mode 7)"; rc=$?
 set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^mglru_mode|readback_mismatch|smart|0x0000|' || fail "a dropped core bit was accepted: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^mglru_mode|readback_mismatch|smart|0x0000|' >/dev/null || fail "a dropped core bit was accepted: $out"
 set +e
 out="$(clamped 0x0003 apply mglru_mode 5)"; rc=$?
 set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^mglru_mode|readback_mismatch|smart|0x0003|' || fail "a bit that was not requested was accepted: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^mglru_mode|readback_mismatch|smart|0x0003|' >/dev/null || fail "a bit that was not requested was accepted: $out"
 printf 'mglru_mode=on\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
 out="$(clamped 0x0003 apply mglru_mode)"
-printf '%s\n' "$out" | grep -q '^mglru_mode|applied|on|0x0003|' || fail "mode on read back as a mismatch on an arm64 kernel: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|applied|on|0x0003|' >/dev/null || fail "mode on read back as a mismatch on an arm64 kernel: $out"
 printf 'mglru_mode=smart\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
 [ -f "$T/state/mglru_mode.prev" ] || fail 'mismatch consumed restore evidence'
 rm -f "$T/clamp"
 # Stock restores the captured representation/value even after an external change.
 printf '9\n' > "$T/nr"; printf 'mglru_mode=stock\nkernel_timer_migration=stock\nkernel_sched_nr_migrate=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply)"
-printf '%s\n' "$out" | grep -q '^mglru_mode|restored|stock|0x0001|none$' || fail "MGLRU restore verdict: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|restored|stock|0x0001|none$' >/dev/null || fail "MGLRU restore verdict: $out"
 [ "$(cat "$T/mglru")" = 0x0001 ] && [ "$(cat "$T/timer")" = 1 ] && [ "$(cat "$T/nr")" = 32 ] || fail 'exact baseline restore failed'
 [ ! -e "$T/state/mglru_mode.prev" ] && [ ! -e "$T/state/kernel_timer_migration.prev" ] && [ ! -e "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'verified restore retained state'
 # A missing node keeps an existing baseline; malformed evidence blocks all writes.
@@ -5693,11 +5693,11 @@ run apply mglru_mode >/dev/null
 rm -f "$T/mglru"
 set +e; out="$(run apply mglru_mode 2>/dev/null)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && [ -f "$T/state/mglru_mode.prev" ] || fail 'missing node destroyed baseline'
-printf '%s\n' "$out" | grep -q '^mglru_mode|not_exposed|' || fail "missing node verdict: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|not_exposed|' >/dev/null || fail "missing node verdict: $out"
 printf '0x0001\n' > "$T/mglru"; printf 'garbage\n' > "$T/state/mglru_mode.prev"
 set +e; out="$(run apply mglru_mode 2>/dev/null)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && [ "$(cat "$T/mglru")" = 0x0001 ] || fail 'invalid baseline permitted a write'
-printf '%s\n' "$out" | grep -q '^mglru_mode|baseline_failed|' || fail "invalid baseline verdict: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|baseline_failed|' >/dev/null || fail "invalid baseline verdict: $out"
 # Config writer has the same closed vocabulary, including upgrades where a key is initially absent.
 mkdir -p "$T/cmod/config" "$T/cmod/runtime"
 cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
@@ -5744,14 +5744,14 @@ mode() { printf 'kernel_sched_autogroup=%s\nkernel_sched_child_runs_first=%s\n' 
 # Defaults are genuinely inert: no baseline and no write when both controls are stock.
 mode stock stock
 out="$(run apply)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|stock_unowned|stock|unknown|none$' || fail "stock autogroup: $out"
-printf '%s\n' "$out" | grep -q '^kernel_sched_child_runs_first|stock_unowned|stock|unknown|none$' || fail "stock child-first: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_autogroup|stock_unowned|stock|unknown|none$' >/dev/null || fail "stock autogroup: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_child_runs_first|stock_unowned|stock|unknown|none$' >/dev/null || fail "stock child-first: $out"
 [ ! -d "$T/state" ] || [ -z "$(find "$T/state" -type f -print -quit)" ] || fail 'stock created restore evidence'
 # Initial baselines survive a mode reversal and a repeated apply.
 mode off on
 out="$(run apply)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|applied|off|0|1$' || fail "autogroup off: $out"
-printf '%s\n' "$out" | grep -q '^kernel_sched_child_runs_first|applied|on|1|0$' || fail "child-first on: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_autogroup|applied|off|0|1$' >/dev/null || fail "autogroup off: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_child_runs_first|applied|on|1|0$' >/dev/null || fail "child-first on: $out"
 [ "$(cat "$T/autogroup")" = 0 ] && [ "$(cat "$T/child")" = 1 ] || fail 'requested scheduler values not written'
 [ "$(cat "$T/state/kernel_sched_autogroup.prev")" = 1 ] || fail 'autogroup baseline not captured'
 [ "$(cat "$T/state/kernel_sched_child_runs_first.prev")" = 0 ] || fail 'child-first baseline not captured'
@@ -5759,26 +5759,26 @@ mode on off
 run apply >/dev/null
 [ "$(cat "$T/state/kernel_sched_autogroup.prev")" = 1 ] && [ "$(cat "$T/state/kernel_sched_child_runs_first.prev")" = 0 ] || fail 'repeat apply replaced original baseline'
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|writable|on|1|1$' || fail "autogroup status: $out"
-printf '%s\n' "$out" | grep -q '^kernel_sched_child_runs_first|writable|off|0|0$' || fail "child-first status: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_autogroup|writable|on|1|1$' >/dev/null || fail "autogroup status: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_child_runs_first|writable|off|0|0$' >/dev/null || fail "child-first status: $out"
 mode stock stock
 out="$(run apply)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|restored|stock|1|none$' || fail "autogroup restore: $out"
-printf '%s\n' "$out" | grep -q '^kernel_sched_child_runs_first|restored|stock|0|none$' || fail "child-first restore: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_autogroup|restored|stock|1|none$' >/dev/null || fail "autogroup restore: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_child_runs_first|restored|stock|0|none$' >/dev/null || fail "child-first restore: $out"
 [ ! -e "$T/state/kernel_sched_autogroup.prev" ] && [ ! -e "$T/state/kernel_sched_child_runs_first.prev" ] || fail 'verified restore retained baselines'
 # Missing, unreadable and read-only interfaces fail closed and do not capture/write a baseline.
 rm -f "$T/autogroup"; mode off stock
 set +e; out="$(run apply kernel_sched_autogroup 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|not_exposed|off|unknown|none$' || fail "missing autogroup: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_sched_autogroup|not_exposed|off|unknown|none$' >/dev/null || fail "missing autogroup: $out"
 [ ! -e "$T/state/kernel_sched_autogroup.prev" ] || fail 'missing node created baseline'
 printf '1\n' > "$T/autogroup"; chmod 000 "$T/autogroup"
 set +e; out="$(run apply kernel_sched_autogroup 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|not_readable|off|unknown|none$' || fail "unreadable autogroup: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_sched_autogroup|not_readable|off|unknown|none$' >/dev/null || fail "unreadable autogroup: $out"
 chmod 444 "$T/autogroup"
 out="$(run status kernel_sched_autogroup)"
-printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|not_writable|off|1|none$' || fail "read-only status: $out"
+printf '%s\n' "$out" | grep '^kernel_sched_autogroup|not_writable|off|1|none$' >/dev/null || fail "read-only status: $out"
 set +e; out="$(run apply kernel_sched_autogroup 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|not_writable|off|unknown|none$' || fail "read-only apply: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_sched_autogroup|not_writable|off|unknown|none$' >/dev/null || fail "read-only apply: $out"
 [ "$(cat "$T/autogroup")" = 1 ] && [ ! -e "$T/state/kernel_sched_autogroup.prev" ] || fail 'read-only node changed or captured baseline'
 chmod 644 "$T/autogroup"
 # A successful write syscall with different readback is a mismatch, and Stock can still restore.
@@ -5795,7 +5795,7 @@ set +e
 out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/autogroup" run apply kernel_sched_autogroup 2>/dev/null)"
 rc=$?
 set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|readback_mismatch|on|0|0$' || fail "mismatch verdict: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_sched_autogroup|readback_mismatch|on|0|0$' >/dev/null || fail "mismatch verdict: $out"
 [ -f "$T/state/kernel_sched_autogroup.prev" ] || fail 'mismatch consumed baseline'
 rm -f "$T/clamp"; mode stock stock; run apply kernel_sched_autogroup >/dev/null
 [ "$(cat "$T/autogroup")" = 0 ] && [ ! -e "$T/state/kernel_sched_autogroup.prev" ] || fail 'restore after mismatch failed'
@@ -5820,9 +5820,9 @@ done
 # non-Smart profiles; a successful live WebUI write alone is not persistence evidence.
 _kc_block="$(sed -n '/^_kc_helper=/,/^# --- MGLRU working-set protection/p' "$ROOT/runtime/asb_system_tweaks.sh")"
 for key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost; do
-  printf '%s\n' "$_kc_block" | grep -Fq "$key" || fail "$key not routed through profile/boot reapply"
+  printf '%s\n' "$_kc_block" | grep -F "$key" >/dev/null || fail "$key not routed through profile/boot reapply"
 done
-printf '%s\n' "$_kc_block" | grep -Fq 'smart:smart|:smart) _kc_keys=' || fail 'Smart ownership branch missing'
+printf '%s\n' "$_kc_block" | grep -F 'smart:smart|:smart) _kc_keys=' >/dev/null || fail 'Smart ownership branch missing'
 grep -Fq 'sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1' "$ROOT/service.sh" || fail 'post-boot system tweaks owner is not called'
 _direct="$(grep -RInE '> */proc/sys/kernel/(sched_autogroup_enabled|sched_child_runs_first)|sysctlw kernel\.(sched_autogroup_enabled|sched_child_runs_first)' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/runtime" "$ROOT/profiles" "$ROOT/common" 2>/dev/null | grep -v 'runtime/asb_kernel_controls.sh' || true)"
 [ -z "$_direct" ] || fail "competing direct scheduler writer: $_direct"
@@ -5849,17 +5849,17 @@ run() {
 mode() { printf 'kernel_hrtimer_migration=%s\nkernel_lpm_prediction=%s\nkernel_usb_autosuspend=%s\n' "$1" "$2" "$3" > "$T/mod/config/governor.conf"; }
 mode auto auto stock
 out="$(run apply kernel_hrtimer_migration '' performance; run apply kernel_lpm_prediction '' battery)"
-printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|applied|auto|0|1$' || fail "Performance hrtimer Auto: $out"
-printf '%s\n' "$out" | grep -q '^kernel_lpm_prediction|applied|auto|1|0$' || fail "Battery LPM Auto: $out"
+printf '%s\n' "$out" | grep '^kernel_hrtimer_migration|applied|auto|0|1$' >/dev/null || fail "Performance hrtimer Auto: $out"
+printf '%s\n' "$out" | grep '^kernel_lpm_prediction|applied|auto|1|0$' >/dev/null || fail "Battery LPM Auto: $out"
 [ "$(cat "$T/hrtimer")" = 0 ] && [ "$(cat "$T/lpm")" = 1 ] && [ "$(cat "$T/usb")" = -1 ] || fail 'Auto wrote an unintended value'
 run apply kernel_hrtimer_migration '' performance >/dev/null; run apply kernel_lpm_prediction '' battery >/dev/null
 [ "$(cat "$T/state/kernel_hrtimer_migration.prev")" = 1 ] && [ "$(cat "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'repeat Auto apply replaced a baseline'
 out="$(run apply kernel_hrtimer_migration '' battery; run apply kernel_lpm_prediction '' balanced)"
-printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|restored|auto|1|none$' || fail "non-Performance hrtimer release: $out"
-printf '%s\n' "$out" | grep -q '^kernel_lpm_prediction|restored|auto|0|none$' || fail "non-Battery LPM release: $out"
+printf '%s\n' "$out" | grep '^kernel_hrtimer_migration|restored|auto|1|none$' >/dev/null || fail "non-Performance hrtimer release: $out"
+printf '%s\n' "$out" | grep '^kernel_lpm_prediction|restored|auto|0|none$' >/dev/null || fail "non-Battery LPM release: $out"
 [ ! -e "$T/state/kernel_hrtimer_migration.prev" ] && [ ! -e "$T/state/kernel_lpm_prediction.prev" ] || fail 'Auto release retained ownership'
 out="$(run apply kernel_hrtimer_migration '' battery; run apply kernel_lpm_prediction '' balanced)"
-printf '%s\n' "$out" | grep -q 'stock_unowned|auto' || fail "unowned Auto was not inert: $out"
+printf '%s\n' "$out" | grep 'stock_unowned|auto' >/dev/null || fail "unowned Auto was not inert: $out"
 # Manual values override Auto/profile policy, while Stock still returns to the original values.
 mode off on stock
 run apply kernel_hrtimer_migration '' performance >/dev/null; run apply kernel_lpm_prediction '' performance >/dev/null
@@ -5873,42 +5873,42 @@ run apply kernel_hrtimer_migration >/dev/null; run apply kernel_lpm_prediction >
 printf '1\n' > "$T/timer"; mv "$T/hrtimer" "$T/hrtimer.vendor"
 mode auto auto stock
 out="$(run apply kernel_hrtimer_migration '' battery; run status kernel_hrtimer_migration)"
-printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|covered_by_timer_migration|auto|1|none$' || fail "covered HR timer Auto/status: $out"
+printf '%s\n' "$out" | grep '^kernel_hrtimer_migration|covered_by_timer_migration|auto|1|none$' >/dev/null || fail "covered HR timer Auto/status: $out"
 [ "$(cat "$T/timer")" = 1 ] && [ ! -e "$T/state/kernel_hrtimer_migration.prev" ] || fail 'covered HR timer wrote or captured a baseline'
 mode off auto stock
 out="$(run apply kernel_hrtimer_migration '' performance)"
-printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|covered_by_timer_migration|off|1|none$' || fail "covered HR timer manual Off: $out"
+printf '%s\n' "$out" | grep '^kernel_hrtimer_migration|covered_by_timer_migration|off|1|none$' >/dev/null || fail "covered HR timer manual Off: $out"
 mode stock stock stock
 out="$(run apply kernel_hrtimer_migration; run restore kernel_hrtimer_migration)"
-printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|covered_by_timer_migration|stock|1|none$' || fail "covered HR timer Stock/restore: $out"
+printf '%s\n' "$out" | grep '^kernel_hrtimer_migration|covered_by_timer_migration|stock|1|none$' >/dev/null || fail "covered HR timer Stock/restore: $out"
 [ "$(cat "$T/timer")" = 1 ] && [ ! -e "$T/state/kernel_hrtimer_migration.prev" ] || fail 'covered HR timer Stock changed ownership'
 rm -f "$T/timer"; mode auto auto stock
 set +e; out="$(run apply kernel_hrtimer_migration '' battery 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|not_exposed|auto|unknown|none$' || fail "HR timer without either interface: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_hrtimer_migration|not_exposed|auto|unknown|none$' >/dev/null || fail "HR timer without either interface: $out"
 mv "$T/hrtimer.vendor" "$T/hrtimer"; mode stock stock stock
 # USB is inert by default; on=2, off=-1, repeated apply keeps the captured -1.
 mode auto auto on
 out="$(run apply kernel_usb_autosuspend)"
-printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|applied|on|2|-1$' || fail "USB on: $out"
+printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|applied|on|2|-1$' >/dev/null || fail "USB on: $out"
 [ "$(cat "$T/state/kernel_usb_autosuspend.prev")" = -1 ] || fail 'USB baseline lost its sign'
 mode auto auto off
 out="$(run apply kernel_usb_autosuspend; run apply kernel_usb_autosuspend)"
-printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|applied|off|-1|-1$' || fail "USB off/readback: $out"
+printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|applied|off|-1|-1$' >/dev/null || fail "USB off/readback: $out"
 [ "$(cat "$T/state/kernel_usb_autosuspend.prev")" = -1 ] || fail 'USB repeat apply replaced baseline'
 out="$(run status kernel_usb_autosuspend)"
-printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|writable|off|-1|-1$' || fail "signed USB status: $out"
+printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|writable|off|-1|-1$' >/dev/null || fail "signed USB status: $out"
 mode auto auto stock
 out="$(run apply kernel_usb_autosuspend)"
-printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|restored|stock|-1|none$' || fail "USB exact restore: $out"
+printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|restored|stock|-1|none$' >/dev/null || fail "USB exact restore: $out"
 [ ! -e "$T/state/kernel_usb_autosuspend.prev" ] || fail 'USB restore retained ownership'
 # Missing/read-only nodes fail closed. A kernel clamp is a mismatch, never a success.
 mode auto auto on
 rm -f "$T/usb"
 set +e; out="$(run apply kernel_usb_autosuspend 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|not_exposed|on|unknown|none$' || fail "missing USB node: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|not_exposed|on|unknown|none$' >/dev/null || fail "missing USB node: $out"
 printf '2\n' > "$T/usb"; chmod 444 "$T/usb"
 set +e; out="$(run apply kernel_usb_autosuspend 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|not_writable|on|unknown|none$' || fail "read-only USB node: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|not_writable|on|unknown|none$' >/dev/null || fail "read-only USB node: $out"
 chmod 644 "$T/usb"; mkdir -p "$T/bin"; REAL_CAT="$(command -v cat)"
 cat > "$T/bin/cat" <<'S'
 #!/bin/sh
@@ -5919,7 +5919,7 @@ chmod +x "$T/bin/cat"; : > "$T/clamp"
 set +e
 out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/usb" run apply kernel_usb_autosuspend 2>/dev/null)"; rc=$?
 set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|readback_mismatch|on|-1|-1$' || fail "USB clamp verdict: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|readback_mismatch|on|-1|-1$' >/dev/null || fail "USB clamp verdict: $out"
 rm -f "$T/clamp"; mode auto auto stock; run apply kernel_usb_autosuspend >/dev/null
 [ "$(cat "$T/usb")" = -1 ] && [ ! -e "$T/state/kernel_usb_autosuspend.prev" ] || fail 'USB restore after mismatch failed'
 # Safe config has the exact public vocabularies and preserves both shipped defaults.
@@ -6046,12 +6046,12 @@ out="$(run apply kernel_sched_nr_migrate)"
 [ ! -e "$T/mp" ] || fail 'apply left debugfs mounted'
 [ "$(grep -c '^mount -t debugfs debugfs ' "$T/log")" = "$(grep -c '^umount ' "$T/log")" ] || fail "mounts and unmounts do not pair: $(cat "$T/log")"
 out="$(run apply || true)"
-printf '%s\n' "$out" | grep -qx 'kernel_sched_nr_migrate|applied|8|8|32' || fail "the batch apply did not reach the node: $out"
+printf '%s\n' "$out" | grep -x 'kernel_sched_nr_migrate|applied|8|8|32' >/dev/null || fail "the batch apply did not reach the node: $out"
 [ "$(grep -c '^mount ' "$T/log")" = 3 ] || fail "debugfs was mounted for a key that does not need it: $(cat "$T/log")"
 printf 'kernel_sched_nr_migrate=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_sched_nr_migrate)"
 [ "$out" = 'kernel_sched_nr_migrate|restored|stock|32|none' ] && [ "$(cat "$T/kernel/nr")" = 32 ] || fail "stock restore through the private mount: $out"
-out="$(run restore || true)"; printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|stock_unowned|' || fail "restore-all: $out"
+out="$(run restore || true)"; printf '%s\n' "$out" | grep '^kernel_sched_nr_migrate|stock_unowned|' >/dev/null || fail "restore-all: $out"
 rm -f "$T/kernel/nr"; : > "$T/log"; printf 'kernel_sched_nr_migrate=4\n' > "$T/mod/config/governor.conf"
 set +e; out="$(run apply kernel_sched_nr_migrate)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && [ "$out" = 'kernel_sched_nr_migrate|not_exposed|4|unknown|none' ] || fail "debugfs without the node (no SCHED_DEBUG): $out"
@@ -6081,9 +6081,9 @@ G="$ROOT/src/asb_governor.c"
 fail() { echo "FAIL governor sustained reason: $*" >&2; exit 1; }
 b="$(sed -n '/const int _sus_thresh = asb_config_profile_sustained_temp_enter(&g_asb_cfg, fsm.profile_idx);/,/fsm.perf_hot_guard_active);/p' "$G")"
 [ -n "$b" ] || fail 'the profile threshold is not computed once for the reason'
-printf '%s\n' "$b" | grep -q '(metrics.therm.cpu_max_c >= _sus_thresh)' || fail 'the floor test does not use the profile threshold'
-printf '%s\n' "$b" | grep -q 'g_asb_cfg.sustained_temp_enter' && fail 'the global threshold is still used for the reason'
-printf '%s\n' "$b" | grep -q '^ *_sus_thresh,$' || fail 'the printed threshold is not the one tested'
+printf '%s\n' "$b" | grep '(metrics.therm.cpu_max_c >= _sus_thresh)' >/dev/null || fail 'the floor test does not use the profile threshold'
+printf '%s\n' "$b" | grep 'g_asb_cfg.sustained_temp_enter' >/dev/null && fail 'the global threshold is still used for the reason'
+printf '%s\n' "$b" | grep '^ *_sus_thresh,$' >/dev/null || fail 'the printed threshold is not the one tested'
 echo "PASS governor sustained reason: one profile threshold feeds both the reason and the printed thresh"
 )
 
@@ -6113,7 +6113,7 @@ cp "$ROOT/runtime/asb_kernel_controls.sh" "$T/mod/runtime/"
 printf 'mglru_mode=smart\n' > "$T/mod/config/governor.conf"
 printf '0x0000\n' > "$T/node"
 out="$(MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_MGLRU_ENABLED_NODE="$T/node" sh "$T/mod/runtime/asb_kernel_controls.sh" apply mglru_mode)"
-printf '%s\n' "$out" | grep -q '^mglru_mode|applied|smart|7|0x0000$' || fail "Smart without a request is not 7: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|applied|smart|7|0x0000$' >/dev/null || fail "Smart without a request is not 7: $out"
 sed -n '/^if \[ "\$MODE" != manual \] && \[ "\$(_cfg mglru_mode)" = smart \]; then$/,/^fi$/p' "$ROOT/runtime/smart_dynamic_tune.sh" > "$T/block.sh"
 [ "$(wc -l < "$T/block.sh")" -ge 8 ] || fail 'Smart MGLRU block not found'
 cat > "$T/mod/runtime/asb_kernel_controls.sh" <<'S'
@@ -6252,7 +6252,7 @@ out="$(run set NETLINK wlan_wow_wl NETLINK)"
 printf 'NETLINK\nwlan_wow_wl\n' > "$T/expected"
 cmp -s "$T/mod/config/wakeup_blocklist.conf" "$T/expected" || fail 'policy update was not saved and deduplicated'
 out="$(run status)"
-printf '%s\n' "$out" | grep -q 'node=writable|policy=ready|saved_count=2|current_count=2' || fail "status lacks saved/live counts: $out"
+printf '%s\n' "$out" | grep 'node=writable|policy=ready|saved_count=2|current_count=2' >/dev/null || fail "status lacks saved/live counts: $out"
 [ "$(printf '%s\n' "$out" | grep -c '^wakeup_rule|saved|')" -eq 2 ] || fail 'saved policy readback missing'
 [ "$(printf '%s\n' "$out" | grep -c '^wakeup_rule|current|')" -eq 2 ] || fail 'kernel rule readback missing'
 set +e; out="$(run set bad/name)"; rc=$?; set -e
@@ -6291,7 +6291,7 @@ set +e; out="$(WB_ENV1="$T/env.sh" BASH_ENV="$T/env2.sh" WB_STATE="$T/state" MOD
 [ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|readback_mismatch||' ] || fail "a rule the kernel kept was reported as cleared: $out"
 : > "$T/state"; : > "$T/node"
 printf '17\n' > "$T/events"; out="$(run status)"
-printf '%s\n' "$out" | grep -q 'blocked_events=17' || fail "status omitted kernel counter: $out"
+printf '%s\n' "$out" | grep 'blocked_events=17' >/dev/null || fail "status omitted kernel counter: $out"
 set +e; out="$(MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/missing" sh "$W" apply)"; rc=$?; set -e
 [ "$rc" -eq 2 ] && [ "$out" = 'wakeup_blocker|not_exposed||' ] || fail "unsupported kernel was reported as applied: $rc $out"
 i=0; : > "$T/mod/config/wakeup_blocklist.conf"
@@ -6326,23 +6326,23 @@ wk wakeup0 radio 10 20 3000; wk wakeup1 other 5 7 900; wk wakeup2 unchanged 1 1 
 printf 'bad name\n' > "$T/class/wakeup3/name"; printf '1\n' > "$T/class/wakeup3/active_count"; printf '1\n' > "$T/class/wakeup3/event_count"; printf '1\n' > "$T/class/wakeup3/total_time_ms"
 run() { MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/node" ASB_WAKEUP_POLICY="$T/policy" ASB_WAKEUP_EVENTS_NODE="$T/events" ASB_WAKEUP_ABI_NODE="$T/abi" ASB_WAKEUP_STATS_NODE="$T/stats" ASB_WAKEUP_CLASS="$T/class" ASB_WAKEUP_OBSERVE_DIR="$T/state" sh "$W" "$@"; }
 out="$(run status)"
-printf '%s\n' "$out" | grep -q 'abi=2|rule_stats=ready' || fail "ABI/status missing: $out"
-printf '%s\n' "$out" | grep -q '^wakeup_rule|blocked|radio|12$' || fail 'per-rule counter missing'
-printf '%s\n' "$out" | grep -q '^wakeup_observe|status|state=idle|' || fail 'initial state is not idle'
+printf '%s\n' "$out" | grep 'abi=2|rule_stats=ready' >/dev/null || fail "ABI/status missing: $out"
+printf '%s\n' "$out" | grep '^wakeup_rule|blocked|radio|12$' >/dev/null || fail 'per-rule counter missing'
+printf '%s\n' "$out" | grep '^wakeup_observe|status|state=idle|' >/dev/null || fail 'initial state is not idle'
 out="$(run observe_start)"
-printf '%s\n' "$out" | grep -q 'state=measuring|.*sources=0|resets=0' || fail "start invented deltas: $out"
+printf '%s\n' "$out" | grep 'state=measuring|.*sources=0|resets=0' >/dev/null || fail "start invented deltas: $out"
 [ ! -s "$T/policy" ] || fail 'observation created a policy rule'
 wk wakeup0 radio 13 26 3450; wk wakeup1 other 2 3 100; wk wakeup2 unchanged 1 1 1
 mkdir -p "$T/class/wakeup4"; wk wakeup4 new_source 2 4 80
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^wakeup_source|radio|events=6|active=3|time_ms=450|reset=0|shared=1|new=0$' || fail "radio delta wrong: $out"
-printf '%s\n' "$out" | grep -q '^wakeup_source|other|events=3|active=2|time_ms=100|reset=1|shared=1|new=0$' || fail "counter reset not bounded: $out"
-printf '%s\n' "$out" | grep -q '^wakeup_source|new_source|events=4|active=2|time_ms=80|reset=0|shared=1|new=1$' || fail 'new source missing'
-printf '%s\n' "$out" | grep -q '^wakeup_source|unchanged|' && fail 'unchanged lifetime counter listed as idle activity'
-printf '%s\n' "$out" | grep -q '^wakeup_source|bad' && fail 'unsafe source name emitted'
-printf '%s\n' "$out" | grep -q 'sources=3|resets=1' || fail 'summary counts wrong'
+printf '%s\n' "$out" | grep '^wakeup_source|radio|events=6|active=3|time_ms=450|reset=0|shared=1|new=0$' >/dev/null || fail "radio delta wrong: $out"
+printf '%s\n' "$out" | grep '^wakeup_source|other|events=3|active=2|time_ms=100|reset=1|shared=1|new=0$' >/dev/null || fail "counter reset not bounded: $out"
+printf '%s\n' "$out" | grep '^wakeup_source|new_source|events=4|active=2|time_ms=80|reset=0|shared=1|new=1$' >/dev/null || fail 'new source missing'
+printf '%s\n' "$out" | grep '^wakeup_source|unchanged|' >/dev/null && fail 'unchanged lifetime counter listed as idle activity'
+printf '%s\n' "$out" | grep '^wakeup_source|bad' >/dev/null && fail 'unsafe source name emitted'
+printf '%s\n' "$out" | grep 'sources=3|resets=1' >/dev/null || fail 'summary counts wrong'
 [ ! -s "$T/policy" ] || fail 'status automatically blocked a source'
-out="$(run observe_clear)"; printf '%s\n' "$out" | grep -q 'state=idle|elapsed_ms=0|started=0|sources=0|resets=0' || fail 'clear did not reset observation'
+out="$(run observe_clear)"; printf '%s\n' "$out" | grep 'state=idle|elapsed_ms=0|started=0|sources=0|resets=0' >/dev/null || fail 'clear did not reset observation'
 # dev55: names are not unique in /sys/class/wakeup (every epoll instance with an EPOLLWAKEUP
 # item registers its own "eventpoll"). dev54 keyed the window by name, so one eventpoll that
 # woke once read as +96 right after the start. Snapshots are keyed by the wakeupN entry,
@@ -6351,19 +6351,19 @@ out="$(run observe_clear)"; printf '%s\n' "$out" | grep -q 'state=idle|elapsed_m
 rm -rf "$T/class"; mkdir -p "$T/class/wakeup0" "$T/class/wakeup1" "$T/class/wakeup2" "$T/class/wakeup5"
 wk wakeup0 eventpoll 100 100 500; wk wakeup1 eventpoll 5 5 20; wk wakeup2 alarmtimer 7 7 7; wk wakeup5 recycled 3 3 3
 out="$(run observe_start)"
-printf '%s\n' "$out" | grep -q 'state=measuring|.*sources=0|resets=0' || fail "duplicate names invented activity at the start: $out"
+printf '%s\n' "$out" | grep 'state=measuring|.*sources=0|resets=0' >/dev/null || fail "duplicate names invented activity at the start: $out"
 wk wakeup0 eventpoll 101 101 510; printf 'other_name\n' > "$T/class/wakeup5/name"
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^wakeup_source|eventpoll|events=1|active=1|time_ms=10|reset=0|shared=2|new=0$' || fail "same-named sources not kept apart: $out"
-printf '%s\n' "$out" | grep -q '^wakeup_source|other_name|events=3|active=3|time_ms=3|reset=0|shared=1|new=1$' || fail "a reused entry id read as the old source: $out"
-printf '%s\n' "$out" | grep -q '^wakeup_source|recycled|' && fail 'a vanished source was listed'
-printf '%s\n' "$out" | grep -q '^wakeup_source|alarmtimer|' && fail 'an unchanged source was listed'
+printf '%s\n' "$out" | grep '^wakeup_source|eventpoll|events=1|active=1|time_ms=10|reset=0|shared=2|new=0$' >/dev/null || fail "same-named sources not kept apart: $out"
+printf '%s\n' "$out" | grep '^wakeup_source|other_name|events=3|active=3|time_ms=3|reset=0|shared=1|new=1$' >/dev/null || fail "a reused entry id read as the old source: $out"
+printf '%s\n' "$out" | grep '^wakeup_source|recycled|' >/dev/null && fail 'a vanished source was listed'
+printf '%s\n' "$out" | grep '^wakeup_source|alarmtimer|' >/dev/null && fail 'an unchanged source was listed'
 wk wakeup1 eventpoll 2 2 4
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^wakeup_source|eventpoll|events=3|active=3|time_ms=14|reset=1|shared=2|new=0$' || fail "a reset in one of two same-named sources: $out"
+printf '%s\n' "$out" | grep '^wakeup_source|eventpoll|events=3|active=3|time_ms=14|reset=1|shared=2|new=0$' >/dev/null || fail "a reset in one of two same-named sources: $out"
 printf 'start_mono_ms=1\nstart_epoch=1\n' > "$T/state/meta"; printf 'eventpoll\t1\t1\t1\n' > "$T/state/baseline.tsv"
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^wakeup_observe|status|state=idle|' && [ ! -e "$T/state/baseline.tsv" ] || fail "a dev54 by-name window was compared as by-id: $out"
+printf '%s\n' "$out" | grep '^wakeup_observe|status|state=idle|' >/dev/null && [ ! -e "$T/state/baseline.tsv" ] || fail "a dev54 by-name window was compared as by-id: $out"
 mkdir -p "$T/bin"; printf '#!/bin/sh\necho "$*" >> "%s"\nexec %s "$@"\n' "$T/cat.log" "$(command -v cat)" > "$T/bin/cat"; chmod 0755 "$T/bin/cat"
 PATH="$T/bin:$PATH" run observe_start >/dev/null
 ! grep -q "$T/class" "$T/cat.log" 2>/dev/null || fail "the snapshot spawned one cat per counter ($(grep -c "$T/class" "$T/cat.log"))"
@@ -6501,28 +6501,28 @@ out="$(PATH="$T/bin:$PATH" FAKE_DIR="$T" LK_OUT_DIR="$T/out" LK_WAKEUP_CLASS="$T
 ' "$C" "$T" 2>&1)"
 
 h="$(printf '%s\n' "$out" | sed -n '/^--- holders$/,/^--- files$/p')"
-printf '%s\n' "$out" | grep -q '^calls after active: 1$' || f "a screen-on close read batterystats, or the first screen-off close did not: $out"
-printf '%s\n' "$out" | grep -q '^calls after snapshot: 1$' || f "the interim snapshot read batterystats: $out"
+printf '%s\n' "$out" | grep '^calls after active: 1$' >/dev/null || f "a screen-on close read batterystats, or the first screen-off close did not: $out"
+printf '%s\n' "$out" | grep '^calls after snapshot: 1$' >/dev/null || f "the interim snapshot read batterystats: $out"
 [ "$(printf '%s\n' "$h" | grep -c '^phase=')" = 3 ] || f "expected three blocks (gap, idle-relabelled gap, idle; none for audio_bt or the snapshot): $h"
-printf '%s\n' "$h" | grep -q 'dur=2s\|dur=30s' && f "a block for the phase still open: $h"
+printf '%s\n' "$h" | grep 'dur=2s\|dur=30s' >/dev/null && f "a block for the phase still open: $h"
 # 1: running totals, labelled.
-printf '%s\n' "$h" | grep -q "^  app:    5m 41s  PedometerLib:tag  (u0a493)  since Android's last unplug - no earlier reading in this capture$" \
+printf '%s\n' "$h" | grep "^  app:    5m 41s  PedometerLib:tag  (u0a493)  since Android's last unplug - no earlier reading in this capture$" >/dev/null \
   || f "first close not labelled as running totals: $h"
-printf '%s\n' "$h" | grep -q '^  kernel: +0m 30s  PowerManagerService.WakeLocks$' || f "kernel step of the first gap: $h"
-printf '%s\n' "$h" | grep -q 'asb_logkit' && f "the capture's own lock listed: $h"
+printf '%s\n' "$h" | grep '^  kernel: +0m 30s  PowerManagerService.WakeLocks$' >/dev/null || f "kernel step of the first gap: $h"
+printf '%s\n' "$h" | grep 'asb_logkit' >/dev/null && f "the capture's own lock listed: $h"
 # 3: the 200-second "gap" is an idle, and its steps are its own.
 blk="$(printf '%s\n' "$h" | awk '/^phase=/{n++} n==2')"
-printf '%s\n' "$blk" | head -1 | grep -q '^phase=idle awake=60% dur=200s  (time gained inside this phase)$' || f "relabel or header: $blk"
-printf '%s\n' "$blk" | grep -q '^  app:    +2m 05s  PedometerLib:tag  (u0a493)$' || f "app step in the idle stretch: $blk"
-printf '%s\n' "$blk" | grep -q 'SystemJobService' && f "an app with no step listed: $blk"
-printf '%s\n' "$blk" | grep -q '^  kernel: +2m 10s  PowerManagerService.WakeLocks$' || f "kernel step (open->close): $blk"
-printf '%s\n' "$blk" | grep -q '^  kernel: +0m 40s  1994000.qcom,qup_uart$' || f "second kernel step: $blk"
+printf '%s\n' "$blk" | head -1 | grep '^phase=idle awake=60% dur=200s  (time gained inside this phase)$' >/dev/null || f "relabel or header: $blk"
+printf '%s\n' "$blk" | grep '^  app:    +2m 05s  PedometerLib:tag  (u0a493)$' >/dev/null || f "app step in the idle stretch: $blk"
+printf '%s\n' "$blk" | grep 'SystemJobService' >/dev/null && f "an app with no step listed: $blk"
+printf '%s\n' "$blk" | grep '^  kernel: +2m 10s  PowerManagerService.WakeLocks$' >/dev/null || f "kernel step (open->close): $blk"
+printf '%s\n' "$blk" | grep '^  kernel: +0m 40s  1994000.qcom,qup_uart$' >/dev/null || f "second kernel step: $blk"
 # 4: after the audio phase the idle shows only its own 4 s, not the minute the audio phase added.
 blk="$(printf '%s\n' "$h" | awk '/^phase=/{n++} n==3')"
-printf '%s\n' "$blk" | grep -q '^  app:    +0m 04s  PedometerLib:tag  (u0a493)$' || f "baseline not carried through the audio phase: $blk"
-printf '%s\n' "$blk" | grep -q '\*alarm\*' && f "a sub-second step listed: $blk"
-printf '%s\n' "$out" | sed -n '/^--- files$/,$p' | grep -q '^\.wh_a_prev$' || f "baseline not kept: $out"
-printf '%s\n' "$out" | sed -n '/^--- files$/,$p' | grep -qE '^\.wh_(a|k)_now$' && f "scratch files left: $out"
+printf '%s\n' "$blk" | grep '^  app:    +0m 04s  PedometerLib:tag  (u0a493)$' >/dev/null || f "baseline not carried through the audio phase: $blk"
+printf '%s\n' "$blk" | grep '\*alarm\*' >/dev/null && f "a sub-second step listed: $blk"
+printf '%s\n' "$out" | sed -n '/^--- files$/,$p' | grep '^\.wh_a_prev$' >/dev/null || f "baseline not kept: $out"
+printf '%s\n' "$out" | sed -n '/^--- files$/,$p' | grep -E '^\.wh_(a|k)_now$' >/dev/null && f "scratch files left: $out"
 
 [ "$fail" = 0 ] && echo "PASS phase wakeholders: app and kernel time gained inside each screen-off phase, no blocks from interim snapshots"
 exit "$fail"
@@ -6563,13 +6563,13 @@ grep -qx 'global|network_recommendations_enabled|0|OnePlus/CPH2745/OP611FL1:16/A
 r="$(run global network_recommendations_enabled 0)"
 [ "$r" = rc=1 ] || fail "skipped write reported as success: $r"
 [ -s "$T/calls" ] && fail "settings called again for a known refusal: $(cat "$T/calls")"
-tail -1 "$T/state/apply_ledger" | grep -q 'unsupported|key absent on this ROM - not retried' || fail "skip of an absent key not filed as unsupported: $(tail -1 "$T/state/apply_ledger")"
+tail -1 "$T/state/apply_ledger" | grep 'unsupported|key absent on this ROM - not retried' >/dev/null || fail "skip of an absent key not filed as unsupported: $(tail -1 "$T/state/apply_ledger")"
 # V66 dev11: a refusal of a key that exists keeps its class on the skipped boots too, and a
 # list written by an older build (four fields) still means "refused".
 printf 'global|older_key|1|OnePlus/CPH2745/OP611FL1:16/A\nglobal|refused_key|0|OnePlus/CPH2745/OP611FL1:16/A|not_writable\n' >> "$T/state/settings_rejected"
 : > "$T/calls"
-run global older_key 1 >/dev/null; tail -1 "$T/state/apply_ledger" | grep -q 'not_writable|rejected before on this ROM build - not retried' || fail "an old-format entry was not honoured"
-run global refused_key 0 >/dev/null; tail -1 "$T/state/apply_ledger" | grep -q 'not_writable|rejected before on this ROM build - not retried' || fail "a refusal lost its class"
+run global older_key 1 >/dev/null; tail -1 "$T/state/apply_ledger" | grep 'not_writable|rejected before on this ROM build - not retried' >/dev/null || fail "an old-format entry was not honoured"
+run global refused_key 0 >/dev/null; tail -1 "$T/state/apply_ledger" | grep 'not_writable|rejected before on this ROM build - not retried' >/dev/null || fail "a refusal lost its class"
 [ -s "$T/calls" ] && fail "settings called for remembered keys: $(cat "$T/calls")"
 # Other keys are unaffected.
 r="$(run global wifi_scan_throttle_enabled 1)"
@@ -6583,13 +6583,13 @@ grep -q '^put global network_recommendations_enabled 0' "$T/calls" || fail "not 
 # fix221: the key that does not exist on the ROM (empty read-back before AND after the
 # failed write - ColorOS 16 refuses to create unknown keys) is filed as unsupported,
 # not as a refusal: it is not a permission problem, and asbdiag lists it apart.
-tail -1 "$T/state/apply_ledger" | grep -q 'unsupported|key absent on this ROM' \
+tail -1 "$T/state/apply_ledger" | grep 'unsupported|key absent on this ROM' >/dev/null \
   || fail "absent key not filed as unsupported: $(tail -1 "$T/state/apply_ledger")"
 # A key that EXISTS but refuses the write is still a refusal.
 echo 1 > "$T/s/global.network_recommendations_enabled"
 echo "OnePlus/CPH2745/OP611FL1:16/C" > "$T/fp"
 run global network_recommendations_enabled 0 >/dev/null
-tail -1 "$T/state/apply_ledger" | grep -q 'not_writable|write rejected' \
+tail -1 "$T/state/apply_ledger" | grep 'not_writable|write rejected' >/dev/null \
   || fail "existing-key refusal no longer filed as not_writable: $(tail -1 "$T/state/apply_ledger")"
 rm -f "$T/s/global.network_recommendations_enabled"
 # A value the ROM stored in another form did take: not remembered as a refusal.
@@ -6843,11 +6843,11 @@ MATCHED="$(printf '%s\n' "$DUMP" | sed -n "$SED_EXPR")"
 for _p in persist.asb.dsp.enable persist.asb.dsp.route persist.asb.force_disableabsvol \
           persist.vendor.asb.dsp.gain_mb persist.vendor.asb.dsp.bass_db \
           persist.vendor.asb.dsp.comp_ratio_x10 persist.vendor.asb.dsp.ceiling_mb; do
-  printf '%s\n' "$MATCHED" | grep -Fqx "$_p" || fail "selector misses ASB prop: $_p"
+  printf '%s\n' "$MATCHED" | grep -Fx "$_p" >/dev/null || fail "selector misses ASB prop: $_p"
 done
 for _p in persist.vendor.audio.hifi persist.vendor.audio.fluence.voicecall \
           persist.asbd.evil persist.sys.oplus.athena.reclaim_enable; do
-  printf '%s\n' "$MATCHED" | grep -Fq "$_p" && fail "selector wrongly catches foreign prop: $_p"
+  printf '%s\n' "$MATCHED" | grep -F "$_p" >/dev/null && fail "selector wrongly catches foreign prop: $_p"
 done
 
 # Every selected name must carry the asb. marker after the optional vendor. segment -
@@ -6904,7 +6904,7 @@ need "$SERVICE" 'pkill -USR1 -f asb_dsp_attach'
 core_start="$(line_of "$SERVICE" 'asb_apply_deferred_core_boot() {')"
 core_end="$(line_of "$SERVICE" 'apply_doze() {')"
 [ -n "$core_start" ] && [ -n "$core_end" ] || fail 'could not locate deferred core worker'
-if sed -n "${core_start},${core_end}p" "$SERVICE" | grep -Eq '^[[:space:]]*asb_apply_profile_once([[:space:]]|$)'; then
+if sed -n "${core_start},${core_end}p" "$SERVICE" | grep -E '^[[:space:]]*asb_apply_profile_once([[:space:]]|$)' >/dev/null; then
   fail 'deferred core worker still uses broad profile fan-out'
 fi
 need "$SERVICE" 'asb_feature_enabled CPU && asb_cpu_cluster_init'
@@ -7413,9 +7413,9 @@ fit() { printf 'wakelock_action=0\nwakelock_fitness=%s\n' "$1" > "$T/mod/config/
 printf 'wakelock_action=0\nwakelock_fitness=limit\n' > "$T/mod/config/governor.conf"
 : > "$T/ops"
 o="$(st)"
-printf '%s\n' "$o" | grep -qx 'installed=2' || f "installed count: $o"
-printf '%s\n' "$o" | grep -qx 'preset=0' || f "preset count before limiting: $o"
-printf '%s\n' "$o" | grep -qx 'names=com.sec.android.app.shealth,com.renpho.health' || f "names: $o"
+printf '%s\n' "$o" | grep -x 'installed=2' >/dev/null || f "installed count: $o"
+printf '%s\n' "$o" | grep -x 'preset=0' >/dev/null || f "preset count before limiting: $o"
+printf '%s\n' "$o" | grep -x 'names=com.sec.android.app.shealth,com.renpho.health' >/dev/null || f "names: $o"
 grep -q 'appops set' "$T/am.log" 2>/dev/null && f "fitness-status changed an app-op"
 # A uid mode "allow" sits above the package line (the suspected owner's case).
 printf 'uid com.sec.android.app.shealth WAKE_LOCK allow\n' > "$T/ops"; : > "$T/am.log"
@@ -7425,8 +7425,8 @@ grep -q 'appops set --uid com.sec.android.app.shealth WAKE_LOCK ignore' "$T/am.l
 grep -qx 'com.sec.android.app.shealth|allow' "$T/d/wakelock_fitness_uidmode" || f "uid mode not recorded for hand-back"
 grep -qx 'com.renpho.health|default' "$T/d/wakelock_fitness_limited" || f "Renpho not limited"
 o="$(st)"
-printf '%s\n' "$o" | grep -qx 'preset=0' || f "recorded apps counted as preset: $o"
-printf '%s\n' "$o" | grep -qx 'limited=2' || f "ledger count: $o"
+printf '%s\n' "$o" | grep -x 'preset=0' >/dev/null || f "recorded apps counted as preset: $o"
+printf '%s\n' "$o" | grep -x 'limited=2' >/dev/null || f "ledger count: $o"
 : > "$T/am.log"; st >/dev/null
 grep -q 'appops get com.sec.android.app.shealth' "$T/am.log" && f "fitness-status asked appops about a recorded app"
 : > "$T/am.log"; fit limit
@@ -7443,12 +7443,12 @@ printf 'com.sec.android.app.shealth WAKE_LOCK ignore\ncom.renpho.health WAKE_LOC
 fit limit
 [ -s "$T/d/wakelock_fitness_limited" ] && f "recorded apps someone else had ignored"
 grep -q 'appops set' "$T/am.log" && f "re-set an externally ignored app"
-printf '%s\n' "$(st)" | grep -qx 'preset=2' || f "an op in force with no record not counted: $(st)"
+printf '%s\n' "$(st)" | grep -x 'preset=2' >/dev/null || f "an op in force with no record not counted: $(st)"
 # A ROM that will not store the op: rolled back, said, counted as refused.
 printf '#!/bin/sh\necho "appops $*" >> "$AM_LOG"\n[ "$1" = get ] && echo "No operations."\n:\n' > "$T/bin/appops"; chmod +x "$T/bin/appops"
 rm -f "$T/d/wakelock_fitness_limited"; : > "$T/am.log"
 fit limit
-printf '%s\n' "$(st)" | grep -qx 'refused=2' || f "refused not counted: $(st)"
+printf '%s\n' "$(st)" | grep -x 'refused=2' >/dev/null || f "refused not counted: $(st)"
 grep -q 'appops set com.sec.android.app.shealth WAKE_LOCK default' "$T/am.log" || f "a refused op was not rolled back"
 printf 'wakelock_action=0\nwakelock_fitness=protect\n' > "$T/mod/config/governor.conf"
 env_run sh "$SRC" >/dev/null 2>&1
@@ -7577,7 +7577,7 @@ A="$T/d/wakelock_apps"
 grep -qx 'batterystats --charged' "$T/ds.log" || f "fix288: the pass did not ask for the since-charge statistics only"
 [ -s "$A" ] || f "no wakelock_apps written while report-only"
 [ ! -s "$T/am.log" ] || f "acted while wakelock_action=0"
-head -1 "$A" | grep -q '^com.example.sync|3720|0|report$' || f "top row wrong: $(head -1 "$A")"
+head -1 "$A" | grep '^com.example.sync|3720|0|report$' >/dev/null || f "top row wrong: $(head -1 "$A")"
 grep -q '^com.sec.android.app.shealth|244|0|protected$' "$A" || f "pedometer not ranked as protected"
 grep -q '^com.duolingo|190|0|report$' "$A" || f "job wakelock not charged to its app"
 grep -q '^com.example.player|0|1|in_use$' "$A" || f "WorkSource LONG holder not attributed or not exempt"
@@ -8274,22 +8274,22 @@ grep -q '_act_ref_rows=' "$T/run.sh" || fail 'real summary block not extracted'
 run() { sh "$T/run.sh"; }
 : > "$T/ledger"
 out="$(run)"
-printf '%s\n' "$out" | grep -q 'All configured tweaks verified applied' || fail "empty ledger not clean: $out"
+printf '%s\n' "$out" | grep 'All configured tweaks verified applied' >/dev/null || fail "empty ledger not clean: $out"
 cat > "$T/ledger" <<'L'
 1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable
 1790000001|settings|other_android_key|0|1|fixture|readback_mismatch
 L
 out="$(run)"
-printf '%s\n' "$out" | grep -q 'Applied except 2 Android setting(s): settings/network_recommendations_enabled, settings/other_android_key' || fail "outstanding refusals not reported: $out"
-printf '%s\n' "$out" | grep -q 'All configured tweaks verified applied' && fail 'refusal also printed the all-OK verdict'
+printf '%s\n' "$out" | grep 'Applied except 2 Android setting(s): settings/network_recommendations_enabled, settings/other_android_key' >/dev/null || fail "outstanding refusals not reported: $out"
+printf '%s\n' "$out" | grep 'All configured tweaks verified applied' >/dev/null && fail 'refusal also printed the all-OK verdict'
 cat > "$T/ledger" <<'L'
 1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable
 1790000010|settings|network_recommendations_enabled|0|1|fixture|applied
 1790000011|reconcile|network_recommendations_enabled|0|1|fixture|not_writable
 L
 out="$(run)"
-printf '%s\n' "$out" | grep -q 'All configured tweaks verified applied' || fail "recovered key or reconcile row poisoned summary: $out"
-printf '%s\n' "$out" | grep -q 'Applied except' && fail "recovered key still listed: $out"
+printf '%s\n' "$out" | grep 'All configured tweaks verified applied' >/dev/null || fail "recovered key or reconcile row poisoned summary: $out"
+printf '%s\n' "$out" | grep 'Applied except' >/dev/null && fail "recovered key still listed: $out"
 # Russian uses the same real block and must not silently fall back to the English claim.
 {
   echo '_bad=""; _f() { _fmt="$1"; shift; printf "$_fmt\\n" "$@"; }'
@@ -8299,7 +8299,7 @@ printf '%s\n' "$out" | grep -q 'Applied except' && fail "recovered key still lis
 } | sed "s#/data/adb/asb/apply_ledger#$T/ledger#g" > "$T/run-ru.sh"
 printf '1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable\n' > "$T/ledger"
 out="$(sh "$T/run-ru.sh")"
-printf '%s\n' "$out" | grep -q 'Применено всё, кроме настроек Android: 1' || fail "Russian refusal missing: $out"
+printf '%s\n' "$out" | grep 'Применено всё, кроме настроек Android: 1' >/dev/null || fail "Russian refusal missing: $out"
 for f in "$ROOT"/runtime/i18n/action_*.sh; do
   [ "$(grep -c '^T_ALL_REFUSED=' "$f")" = 1 ] || fail "T_ALL_REFUSED missing/duplicated in ${f##*/}"
   [ "$(sed -n 's/^T_ALL_REFUSED=//p' "$f" | grep -o '%s' | wc -l)" -eq 2 ] || fail "T_ALL_REFUSED placeholders in ${f##*/}"
@@ -8334,16 +8334,16 @@ for l in en ru; do
     out="$(sh "$T/run.sh" 2>&1)" || fail "$l/$prof: $out"
     case "$l/$prof" in
       en/stock)
-        printf '%s\n' "$out" | grep -q 'Profile: stock — the ASB governor is stopped' || fail "no Stock line: $out"
-        printf '%s\n' "$out" | grep -q 'Battery tilt\|Battery lean\|Throttling temperature\|sensor polling slowed' && fail "governor settings shown on Stock: $out" ;;
+        printf '%s\n' "$out" | grep 'Profile: stock — the ASB governor is stopped' >/dev/null || fail "no Stock line: $out"
+        printf '%s\n' "$out" | grep 'Battery tilt\|Battery lean\|Throttling temperature\|sensor polling slowed' >/dev/null && fail "governor settings shown on Stock: $out" ;;
       en/balanced)
-        printf '%s\n' "$out" | grep -q 'Profile: balanced (manual — Smart off)' || fail "manual line lost: $out"
-        printf '%s\n' "$out" | grep -q 'Battery tilt: 60%' || fail "tilt lost off Stock: $out"
-        printf '%s\n' "$out" | grep -q 'Throttling temperature: 64' || fail "throttling temperature lost off Stock: $out"
-        printf '%s\n' "$out" | grep -q 'sensor polling slowed' || fail "night quiet lost off Stock: $out" ;;
+        printf '%s\n' "$out" | grep 'Profile: balanced (manual — Smart off)' >/dev/null || fail "manual line lost: $out"
+        printf '%s\n' "$out" | grep 'Battery tilt: 60%' >/dev/null || fail "tilt lost off Stock: $out"
+        printf '%s\n' "$out" | grep 'Throttling temperature: 64' >/dev/null || fail "throttling temperature lost off Stock: $out"
+        printf '%s\n' "$out" | grep 'sensor polling slowed' >/dev/null || fail "night quiet lost off Stock: $out" ;;
       ru/stock)
-        printf '%s\n' "$out" | grep -q 'регулятор ASB остановлен' || fail "no Russian Stock line: $out"
-        printf '%s\n' "$out" | grep -q 'Уклон\|Температура троттлинга\|датчики опрашиваются' && fail "Russian Stock shows governor settings: $out" ;;
+        printf '%s\n' "$out" | grep 'регулятор ASB остановлен' >/dev/null || fail "no Russian Stock line: $out"
+        printf '%s\n' "$out" | grep 'Уклон\|Температура троттлинга\|датчики опрашиваются' >/dev/null && fail "Russian Stock shows governor settings: $out" ;;
     esac
   done
 done
@@ -8383,27 +8383,27 @@ run() {
 grep -q '^  _gx=""$' "$A" || fail "governor also block not found"
 printf 'unlock_lift_pct=80\nunlock_lift_s=3\nperf_ceiling_pct=90\nsustained_temp_mode=stock\nheavy_prime_escape=1\nprime_escape_burst_s=10\nprime_escape_rest_s=60\ndsp_clarity=12\ndsp_rumble=50\ndsp_headroom=30\n' > "$T/mod/config/governor.conf"
 out="$(run en battery on)"
-printf '%s\n' "$out" | grep -qF 'also: lift 64% of each cluster  ·  performance ceiling 90%  ·  throttling point: ROM  ·  prime lift 10 s, pause 60 s' || fail "Battery governor line: $out"
-printf '%s\n' "$out" | grep -qF 'DSP filters: clarity +4.0 dB above 6.5 kHz  ·  sub-bass cut below 50 Hz  ·  output headroom -0.30 dB' || fail "DSP filter line: $out"
+printf '%s\n' "$out" | grep -F 'also: lift 64% of each cluster  ·  performance ceiling 90%  ·  throttling point: ROM  ·  prime lift 10 s, pause 60 s' >/dev/null || fail "Battery governor line: $out"
+printf '%s\n' "$out" | grep -F 'DSP filters: clarity +4.0 dB above 6.5 kHz  ·  sub-bass cut below 50 Hz  ·  output headroom -0.30 dB' >/dev/null || fail "DSP filter line: $out"
 out="$(run en smart on)"
-printf '%s\n' "$out" | grep -qF 'also: lift 80% of each cluster' || fail "Smart keeps the full lift share: $out"
+printf '%s\n' "$out" | grep -F 'also: lift 80% of each cluster' >/dev/null || fail "Smart keeps the full lift share: $out"
 out="$(run en performance off)"
-printf '%s\n' "$out" | grep -q 'lift .* of each cluster' && fail "Performance shows a lift share: $out"
-printf '%s\n' "$out" | grep -q 'DSP filters' && fail "DSP filters shown with the DSP off: $out"
+printf '%s\n' "$out" | grep 'lift .* of each cluster' >/dev/null && fail "Performance shows a lift share: $out"
+printf '%s\n' "$out" | grep 'DSP filters' >/dev/null && fail "DSP filters shown with the DSP off: $out"
 printf 'unlock_lift_pct=55\nunlock_lift_s=3\n' > "$T/mod/config/governor.conf"
 out="$(run en battery on)"
-printf '%s\n' "$out" | grep -qF 'also: lift 50% of each cluster' || fail "the Battery share keeps its 50% floor: $out"
-printf '%s\n' "$out" | grep -qF 'DSP filters: output headroom -0.15 dB' || fail "default headroom: $out"
+printf '%s\n' "$out" | grep -F 'also: lift 50% of each cluster' >/dev/null || fail "the Battery share keeps its 50% floor: $out"
+printf '%s\n' "$out" | grep -F 'DSP filters: output headroom -0.15 dB' >/dev/null || fail "default headroom: $out"
 printf 'unlock_lift_s=0\n' > "$T/mod/config/governor.conf"
 out="$(run en battery off)"
 [ -z "$out" ] || fail "nothing to add must print nothing: $out"
 out="$(ST_WALT=rom run en smart off)"
-printf '%s\n' "$out" | grep -qF 'scheduler window: ROM, per refresh rate' || fail "the ROM-owned scheduler window is not named: $out"
+printf '%s\n' "$out" | grep -F 'scheduler window: ROM, per refresh rate' >/dev/null || fail "the ROM-owned scheduler window is not named: $out"
 printf 'unlock_lift_pct=80\nunlock_lift_s=3\ndsp_rumble=70\n' > "$T/mod/config/governor.conf"
 out="$(run ru battery on)"
-printf '%s\n' "$out" | grep -q '64%' || fail "Russian Battery share: $out"
-printf '%s\n' "$out" | grep -q '70' || fail "Russian sub-bass cut: $out"
-printf '%s\n' "$out" | grep -q 'lift\|DSP filters\|also:' && fail "English left in the Russian screen: $out"
+printf '%s\n' "$out" | grep '64%' >/dev/null || fail "Russian Battery share: $out"
+printf '%s\n' "$out" | grep '70' >/dev/null || fail "Russian sub-bass cut: $out"
+printf '%s\n' "$out" | grep 'lift\|DSP filters\|also:' >/dev/null && fail "English left in the Russian screen: $out"
 echo "PASS action also lines: governor lift share (Battery 4/5, floor 50), ceiling, ROM throttling and prime-lift timing; DSP clarity, sub-bass cut and headroom; English and Russian"
 )
 
@@ -8502,13 +8502,13 @@ sed -n '/^lk_emit_screenoff_sleep() {/,/^}/p' "$FULL" > "$T/f.sh"
 grep -q 'awake' "$T/f.sh" || fail "function not found"
 run() { ( BS="$1"; lk_dumpsys() { printf '%s\n' "$BS"; }; . "$T/f.sh"; lk_emit_screenoff_sleep ); }
 out="$(run '  Time on battery screen off: 7h 36m 0s 0ms realtime, 4h 31m 0s 0ms uptime')"
-printf '%s\n' "$out" | grep -q 'screen-off: 7.6h realtime, CPU awake 271m -> awake 59.4% (deep sleep 40.6%)' || fail "a real window: $out"
+printf '%s\n' "$out" | grep 'screen-off: 7.6h realtime, CPU awake 271m -> awake 59.4% (deep sleep 40.6%)' >/dev/null || fail "a real window: $out"
 out="$(run '  Time on battery screen off: 2s 300ms realtime, 2s 500ms uptime')"
-printf '%s\n' "$out" | grep -q 'awake 100' && fail "two seconds read as a phone that never slept: $out"
-printf '%s\n' "$out" | grep -q 'only 2s of screen-off time' || fail "short window not named: $out"
+printf '%s\n' "$out" | grep 'awake 100' >/dev/null && fail "two seconds read as a phone that never slept: $out"
+printf '%s\n' "$out" | grep 'only 2s of screen-off time' >/dev/null || fail "short window not named: $out"
 out="$(run '  Time on battery screen off: 0ms realtime, 0ms uptime')"
-printf '%s\n' "$out" | grep -q 'only' && fail "an empty window read as a short one: $out"
-printf '%s\n' "$out" | grep -q 'night(longest)' || fail "no pointer to the overnight figure: $out"
+printf '%s\n' "$out" | grep 'only' >/dev/null && fail "an empty window read as a short one: $out"
+printf '%s\n' "$out" | grep 'night(longest)' >/dev/null || fail "no pointer to the overnight figure: $out"
 echo "PASS logkit screen-off sleep: Android's screen-off window is read only from ten minutes up"
 )
 
@@ -8540,9 +8540,9 @@ out="$( ( set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$COMMON" >/dev/null 2>&
           lk_wakelock_batterystats_dump; cat "$T/wake_sources.txt" ) )"
 sec="$(printf '%s\n' "$out" | sed -n '/^# --- Wi-Fi multicast by app/,/^$/p')"
 [ -n "$sec" ] || fail "no multicast-by-app section: $out"
-printf '%s\n' "$sec" | grep -qx '1000 (system): WiFi Multicast Wakelock count = 12 time = 41m2s3ms' || fail "system uid: $sec"
-printf '%s\n' "$sec" | grep -qx 'u0a345 (com.instagram.android): WiFi Multicast Wakelock count = 3 time = 11m56s541ms' || fail "app uid: $sec"
-printf '%s\n' "$sec" | grep -q 'Total\|u0a999' && fail "the total or an unrelated uid was listed: $sec"
+printf '%s\n' "$sec" | grep -x '1000 (system): WiFi Multicast Wakelock count = 12 time = 41m2s3ms' >/dev/null || fail "system uid: $sec"
+printf '%s\n' "$sec" | grep -x 'u0a345 (com.instagram.android): WiFi Multicast Wakelock count = 3 time = 11m56s541ms' >/dev/null || fail "app uid: $sec"
+printf '%s\n' "$sec" | grep 'Total\|u0a999' >/dev/null && fail "the total or an unrelated uid was listed: $sec"
 echo "PASS logkit multicast by app: the capture names the Wi-Fi multicast holders per uid"
 )
 
@@ -8563,10 +8563,10 @@ run() { ( set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$COMMON" >/dev/null 2>&
           LK_OUT_DIR="$T"; ASB_LK_EM_ROOT="$1"; lk_energy_model_write; cat "$T/energy_model.txt" ); }
 out="$(run "$T/em")"
 [ "$(printf '%s\n' "$out" | sed -n 2p)" = 'cpu0|960000|240|960' ] || fail "first row (steps in kHz order): $out"
-printf '%s\n' "$out" | grep -qx 'cpu0|1401600|350|1401' || fail "second step: $out"
-printf '%s\n' "$out" | grep -qx 'cpu6|537600|134|537' || fail "second domain: $out"
+printf '%s\n' "$out" | grep -x 'cpu0|1401600|350|1401' >/dev/null || fail "second step: $out"
+printf '%s\n' "$out" | grep -x 'cpu6|537600|134|537' >/dev/null || fail "second domain: $out"
 out="$(run "$T/none")"
-printf '%s\n' "$out" | grep -qx 'unavailable' || fail "missing debugfs not said: $out"
+printf '%s\n' "$out" | grep -x 'unavailable' >/dev/null || fail "missing debugfs not said: $out"
 grep -q '^  lk_energy_model_write$' "$COMMON" || fail "the capture start does not write the energy model"
 echo "PASS logkit energy model: the per-step CPU power table is in the capture where the kernel exposes it"
 )
@@ -8592,14 +8592,14 @@ cat > "$T/audio_wakelock_attribution.tsv" <<'D'
 1792445950|t|10088|com.a,com.b|PARTIAL_WAKE_LOCK 'AudioMix'
 D
 out="$( LK_OUT_DIR="$T"; . "$T/f.sh"; lk_emit_audiomix_summary )"
-printf '%s\n' "$out" | grep -q 'worksource_uid' && fail "the header was counted: $out"
-printf '%s\n' "$out" | grep -qx 'samples=2  uid|package=10596|com.google.android.youtube' || fail "app row: $out"
-printf '%s\n' "$out" | grep -qx 'samples=1  uid|package=1000|system' || fail "system uid: $out"
-printf '%s\n' "$out" | grep -qx 'samples=1  uid|package=10088|com.a (shared uid)' || fail "shared app uid: $out"
-printf '%s\n' "$out" | grep -q 'DeviceAsWebcam' && fail "the shared-uid package list was printed: $out"
+printf '%s\n' "$out" | grep 'worksource_uid' >/dev/null && fail "the header was counted: $out"
+printf '%s\n' "$out" | grep -x 'samples=2  uid|package=10596|com.google.android.youtube' >/dev/null || fail "app row: $out"
+printf '%s\n' "$out" | grep -x 'samples=1  uid|package=1000|system' >/dev/null || fail "system uid: $out"
+printf '%s\n' "$out" | grep -x 'samples=1  uid|package=10088|com.a (shared uid)' >/dev/null || fail "shared app uid: $out"
+printf '%s\n' "$out" | grep 'DeviceAsWebcam' >/dev/null && fail "the shared-uid package list was printed: $out"
 head -2 "$T/audio_wakelock_attribution.tsv" > "$T/h"; mv "$T/h" "$T/audio_wakelock_attribution.tsv"
 out="$( LK_OUT_DIR="$T"; . "$T/f.sh"; lk_emit_audiomix_summary )"
-printf '%s\n' "$out" | grep -q 'no AudioMix partial wakelock observed' || fail "headers alone read as samples: $out"
+printf '%s\n' "$out" | grep 'no AudioMix partial wakelock observed' >/dev/null || fail "headers alone read as samples: $out"
 echo "PASS logkit audiomix summary: data rows only, a shared system uid named once"
 )
 
@@ -8657,7 +8657,7 @@ ls "$T"/shell_cpu_caps.tmp.* >/dev/null 2>&1 && fail "temp file left behind"
 # screen off with the governor running: the screen-on rung stays (nothing would restore it)
 SCREEN=0 GOV=1 run
 [ "$(cat "$T/cpufreq/policy6/scaling_max_freq")" = 1747200 ] || fail "screen-off rung written with the governor up: $(cat "$T/cpufreq/policy6/scaling_max_freq")"
-tail -1 "$T/log" | grep -q 'governor is running and nothing would restore the screen-on rung' || fail "rung note not logged: $(tail -1 "$T/log")"
+tail -1 "$T/log" | grep 'governor is running and nothing would restore the screen-on rung' >/dev/null || fail "rung note not logged: $(tail -1 "$T/log")"
 # screen off without the governor: reconcile follows the screen, so the rung applies
 SCREEN=0 GOV=0 run
 [ "$(cat "$T/cpufreq/policy6/scaling_max_freq")" = 1152000 ] || fail "screen-off rung (25 %) not applied without the governor: $(cat "$T/cpufreq/policy6/scaling_max_freq")"
@@ -8685,8 +8685,8 @@ echo 2400000 > "$T/cpufreq/policy0/scaling_max_freq"
 [ -f "$T/shell_cpu_caps" ] && fail "Smart wrote a manual record"
 [ "$(cat "$T/cpufreq/policy0/scaling_max_freq")" = 2400000 ] || fail "the precompute wrote a ceiling under Smart"
 # the per-device tables (multi-device): OP13 battery 58/48, OP12 4 clusters with a MID rung
-( . "$T/stubs.sh"; . "$T/f.sh"; asb_manual_cap_pct battery 1 op13; echo "$_P_CPUCAP_L/$_P_CPUCAP_B" ) | grep -qx '58/48' || fail "OP13 battery table"
-( . "$T/stubs.sh"; . "$T/f.sh"; asb_manual_cap_pct balanced 1 op15; echo "[$_P_CPUCAP_L/$_P_CPUCAP_B]" ) | grep -qx '\[/\]' || fail "OP15 balanced screen-on must stay uncapped"
+( . "$T/stubs.sh"; . "$T/f.sh"; asb_manual_cap_pct battery 1 op13; echo "$_P_CPUCAP_L/$_P_CPUCAP_B" ) | grep -x '58/48' >/dev/null || fail "OP13 battery table"
+( . "$T/stubs.sh"; . "$T/f.sh"; asb_manual_cap_pct balanced 1 op15; echo "[$_P_CPUCAP_L/$_P_CPUCAP_B]" ) | grep -x '\[/\]' >/dev/null || fail "OP15 balanced screen-on must stay uncapped"
 ( . "$T/stubs.sh"; . "$T/f.sh"; asb_manual_cap_pct smart 1 op15 ) && fail "smart is not a shell-capped profile"
 rm -rf "$T/cpufreq"
 mk 0 "0 1" 2265600 "300000 1132800 1363200 2265600"
@@ -8755,12 +8755,12 @@ OWN=vendor SRC=vendor_clamp run lk_throttle_row active
 grep -q 'prime_by=vendor|writer=shell' "$T/throttle_trace.txt" || fail "a clamp under the shell cap: $(cat "$T/throttle_trace.txt")"
 grep -q 'main_by=-' "$T/throttle_trace.txt" || fail "main at the shell cap is not under it: $(cat "$T/throttle_trace.txt")"
 out="$(run lk_emit_cap_ownership_verdict)"
-printf '%s\n' "$out" | grep -q 'sample(s) were taken in a manual profile' || fail "manual-profile note missing: $out"
+printf '%s\n' "$out" | grep 'sample(s) were taken in a manual profile' >/dev/null || fail "manual-profile note missing: $out"
 # shell rows count as ASB's own, not foreign
 printf '%s\n' "$(cut -d'|' -f1-6 "$T/throttle_trace.txt")|cap_owner=shell|main_by=vendor|prime_by=-|writer=shell" > "$T/x"
 cat "$T/x" "$T/x" "$T/x" > "$T/throttle_trace.txt"
 out="$(run lk_emit_cap_ownership_verdict)"
-printf '%s\n' "$out" | grep -q 'foreign cap ownership dominated' && fail "the shell was counted as a foreign owner: $out"
+printf '%s\n' "$out" | grep 'foreign cap ownership dominated' >/dev/null && fail "the shell was counted as a foreign owner: $out"
 # fix186: in Smart, ASB's own msm_performance registration under its scaling_max_freq is
 # ASB's (headroom reason own_cap, node value == live), not the vendor's.
 cat > "$T/state" <<'D'
@@ -8966,7 +8966,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail() { echo "FAIL smart7 budget/data: $*" >&2; exit 1; }
 S="$ROOT/runtime/asb_smart7.sh"
 sh -n "$S" || fail "syntax"
-sed 1d "$S" | grep -qE '^[[:space:]]*#' && fail "comments in module shell code"
+sed 1d "$S" | grep -E '^[[:space:]]*#' >/dev/null && fail "comments in module shell code"
 mkdir -p "$T/bin" "$T/run" "$T/mod"
 now=$(date +%s)
 ts() { date -d "@$1" '+%Y-%m-%d %H:%M:%S'; }
@@ -9025,18 +9025,18 @@ run() { PATH="$T/bin:$PATH" S7_T="$T" MODDIR="$T/mod" ASB_S7_DIR="$T/s7" ASB_ZYG
 run tick; [ -d "$T/s7" ] && fail "a tick created state without the opt-in or the Battery profile"
 out="$(run refresh)"; [ "$out" = result=started ] || fail "refresh: $out"
 st="$(run status)"
-printf '%s\n' "$st" | grep -qx 'usage=ok' && printf '%s\n' "$st" | grep -qx 'netstats=ok' && printf '%s\n' "$st" | grep -qx 'ledger=1' || fail "status head: $st"
-printf '%s\n' "$st" | grep -qx 'cand|budget|com.game.idle|10301|20|25|0' || fail "budget candidate: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep -x 'usage=ok' >/dev/null && printf '%s\n' "$st" | grep -x 'netstats=ok' >/dev/null && printf '%s\n' "$st" | grep -x 'ledger=1' >/dev/null || fail "status head: $st"
+printf '%s\n' "$st" | grep -x 'cand|budget|com.game.idle|10301|20|25|0' >/dev/null || fail "budget candidate: $(printf '%s\n' "$st" | grep '^cand')"
 printf '%s\n' "$st" | grep -qx 'cand|budget|com.shop.rare|10302|9|8|0' || fail "second budget candidate: $(printf '%s\n' "$st" | grep '^cand')"
-printf '%s\n' "$st" | grep -q '^cand|[a-z]*|com.news.used|' && fail "a used app became a candidate"
-printf '%s\n' "$st" | grep -q '^cand|[a-z]*|org.telegram.messenger|' && fail "a messenger became a candidate"
-printf '%s\n' "$st" | grep -qx 'cand|data|com.feed.data|10305|5|15|1' || fail "data candidate (background mobile only): $(printf '%s\n' "$st" | grep '^cand|data')"
+printf '%s\n' "$st" | grep '^cand|[a-z]*|com.news.used|' >/dev/null && fail "a used app became a candidate"
+printf '%s\n' "$st" | grep '^cand|[a-z]*|org.telegram.messenger|' >/dev/null && fail "a messenger became a candidate"
+printf '%s\n' "$st" | grep -x 'cand|data|com.feed.data|10305|5|15|1' >/dev/null || fail "data candidate (background mobile only): $(printf '%s\n' "$st" | grep '^cand|data')"
 out="$(run apply budget com.game.idle)"; [ "$out" = result=ok ] && grep -qx 'com.game.idle 40' "$T/buckets" || fail "apply budget: $out $(cat "$T/buckets")"
 out="$(run apply data com.feed.data)"; [ "$out" = result=ok ] && grep -qx 10305 "$T/deny" || fail "apply data: $out"
 run status | grep -q '^cand|budget|com.game.idle|' && fail "an applied app is still offered"
 id="$(run status | awk -F'|' '$1 == "j" && $6 == "com.game.idle" { print $2 }')"
 out="$(run undo "$id")"; [ "$out" = "$(printf 'restore=restored\nresult=ok')" ] && grep -qx 'com.game.idle 10' "$T/buckets" || fail "undo budget: $out $(cat "$T/buckets")"
-out="$(run undo-all)"; printf '%s\n' "$out" | grep -qx 'undone=1' && [ ! -s "$T/deny" ] || fail "undo-all: $out $(cat "$T/deny")"
+out="$(run undo-all)"; printf '%s\n' "$out" | grep -x 'undone=1' >/dev/null && [ ! -s "$T/deny" ] || fail "undo-all: $out $(cat "$T/deny")"
 out="$(run apply budget com.game.idle)"; [ "$out" = result=ok ] || fail "re-apply budget: $out"
 sed -i 's/^com.game.idle 40$/com.game.idle 20/' "$T/buckets"
 id="$(run status | awk -F'|' '$1 == "j" && $6 == "com.game.idle" && $9 == "active" { print $2 }')"
@@ -9048,7 +9048,7 @@ sed -i 's/^com.game.idle 20$/com.game.idle 10/' "$T/buckets"
 out="$(run apply budget com.game.idle)"; [ "$out" = result=ok ] || fail "re-apply for undo-all: $out"
 out="$(run apply data com.feed.data)"; [ "$out" = result=ok ] || fail "re-apply data for undo-all: $out"
 sed -i 's/^com.game.idle 40$/com.game.idle 20/' "$T/buckets"
-out="$(run undo-all)"; printf '%s\n' "$out" | grep -qx 'undone=1' && printf '%s\n' "$out" | grep -qx 'external=1' || fail "undo-all does not separate an external change: $out"
+out="$(run undo-all)"; printf '%s\n' "$out" | grep -x 'undone=1' >/dev/null && printf '%s\n' "$out" | grep -x 'external=1' >/dev/null || fail "undo-all does not separate an external change: $out"
 sed -i 's/^com.game.idle 20$/com.game.idle 10/' "$T/buckets"
 grep -q '_s7c="$(awk' "$ROOT/tools/asb_diag.sh" && grep -q 'left as another component had already changed them' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not summarise the Smart background/data journal"
 for bad in 'com.x;id' '' 'x'; do out="$(run apply budget "$bad")"; [ "$out" = result=bad_request ] || fail "unsafe name accepted: $bad"; done
@@ -9062,7 +9062,7 @@ grep -qx 'com.game.idle 40' "$T/buckets" || fail "the Battery profile's soft bud
 grep -qx 'com.shop.rare 10' "$T/buckets" || fail "the soft budget used the full limits: $(cat "$T/buckets")"
 [ -s "$T/deny" ] && fail "background data was restricted without its own opt-in"
 n1="$(grep -c active "$T/s7/journal")"; run tick; [ "$(grep -c active "$T/s7/journal")" = "$n1" ] || fail "a second pass ran within a day"
-run status | grep -q '^j|[0-9]*|[0-9]*|auto|budget|com.game.idle|10301|10|active$' || fail "automatic change not journaled: $(cat "$T/s7/journal")"
+run status | grep '^j|[0-9]*|[0-9]*|auto|budget|com.game.idle|10301|10|active$' >/dev/null || fail "automatic change not journaled: $(cat "$T/s7/journal")"
 H="$ROOT/webroot/index.html"
 if command -v node >/dev/null 2>&1; then
   run status > "$T/st.txt"
@@ -9320,9 +9320,9 @@ scope|com.mod.off|com.app.three|0
 modules=3
 scopes=5" ] || fail "inventory: $out"
 [ "$(cksum < "$D")" = "$sum0" ] || fail "reading the inventory changed LSPosed's database"
-out="$("$T/gov/asb" --lspd modules "$T/none.db" || true)"; printf '%s\n' "$out" | grep -qx 'reason=no_database' || fail "missing db: $out"
+out="$("$T/gov/asb" --lspd modules "$T/none.db" || true)"; printf '%s\n' "$out" | grep -x 'reason=no_database' >/dev/null || fail "missing db: $out"
 python3 -c "import sqlite3; db=sqlite3.connect('$T/other.db'); db.execute('CREATE TABLE settings (k text)'); db.commit()"
-out="$("$T/gov/asb" --lspd modules "$T/other.db" || true)"; printf '%s\n' "$out" | grep -qx 'reason=unexpected_schema' || fail "foreign layout: $out"
+out="$("$T/gov/asb" --lspd modules "$T/other.db" || true)"; printf '%s\n' "$out" | grep -x 'reason=unexpected_schema' >/dev/null || fail "foreign layout: $out"
 # dev49: a user's LSPosed card read "unexpected_schema" with nothing else to go on. Forks that
 # rename the columns (id/pkg_name/enable, a "scopes" table, a scope keyed by package) are now
 # mapped from PRAGMA table_info and read as an adapted layout; a database matching nothing
@@ -9360,15 +9360,15 @@ scope|com.b.mod|com.app.two|10
 modules=2
 scopes=2" ] || fail "renamed columns not mapped: $out"
 out="$("$T/gov/asb" --lspd modules "$T/pkgref.db")"
-printf '%s\n' "$out" | grep -qx 'layout=adapted' && printf '%s\n' "$out" | grep -qx 'module|com.a.mod|1|1' && printf '%s\n' "$out" | grep -qx 'scope|com.a.mod|com.app.one|0' || fail "scope keyed by package not mapped: $out"
+printf '%s\n' "$out" | grep -x 'layout=adapted' >/dev/null && printf '%s\n' "$out" | grep -x 'module|com.a.mod|1|1' >/dev/null && printf '%s\n' "$out" | grep -x 'scope|com.a.mod|com.app.one|0' >/dev/null || fail "scope keyed by package not mapped: $out"
 out="$("$T/gov/asb" --lspd modules "$T/foreign.db" || true)"
-printf '%s\n' "$out" | grep -qx 'reason=unexpected_schema' && printf '%s\n' "$out" | grep -qx 'schema=app_list(name);settings(k,v)' || fail "a foreign layout does not name its tables: $out"
+printf '%s\n' "$out" | grep -x 'reason=unexpected_schema' >/dev/null && printf '%s\n' "$out" | grep -x 'schema=app_list(name);settings(k,v)' >/dev/null || fail "a foreign layout does not name its tables: $out"
 out="$("$T/gov/asb" --lspd modules "$T/empty.db" || true)"
-printf '%s\n' "$out" | grep -qx 'schema=no_tables' || fail "an empty database is not named: $out"
+printf '%s\n' "$out" | grep -x 'schema=no_tables' >/dev/null || fail "an empty database is not named: $out"
 out="$("$T/gov/asb" --lspd verbose-get "$T/alt.db" || true)"
-printf '%s\n' "$out" | grep -qx 'reason=no_verbose_switch' && printf '%s\n' "$out" | grep -q '^schema=modules(id,pkg_name,enable);scopes(' || fail "a database without configs reported something else: $out"
+printf '%s\n' "$out" | grep -x 'reason=no_verbose_switch' >/dev/null && printf '%s\n' "$out" | grep '^schema=modules(id,pkg_name,enable);scopes(' >/dev/null || fail "a database without configs reported something else: $out"
 out="$("$T/gov/asb" --lspd verbose-set off "$T/alt.db" || true)"
-printf '%s\n' "$out" | grep -qx 'reason=unexpected_schema' || fail "a write was attempted on an adapted layout: $out"
+printf '%s\n' "$out" | grep -x 'reason=unexpected_schema' >/dev/null || fail "a write was attempted on an adapted layout: $out"
 for _db in alt pkgref foreign; do cmp -s "$T/$_db.db" "$T/$_db.orig" || fail "reading the $_db layout changed it"; done
 grep -q 'db_schema=' "$ROOT/runtime/asb_lsposed_lite.sh" && grep -q '_emit lsposed_hooks db_layout' "$ROOT/runtime/asb_lsposed_info.sh" || fail "the schema evidence does not reach the card or the Device page"
 grep -q 'no known layout' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show the schema evidence"
@@ -9379,7 +9379,7 @@ db = sqlite3.connect(sys.argv[1], isolation_level=None); db.execute('BEGIN EXCLU
 open(sys.argv[2], 'w').close(); time.sleep(6)" "$T/locked.db" "$T/locked.ready" &
 _lk=$!; for _i in 1 2 3 4 5 6 7 8 9 10; do [ -f "$T/locked.ready" ] && break; sleep 0.2; done
 out="$("$T/gov/asb" --lspd modules "$T/locked.db" || true)"; wait "$_lk" || :
-printf '%s\n' "$out" | grep -qx 'reason=read_failed' || fail "a locked database read as a foreign layout or an empty inventory: $out"
+printf '%s\n' "$out" | grep -x 'reason=read_failed' >/dev/null || fail "a locked database read as a foreign layout or an empty inventory: $out"
 # V66 dev13: Vector (the maintained LSPosed fork) runs the database in WAL mode. Once its daemon
 # has closed the file there is no -shm index, and a read-only connection that may not create one
 # fails (SQLITE_READONLY / CANTOPEN) - two Android 17 users read that as "unexpected_schema". The
@@ -9403,10 +9403,10 @@ db.commit(); db.close()
 P
   chmod 555 "$T/wal/config"
   out="$("$T/gov/asb" --lspd modules "$T/wal/config/modules_config.db" || true)"
-  printf '%s\n' "$out" | grep -qx 'module|com.mod.alpha|1|1' || { chmod 755 "$T/wal/config"; fail "a WAL database that cannot be read in place was not read from a copy: $out"; }
-  printf '%s\n' "$out" | grep -qx 'read_from=copy' && printf '%s\n' "$out" | grep -q '^sqlite_rc=' || { chmod 755 "$T/wal/config"; fail "the copy and its cause are not named: $out"; }
+  printf '%s\n' "$out" | grep -x 'module|com.mod.alpha|1|1' >/dev/null || { chmod 755 "$T/wal/config"; fail "a WAL database that cannot be read in place was not read from a copy: $out"; }
+  printf '%s\n' "$out" | grep -x 'read_from=copy' >/dev/null && printf '%s\n' "$out" | grep '^sqlite_rc=' >/dev/null || { chmod 755 "$T/wal/config"; fail "the copy and its cause are not named: $out"; }
   out="$("$T/gov/asb" --lspd verbose-get "$T/wal/config/modules_config.db" || true)"
-  printf '%s\n' "$out" | grep -qx 'verbose=default_on' || { chmod 755 "$T/wal/config"; fail "verbose switch not read from the copy: $out"; }
+  printf '%s\n' "$out" | grep -x 'verbose=default_on' >/dev/null || { chmod 755 "$T/wal/config"; fail "verbose switch not read from the copy: $out"; }
   [ "$(ls "$T/wal/config")" = modules_config.db ] || { chmod 755 "$T/wal/config"; fail "LSPosed's directory was written: $(ls "$T/wal/config")"; }
   [ -z "$(ls -A "$T/lsptmp")" ] || { chmod 755 "$T/wal/config"; fail "the private copy was left behind: $(ls -A "$T/lsptmp")"; }
   chmod 755 "$T/wal/config"
@@ -9463,9 +9463,9 @@ CSRC
 "$CC" -std=gnu11 -Wall -Werror -o "$T/gov/asb_probe" "$T/probe.c" -ldl || fail "probe helper does not compile"
 sum0="$(cksum < "$D")"
 out="$("$T/gov/asb_probe" --lspd modules "$D" || true)"
-printf '%s\n' "$out" | grep -qx 'module|com.mod.alpha|1|4' && printf '%s\n' "$out" | grep -qx 'read_from=copy' && printf '%s\n' "$out" | grep -qx 'sqlite_rc=14' || fail "real module SQL did not retry from the copy: $out"
+printf '%s\n' "$out" | grep -x 'module|com.mod.alpha|1|4' >/dev/null && printf '%s\n' "$out" | grep -x 'read_from=copy' >/dev/null && printf '%s\n' "$out" | grep -x 'sqlite_rc=14' >/dev/null || fail "real module SQL did not retry from the copy: $out"
 out="$("$T/gov/asb_probe" --lspd verbose-get "$D" || true)"
-printf '%s\n' "$out" | grep -qx 'verbose=default_on' && printf '%s\n' "$out" | grep -qx 'read_from=copy' && printf '%s\n' "$out" | grep -qx 'sqlite_rc=14' || fail "real verbose SQL did not retry from the copy: $out"
+printf '%s\n' "$out" | grep -x 'verbose=default_on' >/dev/null && printf '%s\n' "$out" | grep -x 'read_from=copy' >/dev/null && printf '%s\n' "$out" | grep -x 'sqlite_rc=14' >/dev/null || fail "real verbose SQL did not retry from the copy: $out"
 [ "$(cksum < "$D")" = "$sum0" ] || fail "the query-fallback fixture changed the original database"
 [ -z "$(ls -A "$T/lsptmp")" ] || fail "query-fallback copies were left behind"
 cat > "$T/fb/pm" <<'S'
@@ -9522,7 +9522,7 @@ S
 ls -lR "$T/lspd" > "$T/before"
 run() { PATH="$T/fb:$PATH" ASB_LSPD_DIR="$T/lspd" ASB_GOV_BIN="$T/gov/asb" ASB_ZYGISK_RUN_DIR="$T/run" sh "$T/h.sh" "$C"; }
 out="$(run)"
-want() { printf '%s\n' "$out" | grep -Fqx "lsposed_hooks	$1	$2" || fail "missing $1=$2 in: $out"; }
+want() { printf '%s\n' "$out" | grep -Fx "lsposed_hooks	$1	$2" >/dev/null || fail "missing $1=$2 in: $out"; }
 want present 1; want database ok; want modules_enabled 2; want hooked_apps 2
 want modules 'com.mod.alpha 3 targets, com.mod.beta 1 targets'
 want system_scope 'com.mod.alpha: system'
@@ -9534,8 +9534,8 @@ want cpu_hooked_top 'com.app.two 86401 s, com.app.one 120 s'
 want churn_hooked_top 'com.app.one 9/1 burst 7/5min, com.app.two 2/0'
 want findings 4
 want findings_detail 'log_spam:com.app.two errors:com.mod.alpha crash:com.app.one loop:com.app.one'
-printf '%s\n' "$out" | grep -q 'com.mod.off\|com.app.three\|bad;mod\|bad app\|com.unhooked' && fail "disabled, malformed or unhooked data leaked: $out"
-printf '%s\n' "$out" | grep -q 'per-hook call counts' || fail "the basis does not say what LSPosed cannot expose"
+printf '%s\n' "$out" | grep 'com.mod.off\|com.app.three\|bad;mod\|bad app\|com.unhooked' >/dev/null && fail "disabled, malformed or unhooked data leaked: $out"
+printf '%s\n' "$out" | grep 'per-hook call counts' >/dev/null || fail "the basis does not say what LSPosed cannot expose"
 mkdir -p "$T/tomb"
 for i in 0 1 2; do
   _p=com.app.one; [ "$i" = 2 ] && _p=com.app.two
@@ -9544,10 +9544,10 @@ done
 printf 'Cmdline: com.app.one\nbacktrace:\n      #00 pc 01  /system/lib64/libfoo.so (bar+1)\n      #01 pc 02  /data/app/~~A==/com.app.one-B==/base.apk (com.mod.alpha.Hooks.after+4)\n\n' > "$T/tomb/tombstone_03"
 printf 'Cmdline: com.app.two\nbacktrace:\n      #00 pc 01  /data/app/~~A==/com.app.two-B==/base.apk!libown.so (own+1)\n\n' > "$T/tomb/tombstone_04"
 out2="$(PATH="$T/fb:$PATH" ASB_LSPD_DIR="$T/lspd" ASB_GOV_BIN="$T/gov/asb" ASB_ZYGISK_RUN_DIR="$T/run" ASB_TOMBSTONE_DIR="$T/tomb" sh "$T/h.sh" "$C")"
-printf '%s\n' "$out2" | grep -q '^lsposed_hooks	tombstone_hooked	com.mod.native x3 (.*com.app.one 2.*); com.mod.alpha x1 (com.app.one 1)$' || fail "native crashes per module: $(printf '%s\n' "$out2" | grep tombstone)"
+printf '%s\n' "$out2" | grep '^lsposed_hooks	tombstone_hooked	com.mod.native x3 (.*com.app.one 2.*); com.mod.alpha x1 (com.app.one 1)$' >/dev/null || fail "native crashes per module: $(printf '%s\n' "$out2" | grep tombstone)"
 printf '%s\n' "$out2" | grep -q '^lsposed_hooks	findings_detail	.* native:com.mod.native' || fail "repeated native crashes of a module are not a finding: $(printf '%s\n' "$out2" | grep findings)"
-printf '%s\n' "$out2" | grep -q 'native:com.mod.alpha' && fail "a single crash became a finding"
-printf '%s\n' "$out2" | grep -q 'com.app.two x' && fail "an app crashing in its own library was attributed to a module"
+printf '%s\n' "$out2" | grep 'native:com.mod.alpha' >/dev/null && fail "a single crash became a finding"
+printf '%s\n' "$out2" | grep 'com.app.two x' >/dev/null && fail "an app crashing in its own library was attributed to a module"
 ls -lR "$T/lspd" > "$T/after"; cmp -s "$T/before" "$T/after" || fail "the collector changed LSPosed's directory"
 out="$(PATH="$T/fb:$PATH" ASB_LSPD_DIR="$T/nolspd" ASB_GOV_BIN="$T/gov/asb" sh "$T/h.sh" "$C")"
 want present 0
@@ -9631,10 +9631,10 @@ printf '[ 2026-10-20T17:31:01.125     1000:   999:   999 I/LSPosed-Bridge  ] Oth
 printf 'old\n' > "$T/log/modules_2026-10-20T16_00_00.log"; touch -d '2026-10-20 16:00' "$T/log/modules_2026-10-20T16_00_00.log"
 printf 'com.android.systemui 10179 0 /data/user/0/com.android.systemui platform 3003\n' > "$T/pk"
 out="$( NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_LSPD_LOG="$T/log" ASB_PKG_LIST="$T/pk" _asb_lsp_modlog )"
-printf '%s\n' "$out" | grep -q 'in 2 file(s) this boot' || fail "size/count line: $out"
-printf '%s\n' "$out" | grep -q 'not the verbose log' || fail "not told apart from the verbose log: $out"
-printf '%s\n' "$out" | sed -n 2p | grep -q '96% of the newest file (30 lines): com.android.systemui | LuckyTool: hook statusbar clock #$' || fail "top writer not named: $out"
-printf '%s\n' "$out" | grep -q 'system | OtherMod: hooked' || fail "uid 1000 not named system: $out"
+printf '%s\n' "$out" | grep 'in 2 file(s) this boot' >/dev/null || fail "size/count line: $out"
+printf '%s\n' "$out" | grep 'not the verbose log' >/dev/null || fail "not told apart from the verbose log: $out"
+printf '%s\n' "$out" | sed -n 2p | grep '96% of the newest file (30 lines): com.android.systemui | LuckyTool: hook statusbar clock #$' >/dev/null || fail "top writer not named: $out"
+printf '%s\n' "$out" | grep 'system | OtherMod: hooked' >/dev/null || fail "uid 1000 not named system: $out"
 out="$( NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_LSPD_LOG="$T/none" _asb_lsp_modlog )"
 [ -z "$out" ] || fail "printed something without a modules log: $out"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
@@ -10168,43 +10168,43 @@ chmod +x "$T/bin/"*
 : > "$T/ops"; : > "$T/am.log"
 run() { OPS="$T/ops" AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" "$@"; }
 out="$(run sh "$SRC" manual-status)"
-printf '%s\n' "$out" | grep -qx 'scan=ok' || f "scan failed: $out"
-printf '%s\n' "$out" | grep -qx 'row|com.example.sync|3720|0|0|default|0|3720' || f "candidate/rank state wrong: $out"
+printf '%s\n' "$out" | grep -x 'scan=ok' >/dev/null || f "scan failed: $out"
+printf '%s\n' "$out" | grep -x 'row|com.example.sync|3720|0|0|default|0|3720' >/dev/null || f "candidate/rank state wrong: $out"
 # fix287: every other user app is offered for an explicit choice, without an AppOps read each.
-printf '%s\n' "$out" | grep -qx 'app|com.example.notes' && printf '%s\n' "$out" | grep -qx 'app|org.thoughtcrime.securesms' \
+printf '%s\n' "$out" | grep -x 'app|com.example.notes' >/dev/null && printf '%s\n' "$out" | grep -x 'app|org.thoughtcrime.securesms' >/dev/null \
   || f "other user apps not offered: $out"
-printf '%s\n' "$out" | grep -qx 'app|com.example.sync' && f 'a ranked app was listed twice'
+printf '%s\n' "$out" | grep -x 'app|com.example.sync' >/dev/null && f 'a ranked app was listed twice'
 [ "$(grep -c 'appops get' "$T/am.log")" -le 2 ] || f "AppOps read for every listed app: $(grep -c 'appops get' "$T/am.log")"
 # fix287: a 7-day history survives Android's counter reset (a charge, a restart) and a night on
 # the charger, where batterystats counts nothing; older entries fall out of the window.
 printf '  Wake lock u0a700 SyncLoop: 10m 0s 1ms (4 times) realtime\n' > "$T/bs"
 out="$(BS_FILE="$T/bs" run sh "$SRC" manual-status)"
-printf '%s\n' "$out" | grep -qx 'row|com.example.sync|600|0|0|default|0|4320' || f "reset counter not added to the history: $out"
+printf '%s\n' "$out" | grep -x 'row|com.example.sync|600|0|0|default|0|4320' >/dev/null || f "reset counter not added to the history: $out"
 : > "$T/bs"
 out="$(BS_FILE="$T/bs" run sh "$SRC" manual-status)"
-printf '%s\n' "$out" | grep -qx 'row|com.example.sync|0|0|0|default|0|4320' || f "history lost after a charge: $out"
-printf '%s\n' "$out" | grep -qx 'scan=ok' || f "an empty batterystats window is not a failed scan: $out"
+printf '%s\n' "$out" | grep -x 'row|com.example.sync|0|0|0|default|0|4320' >/dev/null || f "history lost after a charge: $out"
+printf '%s\n' "$out" | grep -x 'scan=ok' >/dev/null || f "an empty batterystats window is not a failed scan: $out"
 awk -F'|' -v OFS='|' '{ $1 = $1 - 8 * 86400; print }' "$T/d/wakelock_hist" > "$T/h.old" && mv "$T/h.old" "$T/d/wakelock_hist"
 out="$(BS_FILE="$T/bs" run sh "$SRC" manual-status)"
-printf '%s\n' "$out" | grep -q '^row|com.example.sync|' && f "an 8-day-old hold still ranked: $out"
-printf '%s\n' "$out" | grep -qx 'app|com.example.sync' || f "an app that fell out of the window is not offered: $out"
+printf '%s\n' "$out" | grep '^row|com.example.sync|' >/dev/null && f "an 8-day-old hold still ranked: $out"
+printf '%s\n' "$out" | grep -x 'app|com.example.sync' >/dev/null || f "an app that fell out of the window is not offered: $out"
 printf '  Wake lock u0a700 SyncLoop: 15m 0s 1ms (4 times) realtime\n' > "$T/bs"
 BS_FILE="$T/bs" run sh "$SRC" >/dev/null 2>&1
 grep -q '|com.example.sync|900$' "$T/d/wakelock_hist" || f "the hourly pass does not add to the history: $(cat "$T/d/wakelock_hist" 2>/dev/null)"
 rm -f "$T/d/wakelock_hist" "$T/d/wakelock_hist_base"; : > "$T/am.log"
-printf '%s\n' "$out" | grep -q '^row|org.thoughtcrime.securesms' && f "29-second row should be below the ranking floor: $out"
+printf '%s\n' "$out" | grep '^row|org.thoughtcrime.securesms' >/dev/null && f "29-second row should be below the ranking floor: $out"
 grep -q 'appops set' "$T/am.log" && f 'read-only status changed AppOps'
 # A protected class remains manually selectable only by explicit command, and is labelled.
 out="$(run sh "$SRC" manual-set org.thoughtcrime.securesms ignore)"
-printf '%s\n' "$out" | grep -qx 'result=limited' || f "explicit protected-class choice refused: $out"
+printf '%s\n' "$out" | grep -x 'result=limited' >/dev/null || f "explicit protected-class choice refused: $out"
 grep -qx 'org.thoughtcrime.securesms|default|default' "$T/d/wakelock_manual" || f 'original defaults not recorded'
 out="$(run sh "$SRC" manual-status)"
-printf '%s\n' "$out" | grep -q 'row|org.thoughtcrime.securesms|0|0|1|ignore|1' || f "selected protected row absent: $out"
+printf '%s\n' "$out" | grep 'row|org.thoughtcrime.securesms|0|0|1|ignore|1' >/dev/null || f "selected protected row absent: $out"
 # Original non-default modes survive a later OPlus-style reset and reapply.
 run sh "$SRC" manual-set org.thoughtcrime.securesms restore >/dev/null
 printf 'com.example.sync WAKE_LOCK allow\nuid com.example.sync WAKE_LOCK allow\n' > "$T/ops"
 out="$(run sh "$SRC" manual-set com.example.sync ignore)"
-printf '%s\n' "$out" | grep -qx 'result=limited' || f "non-default limit failed: $out"
+printf '%s\n' "$out" | grep -x 'result=limited' >/dev/null || f "non-default limit failed: $out"
 grep -qx 'com.example.sync|allow|allow' "$T/d/wakelock_manual" || f 'package/uid originals not recorded'
 printf 'com.example.sync WAKE_LOCK default\nuid com.example.sync WAKE_LOCK default\n' > "$T/ops"
 run sh "$SRC" manual-reapply >/dev/null
@@ -10212,14 +10212,14 @@ grep -q 'com.example.sync WAKE_LOCK ignore' "$T/ops" || f 'package limit not rea
 grep -q 'uid com.example.sync WAKE_LOCK ignore' "$T/ops" || f 'uid limit not reapplied'
 grep -qx 'com.example.sync|allow|allow' "$T/d/wakelock_manual" || f 'reapply overwrote originals'
 out="$(run sh "$SRC" manual-set com.example.sync restore)"
-printf '%s\n' "$out" | grep -qx 'result=restored' || f "restore failed: $out"
+printf '%s\n' "$out" | grep -x 'result=restored' >/dev/null || f "restore failed: $out"
 grep -q '^com.example.sync WAKE_LOCK allow' "$T/ops" || f 'package original not restored'
 grep -q '^uid com.example.sync WAKE_LOCK allow' "$T/ops" || f 'uid original not restored'
 [ ! -s "$T/d/wakelock_manual" ] || f 'restored entry retained'
 # External ignore is not adopted and can never be undone by this ledger.
 printf 'com.example.notes WAKE_LOCK ignore\n' > "$T/ops"
 out="$(run sh "$SRC" manual-set com.example.notes ignore)"
-printf '%s\n' "$out" | grep -qx 'result=external_ignore' || f "external ignore reported as a failure: $out"
+printf '%s\n' "$out" | grep -x 'result=external_ignore' >/dev/null || f "external ignore reported as a failure: $out"
 grep -q '^com.example.notes|' "$T/d/wakelock_manual" 2>/dev/null && f 'external ignore adopted'
 # fix277: an uninstalled package is dropped instead of leaving a Restore that can never succeed,
 # and one reapply pass lists packages once instead of once per entry.
@@ -10233,7 +10233,7 @@ grep -q '^com.example.sync|default|default$' "$T/d/wakelock_manual" || f 'reappl
 grep -q 'com.example.sync WAKE_LOCK ignore' "$T/ops" || f 'installed entry not reapplied'
 printf 'com.example.gone|allow|default\n' >> "$T/d/wakelock_manual"
 out="$(run sh "$SRC" manual-set com.example.gone restore)"
-printf '%s\n' "$out" | grep -qx 'result=uninstalled' || f "uninstalled restore not resolved: $out"
+printf '%s\n' "$out" | grep -x 'result=uninstalled' >/dev/null || f "uninstalled restore not resolved: $out"
 grep -q '^com.example.gone|' "$T/d/wakelock_manual" && f 'uninstalled entry kept by restore'
 : > "$T/d/wakelock_manual"; : > "$T/ops"
 # Malformed/system targets and refused writes never leave a partial restriction.
@@ -10241,7 +10241,7 @@ run sh "$SRC" manual-set 'bad;name' ignore >/dev/null && f 'malformed package ac
 run sh "$SRC" manual-set android ignore >/dev/null && f 'non-user package accepted'
 printf 'com.example.notes WAKE_LOCK allow\n' > "$T/ops"
 out="$(OPS_REFUSE=1; export OPS_REFUSE; run sh "$SRC" manual-set com.example.notes ignore)"
-printf '%s\n' "$out" | grep -qx 'result=not_enforced' || f "refusal not reported: $out"
+printf '%s\n' "$out" | grep -x 'result=not_enforced' >/dev/null || f "refusal not reported: $out"
 grep -q '^com.example.notes|' "$T/d/wakelock_manual" 2>/dev/null && f 'refused write recorded'
 grep -q 'asb_wakelock_watch.sh" manual-reapply' "$ROOT/service.sh" || f 'existing boot pass lacks manual reapply'
 grep -q 'wakelock_manual' "$ROOT/uninstall.sh" || f 'uninstall lacks exact manual restore'
@@ -10292,18 +10292,18 @@ run() { PM_STATE="$T/state" RUNNING="$T/running" PM_LOG="$T/pm.log" PATH="$T/bin
 a='com.example.sync/com.example.sync.SyncService'; b='com.example.sync/com.example.sync.MediaService'
 printf '%s\n%s\n' "$a" "$b" > "$T/running"
 out="$(run sh "$SRC" service-list com.example.sync)"
-printf '%s\n' "$out" | grep -qx 'scan=ok' || f "service scan failed: $out"
-printf '%s\n' "$out" | grep -qx "service|$a|0|default|1" || f "running default service missing: $out"
-printf '%s\n' "$out" | grep -qx "service|$b|0|default|1" || f "second running service missing: $out"
+printf '%s\n' "$out" | grep -x 'scan=ok' >/dev/null || f "service scan failed: $out"
+printf '%s\n' "$out" | grep -x "service|$a|0|default|1" >/dev/null || f "running default service missing: $out"
+printf '%s\n' "$out" | grep -x "service|$b|0|default|1" >/dev/null || f "second running service missing: $out"
 out="$(run sh "$SRC" service-set com.example.sync disable "$a")"
-printf '%s\n' "$out" | grep -qx 'result=disabled' || f "default disable failed: $out"
+printf '%s\n' "$out" | grep -x 'result=disabled' >/dev/null || f "default disable failed: $out"
 grep -qx "com.example.sync|$a|default" "$T/d/wakelock_services" || f 'default original not recorded'
 grep -qx "$a|disabled" "$T/state" || f 'component not disabled'
 : > "$T/running"
 out="$(run sh "$SRC" service-list com.example.sync)"
-printf '%s\n' "$out" | grep -qx "service|$a|1|disabled|0" || f "selected stopped service cannot be restored: $out"
+printf '%s\n' "$out" | grep -x "service|$a|1|disabled|0" >/dev/null || f "selected stopped service cannot be restored: $out"
 out="$(run sh "$SRC" service-set com.example.sync restore "$a")"
-printf '%s\n' "$out" | grep -qx 'result=restored' || f "default restore failed: $out"
+printf '%s\n' "$out" | grep -x 'result=restored' >/dev/null || f "default restore failed: $out"
 grep -qx "$a|default" "$T/state" || f 'default-state not restored'
 [ ! -s "$T/d/wakelock_services" ] || f 'restored service ledger entry retained'
 # Explicit enabled must never be restored to default.
@@ -10316,19 +10316,19 @@ grep -qx "$b|enabled" "$T/state" || f 'enabled original restored as another stat
 c='com.example.sync/com.example.sync.ExternalService'
 printf '%s|disabled\n' "$c" >> "$T/state"
 out="$(run sh "$SRC" service-set com.example.sync disable "$c")"
-printf '%s\n' "$out" | grep -qx 'result=external_disabled' || f "external disabled state adopted: $out"
+printf '%s\n' "$out" | grep -x 'result=external_disabled' >/dev/null || f "external disabled state adopted: $out"
 grep -q "|$c|" "$T/d/wakelock_services" 2>/dev/null && f 'external component recorded'
 printf '%s|default\n' "$c" > "$T/state"; : > "$T/running"
 out="$(run sh "$SRC" service-set com.example.sync disable "$c")"
-printf '%s\n' "$out" | grep -qx 'result=not_running' || f "non-running default component accepted: $out"
+printf '%s\n' "$out" | grep -x 'result=not_running' >/dev/null || f "non-running default component accepted: $out"
 grep -qx "$c|default" "$T/state" || f 'non-running component changed'
 # Refused write and false-success read-back both roll back and never record success.
 printf '%s|default\n' "$a" > "$T/state"; printf '%s\n' "$a" > "$T/running"
 out="$(PM_REFUSE=1; export PM_REFUSE; run sh "$SRC" service-set com.example.sync disable "$a")"
-printf '%s\n' "$out" | grep -qx 'result=not_enforced' || f "refusal not reported: $out"
+printf '%s\n' "$out" | grep -x 'result=not_enforced' >/dev/null || f "refusal not reported: $out"
 grep -q "|$a|" "$T/d/wakelock_services" 2>/dev/null && f 'refused disable recorded'
 out="$(DUMP_HIDE_DISABLED=1; export DUMP_HIDE_DISABLED; run sh "$SRC" service-set com.example.sync disable "$a")"
-printf '%s\n' "$out" | grep -qx 'result=not_enforced' || f "false read-back accepted: $out"
+printf '%s\n' "$out" | grep -x 'result=not_enforced' >/dev/null || f "false read-back accepted: $out"
 grep -qx "$a|default" "$T/state" || f 'unconfirmed component not rolled back'
 grep -q "|$a|" "$T/d/wakelock_services" 2>/dev/null && f 'unconfirmed disable recorded'
 # Malformed/system requests never reach pm; uninstalled selected entries are cleaned up.
@@ -10338,7 +10338,7 @@ run sh "$SRC" service-set android disable android/.SystemService >/dev/null && f
 grep -Eq 'disable.*bad;component|disable.*android' "$T/pm.log" && f 'invalid target reached pm'
 printf 'com.example.gone|com.example.gone/com.example.gone.SyncService|default\n' > "$T/d/wakelock_services"
 out="$(run sh "$SRC" service-set com.example.gone restore com.example.gone/com.example.gone.SyncService)"
-printf '%s\n' "$out" | grep -qx 'result=uninstalled' || f "uninstalled service not resolved: $out"
+printf '%s\n' "$out" | grep -x 'result=uninstalled' >/dev/null || f "uninstalled service not resolved: $out"
 [ ! -s "$T/d/wakelock_services" ] || f 'uninstalled service ledger entry retained'
 # The component path has no process/package freezer and needs no periodic reapply worker.
 sed -n '/individual service control (fix319)/,/if \[ "${1:-}" = manual-status \]/p' "$SRC" | grep -E 'force-stop|pkill|kill|appops|sleep ' && f 'service manager contains package/process control or polling'
@@ -10427,11 +10427,11 @@ chmod +x "$T/bin/"*
 run() { PATH="$T/bin:$PATH" NF_ST="$T/st" MODDIR="$T/mod" ASB_NF_DIR="$T/d" sh "$S" "$@"; }
 mode() { awk -F'|' -v p="$1" -v o="$2" '$1 == p && $2 == o { print $3 "/" $4 }' "$T/st/ops"; }
 out="$(run apps)"
-printf '%s\n' "$out" | grep -qx 'A org.telegram.messenger' && printf '%s\n' "$out" | grep -qx 'A com.whatsapp' || fail "apps: $out"
+printf '%s\n' "$out" | grep -x 'A org.telegram.messenger' >/dev/null && printf '%s\n' "$out" | grep -x 'A com.whatsapp' >/dev/null || fail "apps: $out"
 out="$(run set org.telegram.messenger com.whatsapp 'bad;pkg' com.not.installed)"
-printf '%s\n' "$out" | grep -qx 'result=ok' && printf '%s\n' "$out" | grep -qx 'selected=2' || fail "set: $out"
-printf '%s\n' "$out" | grep -qx 'row|org.telegram.messenger|1|user|allow|default|allow|ignore|40|ok|-' || fail "telegram not fixed: $out"
-printf '%s\n' "$out" | grep -q '^row|com.whatsapp|1|user|' || fail "whatsapp: $out"
+printf '%s\n' "$out" | grep -x 'result=ok' >/dev/null && printf '%s\n' "$out" | grep -x 'selected=2' >/dev/null || fail "set: $out"
+printf '%s\n' "$out" | grep -x 'row|org.telegram.messenger|1|user|allow|default|allow|ignore|40|ok|-' >/dev/null || fail "telegram not fixed: $out"
+printf '%s\n' "$out" | grep '^row|com.whatsapp|1|user|' >/dev/null || fail "whatsapp: $out"
 grep -qx 'user,org.telegram.messenger,10234' "$T/st/wl" || fail "no Doze exemption"
 [ "$(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)" = allow/default ] || fail "background restriction kept: $(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)"
 [ "$(mode org.telegram.messenger WAKE_LOCK)" = default/allow ] || fail "uid WAKE_LOCK ignore kept: $(mode org.telegram.messenger WAKE_LOCK)"
@@ -10443,17 +10443,17 @@ grep -qx 'manual-set org.telegram.messenger restore' "$T/st/wlcalls" || fail "AS
 grep -q 'bad;pkg\|com.not.installed' "$T/d/notif_fix" && fail "invalid package recorded"
 mkdir -p "$T/zrun"; printf 'L\torg.telegram.messenger\t7\t2\t1\t3\n' > "$T/zrun/state.arm64-v8a.tsv"; printf 'L\torg.telegram.messenger\t2\t0\t0\t1\n' > "$T/zrun/state.armeabi-v7a.tsv"
 out="$(ASB_ZYGISK_RUN_DIR="$T/zrun" run status)"
-printf '%s\n' "$out" | grep -q '^row|org.telegram.messenger|1|.*|9$' || fail "Zygisk screen-off starts not joined: $(printf '%s\n' "$out" | grep telegram)"
+printf '%s\n' "$out" | grep '^row|org.telegram.messenger|1|.*|9$' >/dev/null || fail "Zygisk screen-off starts not joined: $(printf '%s\n' "$out" | grep telegram)"
 printf '%s\n' "$out" | grep -q '^row|com.whatsapp|.*|-$' || fail "an app without ledger rows must read '-'"
 printf '%s\n' "$out" | grep -qx 'findings=gms_strict doze_aggressive athena_on data_saver' || fail "findings: $(printf '%s\n' "$out" | grep findings)"
-printf '%s\n' "$out" | grep -qx 'selected=2' || fail "status count: $out"
+printf '%s\n' "$out" | grep -x 'selected=2' >/dev/null || fail "status count: $out"
 printf 'org.telegram.messenger|RUN_ANY_IN_BACKGROUND|ignore|default\n' >> "$T/st/ops.x"
 awk -F'|' -v OFS='|' '$1 == "org.telegram.messenger" && $2 == "RUN_ANY_IN_BACKGROUND" { $3 = "ignore" } { print }' "$T/st/ops" > "$T/st/o" && mv "$T/st/o" "$T/st/ops"
 run reapply
 [ "$(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)" = allow/default ] || fail "a reset restriction was not re-applied"
 : > "$T/st/wlcalls"
 out="$(run set com.whatsapp)"
-printf '%s\n' "$out" | grep -qx 'selected=1' || fail "untick: $out"
+printf '%s\n' "$out" | grep -x 'selected=1' >/dev/null || fail "untick: $out"
 [ "$(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)" = ignore/default ] || fail "background mode not restored: $(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)"
 [ "$(mode org.telegram.messenger WAKE_LOCK)" = default/ignore ] || fail "uid WAKE_LOCK not restored: $(mode org.telegram.messenger WAKE_LOCK)"
 grep -q '^user,org.telegram.messenger,' "$T/st/wl" && fail "the Doze exemption ASB gave was not withdrawn"
@@ -10468,7 +10468,7 @@ grep -v '^org.telegram.messenger ' "$T/st/pkgs" > "$T/st/p" && mv "$T/st/p" "$T/
 run reapply
 grep -q '^org.telegram.messenger|' "$T/d/notif_fix" && fail "an uninstalled app stayed in the ledger"
 grep -qx org.telegram.messenger "$T/d/doze_whitelist_keep" && fail "an uninstalled app stayed in the keep list"
-out="$(run status)"; printf '%s\n' "$out" | grep -qx 'selected=1' || fail "status after uninstall: $out"
+out="$(run status)"; printf '%s\n' "$out" | grep -x 'selected=1' >/dev/null || fail "status after uninstall: $out"
 PATH="$T/bin:$PATH" NF_ST="$T/st" MODDIR="$T/mod" ASB_NF_DIR="$T/d" ASB_NF_UNINSTALL=1 sh "$S" restore-all
 [ -e "$T/d/notif_fix" ] && fail "restore-all kept the ledger"
 grep -qx 10300 "$T/st/allow" && fail "restore-all left the Data Saver allowlist entry"
@@ -10663,12 +10663,12 @@ n="$(cat "$T/d/zygisk_guard_night")"
 printf '%s\n' "$n" | grep -Eq '^[0-9]+\|[0-9]+\|60\|1\|com.oem.sys:35,com.whatsapp:13,com.feed.app:10$' || fail "night summary: $n"
 st="$(printf '%s' "$n" | cut -d'|' -f1)"; en="$(printf '%s' "$n" | cut -d'|' -f2)"
 [ $(( en - st )) -ge 5000 ] && [ $(( en - st )) -le 5500 ] || fail "night duration from the last screen-off sample: $((en - st))"
-run status | grep -Eq '^night\|[0-9]+\|[0-9]+\|60\|1\|com.oem.sys:35,' || fail "night not in status"
+run status | grep -E '^night\|[0-9]+\|[0-9]+\|60\|1\|com.oem.sys:35,' >/dev/null || fail "night not in status"
 [ -e "$T/tmp/zygisk_guard.base" ] || [ -e "$T/tmp/zygisk_guard.seen" ] && fail "per-period files survived screen-on"
 echo screen=0 > "$T/state"; run tick; led 40 7 43 120; age prev 600; run tick
 echo screen=1 > "$T/state"; run tick
 [ "$(grep -c '|' "$T/d/zygisk_guard_night")" = 1 ] || fail "a 10-minute screen-off period was summarised"
-grep -c '|com.whatsapp|' "$T/d/zygisk_guard_log" | grep -qx 2 || fail "a new period did not log the protected app once again"
+grep -c '|com.whatsapp|' "$T/d/zygisk_guard_log" | grep -x 2 >/dev/null || fail "a new period did not log the protected app once again"
 i=0; while [ $i -lt 9 ]; do
   echo screen=0 > "$T/state"; run tick; led $((41 + i)) 7 41 121; age prev 600; age base 1800; run tick
   echo screen=1 > "$T/state"; run tick; i=$((i + 1))
@@ -11062,19 +11062,19 @@ run tick
 grep -q '|com.np.app|' "$T/d/zygisk_aot_apps" && fail "an excluded app took a ranking slot: $(cat "$T/d/zygisk_aot_apps")"
 grep -q '^com.bank.app|[0-9]*|speed-profile|' "$T/d/zygisk_aot_apps" || fail "compiled row: $(cat "$T/d/zygisk_aot_apps")"
 out="$(run exclude com.bank.app)"
-printf '%s\n' "$out" | grep -qx 'reset=ok' && printf '%s\n' "$out" | grep -qx 'observer_policy=synced' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "exclude of an app ASB compiled: $out"
+printf '%s\n' "$out" | grep -x 'reset=ok' >/dev/null && printf '%s\n' "$out" | grep -x 'observer_policy=synced' >/dev/null && printf '%s\n' "$out" | grep -x 'result=excluded' >/dev/null || fail "exclude of an app ASB compiled: $out"
 grep -qx 'xpkg=com.bank.app' "$T/mod/zygisk/policy" || fail "owner exclusion did not reach the native policy: $(cat "$T/mod/zygisk/policy")"
 grep -qx 'pm compile --reset com.bank.app' "$T/pm.log" || fail "the compile state was not reset: $(cat "$T/pm.log")"
 grep -q '|com.bank.app|reset|speed-profile>verify$' "$T/d/zygisk_aot_log" || fail "reset event: $(cat "$T/d/zygisk_aot_log")"
 grep -q '^com.bank.app|' "$T/d/zygisk_aot_apps" && fail "the excluded app stayed in the list"
 st="$(run status)"
-printf '%s\n' "$st" | grep -qx 'exclude|com.bank.app' && printf '%s\n' "$st" | grep -qx 'exclude|com.np.app' || fail "status exclusions: $st"
-printf '%s\n' "$st" | grep -q '^event|[0-9]*|com.bank.app|reset|speed-profile>verify$' || fail "status reset event: $st"
+printf '%s\n' "$st" | grep -x 'exclude|com.bank.app' >/dev/null && printf '%s\n' "$st" | grep -x 'exclude|com.np.app' >/dev/null || fail "status exclusions: $st"
+printf '%s\n' "$st" | grep '^event|[0-9]*|com.bank.app|reset|speed-profile>verify$' >/dev/null || fail "status reset event: $st"
 newcharge
 [ "$(compiles com.bank.app)" = 1 ] || fail "an excluded app was compiled again in a later charging session: $(cat "$T/pm.log")"
 grep -q '^com.bank.app|' "$T/d/zygisk_aot_apps" && fail "a refresh brought the excluded app back"
 out="$(run exclude com.yt.app)"
-printf '%s\n' "$out" | grep -qx 'reset=skipped' || fail "an app ASB never compiled was reset: $out"
+printf '%s\n' "$out" | grep -x 'reset=skipped' >/dev/null || fail "an app ASB never compiled was reset: $out"
 grep -q -- '--reset com.yt.app' "$T/pm.log" && fail "Android's own compile was undone"
 [ "$(grep -c '^com.bank.app$' "$T/d/zygisk_aot_exclude")" = 1 ] || fail "a duplicate exclusion"
 run exclude com.bank.app >/dev/null; [ "$(grep -c '^com.bank.app$' "$T/d/zygisk_aot_exclude")" = 1 ] || fail "excluding twice duplicated the entry"
@@ -11086,10 +11086,10 @@ out="$(run reset 'com.a;b')"; [ $? = 2 ] && [ "$out" = result=bad_request ] || f
 grep -qv '^[A-Za-z0-9_.]*$' "$T/d/zygisk_aot_exclude" && fail "the exclusion list holds an unsafe line: $(cat "$T/d/zygisk_aot_exclude")"
 echo com.mail.app > "$T/refuse"
 out="$(run exclude com.mail.app)"
-printf '%s\n' "$out" | grep -qx 'reset=failed' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "a refused reset: $out"
+printf '%s\n' "$out" | grep -x 'reset=failed' >/dev/null && printf '%s\n' "$out" | grep -x 'result=excluded' >/dev/null || fail "a refused reset: $out"
 grep -q '|com.mail.app|reset_failed|speed-profile>speed-profile$' "$T/d/zygisk_aot_log" || fail "refused reset event: $(cat "$T/d/zygisk_aot_log")"
 out="$(run include com.bank.app)"
-printf '%s\n' "$out" | grep -qx 'observer_policy=synced' && printf '%s\n' "$out" | grep -qx 'result=included' || fail "include: $out"
+printf '%s\n' "$out" | grep -x 'observer_policy=synced' >/dev/null && printf '%s\n' "$out" | grep -x 'result=included' >/dev/null || fail "include: $out"
 grep -qx com.bank.app "$T/d/zygisk_aot_exclude" && fail "include left the entry"
 grep -qx 'xpkg=com.bank.app' "$T/mod/zygisk/policy" && fail "include left the native exclusion"
 newcharge
@@ -11101,20 +11101,20 @@ for p in com.np.app com.yt.app com.mail.app; do run include "$p" >/dev/null; don
 cp "$T/mod/runtime/asb_zygisk.sh" "$T/zygisk policy.real"
 printf '#!/bin/sh\nexit 1\n' > "$T/mod/runtime/asb_zygisk.sh"
 out="$(run exclude com.example.policy)"; rc=$?
-[ "$rc" = 1 ] && printf '%s\n' "$out" | grep -qx 'observer_policy=failed' && printf '%s\n' "$out" | grep -qx 'result=partial reason=observer_policy' || fail "policy failure was masked: rc=$rc $out"
+[ "$rc" = 1 ] && printf '%s\n' "$out" | grep -x 'observer_policy=failed' >/dev/null && printf '%s\n' "$out" | grep -x 'result=partial reason=observer_policy' >/dev/null || fail "policy failure was masked: rc=$rc $out"
 grep -qx 'com.example.policy' "$T/d/zygisk_aot_exclude" || fail 'partial result lost the saved owner exclusion'
 cp "$T/zygisk policy.real" "$T/mod/runtime/asb_zygisk.sh"
 out="$(run exclude com.example.policy)"
-printf '%s\n' "$out" | grep -qx 'observer_policy=synced' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "policy retry did not recover: $out"
+printf '%s\n' "$out" | grep -x 'observer_policy=synced' >/dev/null && printf '%s\n' "$out" | grep -x 'result=excluded' >/dev/null || fail "policy retry did not recover: $out"
 grep -qx 'xpkg=com.example.policy' "$T/mod/zygisk/policy" || fail 'retry did not publish the exclusion'
 run include com.example.policy >/dev/null || fail 'cleanup after policy retry'
 mv "$T/mod/runtime/asb_zygisk.sh" "$T/zygisk policy.offline"
 out="$(run exclude com.example.missing)"; rc=$?
-[ "$rc" = 1 ] && printf '%s\n' "$out" | grep -qx 'observer_policy=unavailable' && printf '%s\n' "$out" | grep -qx 'result=partial reason=observer_policy' || fail "missing policy writer was masked: rc=$rc $out"
+[ "$rc" = 1 ] && printf '%s\n' "$out" | grep -x 'observer_policy=unavailable' >/dev/null && printf '%s\n' "$out" | grep -x 'result=partial reason=observer_policy' >/dev/null || fail "missing policy writer was masked: rc=$rc $out"
 mv "$T/zygisk policy.offline" "$T/mod/runtime/asb_zygisk.sh"
 run include com.example.missing >/dev/null || fail 'cleanup after missing policy writer'
 run exclude com.np.app >/dev/null
-run restore-all; ls "$T/d" | grep -q zygisk_aot && fail "uninstall left files: $(ls "$T/d")"
+run restore-all; ls "$T/d" | grep zygisk_aot >/dev/null && fail "uninstall left files: $(ls "$T/d")"
 grep -q '/data/adb/asb/zygisk_aot_exclude' "$ROOT/uninstall.sh" || fail "uninstall does not remove the exclusion list"
 grep -q 'excluded by the owner' "$ROOT/tools/asb_diag.sh" && grep -q 'compile state reset for' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show exclusions and resets"
 H="$ROOT/webroot/index.html"
@@ -11442,7 +11442,7 @@ printf 'wakelock_action=0\nwakelock_fitness=limit\n' > "$T/mod/config/governor.c
 fit
 grep -qx 'com.renpho.health|default' "$T/d/wakelock_fitness_limited" || f 'first limit not recorded'
 grep -Eq '^com\.renpho\.health\|[0-9]+\|ignore\|WAKE_LOCK: ignore; time=\+1m$' "$T/d/wakelock_fitness_reapply" || f "first set not noted: $(cat "$T/d/wakelock_fitness_reapply" 2>/dev/null)"
-st | grep -qx 'not_kept=0' || f "a kept limit counted as not kept: $(st)"
+st | grep -x 'not_kept=0' >/dev/null || f "a kept limit counted as not kept: $(st)"
 : > "$T/ops"
 fit
 grep -Eq '^com\.renpho\.health\|[0-9]+\|ignore\|' "$T/d/wakelock_fitness_reapply" || f 'a successful re-apply after a reset was not noted'
@@ -11450,7 +11450,7 @@ grep -Eq '^com\.renpho\.health\|[0-9]+\|ignore\|' "$T/d/wakelock_fitness_reapply
 : > "$T/ops"; : > "$T/refuse"
 fit
 grep -Eq '^com\.renpho\.health\|[0-9]+\|default\|No operations\.$' "$T/d/wakelock_fitness_reapply" || f "a re-apply the ROM did not keep was not noted: $(cat "$T/d/wakelock_fitness_reapply")"
-st | grep -qx 'not_kept=1' || f "not-kept count missing: $(st)"
+st | grep -x 'not_kept=1' >/dev/null || f "not-kept count missing: $(st)"
 : > "$T/am.log"; st >/dev/null
 grep -q 'appops get com.renpho.health' "$T/am.log" && f 'fitness-status started an appops client for a recorded app'
 printf 'wakelock_action=0\nwakelock_fitness=protect\n' > "$T/mod/config/governor.conf"
@@ -11480,21 +11480,21 @@ run() {
 }
 printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|2000' || fail "bounded apply/readback: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|2000' >/dev/null || fail "bounded apply/readback: $out"
 [ "$(cat "$T/ttl")" = 1000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'value or original baseline is wrong'
 printf 'kernel_mglru_min_ttl=5000\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|2000|2000|2000' || fail "legacy 5000 is not read as 2000: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|2000|2000|2000' >/dev/null || fail "legacy 5000 is not read as 2000: $out"
 [ "$(cat "$T/ttl")" = 2000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'repeat apply replaced the original baseline'
 printf '9\n' > "$T/ttl"
 printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|restored|stock|2000|none' || fail "exact Stock restore: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|restored|stock|2000|none' >/dev/null || fail "exact Stock restore: $out"
 [ "$(cat "$T/ttl")" = 2000 ] && [ ! -e "$T/state/kernel_mglru_min_ttl.prev" ] || fail 'restore left the wrong value or baseline'
 printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
 rm -f "$T/ttl"
 set +e; out="$(run apply kernel_mglru_min_ttl 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_mglru_min_ttl|not_exposed|' || fail "missing interface verdict: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_mglru_min_ttl|not_exposed|' >/dev/null || fail "missing interface verdict: $out"
 [ ! -e "$T/state/kernel_mglru_min_ttl.prev" ] || fail 'missing interface created restore state'
 # The retired mglru_hold path cannot write 0 or bypass the registered owner.
 ! grep -Eq '(echo|printf).*min_ttl_ms|min_ttl_ms.*(echo|printf)' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'legacy direct min_ttl writer remains'
@@ -11529,18 +11529,18 @@ P="$T/state/kernel_mglru_min_ttl.prev"
 KID='6.12.23-a|#1 SMP PREEMPT Mon Nov 10'
 printf '2000\n' > "$T/ttl"; printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|2000' || fail "first capture: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|2000' >/dev/null || fail "first capture: $out"
 [ "$(cat "$P")" = 2000 ] && [ "$(cat "$P.kid")" = "$KID" ] || fail 'baseline or kernel id not recorded'
 KID='6.12.23-b|#1 SMP PREEMPT Fri Nov 14'
 printf '0\n' > "$T/ttl"
 out="$(run status kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|writable|1000|0|none' || fail "status shows a foreign baseline: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|writable|1000|0|none' >/dev/null || fail "status shows a foreign baseline: $out"
 out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|0' || fail "new kernel not re-captured: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|0' >/dev/null || fail "new kernel not re-captured: $out"
 [ "$(cat "$P")" = 0 ] && [ "$(cat "$P.kid")" = "$KID" ] || fail 'baseline not bound to the new kernel'
 printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|restored|stock|0|none' || fail "same-kernel restore: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|restored|stock|0|none' >/dev/null || fail "same-kernel restore: $out"
 [ ! -e "$P" ] && [ ! -e "$P.kid" ] || fail 'restore left state behind'
 printf 'kernel_mglru_min_ttl=2000\n' > "$T/mod/config/governor.conf"
 run apply kernel_mglru_min_ttl >/dev/null
@@ -11548,14 +11548,14 @@ KID='6.12.23-c|#2 SMP PREEMPT Sat Nov 15'
 printf '7\n' > "$T/ttl"
 printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|stock_unowned|stock|unknown|none' || fail "foreign baseline restored: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|stock_unowned|stock|unknown|none' >/dev/null || fail "foreign baseline restored: $out"
 [ "$(cat "$T/ttl")" = 7 ] || fail 'a baseline from another kernel was written into this one'
 [ ! -e "$P" ] && [ ! -e "$P.kid" ] || fail 'foreign baseline kept'
 printf '2000\n' > "$P"
 KID='6.12.23-d|#1'
 printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -qx 'kernel_mglru_min_ttl|applied|1000|1000|2000' || fail "legacy baseline not adopted: $out"
+printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|2000' >/dev/null || fail "legacy baseline not adopted: $out"
 [ "$(cat "$P.kid")" = "$KID" ] || fail 'legacy baseline not bound'
 printf '2000\n' > "$T/ttl"; rm -f "$P" "$P.kid"; out="$(MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_MGLRU_MIN_TTL_NODE="$T/ttl" sh "$K" apply kernel_mglru_min_ttl)"
 [ -s "$P.kid" ] && grep -Fq "$(uname -r)" "$P.kid" || fail "default kernel id is not uname-based: $(cat "$P.kid" 2>/dev/null)"
@@ -11581,11 +11581,11 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail 'asbdiag copies differ'
 } > "$T/kc.sh"
 [ "$(grep -c 'kernel_control' "$T/kc.sh")" -ge 4 ] || fail 'diagnostic block not found'
 OUT="$(sh "$T/kc.sh")"
-printf '%s\n' "$OUT" | grep -qx 'kernel_control: mglru_mode = smart  ·  kernel: 0x0003  ·  ASB baseline: 0x0003' || fail "writable line: $OUT"
-printf '%s\n' "$OUT" | grep -q '^kernel_control: kernel_hrtimer_migration = auto  ·  no separate node on this kernel - the timer migration control above is the one mechanism and the one write' || fail "covered line: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'kernel_control: kernel_sched_nr_migrate = 4  ·  interface not exposed by this kernel - nothing written' || fail "not exposed line: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'kernel_control: kernel_usb_autosuspend = on  ·  readback_mismatch  ·  kernel: 5  ·  ASB baseline: 2' || fail "other state line: $OUT"
-! printf '%s\n' "$OUT" | grep -q '|' || fail "raw pipe records still printed: $OUT"
+printf '%s\n' "$OUT" | grep -x 'kernel_control: mglru_mode = smart  ·  kernel: 0x0003  ·  ASB baseline: 0x0003' >/dev/null || fail "writable line: $OUT"
+printf '%s\n' "$OUT" | grep '^kernel_control: kernel_hrtimer_migration = auto  ·  no separate node on this kernel - the timer migration control above is the one mechanism and the one write' >/dev/null || fail "covered line: $OUT"
+printf '%s\n' "$OUT" | grep -x 'kernel_control: kernel_sched_nr_migrate = 4  ·  interface not exposed by this kernel - nothing written' >/dev/null || fail "not exposed line: $OUT"
+printf '%s\n' "$OUT" | grep -x 'kernel_control: kernel_usb_autosuspend = on  ·  readback_mismatch  ·  kernel: 5  ·  ASB baseline: 2' >/dev/null || fail "other state line: $OUT"
+! printf '%s\n' "$OUT" | grep '|' >/dev/null || fail "raw pipe records still printed: $OUT"
 grep -Fq 'not in force on this phone: the governor loaded ${_dba} device-adaptive value(s) at start' "$D" || fail 'shipped rails are still presented as the live caps'
 echo "PASS diag kernel controls: one readable line per control, hrtimer explained as the same mechanism, shipped rails marked as fallback when device bounds are live"
 )
@@ -11956,12 +11956,12 @@ run() {
 nodes() { printf '%s %s %s %s' "$(cat "$T/timer")" "$(cat "$T/nr")" "$(cat "$T/rt")" "$(cat "$T/lpm")"; }
 out="$(run follow performance || true)"
 [ "$(nodes)" = '0 8 256 0' ] || fail "Performance: $(nodes) / $out"
-printf '%s\n' "$out" | grep -qx 'kernel_rt_boost|applied|auto|256|0' || fail "RT Performance verdict: $out"
-printf '%s\n' "$out" | grep -q '^mglru_mode|' || fail 'non-Smart profile skipped the MGLRU mode'
+printf '%s\n' "$out" | grep -x 'kernel_rt_boost|applied|auto|256|0' >/dev/null || fail "RT Performance verdict: $out"
+printf '%s\n' "$out" | grep '^mglru_mode|' >/dev/null || fail 'non-Smart profile skipped the MGLRU mode'
 out="$(run follow smart || true)"
 [ "$(nodes)" = '1 4 0 0' ] || fail "Smart: $(nodes)"
-printf '%s\n' "$out" | grep -qx 'kernel_timer_migration|restored|auto|1|none' || fail "Auto release reports auto: $out"
-! printf '%s\n' "$out" | grep -q '^mglru_mode|' || fail 'Smart profile with Smart MGLRU must leave the mode to the governor'
+printf '%s\n' "$out" | grep -x 'kernel_timer_migration|restored|auto|1|none' >/dev/null || fail "Auto release reports auto: $out"
+! printf '%s\n' "$out" | grep '^mglru_mode|' >/dev/null || fail 'Smart profile with Smart MGLRU must leave the mode to the governor'
 run follow battery >/dev/null || true
 [ "$(nodes)" = '1 2 0 1' ] || fail "Battery: $(nodes)"
 run follow balanced >/dev/null || true
@@ -11972,7 +11972,7 @@ for k in kernel_timer_migration kernel_sched_nr_migrate kernel_rt_boost; do
   run apply "$k" '' stock >/dev/null
 done
 [ "$(nodes)" = '1 32 0 0' ] || fail "Auto under Stock must restore: $(nodes)"
-ls "$T/state" | grep -q '\.prev$' && fail "Stock left a baseline: $(ls "$T/state")"
+ls "$T/state" | grep '\.prev$' >/dev/null && fail "Stock left a baseline: $(ls "$T/state")"
 # The kernel boots with 1024; a Snapdragon post-boot script lowers it to 0. Before that has
 # finished nothing is captured or written, and the next pass applies normally.
 printf '1024\n' > "$T/rt"
@@ -11991,11 +11991,11 @@ done
 for bad in 1024 2000 -1 abc; do
   sed -i "s/^kernel_rt_boost=.*/kernel_rt_boost=$bad/" "$T/mod/config/governor.conf"
   out="$(run apply kernel_rt_boost '' performance)"
-  printf '%s\n' "$out" | grep -Eq '^kernel_rt_boost\|(restored|stock_unowned)\|stock\|' && [ "$(cat "$T/rt")" = 0 ] || fail "invalid $bad is not treated as Stock: $out"
+  printf '%s\n' "$out" | grep -E '^kernel_rt_boost\|(restored|stock_unowned)\|stock\|' >/dev/null && [ "$(cat "$T/rt")" = 0 ] || fail "invalid $bad is not treated as Stock: $out"
 done
 printf '9999\n' > "$T/state/kernel_rt_boost.prev"; printf 'k57\n' > "$T/state/kernel_rt_boost.prev.kid"
 set +e; out="$(run restore kernel_rt_boost)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_rt_boost|baseline_invalid|' || fail "out-of-range baseline restored: $out"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep '^kernel_rt_boost|baseline_invalid|' >/dev/null || fail "out-of-range baseline restored: $out"
 rm -f "$T/state/kernel_rt_boost.prev" "$T/state/kernel_rt_boost.prev.kid"
 # The safe config writer accepts exactly the card's options.
 mkdir -p "$T/cmod/config" "$T/cmod/runtime"
@@ -12222,7 +12222,7 @@ reset_fixture; printf '2\n' > "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; 
 reset_fixture; : > "$T/clamp"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|readback_mismatch|auto|0|0' ] && [ -f "$T/state/kernel_bore.prev" ] || fail "Auto readback mismatch: rc=$rc out=$out"
 rm -f "$T/clamp"; PROFILE=battery; out="$(run)"; want_restored mismatch_recovery
-! sed -n '/^asb_kc_bore_auto_hold() {/,/^}/p' "$S" | grep -Eq '^[[:space:]]*#' || fail 'new helper comment contract changed unexpectedly'
+! sed -n '/^asb_kc_bore_auto_hold() {/,/^}/p' "$S" | grep -E '^[[:space:]]*#' >/dev/null || fail 'new helper comment contract changed unexpectedly'
 echo 'PASS BORE Auto dev65: Performance-only fresh MODERATE/HEAVY gate, all profile/thermal/battery/state/Safe-mode/watchdog holds, fail-closed ABI, exact baseline and readback cleanup'
 )
 
@@ -12270,7 +12270,7 @@ mod NyaZygisk zygisksu zygisksu v2.5; mod NeoZygisk other zygisksu v2.3; out="$(
 # One enabled provider plus an old disabled one is unambiguous, with both installations shown.
 : > "$DATA/modules/other/disable"; out="$(probe)"
 [ "$(val "$out" provider)" = NyaZygisk ] && [ "$(val "$out" enabled_count)" = 1 ] || fail "enabled plus disabled: $out"
-printf '%s\n' "$out" | grep -q 'NeoZygisk (disabled)' || fail 'disabled installation hidden'
+printf '%s\n' "$out" | grep 'NeoZygisk (disabled)' >/dev/null || fail 'disabled installation hidden'
 # An unrelated/malformed module name is neither executed nor mistaken for a provider.
 mod 'Other `x`;$(id)' other unknown test; out="$(probe)"
 [ "$(val "$out" provider)" = NyaZygisk ] || fail 'unrelated metadata changed provider'

@@ -192,26 +192,26 @@ t_heytap_mcs_lifecycle() (
   fail() { echo "FAIL HeyTap lifecycle: $*" >&2; exit 1; }
   _fixture "$ROOT" "$T"
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=disabled compile=pending' || fail "apply: $_out"
+  printf '%s\n' "$_out" | grep 'result=disabled compile=pending' >/dev/null || fail "apply: $_out"
   [ "$(_state mcs)" = 2 ] || fail 'MCS was not disabled'
   grep -qx 'previous_enabled=1' "$ASB_HEYTAP_STATE_DIR/baseline.conf" || fail 'baseline not saved'
   grep -qx 'state=pending' "$ASB_ART_COMPILE_STATE" || fail 'ART not pending'
   _before="$(cksum < "$ASB_HEYTAP_STATE_DIR/baseline.conf")"
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=already_disabled compile=pending' || fail "repeat apply: $_out"
+  printf '%s\n' "$_out" | grep 'result=already_disabled compile=pending' >/dev/null || fail "repeat apply: $_out"
   [ "$(cksum < "$ASB_HEYTAP_STATE_DIR/baseline.conf")" = "$_before" ] || fail 'repeat apply overwrote baseline'
   _out="$(_run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=done exit_code=0' || fail "compile: $_out"
+  printf '%s\n' "$_out" | grep 'result=done exit_code=0' >/dev/null || fail "compile: $_out"
   [ "$(_compile_count)" = 1 ] || fail 'compile did not run exactly once'
   _out="$(_run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=not_pending' || fail 'second boot attempted a retry'
+  printf '%s\n' "$_out" | grep 'result=not_pending' >/dev/null || fail 'second boot attempted a retry'
   [ "$(_compile_count)" = 1 ] || fail 'second run-pending compiled again'
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=already_disabled compile=done' || fail 'repeat apply resurrected completed ART'
+  printf '%s\n' "$_out" | grep 'result=already_disabled compile=done' >/dev/null || fail 'repeat apply resurrected completed ART'
   [ "$(_compile_count)" = 1 ] || fail 'repeat apply compiled again'
   _conf stock 0
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=restored previous_enabled=1' || fail "restore: $_out"
+  printf '%s\n' "$_out" | grep 'result=restored previous_enabled=1' >/dev/null || fail "restore: $_out"
   [ "$(_state mcs)" = 1 ] || fail 'MCS baseline was not restored'
   [ ! -e "$ASB_ART_COMPILE_STATE" ] || fail 'done ART state was not cleared on Stock'
   grep -q 'force-stop com.heytap.mcs' "$AM_LOG" || fail 'MCS was not stopped'
@@ -235,29 +235,29 @@ t_heytap_mcs_safety() (
   for _before in 2 3; do
     _clear_requests; _conf off 0; echo "$_before" > "$PKG_DB/mcs.enabled"
     _out="$(_run asb_heytap_mcs.sh apply)"
-    printf '%s\n' "$_out" | grep -q 'result=already_disabled' || fail 'pre-disabled state was rewritten'
+    printf '%s\n' "$_out" | grep 'result=already_disabled' >/dev/null || fail 'pre-disabled state was rewritten'
     [ ! -f "$ASB_HEYTAP_STATE_DIR/baseline.conf" ] || fail 'ASB claimed a pre-disabled package'
     _conf stock 0; _run asb_heytap_mcs.sh apply >/dev/null
     [ "$(_state mcs)" = "$_before" ] || fail 'pre-disabled package was enabled on Stock'
   done
   _clear_requests; _conf off 0; echo 1 > "$PKG_DB/mcs.enabled"; : > "$PKG_DB/mcs.dump_unknown"
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=state_unknown' || fail 'unknown state did not fail closed'
+  printf '%s\n' "$_out" | grep 'result=state_unknown' >/dev/null || fail 'unknown state did not fail closed'
   [ "$(_state mcs)" = 1 ] || fail 'unknown state caused a write'
   [ ! -e "$ASB_ART_COMPILE_STATE" ] || fail 'unknown state requested ART'
   rm -f "$PKG_DB/mcs.dump_unknown"; FAIL_ACTION=disable
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=write_failed' || fail 'rejected disable not reported'
+  printf '%s\n' "$_out" | grep 'result=write_failed' >/dev/null || fail 'rejected disable not reported'
   [ "$(_state mcs)" = 1 ] || fail 'rejected disable changed state'
   FAIL_ACTION=; : > "$PKG_DB/mcs.dump_override"
   echo 1 > "$PKG_DB/mcs.dump_override"
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=readback_mismatch' || fail 'silent readback mismatch not reported'
+  printf '%s\n' "$_out" | grep 'result=readback_mismatch' >/dev/null || fail 'silent readback mismatch not reported'
   [ "$(_state mcs)" = 1 ] || fail 'readback mismatch did not roll back'
   [ ! -e "$ASB_ART_COMPILE_STATE" ] || fail 'failed apply left ART pending'
   echo 0 > "$PKG_DB/mcs.present"; rm -f "$PKG_DB/mcs.dump_override"
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=absent' || fail 'absent package not handled'
+  printf '%s\n' "$_out" | grep 'result=absent' >/dev/null || fail 'absent package not handled'
   echo 'PASS HeyTap safety: pre-disabled ownership, 0/1/4 restore, unknown/rejected/readback failures'
 )
 
@@ -270,26 +270,26 @@ t_art_compile_cancel_and_failure() (
   echo 2 > "$PKG_DB/mcs.enabled"
   _run asb_art_compile.sh request >/dev/null
   _out="$(_run asb_art_compile.sh cancel)"
-  printf '%s\n' "$_out" | grep -q 'result=cancelled' || fail 'pending request not cancelled'
+  printf '%s\n' "$_out" | grep 'result=cancelled' >/dev/null || fail 'pending request not cancelled'
   _out="$(_run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=not_pending' || fail 'cancelled request ran at boot'
+  printf '%s\n' "$_out" | grep 'result=not_pending' >/dev/null || fail 'cancelled request ran at boot'
   [ "$(_compile_count)" = 0 ] || fail 'cancelled request compiled'
 
   _run asb_art_compile.sh request >/dev/null
   PM_COMPILE_RC=1
   _out="$(_run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=failed reason=pm_compile_failed exit_code=1' || fail "failure not recorded: $_out"
+  printf '%s\n' "$_out" | grep 'result=failed reason=pm_compile_failed exit_code=1' >/dev/null || fail "failure not recorded: $_out"
   [ "$(_compile_count)" = 1 ] || fail 'failed compile count'
   _run asb_art_compile.sh run-pending >/dev/null
   _out="$(_run asb_art_compile.sh request)"
-  printf '%s\n' "$_out" | grep -q 'result=failed' || fail 'failed request was silently re-armed'
+  printf '%s\n' "$_out" | grep 'result=failed' >/dev/null || fail 'failed request was silently re-armed'
   [ "$(_compile_count)" = 1 ] || fail 'failed compile retried automatically'
 
   _run asb_art_compile.sh cancel >/dev/null
   echo 1 > "$PKG_DB/mcs.enabled"
   _run asb_art_compile.sh request >/dev/null
   _out="$(_run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=failed reason=mcs_not_disabled' || fail 'MCS ownership gate missing'
+  printf '%s\n' "$_out" | grep 'result=failed reason=mcs_not_disabled' >/dev/null || fail 'MCS ownership gate missing'
   [ "$(_compile_count)" = 1 ] || fail 'compile ran while MCS was enabled'
   echo 'PASS ART lifecycle: cancel before boot, failed means no retry, MCS state gate'
 )
@@ -308,7 +308,7 @@ t_art_compile_charger_gate() (
   echo Discharging > "$ASB_ART_COMPILE_POWER"
   _run asb_art_compile.sh request >/dev/null
   _out="$(ASB_ART_COMPILE_CHARGE_WAIT=0 _run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=deferred reason=not_charging' || fail "no charger: $_out"
+  printf '%s\n' "$_out" | grep 'result=deferred reason=not_charging' >/dev/null || fail "no charger: $_out"
   [ "$(_compile_count)" = 0 ] || fail 'compiled on battery'
   grep -qx 'state=pending' "$ASB_ART_COMPILE_STATE" || fail 'deferred request was not kept pending'
   [ ! -e "$ASB_ART_COMPILE_LOCK" ] || fail 'deferred run kept its lock'
@@ -316,7 +316,7 @@ t_art_compile_charger_gate() (
   printf '#!/bin/sh\necho Charging > "%s"\n' "$ASB_ART_COMPILE_POWER" > "$T/bin/sleep"
   chmod 755 "$T/bin/sleep"
   _out="$(ASB_ART_COMPILE_CHARGE_STEP=1 _run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=done exit_code=0' || fail "charger arrived: $_out"
+  printf '%s\n' "$_out" | grep 'result=done exit_code=0' >/dev/null || fail "charger arrived: $_out"
   [ "$(_compile_count)" = 1 ] || fail 'compile did not run once on the charger'
 
   rm -f "$T/bin/sleep"
@@ -328,14 +328,14 @@ t_art_compile_charger_gate() (
   printf '#!/bin/sh\nrm -f "%s"\n' "$ASB_ART_COMPILE_STATE" > "$T/bin/sleep"
   chmod 755 "$T/bin/sleep"
   _out="$(ASB_ART_COMPILE_CHARGE_STEP=1 _run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=cancelled' || fail "cancel while waiting: $_out"
+  printf '%s\n' "$_out" | grep 'result=cancelled' >/dev/null || fail "cancel while waiting: $_out"
   [ "$(_compile_count)" = 1 ] || fail 'cancelled wait still compiled'
   rm -f "$T/bin/sleep"
 
   printf 'state=running\npid=999999\nstarted_at=1\n' > "$ASB_ART_COMPILE_STATE"
   rm -rf "$ASB_ART_COMPILE_LOCK"
   _out="$(_run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep -q 'result=failed reason=interrupted' || fail "stale running: $_out"
+  printf '%s\n' "$_out" | grep 'result=failed reason=interrupted' >/dev/null || fail "stale running: $_out"
   grep -qx 'state=failed' "$ASB_ART_COMPILE_STATE" || fail 'interrupted compile not recorded'
   [ "$(_compile_count)" = 1 ] || fail 'interrupted compile retried automatically'
   grep -q 'heytap_art_compile.lock' "$ROOT/post-fs-data.sh" || fail 'boot does not clear a stale ART lock'
@@ -349,7 +349,7 @@ t_documentsui_lifecycle() (
   fail() { echo "FAIL DocumentsUI lifecycle: $*" >&2; exit 1; }
   _fixture "$ROOT" "$T"
   _out="$(_run asb_documentsui_fix.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=applied' || fail "apply: $_out"
+  printf '%s\n' "$_out" | grep 'result=applied' >/dev/null || fail "apply: $_out"
   [ "$(_state doc)" = 1 ] || fail 'DocumentsUI not enabled'
   [ "$(cat "$PKG_DB/doc.hidden")" = 0 ] || fail 'DocumentsUI not unhidden'
   [ "$(_state pick)" = 0 ] || fail 'PickActivity not reset'
@@ -358,11 +358,11 @@ t_documentsui_lifecycle() (
   [ "$(_compile_count)" = 0 ] || fail 'DocumentsUI unexpectedly requested ART'
   _before="$(cksum < "$ASB_DOCUMENTSUI_STATE_DIR/baseline.conf")"
   _out="$(_run asb_documentsui_fix.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=already_applied' || fail 'repeat apply not idempotent'
+  printf '%s\n' "$_out" | grep 'result=already_applied' >/dev/null || fail 'repeat apply not idempotent'
   [ "$(cksum < "$ASB_DOCUMENTSUI_STATE_DIR/baseline.conf")" = "$_before" ] || fail 'repeat apply overwrote baseline'
   _conf stock 0
   _out="$(_run asb_documentsui_fix.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=restored' || fail "restore: $_out"
+  printf '%s\n' "$_out" | grep 'result=restored' >/dev/null || fail "restore: $_out"
   [ "$(_state doc)" = 0 ] || fail 'DocumentsUI enabled state not restored'
   [ "$(cat "$PKG_DB/doc.hidden")" = 1 ] || fail 'DocumentsUI hidden state not restored'
   [ "$(_state pick)" = 2 ] || fail 'PickActivity state not restored'
@@ -393,7 +393,7 @@ t_documentsui_safety() (
   echo 1 > "$PKG_DB/doc.enabled"; echo 0 > "$PKG_DB/doc.hidden"
   echo 0 > "$PKG_DB/pick.enabled"; echo 0 > "$PKG_DB/files.enabled"; echo 3 > "$PKG_DB/fm.enabled"
   _out="$(_run asb_documentsui_fix.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=already_fixed' || fail 'already-fixed state not detected'
+  printf '%s\n' "$_out" | grep 'result=already_fixed' >/dev/null || fail 'already-fixed state not detected'
   [ ! -f "$ASB_DOCUMENTSUI_STATE_DIR/baseline.conf" ] || fail 'already-fixed state gained a baseline'
 
   _clear_requests
@@ -401,11 +401,11 @@ t_documentsui_safety() (
   echo 2 > "$PKG_DB/pick.enabled"; echo 1 > "$PKG_DB/files.enabled"; echo 1 > "$PKG_DB/fm.enabled"
   : > "$PKG_DB/doc.component_unknown"
   _out="$(_run asb_documentsui_fix.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=state_unknown field=pick_enabled' || fail 'unknown component did not fail closed'
+  printf '%s\n' "$_out" | grep 'result=state_unknown field=pick_enabled' >/dev/null || fail 'unknown component did not fail closed'
   [ "$(_state doc)" = 0 ] && [ "$(_state fm)" = 1 ] || fail 'unknown component caused writes'
   rm -f "$PKG_DB/doc.component_unknown"; FAIL_ACTION=enable
   _out="$(_run asb_documentsui_fix.sh apply)"
-  printf '%s\n' "$_out" | grep -q 'result=write_failed_rolled_back' || fail "rollback result: $_out"
+  printf '%s\n' "$_out" | grep 'result=write_failed_rolled_back' >/dev/null || fail "rollback result: $_out"
   [ "$(_state doc)" = 0 ] || fail 'rollback did not restore DocumentsUI'
   [ "$(cat "$PKG_DB/doc.hidden")" = 1 ] || fail 'rollback did not rehide DocumentsUI'
   [ "$(_state pick)" = 2 ] && [ "$(_state files)" = 1 ] || fail 'rollback did not restore components'
@@ -428,7 +428,7 @@ t_package_tweaks_contract() (
   for _wf in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
     for _f in asb_package_state.sh asb_heytap_mcs.sh asb_art_compile.sh asb_documentsui_fix.sh; do
       sed -n '/- name: Normalize executable source script modes/,/- name: Validate required source files/p' "$_wf" \
-        | grep -Fq "runtime/$_f" || fail "$_wf does not restore the executable mode of $_f"
+        | grep -F "runtime/$_f" >/dev/null || fail "$_wf does not restore the executable mode of $_f"
     done
   done
   ! grep -q '\.replace/' "$ROOT/runtime/asb_heytap_mcs.sh" || fail 'HeyTap uses a .replace overlay'

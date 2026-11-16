@@ -227,9 +227,9 @@ run "$MD"
 
 # 5. No forced baseline save at install (that is what stored the graded file as "stock").
 sed -n '/^asb_save_dynamic_baselines()/,/^}/p' "$ROOT/runtime/asb_tweaks.sh" \
-  | grep -q 'conf_tuning_params.json' || f "baseline saver no longer covers the camera"
+  | grep 'conf_tuning_params.json' >/dev/null || f "baseline saver no longer covers the camera"
 sed -n '/^asb_save_dynamic_baselines()/,/^}/p' "$ROOT/runtime/asb_tweaks.sh" \
-  | grep -q 'asb_tw_save_base "$_cam" force' && f "camera baseline still force-saved after grading"
+  | grep 'asb_tw_save_base "$_cam" force' >/dev/null && f "camera baseline still force-saved after grading"
 grep -q '_cam_conf=/data/adb/modules/AutoSystemBoost/config/governor.conf' "$ROOT/runtime/asb_tweaks.sh" \
   || f "install pass grades from the staging dir's shipped config"
 
@@ -459,20 +459,20 @@ printf '# ASB_PROFILE_SCHEMA=1\ngnss_trim=1\n' > "$OUT/daily.conf"; printf 'x\n'
 # ...while a user's own unrelated file of another name is left alone.
 printf 'mine\n' > "$OUT/notes.conf"
 out="$(run export-path daily "$OUT")"
-printf '%s\n' "$out" | grep -qx "exported=$OUT/daily.asb" || fail "export did not report the .asb file: $out"
-printf '%s\n' "$out" | grep -qx 'smart_learning=saved' || fail "Smart learning not in the file: $out"
+printf '%s\n' "$out" | grep -x "exported=$OUT/daily.asb" >/dev/null || fail "export did not report the .asb file: $out"
+printf '%s\n' "$out" | grep -x 'smart_learning=saved' >/dev/null || fail "Smart learning not in the file: $out"
 [ "$(ls -A "$OUT" | grep -c '^daily')" = 1 ] || fail "more than one entry for one configuration: $(ls -A "$OUT")"
 [ -f "$OUT/notes.conf" ] || fail "a user file was removed"
 [ "$(head -c 2 "$OUT/daily.asb" | od -An -tx1 | tr -d ' \n')" = 1f8b ] || fail "not compressed"
-tar -tzf "$OUT/daily.asb" | grep -qx 'daily.smart/session_history.jsonl' || fail "session history missing inside"
+tar -tzf "$OUT/daily.asb" | grep -x 'daily.smart/session_history.jsonl' >/dev/null || fail "session history missing inside"
 
 # 2. Opens back - the name comes from inside, whatever the file is called now.
 run delete daily >/dev/null
 cp "$OUT/daily.asb" "$OUT/renamed copy.asb"
 imp="$(run import-path "$OUT/renamed copy.asb")"
-printf '%s\n' "$imp" | grep -qx 'imported=daily' || fail "import did not restore the name: $imp"
-printf '%s\n' "$imp" | grep -qx 'smart_learning=saved' || fail "Smart learning not imported: $imp"
-run list | grep -q '^daily|.*|ok|saved$' || fail "imported profile not listed with Smart learning"
+printf '%s\n' "$imp" | grep -x 'imported=daily' >/dev/null || fail "import did not restore the name: $imp"
+printf '%s\n' "$imp" | grep -x 'smart_learning=saved' >/dev/null || fail "Smart learning not imported: $imp"
+run list | grep '^daily|.*|ok|saved$' >/dev/null || fail "imported profile not listed with Smart learning"
 rm -f "$SMART/buckets.bin"
 run restore daily $KEYS | grep -x 'smart_learning=restored' >/dev/null || fail "restore from an imported file failed"
 [ -s "$SMART/buckets.bin" ] || fail "learning not restored from the file"
@@ -909,11 +909,11 @@ run create daily $KEYS >/dev/null
 sed -i -e 's/^gnss_trim=.*/gnss_trim=9/' -e 's/^doze_level=.*/doze_level=9/' "$MOD/config/governor.conf"
 grep -q '^gnss_trim=9' "$MOD/config/governor.conf" || fail "fixture edit did not take"
 out="$(run restore daily $KEYS)" || fail "restore failed: $out"
-printf '%s\n' "$out" | grep -qx 'restored=daily' || fail "no restored= line: $out"
-printf '%s\n' "$out" | grep -qx 'keys=4' || fail "settings in the file not reported: $out"
-printf '%s\n' "$out" | grep -qx 'changed=2' || fail "changed count wrong: $out"
+printf '%s\n' "$out" | grep -x 'restored=daily' >/dev/null || fail "no restored= line: $out"
+printf '%s\n' "$out" | grep -x 'keys=4' >/dev/null || fail "settings in the file not reported: $out"
+printf '%s\n' "$out" | grep -x 'changed=2' >/dev/null || fail "changed count wrong: $out"
 out="$(run restore daily $KEYS)"
-printf '%s\n' "$out" | grep -qx 'changed=0' || fail "a second apply reports changes: $out"
+printf '%s\n' "$out" | grep -x 'changed=0' >/dev/null || fail "a second apply reports changes: $out"
 [ -z "$(ls "$TMP" | grep asb_restore_before)" ] || fail "temporary copy left behind"
 
 # WebUI wiring (the flow itself was driven in Chromium for this change).
@@ -1177,8 +1177,8 @@ grep -q 'cat "\$_floor_file"' "$ROOT/service.sh" && fail "service.sh still reads
 grep -Fq '"$MODDIR/system/vendor/lib64/soundfx"' "$ROOT/runtime/asb_capabilities.sh" || fail "capability probe ignores the staged DSP library"
 G="$ROOT/src/asb_governor.c"
 grep -Fq 'static int asb_smart_session_idle_dominant(' "$G" || fail "Smart session idle/active split missing"
-awk '/^static const char \*classify_confidence\(/,/^}$/' "$G" | grep -q 'PROFILE_SMART' || fail "Smart has no confidence branch"
-awk '/^static const char \*classify_signature\(/,/^}$/' "$G" | grep -q 'PROFILE_SMART' || fail "Smart has no signature branch"
+awk '/^static const char \*classify_confidence\(/,/^}$/' "$G" | grep 'PROFILE_SMART' >/dev/null || fail "Smart has no confidence branch"
+awk '/^static const char \*classify_signature\(/,/^}$/' "$G" | grep 'PROFILE_SMART' >/dev/null || fail "Smart has no signature branch"
 grep -Fq "asb_settings_put global dropbox_max_files 50" "$ROOT/service.sh" || fail "dropbox still capped so low that crash evidence is lost"
 echo "PASS /data/adb/asb findings: GPU floor, DSP capability, Smart session labels"
 
@@ -1196,11 +1196,11 @@ live='  AudioPlaybackConfiguration piid:79 deviceIds:[2] type:android.media.Medi
 idle='  AudioPlaybackConfiguration piid:80 deviceIds:[] type:AAudio u/pid:10658/1234 state:paused attr:AudioAttributes: usage=USAGE_MEDIA'
 hist='  10-07 12:01:02:123 player piid:63 state:started'
 hist2='  10-07 12:01:02:123 player piid:63 event:started'
-printf '%s\n' "$live" | grep -qE "$RX" || f "live player not recognised"
-printf '%s\n%s\n%s\n' "$idle" "$hist" "$hist2" | grep -qE "$RX" && f "idle player or history counted as playing"
+printf '%s\n' "$live" | grep -E "$RX" >/dev/null || f "live player not recognised"
+printf '%s\n%s\n%s\n' "$idle" "$hist" "$hist2" | grep -E "$RX" >/dev/null && f "idle player or history counted as playing"
 for file in runtime/asb_screenoff_class.sh service.sh tools/asb_diag.sh tools/logkit/_asb_logkit_common.sh tools/logkit/asb_audio_ab.sh; do
   grep -q "AudioPlaybackConfiguration .\*state:started" "$ROOT/$file" || f "$file does not use the live-player pattern"
-  grep -vE '^[[:space:]]*#' "$ROOT/$file" | grep -qE "player piid\.\*started|grep -q[a-zA-Z]* '?\"?state:started|\*state:started\*" && f "$file still matches history lines"
+  grep -vE '^[[:space:]]*#' "$ROOT/$file" | grep -E "player piid\.\*started|grep -q[a-zA-Z]* '?\"?state:started|\*state:started\*" >/dev/null && f "$file still matches history lines"
 done
 [ "$fail" = 0 ] && echo "PASS audio live player"
 exit "$fail"
@@ -1216,7 +1216,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 S="$ROOT/service.sh"; U="$ROOT/uninstall.sh"
 fail=0; f() { echo "FAIL bg buckets: $*" >&2; fail=1; }
 blk="$(sed -n '/^asb_bg_trim_apply_buckets() {/,/^}/p' "$S")"
-printf '%s\n' "$blk" | grep -q 'am set-standby-bucket' && f "apply_buckets forces a bucket without recording it"
+printf '%s\n' "$blk" | grep 'am set-standby-bucket' >/dev/null && f "apply_buckets forces a bucket without recording it"
 grep -q '/data/adb/asb/bg_buckets_orig' "$U" || f "uninstall does not restore recorded buckets"
 # Uninstall's fallback list must be the heavy list, or an old install keeps apps in rare.
 heavy="$(sed -n '/^_BG_TRIM_HEAVY="/,/^"/p' "$S" | grep -E '^[a-z]' | sort | tr '\n' ' ')"
@@ -1254,8 +1254,8 @@ grep -q 'com.gone' "$T/am.log" && f "uninstalled package touched"
 grep -q '^com.daily ' "$T/am.log" && f "an app in daily use was demoted"
 grep -qx 'com.weekly rare' "$T/am.log" || f "an app out of daily use was not demoted"
 # Heavy apps go through the idle-only rule; aggressive without opt-in gets the periodic pass.
-printf '%s\n' "$blk" | grep -q 'asb_bg_bucket_demote_idle "$_p" rare' || f "heavy apps bypass the idle-only rule"
-sed -n '/allow_disruptive_bg_trim \]; then/,/return 0/p' "$S" | grep -q 'asb_bg_trim_periodic' || f "smart aggressive has no periodic pass"
+printf '%s\n' "$blk" | grep 'asb_bg_bucket_demote_idle "$_p" rare' >/dev/null || f "heavy apps bypass the idle-only rule"
+sed -n '/allow_disruptive_bg_trim \]; then/,/return 0/p' "$S" | grep 'asb_bg_trim_periodic' >/dev/null || f "smart aggressive has no periodic pass"
 [ "$fail" = 0 ] && echo "PASS bg bucket restore"
 exit "$fail"
 
@@ -1271,8 +1271,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 I="$ROOT/common/install.sh"
 fail=0; f() { echo "FAIL camera bind requeue: $*" >&2; fail=1; }
 body="$(sed -n '/^asb_generate_odm_camera_binds()/,/^}/p' "$I")"
-printf '%s\n' "$body" | grep -q 'cmp -s' && f 'a live-file comparison can skip the camera bind again'
-printf '%s\n' "$body" | grep -Fq 'echo "${_obc_live}|${_obc_dst}" >> "$_obc_man"' || f 'camera payload no longer queued'
+printf '%s\n' "$body" | grep 'cmp -s' >/dev/null && f 'a live-file comparison can skip the camera bind again'
+printf '%s\n' "$body" | grep -F 'echo "${_obc_live}|${_obc_dst}" >> "$_obc_man"' >/dev/null || f 'camera payload no longer queued'
 grep -Fq 'camera bind: ' "$ROOT/tools/asb_diag.sh" || f 'asbdiag does not show camera bind evidence'
 grep -Fq 'nsenter -t 1 -m -- umount "$_ct_live"' "$I" || f 'installer does not take down its own camera bind before declaring the live tone table dirty'
 # fix112: the skipped install ships no tone file and the install wipes odm_patched and the
@@ -1281,8 +1281,8 @@ grep -q 'ASB_L_CAM_LIVE_DIRTY2=".*after the reboot just install ASB once more' "
 # fix146: the wipe moved to asb_reset_odm_binds (before the audio stage); payloads and the
 # manifest still go, only the partition's stock snapshots are kept.
 _rb="$(sed -n '/^asb_reset_odm_binds() {/,/^}/p' "$I")"
-printf '%s\n' "$_rb" | grep -Fq "find \"\$_rb_root\" -type f ! -name '*.stock' ! -name '.base_fp' -delete" \
-  && printf '%s\n' "$_rb" | grep -Fq 'rm -f "${ASB_ODM_MAN:-/data/adb/asb/odm_bind_manifest.txt}"' \
+printf '%s\n' "$_rb" | grep -F "find \"\$_rb_root\" -type f ! -name '*.stock' ! -name '.base_fp' -delete" >/dev/null \
+  && printf '%s\n' "$_rb" | grep -F 'rm -f "${ASB_ODM_MAN:-/data/adb/asb/odm_bind_manifest.txt}"' >/dev/null \
   || f 'install no longer wipes the old odm payloads and the manifest (the advice depends on it)'
 [ "$fail" = 0 ] && echo "PASS camera bind requeue contract"
 exit "$fail"
@@ -1495,11 +1495,11 @@ S="$ROOT/service.sh"
 fail=0; f() { echo "FAIL dsp route backoff: $*" >&2; fail=1; }
 blk="$(sed -n '/_prev_route=""/,/persist.asb.dsp.route "\$_now"/p' "$S")"
 [ -n "$blk" ] || { echo "FAIL dsp route backoff: watcher block not found" >&2; exit 1; }
-printf '%s\n' "$blk" | grep -q '_sig="$_aa_sig"' || f "no playback-state pull-forward"
+printf '%s\n' "$blk" | grep '_sig="$_aa_sig"' >/dev/null || f "no playback-state pull-forward"
 grep -q 'grep -l RUNNING "$_aa_snd"/card\*/pcm\*p/sub\*/status' "$ROOT/runtime/asb_audio_activity.sh" || f "PCM state no longer read where the kernel has it"
 grep -q 'AudioOut_\*) _aa_outs=' "$ROOT/runtime/asb_audio_activity.sh" || f "no playback signal on kernels without PCM state"
-printf '%s\n' "$blk" | grep -q '\[ "$_since" -lt "${_iv:-5}" \]' || f "dump not gated by the interval"
-printf '%s\n' "$blk" | grep -q '_ivmax=30; \[ "$_play_now" = 1 \] && _ivmax=15' || f "back-off ceilings changed"
+printf '%s\n' "$blk" | grep '\[ "$_since" -lt "${_iv:-5}" \]' >/dev/null || f "dump not gated by the interval"
+printf '%s\n' "$blk" | grep '_ivmax=30; \[ "$_play_now" = 1 \] && _ivmax=15' >/dev/null || f "back-off ceilings changed"
 # The dump must come after the gate, never straight after a fixed sleep.
 printf '%s\n' "$blk" | awk '/sleep 5$/ { s = NR } /_adump="\$\(dumpsys audio/ { if (s && NR - s < 3) bad = 1 } END { exit bad }' \
   || f "dumpsys audio directly after a fixed sleep"
@@ -1944,9 +1944,9 @@ printf 'k.same=1\nk.diff=false\nk.other=1\n# k.diff=x\n' > "$T/other"
 awk_prog="$(sed -n "/_ov_rows=\"\$(awk -F= '/,/' \"\$_ov_asb\" \"\$_ov_m\/system.prop\" 2>\/dev\/null)\"/p" "$D" | sed "1s/.*awk -F= '//; \$s/' \"\\\$_ov_asb\".*//")"
 [ -n "$awk_prog" ] || f "could not extract the overlap program"
 out="$(awk -F= "$awk_prog" "$T/asb" "$T/other")"
-printf '%s\n' "$out" | grep -qx 'k.diff|true|false' || f "differing key not reported: $out"
-printf '%s\n' "$out" | grep -qx '#|2|1' || f "summary wrong: $out"
-printf '%s\n' "$out" | grep -q 'k.same|' && f "equal key reported as different"
+printf '%s\n' "$out" | grep -x 'k.diff|true|false' >/dev/null || f "differing key not reported: $out"
+printf '%s\n' "$out" | grep -x '#|2|1' >/dev/null || f "summary wrong: $out"
+printf '%s\n' "$out" | grep 'k.same|' >/dev/null && f "equal key reported as different"
 [ "$fail" = 0 ] && echo "PASS module overlap contract"
 exit "$fail"
 
@@ -2019,7 +2019,7 @@ grep -q 'route show table all' "$R" || f "net_routes does not read table all"
 grep -q '_route_fp()' "$R" || f "no route fingerprint"
 grep -q '\[ "$_nfp" = "$_fp" \] && continue' "$R" || f "monitor loop does not skip unchanged routes"
 for tok in initcwnd initrwnd congctl; do
-  sed -n '/^_route_fp()/,/^}/p' "$R" | grep -q "s/ $tok " || f "fingerprint keeps $tok"
+  sed -n '/^_route_fp()/,/^}/p' "$R" | grep "s/ $tok " >/dev/null || f "fingerprint keeps $tok"
 done
 # A re-created route lost its congctl too; the watcher restores it through the routes mode.
 grep -q 'asb_net_apply.sh" routes' "$R" || f "watcher does not re-apply per-route congctl"
@@ -2033,7 +2033,7 @@ grep -q 'in auto|conservative|aggressive) _apply' "$R" || f "watcher replays rou
 # iproute2, not BusyBox: the root manager's applet has no monitor/initcwnd/congctl.
 for file in runtime/asb_net_routes.sh runtime/asb_net_apply.sh; do
   grep -q 'for _ipb in /system/bin/ip' "$ROOT/$file" || f "$file does not prefer /system/bin/ip"
-  if grep -vE '^[[:space:]]*#' "$ROOT/$file" | grep -qE '(^|[;|&(]|then|else|do)[[:space:]]*ip (route|-6|monitor)'; then
+  if grep -vE '^[[:space:]]*#' "$ROOT/$file" | grep -E '(^|[;|&(]|then|else|do)[[:space:]]*ip (route|-6|monitor)' >/dev/null; then
     f "$file still calls a bare ip"
   fi
 done
@@ -2052,14 +2052,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 S="$ROOT/service.sh"
 fail=0; f() { echo "FAIL route watch idle: $*" >&2; fail=1; }
 blk="$(sed -n '/^# Keep persist.asb.dsp.route honest while the phone is running./,/^) >\/dev\/null 2>&1 &$/p' "$S")"
-printf '%s\n' "$blk" | grep -q 'elif \[ -z "$_sig" \] && \[ -n "${_pcm_known:-}" \] && \[ -n "$_prev_route" \]; then' \
+printf '%s\n' "$blk" | grep 'elif \[ -z "$_sig" \] && \[ -n "${_pcm_known:-}" \] && \[ -n "$_prev_route" \]; then' >/dev/null \
   || f "idle skip missing"
-printf '%s\n' "$blk" | grep -q '_pcm_known=1' || f "PCM-state availability not detected"
+printf '%s\n' "$blk" | grep '_pcm_known=1' >/dev/null || f "PCM-state availability not detected"
 # Order: a changed signature must be handled before the idle skip.
 _a="$(printf '%s\n' "$blk" | grep -n 'if \[ "$_sig" != "${_prev_sig:-}" \]; then' | cut -d: -f1)"
 _b="$(printf '%s\n' "$blk" | grep -n 'elif \[ -z "$_sig" \]' | cut -d: -f1)"
 [ -n "$_a" ] && [ -n "$_b" ] && [ "$_a" -lt "$_b" ] || f "playback start no longer forces a dump first"
-printf '%s\n' "$blk" | grep -q '\*bt_sco\*|\*BLUETOOTH_SCO\*) _now="call"' || f "SCO route lost"
+printf '%s\n' "$blk" | grep '\*bt_sco\*|\*BLUETOOTH_SCO\*) _now="call"' >/dev/null || f "SCO route lost"
 [ "$fail" = 0 ] && echo "PASS route watch idle contract"
 exit "$fail"
 
@@ -2322,10 +2322,10 @@ fail() { echo "FAIL uevent parking: $*" >&2; exit 1; }
 grep -q 'uev_park(epfd, uefd);' "$SRC" || fail "screen-on paths do not park"
 grep -q 'if (screen_on) uev_park(epfd, uefd);' "$SRC" || fail "startup with the screen on does not park"
 _off="$(sed -n '/} else if (!metrics.misc.screen_on && _ts == 1) {/,/^                }/p' "$SRC")"
-printf '%s\n' "$_off" | grep -q 'uev_unpark(epfd, uefd);' || fail "tick screen-off does not unpark"
-printf '%s\n' "$_off" | grep -q 'session_plan_build(&fsm, 0);' || fail "tick screen-off skips the screen-off session plan"
-printf '%s\n' "$_off" | grep -q 'session_plan_apply_prearm(&fsm);' || fail "tick screen-off skips the prearm"
-printf '%s\n' "$_off" | grep -q 'persistent_stats_screen_off(&fsm);' || fail "tick screen-off skips the screen-off stats context"
+printf '%s\n' "$_off" | grep 'uev_unpark(epfd, uefd);' >/dev/null || fail "tick screen-off does not unpark"
+printf '%s\n' "$_off" | grep 'session_plan_build(&fsm, 0);' >/dev/null || fail "tick screen-off skips the screen-off session plan"
+printf '%s\n' "$_off" | grep 'session_plan_apply_prearm(&fsm);' >/dev/null || fail "tick screen-off skips the prearm"
+printf '%s\n' "$_off" | grep 'persistent_stats_screen_off(&fsm);' >/dev/null || fail "tick screen-off skips the screen-off stats context"
 grep -q 'uevent_dropped_while_parked=' "$SRC" || fail "parking not published"
 grep -q 'uevent_dropped_while_parked' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show parking"
 
@@ -2422,7 +2422,7 @@ need "$G" '(long)metrics.cpu.cur_freq[0] * 1000L > (long)want_p0 + 100000L' 'lit
 need "$G" 'if (used0 || used1) g_leak_used_ticks++;' 'really-used ticks not counted'
 need "$G" 'vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu' 'counters not published'
 need "$G" 'int _lvl = (used0 || used1) ? 1 : 3;' 'unused raises still logged at the normal level'
-grep -F 'asb_log(' "$G" | grep -Fq 'reconcile.sh handles' && fail 'misleading "reconcile.sh handles" text is back'
+grep -F 'asb_log(' "$G" | grep -F 'reconcile.sh handles' >/dev/null && fail 'misleading "reconcile.sh handles" text is back'
 need "$A" '_vcu="$(_st vendor_ceiling_used_ticks)"' 'action does not report the cost'
 echo "PASS vendor ceiling cost contract"
 
@@ -2460,14 +2460,14 @@ exit "$fail"
 set -u
 H="$(cd "$(dirname "$0")/.." && pwd)/webroot/index.html"
 fail=0
-sed -n '/^async function pollLive(visible) {/,/^  try {/p' "$H" | grep -q 'if (document.hidden) return;' \
+sed -n '/^async function pollLive(visible) {/,/^  try {/p' "$H" | grep 'if (document.hidden) return;' >/dev/null \
   || { echo "FAIL webui: pollLive runs while hidden" >&2; fail=1; }
 VIS="$(sed -n "/^document.addEventListener('visibilitychange', () => {/,/^});/p" "$H")"
-printf '%s\n' "$VIS" | grep -Fq 'if (_liveOpen) liveMonitorSchedule(0);' \
+printf '%s\n' "$VIS" | grep -F 'if (_liveOpen) liveMonitorSchedule(0);' >/dev/null \
   || { echo "FAIL webui: no scheduled catch-up poll when Monitor is shown again" >&2; fail=1; }
-printf '%s\n' "$VIS" | grep -Fq 'asbStartupLater(asbStartupLive, 300, 0);' \
+printf '%s\n' "$VIS" | grep -F 'asbStartupLater(asbStartupLive, 300, 0);' >/dev/null \
   || { echo "FAIL webui: no Home catch-up poll when the page is shown again" >&2; fail=1; }
-printf '%s\n' "$VIS" | grep -Fq 'liveBackgroundSchedule();' \
+printf '%s\n' "$VIS" | grep -F 'liveBackgroundSchedule();' >/dev/null \
   || { echo "FAIL webui: background schedule is not restored on visibility" >&2; fail=1; }
 [ "$(printf '%s\n' "$VIS" | grep -Fc 'clearTimeout')" -eq 2 ] \
   || { echo "FAIL webui: hidden-page timeouts are not both cleared" >&2; fail=1; }
@@ -2657,8 +2657,8 @@ V(){ printf 'V:%s|%s|%s|%s\n' "$1" "$2" "$3" "$4"; }
 cfg(){ [ "$1" = "sustained_temp_mode" ] && printf '%s\n' "${_tp_mode:-auto}"; }
 _tp_set=60 _tp_now=60 _tp_n=1 _tp_mode=auto
 _boundary_out="$(. "$TMP/throttle_boundary.sh")"
-printf '%s\n' "$_boundary_out" | grep -Fq 'boundary observed, not a failure' || { printf '%s\n' 'FAIL asbdiag equality boundary message missing' >&2; exit 1; }
-if printf '%s\n' "$_boundary_out" | grep -q '^V:'; then
+printf '%s\n' "$_boundary_out" | grep -F 'boundary observed, not a failure' >/dev/null || { printf '%s\n' 'FAIL asbdiag equality boundary message missing' >&2; exit 1; }
+if printf '%s\n' "$_boundary_out" | grep '^V:' >/dev/null; then
   printf '%s\n' 'FAIL asbdiag equality invoked red verdict' >&2
   exit 1
 fi
@@ -2666,21 +2666,21 @@ fi
 # core past an automatic point, which is the clamp doing its job, so that case is a note.
 _tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=auto _pl_scr=0
 _over_out="$(. "$TMP/throttle_boundary.sh")"
-printf '%s\n' "$_over_out" | grep -Fq 'V:  throttle point below live CPU sensor with the screen off' || { printf '%s\n' 'FAIL asbdiag strictly-over-threshold sensor lost verdict' >&2; exit 1; }
+printf '%s\n' "$_over_out" | grep -F 'V:  throttle point below live CPU sensor with the screen off' >/dev/null || { printf '%s\n' 'FAIL asbdiag strictly-over-threshold sensor lost verdict' >&2; exit 1; }
 _tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=auto _pl_scr=1
 _on_out="$(. "$TMP/throttle_boundary.sh")"
-if printf '%s\n' "$_on_out" | grep -q '^V:'; then
+if printf '%s\n' "$_on_out" | grep '^V:' >/dev/null; then
   printf '%s\n' 'FAIL asbdiag screen-on load still emits a red throttle verdict' >&2
   exit 1
 fi
-printf '%s\n' "$_on_out" | grep -Fq 'intended behaviour' || { printf '%s\n' 'FAIL asbdiag screen-on throttle note missing' >&2; exit 1; }
+printf '%s\n' "$_on_out" | grep -F 'intended behaviour' >/dev/null || { printf '%s\n' 'FAIL asbdiag screen-on throttle note missing' >&2; exit 1; }
 _tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=manual
 _manual_out="$(. "$TMP/throttle_boundary.sh")"
-if printf '%s\n' "$_manual_out" | grep -q '^V:'; then
+if printf '%s\n' "$_manual_out" | grep '^V:' >/dev/null; then
   printf '%s\n' 'FAIL asbdiag manual throttle point emitted red verdict' >&2
   exit 1
 fi
-printf '%s\n' "$_manual_out" | grep -Fq 'P:  [WARN] throttle point below live CPU sensor (manual' || { printf '%s\n' 'FAIL asbdiag manual throttle point lost WARN' >&2; exit 1; }
+printf '%s\n' "$_manual_out" | grep -F 'P:  [WARN] throttle point below live CPU sensor (manual' >/dev/null || { printf '%s\n' 'FAIL asbdiag manual throttle point lost WARN' >&2; exit 1; }
 # Exercise camera provenance without Android paths. A commented live vendor file is INFO
 # when ASB carries no malformed payload; a commented ASB payload remains a V failure.
 sed -n '/^camera_json_comment_verdict() {/,/^}/p' "$ROOT/tools/asb_diag.sh" > "$TMP/camera_json_verdict.sh"
@@ -2691,14 +2691,14 @@ mkdir -p "$(dirname "$LIVE")" "$MODDIR/system/odm$(dirname "$LIVE")"
 printf '// vendor comment\n{}\n' > "$LIVE"
 . "$TMP/camera_json_verdict.sh"
 _vendor_out="$(camera_json_comment_verdict "$LIVE")"
-printf '%s\n' "$_vendor_out" | grep -Fq 'vendor JSON-with-comments:' || { printf '%s\n' 'FAIL asbdiag vendor comment was not informational' >&2; exit 1; }
-if printf '%s\n' "$_vendor_out" | grep -q '^V:'; then
+printf '%s\n' "$_vendor_out" | grep -F 'vendor JSON-with-comments:' >/dev/null || { printf '%s\n' 'FAIL asbdiag vendor comment was not informational' >&2; exit 1; }
+if printf '%s\n' "$_vendor_out" | grep '^V:' >/dev/null; then
   printf '%s\n' 'FAIL asbdiag vendor comment emitted a malformed-ASB verdict' >&2
   exit 1
 fi
 printf '// broken staged payload\n{}\n' > "$MODDIR/system/odm$LIVE"
 _managed_out="$(camera_json_comment_verdict "$LIVE")"
-printf '%s\n' "$_managed_out" | grep -Fq 'V:  ASB-managed camera payload has // comments' || { printf '%s\n' 'FAIL asbdiag malformed ASB camera payload lost verdict' >&2; exit 1; }
+printf '%s\n' "$_managed_out" | grep -F 'V:  ASB-managed camera payload has // comments' >/dev/null || { printf '%s\n' 'FAIL asbdiag malformed ASB camera payload lost verdict' >&2; exit 1; }
 
 # Conservative offload semantics must stay conservative.
 #
@@ -2914,7 +2914,7 @@ grep -q 'smart_bucket_drain_x10=" /dev/.asb/state' "$A" || fail "action ETA lack
 grep -q '_eta_kind=slot' "$A" || fail "action ETA slot kind missing"
 grep -q "kv.smart_bucket_drain_x10 || '0'" "$ROOT/webroot/index.html" || fail "WebUI ETA lacks slot fallback"
 for l in ar de en es fr hy id it pt ru tr uk zh; do
-  { [ "$l" = en ] || grep -q "^T_ETA_SLOT=" "$ROOT/runtime/i18n/action_$l.sh"; } || fail "T_ETA_SLOT missing: $l"
+  { [ "$l" = en ] || grep "^T_ETA_SLOT=" "$ROOT/runtime/i18n/action_$l.sh" >/dev/null; } || fail "T_ETA_SLOT missing: $l"
   grep -q '"eta_slot"' "$ROOT/webroot/i18n/$l.json" || fail "eta_slot missing: $l"
 done
 grep -q '^T_ETA_SLOT=' "$A" || fail "T_ETA_SLOT default missing"
@@ -3218,9 +3218,9 @@ M="$ROOT/src/asb_metrics.h"
 grep -q '#include <sys/system_properties.h>' "$M" || fail "property API not included on Android"
 grep -q '^#if defined(__ANDROID__)$' "$M" || fail "property include not guarded for host builds"
 # the doze veto runs before every panel node
-awk '/^static int metrics_screen_on\(/{f=1} f&&/asb_display_state_read\(\)/{print "prop"; exit} f&&/PATH_SCREEN_STATUS/{print "node"; exit}' "$M" | grep -qx prop \
+awk '/^static int metrics_screen_on\(/{f=1} f&&/asb_display_state_read\(\)/{print "prop"; exit} f&&/PATH_SCREEN_STATUS/{print "node"; exit}' "$M" | grep -x prop >/dev/null \
   || fail "a panel node is read before Android's display state"
-grep -q 'display_state|' "$ROOT/tools/logkit/_asb_logkit_common.sh" || grep -q '|wake|disp_state"' "$ROOT/tools/logkit/_asb_logkit_common.sh" \
+grep -q 'display_state|' "$ROOT/tools/logkit/_asb_logkit_common.sh" || grep '|wake|disp_state"' "$ROOT/tools/logkit/_asb_logkit_common.sh" >/dev/null \
   || fail "logkit display trace lacks wake/disp_state"
 grep -q 'always-on display: %d of %d' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "full-day report does not count lit screen-off samples"
 grep -q 'always-on display counted as screen-off' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report AOD time"
@@ -3368,8 +3368,8 @@ fail() { echo "FAIL fix125: $*"; exit 1; }
 UI="$ROOT/webroot/index.html"
 B="$ROOT/tools/asb_config_backup.sh"
 _cell="$(awk '/^\.live-cell \{/{on=1} on{print} on&&/^}/{exit}' "$UI")"
-printf '%s\n' "$_cell" | grep -Eq '^ *min-height: 54px;' || fail "forecast cells do not grow with their text"
-printf '%s\n' "$_cell" | grep -Eq '^ *height: 54px;' && fail "fixed 54px cell height is back"
+printf '%s\n' "$_cell" | grep -E '^ *min-height: 54px;' >/dev/null || fail "forecast cells do not grow with their text"
+printf '%s\n' "$_cell" | grep -E '^ *height: 54px;' >/dev/null && fail "fixed 54px cell height is back"
 grep -q '_bundle_write()' "$B" || fail "no single-file export"
 grep -q '_bundle_import()' "$B" || fail "no single-file import"
 grep -q 'import-path FILE.asb|FILE.conf' "$B" || fail "usage does not name .asb"
@@ -3659,7 +3659,7 @@ grep -q '^lk_capture_on_battery()' "$C" || fail "stall check not limited to a ca
 grep -q 'batterystats disagrees with these samples:' "$C" || fail "live holders not checked against batterystats"
 grep -q 'within %s (%s), by ASB state and touch' "$C" && grep -q 'wn += within(top, "most frames")' "$C" || fail "jank by state not shown inside one app"
 F="$ROOT/tools/logkit/asb_log_full_day.sh"
-grep -n 'echo "' "$F" | grep -q '`' && fail "a backtick inside a double-quoted echo runs a command"
+grep -n 'echo "' "$F" | grep '`' >/dev/null && fail "a backtick inside a double-quoted echo runs a command"
 grep -q "'hfp_audio_disconnect' is an HFP/SCO audio-link detach" "$F" || fail "Bluetooth evidence line still empty"
 grep -q 'Look again for up to 3 s before naming anything' "$ROOT/tools/asb_diag.sh" || fail "asbdiag grades a momentary boost as a vendor floor"
 grep -q 'vendor floor - \$_drv/\$_gov clamps the minimum, not a write failure' "$ROOT/tools/asb_diag.sh" && fail "unproven vendor-floor claim still printed"
@@ -3786,7 +3786,7 @@ fail() { echo "FAIL fix146: $*"; exit 1; }
 I="$ROOT/common/install.sh"; C="$ROOT/tools/logkit/_asb_logkit_common.sh"; D="$ROOT/tools/asb_diag.sh"
 grep -q '^asb_reset_odm_binds() {' "$I" || fail "no odm bind reset ahead of the audio stage"
 grep -q '^asb_odm_bound_by_asb() {' "$I" || fail "the generator cannot tell its own bind from stock"
-sed -n '/^asb_generate_odm_binds() {/,/^}/p' "$I" | grep -q 'rm -rf "$_ob_root"' && fail "the generator wipes the DSP registration's bind again"
+sed -n '/^asb_generate_odm_binds() {/,/^}/p' "$I" | grep 'rm -rf "$_ob_root"' >/dev/null && fail "the generator wipes the DSP registration's bind again"
 grep -q '^lk_cluster_roles() {' "$C" || fail "jank trace still guesses main/prime from policy numbers"
 grep -q 'wn += within(topj, "most janky frames")' "$C" || fail "no table for the app with the most janky frames"
 grep -q 'the little cluster (%s) runs no UI' "$C" || fail "report does not name the clusters on a 4-cluster part"
@@ -4213,7 +4213,7 @@ grep -q 'shell_mode ? "shell" : "governor"' "$ROOT/src/asb_governor.c" || fail "
 grep -q '_lc_foreign="$_lc_vendor"' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "the ownership verdict counts the shell as foreign"
 grep -q 'cap profile/effective' "$ROOT/tools/asb_diag.sh" || fail "asbdiag compares manual caps with the governor rail"
 grep -q 'cap_writer' "$ROOT/docs/log_schemas.md" || fail "cap_writer undocumented"
-awk '/int manual_cap_skip = /{on=1} on && /msm_perf_release\(\);/{rel=NR} on && /goto skip_cpu_caps;/{print (rel ? "ok" : "no"); exit}' "$ROOT/src/asb_writer.h" | grep -qx ok || fail "a manual profile keeps ASB's msm_performance registration after HEAVY/SUSTAINED"
+awk '/int manual_cap_skip = /{on=1} on && /msm_perf_release\(\);/{rel=NR} on && /goto skip_cpu_caps;/{print (rel ? "ok" : "no"); exit}' "$ROOT/src/asb_writer.h" | grep -x ok >/dev/null || fail "a manual profile keeps ASB's msm_performance registration after HEAVY/SUSTAINED"
 grep -q 'if (state != ASB_STATE_HEAVY && state != ASB_STATE_GAMING && state != ASB_STATE_SUSTAINED)' "$ROOT/src/asb_writer.h" || fail "the msm release does not wait for the anti-clamp states to end"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix182 contract"
@@ -4277,7 +4277,7 @@ grep -q 'sin.climate = _cl ? 1 : 0;' "$ROOT/src/asb_governor.c" || fail "the ses
 grep -q 'if (g_asb_cfg.smart_cold_guard && !charging && battery_pct >= 0 && battery_pct < 40 &&' "$ROOT/src/asb_governor.c" || fail "no cold guard"
 [ -f "$ROOT/runtime/asb_gfx_probe.sh" ] || fail "no frame-statistics probe"
 grep -q 'dumpsys graphicsstats' "$ROOT/runtime/asb_gfx_probe.sh" || fail "the probe does not read graphicsstats"
-grep -v '^[[:space:]]*#' "$ROOT/runtime/asb_gfx_probe.sh" | grep -q 'gfxinfo' && fail "the probe must not call into the app (gfxinfo)"
+grep -v '^[[:space:]]*#' "$ROOT/runtime/asb_gfx_probe.sh" | grep 'gfxinfo' >/dev/null && fail "the probe must not call into the app (gfxinfo)"
 grep -q 'snprintf(disp, sizeof(disp), "app %016llx", (unsigned long long)h);' "$ROOT/src/asb_governor.c" || fail "the smoothness log names apps in plaintext in release builds"
 for k in smart_smooth smart_cold_guard; do
   grep -q "^$k=1$" "$ROOT/config/governor.conf" || fail "$k not shipped on"
@@ -4304,7 +4304,7 @@ grep -q 'msm_perf_write_caps(msm_c0, msm_c1, msm_c2);' "$W" || fail "msm_perform
 grep -q 'g_drain_rs_drop_x100 = g_drain_rs_drop_x100 \* 3 / 4 + g_smart_drain_drop_x100;' "$G" || fail "recent drain is not a ratio of sums"
 grep -q 'if (sin.drain_pctph_x10 > 0) {' "$G" && ! grep -q 'g_smart_drain_rate_ewma_x10 = (int)r;' "$G" && fail "recent drain still averages only sessions with a step"
 grep -q 'if (screen_on && _app_prev_on == 0) g_smart_rt.app_cache_last_refresh = 0;' "$G" || fail "the app in front is not re-read on wake"
-awk '/^static void asb_smooth_probe_tick/,/^}/' "$G" | grep -q 'g_smooth_probe_ts = 0;' && fail "the smoothness probe still runs out of turn"
+awk '/^static void asb_smooth_probe_tick/,/^}/' "$G" | grep 'g_smooth_probe_ts = 0;' >/dev/null && fail "the smoothness probe still runs out of turn"
 grep -q '"headroom_real_pct=%d\\n"' "$G" || fail "headroom_real_pct not in the state"
 grep -q '_g_head="$(_st headroom_real_pct)"' "$A" || fail "action shows a different headroom than the Monitor"
 grep -q '\[ "$_l_dwin" -lt 600 \]' "$A" || fail "action prints an unproven drain-now figure"
@@ -4629,13 +4629,13 @@ printf 'id=AutoSystemBoost\nversion=V65\nversionCode=650\n' > "$_OT/r/module.pro
 printf '{\n  "version": "V64",\n  "versionCode": 640,\n  "zipUrl": "https://github.com/o/r/releases/download/64/ASB-V64.zip"\n}\n' > "$_OT/r/update.json"
 _ota_out="$(cd "$_OT/r" && GITHUB_REPOSITORY=o/r ZIP_REL=ASB-V65.zip GITHUB_STEP_SUMMARY="$_OT/sum" bash -e "$_OT/ota.sh" 2>&1)" \
   || { rm -rf "$_OT"; fail "a manifest that still names the previous release failed the run: $_ota_out"; }
-printf '%s\n' "$_ota_out" | grep -q '^::warning::update.json does not describe this build yet.*versionCode 650 and zipUrl https://github.com/o/r/releases/download/65/ASB-V65.zip' \
+printf '%s\n' "$_ota_out" | grep '^::warning::update.json does not describe this build yet.*versionCode 650 and zipUrl https://github.com/o/r/releases/download/65/ASB-V65.zip' >/dev/null \
   || { rm -rf "$_OT"; fail "the warning does not say what to set: $_ota_out"; }
 grep -q 'GITHUB_STEP_SUMMARY' "$_OT/ota.sh" && { rm -rf "$_OT"; fail "the advisory still writes a separate OTA summary block"; }
 [ ! -e "$_OT/sum" ] || { rm -rf "$_OT"; fail "the advisory still duplicates update.json in the job summary"; }
 printf '{\n  "version": "V65",\n  "versionCode": 650,\n  "zipUrl": "https://github.com/o/r/releases/download/65/ASB-V65.zip"\n}\n' > "$_OT/r/update.json"
 _ota_out="$(cd "$_OT/r" && GITHUB_REPOSITORY=o/r ZIP_REL=ASB-V65.zip bash -e "$_OT/ota.sh" 2>&1)" || { rm -rf "$_OT"; fail "a matching manifest failed: $_ota_out"; }
-printf '%s\n' "$_ota_out" | grep -q '^::notice::update.json already describes V65 / 650 / release 65$' || { rm -rf "$_OT"; fail "matching manifest: $_ota_out"; }
+printf '%s\n' "$_ota_out" | grep '^::notice::update.json already describes V65 / 650 / release 65$' >/dev/null || { rm -rf "$_OT"; fail "matching manifest: $_ota_out"; }
 rm -f "$_OT/r/update.json"
 (cd "$_OT/r" && bash -e "$_OT/ota.sh" >/dev/null 2>&1) || { rm -rf "$_OT"; fail "a missing manifest failed the run"; }
 rm -rf "$_OT"
@@ -4647,7 +4647,7 @@ rm -rf "$_OT"
 for _p in "$ROOT"/profiles/*.sh; do
   grep -q 'GPU_THERMAL_PWRLEVEL' "$_p" && fail "profile still pins thermal_pwrlevel: $_p"
 done
-grep -c 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" | grep -q '^[0-9]' || fail "profile_core lost the stale-level release"
+grep -c 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" | grep '^[0-9]' >/dev/null || fail "profile_core lost the stale-level release"
 grep -qF 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" || fail "profile_core does not release a stale thermal_pwrlevel"
 grep -qF 'gpu_tpl_released' "$ROOT/service.sh" || fail "service.sh does not release a stale thermal_pwrlevel"
 grep -qF 'writef_retry "$_tpl" 0 2 0.06' "$ROOT/runtime/profile_core.sh" || fail "the release must write 0 (no cap), not another level"
@@ -5311,15 +5311,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
 fail() { echo "FAIL fix197: $*"; exit 1; }
 # The segment control and the switch wear the navigation bar's capsule material.
-sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -q 'background: var(--cap-wash), var(--tabbar-bg, #000000);' || fail "the segment is not the bar's capsule"
-sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -q 'border: 1px solid var(--cap-edge);' || fail "the segment lost the teal edge"
-sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -q 'box-shadow: var(--cap-shadow);' || fail "the segment lost the lit edge"
-sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -Eq '^[[:space:]]*overflow: hidden;' && fail "the clip is back - it cuts the floating pill's ring"
-sed -n '/^\.cfg-seg button {$/,/^}/p' "$H" | grep -q 'border-radius: 11px;' || fail "the segment buttons are not pills"
-sed -n '/^\.cfg-seg button\.on {$/,/^}/p' "$H" | grep -q 'background: var(--pill-wash);' || fail "the selected option lost the tonal pill"
-sed -n '/^\.cfg-switch {$/,/^}/p' "$H" | grep -q 'background: var(--cap-wash), var(--tabbar-bg, #000000);' || fail "the switch track is not the bar's capsule"
-sed -n '/^\.cfg-switch {$/,/^}/p' "$H" | grep -q 'box-shadow: var(--cap-shadow);' || fail "the switch lost the lit edge"
-sed -n '/^\.cfg-switch\.on {$/,/^}/p' "$H" | grep -q 'rgba(0,240,180,0.5)' || fail "the on state lost the accent wash"
+sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep 'background: var(--cap-wash), var(--tabbar-bg, #000000);' >/dev/null || fail "the segment is not the bar's capsule"
+sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep 'border: 1px solid var(--cap-edge);' >/dev/null || fail "the segment lost the teal edge"
+sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep 'box-shadow: var(--cap-shadow);' >/dev/null || fail "the segment lost the lit edge"
+sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -E '^[[:space:]]*overflow: hidden;' >/dev/null && fail "the clip is back - it cuts the floating pill's ring"
+sed -n '/^\.cfg-seg button {$/,/^}/p' "$H" | grep 'border-radius: 11px;' >/dev/null || fail "the segment buttons are not pills"
+sed -n '/^\.cfg-seg button\.on {$/,/^}/p' "$H" | grep 'background: var(--pill-wash);' >/dev/null || fail "the selected option lost the tonal pill"
+sed -n '/^\.cfg-switch {$/,/^}/p' "$H" | grep 'background: var(--cap-wash), var(--tabbar-bg, #000000);' >/dev/null || fail "the switch track is not the bar's capsule"
+sed -n '/^\.cfg-switch {$/,/^}/p' "$H" | grep 'box-shadow: var(--cap-shadow);' >/dev/null || fail "the switch lost the lit edge"
+sed -n '/^\.cfg-switch\.on {$/,/^}/p' "$H" | grep 'rgba(0,240,180,0.5)' >/dev/null || fail "the on state lost the accent wash"
 grep -q 'html\[data-asb-theme="light"\] \.cfg-seg {' "$H" || fail "no light-theme segment capsule"
 grep -q 'html\[data-asb-theme="light"\] \.cfg-switch {' "$H" || fail "no light-theme switch capsule"
 # The log report is a page in the back-gesture history, like the others.
@@ -5569,10 +5569,10 @@ for prof in stock smart; do
     } > "$T/run.sh"
     out="$(FAKE_GOV=$gov PATH="$T/bin:$PATH" sh "$T/run.sh" 2>&1)"
     case "$prof/$gov" in
-      stock/0) printf '%s\n' "$out" | grep -q '^  \[PASS\] ASB governor stopped (Stock profile)$' || fail "Stock, stopped: $out" ;;
-      stock/1) printf '%s\n' "$out" | grep -q '^  \[FAIL\] ASB governor stopped (Stock profile)$' || fail "Stock with a governor running must fail: $out" ;;
-      smart/0) printf '%s\n' "$out" | grep -q '^  \[FAIL\] ASB governor process alive$' || fail "a dead governor passed because asbdiag itself matched: $out" ;;
-      smart/1) printf '%s\n' "$out" | grep -q '^  \[PASS\] ASB governor process alive$' || fail "running governor: $out" ;;
+      stock/0) printf '%s\n' "$out" | grep '^  \[PASS\] ASB governor stopped (Stock profile)$' >/dev/null || fail "Stock, stopped: $out" ;;
+      stock/1) printf '%s\n' "$out" | grep '^  \[FAIL\] ASB governor stopped (Stock profile)$' >/dev/null || fail "Stock with a governor running must fail: $out" ;;
+      smart/0) printf '%s\n' "$out" | grep '^  \[FAIL\] ASB governor process alive$' >/dev/null || fail "a dead governor passed because asbdiag itself matched: $out" ;;
+      smart/1) printf '%s\n' "$out" | grep '^  \[PASS\] ASB governor process alive$' >/dev/null || fail "running governor: $out" ;;
     esac
   done
 done
@@ -6504,7 +6504,7 @@ grep -Fq -- "--exclude 'tools'" "$WF" || {
 # The manifest is the package step's list: names only, no comments, no paths.
 MANIFEST_NAMES="$(sed 's/#.*//; s/[ \t\r]//g; /^$/d' "$MF" | sort -u)"
 [ -n "$MANIFEST_NAMES" ] || { echo "FAIL: release_tools.list is empty" >&2; exit 1; }
-printf '%s\n' "$MANIFEST_NAMES" | grep -q '/' && {
+printf '%s\n' "$MANIFEST_NAMES" | grep '/' >/dev/null && {
   echo "FAIL: release_tools.list must hold bare top-level names, no paths" >&2
   exit 1
 }
@@ -6555,7 +6555,7 @@ for path in $REQUIRED_TOOLS; do
       : # shipped by the manifest loop itself, checked above
       ;;
     *)
-      printf '%s\n' "$MANIFEST_NAMES" | grep -qxF "$name" || {
+      printf '%s\n' "$MANIFEST_NAMES" | grep -xF "$name" >/dev/null || {
         echo "FAIL: release ZIP requires $path but release_tools.list does not name it" >&2
         exit 1
       }
@@ -6817,7 +6817,7 @@ need "$APPLY" 'stock applied immediately; no duplicate profile worker spawned'
 # Stock is fully restored by notify_governor in the direct path. Do not queue a second worker
 # behind the outgoing Smart worker lock after that real Stock restore has completed.
 _stock_direct="$(sed -n '/^quick_return_or_spawn()/,/^run_worker()/p' "$APPLY" | sed -n '/if \[ "$PROFILE" = "stock" \]; then/,/^[[:space:]]*fi/p')"
-printf '%s\n' "$_stock_direct" | grep -Fq 'spawn_worker' && fail 'Stock direct path still spawns a duplicate worker'
+printf '%s\n' "$_stock_direct" | grep -F 'spawn_worker' >/dev/null && fail 'Stock direct path still spawns a duplicate worker'
 ! grep -Fq '"profile:$PROFILE"' "$APPLY" || true
 need "$CORE" 'stock)'
 need "$CORE" 'ASB_STOCK_PROFILE=1'
@@ -6903,7 +6903,7 @@ need "$UI" 'id="bnStockBattery"'
 need "$UI" 'id="bnStockUptime"'
 need "$ROOT/runtime/asb_rom_telemetry.sh" 'settings get global mobile_data_always_on'
 need "$UI" 'let _stockRomHistory = { ts: 0, cpuT: 0 };'
-! grep -A130 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
+! grep -A130 'async function pollStockTelemetry' "$UI" | grep -E 'settings put|resetprop|tee .*\/sys|echo .*\/sys' >/dev/null || fail 'Stock telemetry contains a write operation'
 ! grep -Eq 'settings put|resetprop|tee .*/sys|> *"?\$(_|SYS|_d|_b|_g|_z)' "$ROOT/runtime/asb_rom_telemetry.sh" || fail 'the ROM snapshot script writes somewhere'
 need "$UI" "if (_selectedProfile === 'stock') {"
 need "$UI" "if (visible) await pollStockTelemetry(true);"
@@ -7064,7 +7064,7 @@ _c_config_shipped_load > "$T/t.c"
 "$CCX" -O1 -I "$ROOT/src" "$T/t.c" -lm -o "$T/t" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; echo "FAIL config shipped load: fixture did not build" >&2; exit 1; }
 out="$("$T/t" "$ROOT/config/governor.conf" "$T")" || { printf '%s\n' "$out" >&2; echo "FAIL config shipped load: the governor's reader refuses its own governor.conf (or the key bound is wrong)" >&2; exit 1; }
 want="$(sed -n 's/^gaming_gpu_enter=//p' "$ROOT/config/governor.conf" | head -1)"
-printf '%s\n' "$out" | grep -q "^shipped rc=0 gaming_gpu_enter=$want " || { printf '%s\n' "$out" >&2; echo "FAIL config shipped load: the file's value did not reach the governor" >&2; exit 1; }
+printf '%s\n' "$out" | grep "^shipped rc=0 gaming_gpu_enter=$want " >/dev/null || { printf '%s\n' "$out" >&2; echo "FAIL config shipped load: the file's value did not reach the governor" >&2; exit 1; }
 n="$(grep -v '^[[:space:]]*#' "$ROOT/config/governor.conf" | grep -c '=')"
 lim="$(sed -n 's/^#define ASB_CFG_MAX_KEYS \([0-9]*\)$/\1/p' "$ROOT/src/asb_config.h")"
 [ "$n" -lt $((lim / 2)) ] || { echo "FAIL config shipped load: governor.conf has $n keys, the reader stops at $lim - raise it before it bites again" >&2; exit 1; }
@@ -7112,11 +7112,11 @@ for s in "$ROOT"/tests/asb_*.sh; do total=$((total + $(bash "$s" --list | wc -l)
 [ "$(bash "$T/asb_fake.sh" --source fx)" = 'int main(void) { return 0; }' ] || fail "--source"
 bash "$T/asb_fake.sh" pass >/dev/null 2>&1 || fail "a passing test failed the suite"
 out="$(bash "$T/asb_fake.sh" 2>&1)" && fail "a failing test passed the suite"
-printf '%s\n' "$out" | grep -qx 'FAILED: fail' || fail "the failure is not named: $out"
-printf '%s\n' "$out" | grep -qx 'FAILED: errexit' || fail "set -e no longer ends a test: $out"
-printf '%s\n' "$out" | grep -q 'errexit-leaked' && fail "a test kept running past set -e"
-printf '%s\n' "$out" | grep -qx 'pass-ran' || fail "a failure stopped the next test"
-printf '%s\n' "$out" | grep -qx 'trap-ran' || fail "an EXIT trap did not run"
+printf '%s\n' "$out" | grep -x 'FAILED: fail' >/dev/null || fail "the failure is not named: $out"
+printf '%s\n' "$out" | grep -x 'FAILED: errexit' >/dev/null || fail "set -e no longer ends a test: $out"
+printf '%s\n' "$out" | grep 'errexit-leaked' >/dev/null && fail "a test kept running past set -e"
+printf '%s\n' "$out" | grep -x 'pass-ran' >/dev/null || fail "a failure stopped the next test"
+printf '%s\n' "$out" | grep -x 'trap-ran' >/dev/null || fail "an EXIT trap did not run"
 bash "$T/asb_fake.sh" nosuch >/dev/null 2>&1 && fail "an unknown test name passed"
 R="$ROOT/tools/asb_full_regression.sh"
 grep -q 'for suite in tests/asb_\*.sh; do' "$R" || fail "the regression does not run the suites"
@@ -7157,27 +7157,27 @@ mkdir -p "$T/r/src/DSP" "$T/r/tools" "$T/r/.github/workflows" "$T/r/src/DSP_AIDL
 echo a > "$T/r/src/DSP/asb_dsp.c"; echo b > "$T/r/CHANGELOG.md"; echo c > "$T/r/service.sh"
 echo v > "$T/r/module.prop"; echo u > "$T/r/update.json"; echo w > "$T/r/.github/workflows/x.yml"; echo p > "$T/r/src/DSP_AIDL/prebuilt/lib.so"
 export ASB_TREE_ROOT="$T/r"
-out="$(sh "$C" write)"; printf '%s\n' "$out" | grep -q 'tree manifest: 3 files' || f "manifest should hold the 3 source files: $out"
+out="$(sh "$C" write)"; printf '%s\n' "$out" | grep 'tree manifest: 3 files' >/dev/null || f "manifest should hold the 3 source files: $out"
 grep -q 'module.prop\|update.json\|\.github\|prebuilt' "$T/r/tools/asb_tree.sha256" && f "manifest lists files the owner edits or CI builds"
-out="$(sh "$C" check)"; printf '%s\n' "$out" | grep -q 'every delivered file is here and unchanged (3 files)' || f "clean tree not recognised: $out"
+out="$(sh "$C" check)"; printf '%s\n' "$out" | grep 'every delivered file is here and unchanged (3 files)' >/dev/null || f "clean tree not recognised: $out"
 echo v2 > "$T/r/module.prop"; echo w2 > "$T/r/.github/workflows/x.yml"
-out="$(sh "$C" check)"; printf '%s\n' "$out" | grep -q 'unchanged' || f "edits to module.prop or a workflow were reported: $out"
+out="$(sh "$C" check)"; printf '%s\n' "$out" | grep 'unchanged' >/dev/null || f "edits to module.prop or a workflow were reported: $out"
 echo old > "$T/r/src/DSP/asb_dsp.c"; rm "$T/r/CHANGELOG.md"
 out="$(sh "$C" check)"; rc=$?
 [ "$rc" = 0 ] || f "a differing tree failed the step without --strict"
-printf '%s\n' "$out" | grep -q 'this tree is NOT the delivered one - 1 file(s) differ, 1 missing, 0 extra' || f "summary line: $out"
-printf '%s\n' "$out" | grep -qx '    differs: src/DSP/asb_dsp.c' || f "the stale file is not named: $out"
-printf '%s\n' "$out" | grep -qx '    missing: CHANGELOG.md' || f "the missing file is not named: $out"
+printf '%s\n' "$out" | grep 'this tree is NOT the delivered one - 1 file(s) differ, 1 missing, 0 extra' >/dev/null || f "summary line: $out"
+printf '%s\n' "$out" | grep -x '    differs: src/DSP/asb_dsp.c' >/dev/null || f "the stale file is not named: $out"
+printf '%s\n' "$out" | grep -x '    missing: CHANGELOG.md' >/dev/null || f "the missing file is not named: $out"
 mkdir -p "$T/r/tests"; echo old > "$T/r/tests/test_old_runtime.sh"
 out="$(sh "$C" check)"
-printf '%s\n' "$out" | grep -q 'this tree is NOT the delivered one - 1 file(s) differ, 1 missing, 1 extra' || f "summary with a leftover: $out"
-printf '%s\n' "$out" | grep -qx '    extra: tests/test_old_runtime.sh' || f "the leftover file is not named: $out"
+printf '%s\n' "$out" | grep 'this tree is NOT the delivered one - 1 file(s) differ, 1 missing, 1 extra' >/dev/null || f "summary with a leftover: $out"
+printf '%s\n' "$out" | grep -x '    extra: tests/test_old_runtime.sh' >/dev/null || f "the leftover file is not named: $out"
 out="$(GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="$T/sum" sh "$C" check)"
-printf '%s\n' "$out" | grep -q '^::warning' && f "CI annotations are back: $out"
+printf '%s\n' "$out" | grep '^::warning' >/dev/null && f "CI annotations are back: $out"
 [ -s "$T/sum" ] && f "a job summary was written: $(cat "$T/sum")"
 sh "$C" check --strict >/dev/null 2>&1 && f "--strict passed a differing tree"
 rm -f "$T/r/tools/asb_tree.sha256"
-out="$(sh "$C" check)"; printf '%s\n' "$out" | grep -q 'none in this tree' || f "no manifest should be said, not failed: $out"
+out="$(sh "$C" check)"; printf '%s\n' "$out" | grep 'none in this tree' >/dev/null || f "no manifest should be said, not failed: $out"
 [ "$fail" = 0 ] && echo "PASS tree check: files that differ from the delivered tree, are missing or are left over are named on request - never as CI annotations"
 exit "$fail"
 )
@@ -7445,7 +7445,7 @@ source "$TMP/migrate_fn.sh"
 asb_migrate_governor_conf
 
 need_line "$MODDIR/config/.schema_version" '20'
-find "$MODDIR/config" -maxdepth 1 -name 'governor.conf.bak.schema17.*' | grep -q . || fail "V62 backup missing"
+find "$MODDIR/config" -maxdepth 1 -name 'governor.conf.bak.schema17.*' | grep . >/dev/null || fail "V62 backup missing"
 for line in \
   'sustained_temp_enter=64' \
   'sustained_temp_ceiling=66' \
@@ -7577,10 +7577,10 @@ absent "$SERVICE" 'Re-assert BOTH directions, not just "off".'
 [ -f "$REFERENCE_DOC" ] || { echo "FAIL: missing reference-model boundary documentation" >&2; exit 1; }
 need "$REFERENCE_DOC" '**not** executable tests of the AutoSystemBoost production implementation'
 need "$REFERENCE_DOC" 'must be a host C harness'
-if find "$ROOT_DIR/tests" -maxdepth 1 -type f -name '*invariant_asb_governor*' | grep -q .; then
+if find "$ROOT_DIR/tests" -maxdepth 1 -type f -name '*invariant_asb_governor*' | grep . >/dev/null; then
   echo "FAIL: pytest reference model remains under tests" >&2; exit 1
 fi
-if grep -RIlE '^[[:space:]]*import[[:space:]]+pytest([[:space:]]|$)' "$ROOT_DIR/tests" 2>/dev/null | grep -q .; then
+if grep -RIlE '^[[:space:]]*import[[:space:]]+pytest([[:space:]]|$)' "$ROOT_DIR/tests" 2>/dev/null | grep . >/dev/null; then
   echo "FAIL: pytest-dependent reference material remains under tests" >&2; exit 1
 fi
 
@@ -8091,8 +8091,8 @@ awk '/^    fsm_init\(&fsm, profile_idx\);$/{i=NR} /^    fsm_session_reset\(&fsm\
   || fail "the governor starts without a session (fsm_session_reset must follow fsm_init in main)"
 for p in '} else if (!metrics.misc.screen_on && _ts == 1) {' '                            disarm_timerfd(tfd_active);'; do
   _blk="$(awk -v p="$p" 'index($0, p) == 1 || index($0, p) {f=1} f{print; n++} n > 30 {exit}' "$G")"
-  printf '%s\n' "$_blk" | grep -q 'persistent_stats_screen_off(&fsm);' || fail "a screen-off path does not keep the next-session context"
-  printf '%s\n' "$_blk" | grep -q 'persistent_stats_save(&fsm);' && fail "a screen-off path still folds the session into the per-profile learning"
+  printf '%s\n' "$_blk" | grep 'persistent_stats_screen_off(&fsm);' >/dev/null || fail "a screen-off path does not keep the next-session context"
+  printf '%s\n' "$_blk" | grep 'persistent_stats_save(&fsm);' >/dev/null && fail "a screen-off path still folds the session into the per-profile learning"
 done
 awk '/^static void persistent_stats_save_ex\(const asb_fsm_t \*fsm, int learn\) \{$/{f=1}
      f && /g_last_session_env = classify_environment\(fsm\);/{e=NR}
@@ -9231,7 +9231,7 @@ grep -qx 'night_charge_start=08:15' "$T/case/mod/config/governor.conf" || fail '
 grep -qx 'night_charge_end=17:45' "$T/case/mod/config/governor.conf" || fail 'custom end fixture not written'
 NOW=494; out="$(run_nc apply)"; [ "$(state "$out")" = released ] || fail "08:14 custom same-day: $out"
 NOW=495; out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || { cat "$T/case/mod/config/governor.conf" >&2; fail "08:15 custom start: $out"; }
-printf '%s\n' "$out" | grep -qx 'window=08:15-17:45' || fail "custom status window: $out"
+printf '%s\n' "$out" | grep -x 'window=08:15-17:45' >/dev/null || fail "custom status window: $out"
 NOW=1064; out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "17:44 custom same-day: $out"
 NOW=1065; out="$(run_nc tick)"; [ "$(state "$out")" = released ] || fail "17:45 custom end: $out"
 [ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'custom end did not restore the original'
@@ -9304,10 +9304,10 @@ out="$(run_nc apply)"
 setup_case; mkdir -p "$T/case/oplus"; printf '1\n' > "$T/case/oplus/mmi_charging_enable"; printf '1\n' > "$T/case/psy/mmi_charging_enable"
 printf '80\n' > "$T/case/psy/capacity"
 out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "oplus mmi hold: $out"
-printf '%s\n' "$out" | grep -qx 'interface=mmi' || fail "oplus mmi not chosen first: $out"
+printf '%s\n' "$out" | grep -x 'interface=mmi' >/dev/null || fail "oplus mmi not chosen first: $out"
 [ "$(cat "$T/case/oplus/mmi_charging_enable")" = 0 ] && [ "$(cat "$T/case/psy/mmi_charging_enable")" = 1 ] || fail 'wrong mmi node written'
 grep -qx 'kind=mmi' "$T/case/state/night_charge.ledger" || fail 'mmi ownership not recorded'
-printf '%s\n' "$(run_nc status)" | grep -qx 'interface=mmi' || fail 'status lost the mmi interface'
+printf '%s\n' "$(run_nc status)" | grep -x 'interface=mmi' >/dev/null || fail 'status lost the mmi interface'
 mkdir -p "$T/case/usb"; printf '1\n' > "$T/case/usb/online"; printf 'Discharging\n' > "$T/case/psy/status"
 out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "a stopped charger reporting Discharging released the hold: $out"
 printf '0\n' > "$T/case/usb/online"
@@ -9317,11 +9317,11 @@ printf 'Charging\n' > "$T/case/psy/status"; printf '1\n' > "$T/case/usb/online"
 out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "mmi re-hold: $out"
 out="$(run_nc restore)"; [ "$(state "$out")" = off ] && [ "$(cat "$T/case/oplus/mmi_charging_enable")" = 1 ] || fail "restore did not hand mmi back: $out"
 setup_case; printf '1\n' > "$T/case/psy/mmi_charging_enable"; printf '81\n' > "$T/case/psy/capacity"
-out="$(run_nc apply)"; printf '%s\n' "$out" | grep -qx 'interface=mmi_psy' && [ "$(cat "$T/case/psy/mmi_charging_enable")" = 0 ] || fail "power_supply mmi: $out"
+out="$(run_nc apply)"; printf '%s\n' "$out" | grep -x 'interface=mmi_psy' >/dev/null && [ "$(cat "$T/case/psy/mmi_charging_enable")" = 0 ] || fail "power_supply mmi: $out"
 printf 'night_charge_enable=0\n' > "$T/case/mod/config/governor.conf"
 out="$(run_nc apply)"; [ "$(state "$out")" = off ] && [ "$(cat "$T/case/psy/mmi_charging_enable")" = 1 ] || fail "disable did not restore mmi_psy: $out"
 setup_case; make_switch; mkdir -p "$T/case/oplus"; printf '1\n' > "$T/case/oplus/mmi_charging_enable"; printf '80\n' > "$T/case/psy/capacity"
-out="$(run_nc apply)"; printf '%s\n' "$out" | grep -qx 'interface=switch' || fail "standard switch must win over mmi: $out"
+out="$(run_nc apply)"; printf '%s\n' "$out" | grep -x 'interface=switch' >/dev/null || fail "standard switch must win over mmi: $out"
 setup_case; mkdir -p "$T/case/oplus"; printf 'x\n' > "$T/case/oplus/mmi_charging_enable"
 out="$(run_nc apply)"; [ "$(state "$out")" = not_exposed ] || fail "a non-binary mmi node was used: $out"
 grep -q '/sys/class/oplus_chg/battery/mmi_charging_enable' "$ROOT/tools/asb_diag.sh" || fail 'diag shows no evidence for the OPlus switch'
@@ -9542,15 +9542,15 @@ for state in both arm64 arm32 none; do
     arm32) printf x > "$MODPATH/zygisk/armeabi-v7a.so" ;;
   esac
   out="$(asb_end_banner)"
-  printf '%s\n' "$out" | grep -q 'ZYGISK OBSERVER' || fail "$state: section absent"
-  printf '%s\n' "$out" | grep -q 'runtime activation: check WebUI after reboot' || fail "$state: runtime boundary absent"
+  printf '%s\n' "$out" | grep 'ZYGISK OBSERVER' >/dev/null || fail "$state: section absent"
+  printf '%s\n' "$out" | grep 'runtime activation: check WebUI after reboot' >/dev/null || fail "$state: runtime boundary absent"
   case "$state" in
-    both) printf '%s\n' "$out" | grep -q 'arm64 + arm32 libraries staged' || fail "$state: wrong payload" ;;
-    arm64) printf '%s\n' "$out" | grep -q 'arm64 library staged; arm32 not present' || fail "$state: wrong payload" ;;
-    arm32) printf '%s\n' "$out" | grep -q 'arm32 library staged; arm64 not present' || fail "$state: wrong payload" ;;
-    none) printf '%s\n' "$out" | grep -q 'native libraries not present in this package' || fail "$state: false payload success" ;;
+    both) printf '%s\n' "$out" | grep 'arm64 + arm32 libraries staged' >/dev/null || fail "$state: wrong payload" ;;
+    arm64) printf '%s\n' "$out" | grep 'arm64 library staged; arm32 not present' >/dev/null || fail "$state: wrong payload" ;;
+    arm32) printf '%s\n' "$out" | grep 'arm32 library staged; arm64 not present' >/dev/null || fail "$state: wrong payload" ;;
+    none) printf '%s\n' "$out" | grep 'native libraries not present in this package' >/dev/null || fail "$state: false payload success" ;;
   esac
-  printf '%s\n' "$out" | grep -q 'PREPARED COMPONENTS' && fail "$state: rejected list printed"
+  printf '%s\n' "$out" | grep 'PREPARED COMPONENTS' >/dev/null && fail "$state: rejected list printed"
 done
 echo 'PASS installer presentation fix331: detailed sections kept, no duplicate checklist, four honest Zygisk ABI states and 13 locales'
 )
@@ -9572,14 +9572,14 @@ sed -n '/^lk_run_bounded() {$/,/^lk_have_dumpsys() {/p' "$C" | sed '$d' > "$T/co
 sed -n '/^lk_uptime_s() {$/,/^lk_mono_s() {$/p' "$F" | sed '$d' > "$T/heartbeat.sh"
 [ -s "$T/collector.sh" ] && [ -s "$T/heartbeat.sh" ] || fail 'real functions not extracted'
 grep -q '^lk_stage() {' "$T/heartbeat.sh" || fail 'heartbeat function missing'
-! sed -n '/^lk_stage() {$/,/^}/p' "$T/heartbeat.sh" | grep -qE 'sleep|&$|while ' || fail 'heartbeat created a polling worker'
+! sed -n '/^lk_stage() {$/,/^}/p' "$T/heartbeat.sh" | grep -E 'sleep|&$|while ' >/dev/null || fail 'heartbeat created a polling worker'
 printf '1000.25 2000.50\n' > "$T/uptime"
 out="$(sh -c '. "$1"; LK_OUT_DIR="$2"; LK_TICK_COUNT=4; LK_POLL_S=90; ASB_LK_UPTIME_FILE="$3"; ASB_DEBUG_SUPPORT_BOOT_ID=boot-test; lk_stage "dumpsys:power"; cat "$2/recorder_heartbeat.env"' x "$T/heartbeat.sh" "$T/cap" "$T/uptime")"
-printf '%s\n' "$out" | grep -qx 'mono=1000' || fail "heartbeat is not monotonic uptime: $out"
-printf '%s\n' "$out" | grep -qx 'stage=dumpsys:power' || fail 'current collector stage missing'
-printf '%s\n' "$out" | grep -qx 'tick=4' || fail 'recorder tick missing'
-printf '%s\n' "$out" | grep -qx 'boot_id=boot-test' || fail 'boot identity missing'
-find "$T/cap" -name 'recorder_heartbeat.env.tmp.*' | grep -q . && fail 'atomic heartbeat temporary file remained'
+printf '%s\n' "$out" | grep -x 'mono=1000' >/dev/null || fail "heartbeat is not monotonic uptime: $out"
+printf '%s\n' "$out" | grep -x 'stage=dumpsys:power' >/dev/null || fail 'current collector stage missing'
+printf '%s\n' "$out" | grep -x 'tick=4' >/dev/null || fail 'recorder tick missing'
+printf '%s\n' "$out" | grep -x 'boot_id=boot-test' >/dev/null || fail 'boot identity missing'
+find "$T/cap" -name 'recorder_heartbeat.env.tmp.*' | grep . >/dev/null && fail 'atomic heartbeat temporary file remained'
 # The heartbeat runs about a dozen times per poll, so its own cost is pinned: after the first
 # stage of a recorder only `date` and the atomic `mv` start a process. The boot identity is
 # read once, the uptime is read by the shell, and an odd stage name is still sanitized.
@@ -9594,9 +9594,9 @@ out="$(PATH="$T/count" /bin/sh -c '. "$1"; LK_OUT_DIR="$2"; ASB_LK_UPTIME_FILE="
   printf "boot-two\n" > "$4"; lk_stage "bad|stage	x"; cat "$2/recorder_heartbeat.env"' x "$T/heartbeat.sh" "$T/hb" "$T/uptime.nonl" "$T/boot_id" "$T/count/log")"
 [ "$(sed -n 1,6p "$T/count/log" | sort | uniq -c | awk '{printf "%s:%s ", $2, $1}')" = 'date:3 mv:3 ' ] \
   || fail "a heartbeat stage starts more than date and mv: $(sed -n 1,6p "$T/count/log" | tr '\n' ' ')"
-printf '%s\n' "$out" | grep -qx 'mono=1234' || fail "uptime without a trailing newline: $out"
-printf '%s\n' "$out" | grep -qx 'boot_id=boot-one' || fail "boot identity re-read inside one recorder: $out"
-printf '%s\n' "$out" | grep -qx 'stage=badstagex' || fail "unsafe stage text reached the heartbeat: $out"
+printf '%s\n' "$out" | grep -x 'mono=1234' >/dev/null || fail "uptime without a trailing newline: $out"
+printf '%s\n' "$out" | grep -x 'boot_id=boot-one' >/dev/null || fail "boot identity re-read inside one recorder: $out"
+printf '%s\n' "$out" | grep -x 'stage=badstagex' >/dev/null || fail "unsafe stage text reached the heartbeat: $out"
 cat > "$T/bin/dumpsys" <<'X'
 #!/bin/sh
 [ "${1:-}" != hang ] || { sleep 5; exit 0; }

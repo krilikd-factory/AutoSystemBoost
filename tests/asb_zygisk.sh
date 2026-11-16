@@ -154,7 +154,7 @@ int main() {
 }
 CPP
   g++ -std=c++17 -Wall -Wextra -Werror -I"$ROOT/src/zygisk" "$T/core.cpp" -o "$T/core" || fail 'C++ build'
-  "$T/core" | grep -qx 'observer core ok' || fail 'core assertions'
+  "$T/core" | grep -x 'observer core ok' >/dev/null || fail 'core assertions'
   echo 'PASS observer native core: validation, exclusions, lifecycle/hint/cold-start bounds, ledger, policy and launch-class parsers, exit and TTL'
 )
 
@@ -191,7 +191,7 @@ t_zygisk_native_contract() (
   grep -q 'const bool observe = !base.empty() && policy.selected(base.c_str());' "$S" \
     || fail 'the unmount flag (every app without root on KernelSU) still silences the allowlist'
   [ "$(grep -c 'classes_locked()' "$S")" = 2 ] || fail 'launch classes are read outside the companion'
-  sed -n '/void preAppSpecialize/,/void preServerSpecialize/p' "$S" | grep -q 'CLASSES' && fail 'the zygote side reads the launch classes'
+  sed -n '/void preAppSpecialize/,/void preServerSpecialize/p' "$S" | grep 'CLASSES' >/dev/null && fail 'the zygote side reads the launch classes'
   grep -q 'ASB_ZYGISK_CLASSES_ABS "/data/adb/modules/AutoSystemBoost/zygisk/classes"' "$ROOT/src/zygisk/asb_observer_protocol.h" || fail 'classes path'
   ! grep -q 'slow=\|fast=' "$ROOT/runtime/asb_zygisk.sh" || fail 'launch classes leaked into the process policy'
   grep -q "printf 'xpkg=%s" "$ROOT/runtime/asb_zygisk.sh" || fail 'owner exclusions do not reach the generated policy'
@@ -831,7 +831,7 @@ CPP
     -DASB_GOVERNOR_STATE="\"$T/gov/state\"" -DASB_GOVERNOR_SOCKET="\"$T/gov/ctl.sock\"" \
     -DASB_GOVERNOR_CLIENT_DIR="\"$T/gov\"" "$T/hot.cpp" -o "$T/hot" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail 'host harness build'; }
   out="$("$T/hot")" || fail "runtime: $out"
-  printf '%s\n' "$out" | grep -qx 'hot path ok' || fail "$out"
+  printf '%s\n' "$out" | grep -x 'hot path ok' >/dev/null || fail "$out"
   if grep -q 'api_->exemptFd\|socket_ = sock\|package_ = base' "$ROOT/src/zygisk/asb_observer.cpp"; then
     fail 'app-side retained socket state returned'
   fi
@@ -1538,13 +1538,13 @@ t_zygisk_capture_digest_runtime() (
   _snap "$CAP/zygisk_observer_latest.tsv" connected 15
   out="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP")"
   zy="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "zygisk"')"
-  printf '%s\n' "$zy" | grep -q $'^zygisk\tstate=connected\tstart_state=waiting\tcoverage=start_latest' || fail "capture verdict missing: $zy"
-  printf '%s\n' "$zy" | grep -q $'events_total_delta=5' || fail 'event delta missing'
-  printf '%s\n' "$zy" | grep -q $'launch_accepted_delta=5' || fail 'launch delta missing'
-  printf '%s\n' "$zy" | grep -q $'launch_vetoed_delta=5' && printf '%s\n' "$zy" | grep -q $'launch_unavailable_delta=5' && printf '%s\n' "$zy" | grep -q $'launch_throttled_delta=5' && printf '%s\n' "$zy" | grep -q $'launch_screen_off_delta=5' || fail 'cold-start outcome deltas missing'
-  printf '%s\n' "$zy" | grep -q $'memory_kb=2222' && printf '%s\n' "$zy" | grep -q $'ledger_top_screen_off=com.example.sync 17/3' && printf '%s\n' "$zy" | grep -q $'ledger_restart_loops=4' || fail 'ledger diagnostics missing'
-  printf '%s\n' "$zy" | grep -q $'ipc_cpu_ms_delta=5' || fail 'IPC delta missing'
-  printf '%s\n' "$zy" | grep -q $'deltas=available' || fail 'valid deltas not acknowledged'
+  printf '%s\n' "$zy" | grep $'^zygisk\tstate=connected\tstart_state=waiting\tcoverage=start_latest' >/dev/null || fail "capture verdict missing: $zy"
+  printf '%s\n' "$zy" | grep $'events_total_delta=5' >/dev/null || fail 'event delta missing'
+  printf '%s\n' "$zy" | grep $'launch_accepted_delta=5' >/dev/null || fail 'launch delta missing'
+  printf '%s\n' "$zy" | grep $'launch_vetoed_delta=5' >/dev/null && printf '%s\n' "$zy" | grep $'launch_unavailable_delta=5' >/dev/null && printf '%s\n' "$zy" | grep $'launch_throttled_delta=5' >/dev/null && printf '%s\n' "$zy" | grep $'launch_screen_off_delta=5' >/dev/null || fail 'cold-start outcome deltas missing'
+  printf '%s\n' "$zy" | grep $'memory_kb=2222' >/dev/null && printf '%s\n' "$zy" | grep $'ledger_top_screen_off=com.example.sync 17/3' >/dev/null && printf '%s\n' "$zy" | grep $'ledger_restart_loops=4' >/dev/null || fail 'ledger diagnostics missing'
+  printf '%s\n' "$zy" | grep $'ipc_cpu_ms_delta=5' >/dev/null || fail 'IPC delta missing'
+  printf '%s\n' "$zy" | grep $'deltas=available' >/dev/null || fail 'valid deltas not acknowledged'
   # Governor-side action evidence comes only from the state blocks already present in
   # before/after snapshots. Decoys outside that block must never enter the projection.
   cat > "$CAP/before.txt" <<'EOF_GOV_BEFORE'
@@ -1577,29 +1577,29 @@ unlock_cold_trims=2
 --- end state ---
 EOF_GOV_AFTER
   gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
-  printf '%s\n' "$gov" | grep -q $'^zygov\tcoverage=start_latest' || fail "governor coverage missing: $gov"
+  printf '%s\n' "$gov" | grep $'^zygov\tcoverage=start_latest' >/dev/null || fail "governor coverage missing: $gov"
   for field in zygisk_launch_accepted_delta=5 zygisk_launch_vetoed_delta=2 zygisk_refresh_accepted_delta=3 zygisk_refresh_vetoed_delta=1 unlock_cold_lifts_delta=3 unlock_cold_extends_delta=2 unlock_cold_long_delta=2 unlock_cold_trims_delta=1 deltas=available; do
-    printf '%s\n' "$gov" | grep -q "	$field" || fail "governor action projection: $field: $gov"
+    printf '%s\n' "$gov" | grep "	$field" >/dev/null || fail "governor action projection: $field: $gov"
   done
-  ! printf '%s\n' "$gov" | grep -q '999\|unrelated_counter' || fail 'state-block allowlist leaked decoy evidence'
+  ! printf '%s\n' "$gov" | grep '999\|unrelated_counter' >/dev/null || fail 'state-block allowlist leaked decoy evidence'
   # A capture zipped while the recorder still runs has no after.txt yet: the newest hourly
   # snapshot is its latest point, as it already is for the Smart counters.
   mv "$CAP/after.txt" "$CAP/after.hold"
   cp "$CAP/after.hold" "$CAP/snapshot_1794000100.txt"
   sed 's/^zygisk_launch_accepted=15$/zygisk_launch_accepted=12/' "$CAP/after.hold" > "$CAP/snapshot_1794000000.txt"
   gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
-  printf '%s\n' "$gov" | grep -q $'^zygov\tcoverage=start_latest' && printf '%s\n' "$gov" | grep -q $'\tzygisk_launch_accepted_delta=5\t' \
+  printf '%s\n' "$gov" | grep $'^zygov\tcoverage=start_latest' >/dev/null && printf '%s\n' "$gov" | grep $'\tzygisk_launch_accepted_delta=5\t' >/dev/null \
     || fail "a live export without after.txt did not read the newest snapshot: $gov"
   rm -f "$CAP"/snapshot_*.txt; mv "$CAP/after.hold" "$CAP/after.txt"
   sed -i 's/^unlock_cold_lifts=7$/unlock_cold_lifts=3/' "$CAP/after.txt"
   gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
   for k in zygisk_launch_accepted zygisk_launch_vetoed zygisk_refresh_accepted zygisk_refresh_vetoed unlock_cold_lifts unlock_cold_extends unlock_cold_long unlock_cold_trims; do
-    printf '%s\n' "$gov" | grep -q "	${k}_delta=unknown" || fail "governor reset invented $k: $gov"
+    printf '%s\n' "$gov" | grep "	${k}_delta=unknown" >/dev/null || fail "governor reset invented $k: $gov"
   done
-  printf '%s\n' "$gov" | grep -q $'deltas=counter_reset_or_restart' || fail 'governor reset was not named'
+  printf '%s\n' "$gov" | grep $'deltas=counter_reset_or_restart' >/dev/null || fail 'governor reset was not named'
   rm "$CAP/before.txt"
   gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
-  printf '%s\n' "$gov" | grep -q $'coverage=latest_only' && printf '%s\n' "$gov" | grep -q $'unlock_cold_lifts_latest=3' && printf '%s\n' "$gov" | grep -q $'unlock_cold_lifts_delta=unknown' || fail "single governor snapshot was not bounded: $gov"
+  printf '%s\n' "$gov" | grep $'coverage=latest_only' >/dev/null && printf '%s\n' "$gov" | grep $'unlock_cold_lifts_latest=3' >/dev/null && printf '%s\n' "$gov" | grep $'unlock_cold_lifts_delta=unknown' >/dev/null || fail "single governor snapshot was not bounded: $gov"
   rm "$CAP/after.txt"
   # SM8750 field shape: an outcome decreased across a companion restart while the total
   # stayed at ten and accepted rose. No cold-start delta is comparable in that window;
@@ -1614,23 +1614,23 @@ EOF_GOV_AFTER
   done
   zy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygisk"')"
   for k in launch_events launch_accepted launch_vetoed launch_unavailable launch_throttled launch_screen_off; do
-    printf '%s\n' "$zy" | grep -q "	${k}_delta=unknown" || fail "reset launch family invented $k: $zy"
+    printf '%s\n' "$zy" | grep "	${k}_delta=unknown" >/dev/null || fail "reset launch family invented $k: $zy"
   done
-  printf '%s\n' "$zy" | grep -q $'spawn_events_delta=10' || fail 'an independent monotonic spawn counter was discarded'
-  printf '%s\n' "$zy" | grep -q $'deltas=counter_reset_or_restart' || fail 'partial cold-start reset was not named'
+  printf '%s\n' "$zy" | grep $'spawn_events_delta=10' >/dev/null || fail 'an independent monotonic spawn counter was discarded'
+  printf '%s\n' "$zy" | grep $'deltas=counter_reset_or_restart' >/dev/null || fail 'partial cold-start reset was not named'
   _snap "$CAP/zygisk_observer_start.tsv" waiting 10
   _snap "$CAP/zygisk_observer_latest.tsv" connected 4
   zy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygisk"')"
-  printf '%s\n' "$zy" | grep -q $'events_total_delta=unknown' || fail 'counter reset invented a delta'
-  printf '%s\n' "$zy" | grep -q $'deltas=counter_reset_or_restart' || fail 'counter reset was not named'
+  printf '%s\n' "$zy" | grep $'events_total_delta=unknown' >/dev/null || fail 'counter reset invented a delta'
+  printf '%s\n' "$zy" | grep $'deltas=counter_reset_or_restart' >/dev/null || fail 'counter reset was not named'
   rm "$CAP/zygisk_observer_start.tsv"
   zy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygisk"')"
-  printf '%s\n' "$zy" | grep -q $'coverage=latest_only' || fail 'single snapshot not bounded'
-  printf '%s\n' "$zy" | grep -q $'events_total_delta=unknown' || fail 'single snapshot invented a delta'
+  printf '%s\n' "$zy" | grep $'coverage=latest_only' >/dev/null || fail 'single snapshot not bounded'
+  printf '%s\n' "$zy" | grep $'events_total_delta=unknown' >/dev/null || fail 'single snapshot invented a delta'
   rm "$CAP/zygisk_observer_latest.tsv"
   legacy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP")"
-  ! printf '%s\n' "$legacy" | grep -q '^zygisk' || fail 'legacy capture gained fake Zygisk evidence'
-  ! printf '%s\n' "$legacy" | grep -q '^zygov' || fail 'legacy capture gained fake Governor action evidence'
+  ! printf '%s\n' "$legacy" | grep '^zygisk' >/dev/null || fail 'legacy capture gained fake Zygisk evidence'
+  ! printf '%s\n' "$legacy" | grep '^zygov' >/dev/null || fail 'legacy capture gained fake Governor action evidence'
   echo 'PASS observer capture digest: companion/Governor start/latest verdicts, newest hourly snapshot for a live export, monotonic deltas, full-family resets, single-snapshot and legacy-capture honesty'
 )
 
@@ -1733,26 +1733,26 @@ CPP
   m0="$(stat -c %Y.%i "$C")"; chmod 644 "$C"; sleep 1
   out="$(run classes)"; [ "$out" = 'result=unchanged slow=1 fast=2' ] && [ "$(stat -c %Y.%i "$C")" = "$m0" ] || fail "an unchanged pass rewrote the file: $out"
   [ "$(stat -c %a "$C")" = 600 ] || fail 'an unchanged pass kept legacy world-readable classes'
-  ls "$T/asb" | grep -q 'zygisk_link\.' && fail "temporary files left: $(ls "$T/asb")"
+  ls "$T/asb" | grep 'zygisk_link\.' >/dev/null && fail "temporary files left: $(ls "$T/asb")"
   st="$(run status)"
   for want in version=1 classes=on classes_slow=1 classes_fast=2 comp_state=1 comp_supported=1 comp_long=5 comp_short=3 comp_classes_loaded=1 \
       denylist_spawns=7 gov_launch=20 gov_long=4 gov_short=2 gov_cold_long=3 gov_trims=1 lsposed=1 lsposed_modules=2 lsposed_apps=5 lsposed_system=1 lsposed_sysui=2 \
       'zmod|other_x|0|Other x(id)' 'zmod|zygisk_lsposed|1|Zygisk - LSPosed' 'cmp|575|2|700|5'; do
     printf '%s\n' "$st" | grep -xF "$want" >/dev/null || fail "status lacks '$want': $st"
   done
-  printf '%s\n' "$st" | grep -q 'AutoSystemBoost' && fail 'ASB listed itself among other Zygisk modules'
-  printf '%s\n' "$st" | grep -qxF 'app|com.example.midapp|normal|normal|measured|3|700|0|-|3|-1|loop|-|notif|0' || fail "guarded + protected row: $st"
-  printf '%s\n' "$st" | grep -qxF 'app|com.example.slowapp|slow|slow|measured|4|1225|0|-|4|46|-|-|-|0' || fail "slow row with background history: $st"
-  printf '%s\n' "$st" | grep -qxF 'app|com.example.fastapp|fast|fast|measured|3|302|0|-|3|-1|-|verify|-|0' || fail "fast row with ART: $st"
-  printf '%s\n' "$st" | grep -qxF 'app|com.example.hooked|normal|normal|hooks|1|1300|2|it.dhd.oxygencustomizer,com.luckyzyx.luckytool|2|-1|-|-|-|0' \
-    || printf '%s\n' "$st" | grep -qxF 'app|com.example.hooked|normal|normal|hooks|1|1300|2|com.luckyzyx.luckytool,it.dhd.oxygencustomizer|2|-1|-|-|-|0' || fail "one hooked slow launch must keep the normal lift: $st"
-  printf '%s\n' "$st" | grep -q '^app|com.example.hookednolaunch|' && fail "fix287: a hooked app never opened is listed or classed: $st"
-  printf '%s\n' "$st" | grep -qxF 'app|com.android.settings|normal|normal|excluded|3|1500|0|-|3|-1|-|-|-|0' || fail "excluded row: $st"
-  printf '%s\n' "$st" | grep -qxF 'app|com.example.hookedmid|normal|normal|measured|3|800|1|it.dhd.oxygencustomizer|3|-1|-|-|-|0' || fail "measured beats hooks: $st"
+  printf '%s\n' "$st" | grep 'AutoSystemBoost' >/dev/null && fail 'ASB listed itself among other Zygisk modules'
+  printf '%s\n' "$st" | grep -xF 'app|com.example.midapp|normal|normal|measured|3|700|0|-|3|-1|loop|-|notif|0' >/dev/null || fail "guarded + protected row: $st"
+  printf '%s\n' "$st" | grep -xF 'app|com.example.slowapp|slow|slow|measured|4|1225|0|-|4|46|-|-|-|0' >/dev/null || fail "slow row with background history: $st"
+  printf '%s\n' "$st" | grep -xF 'app|com.example.fastapp|fast|fast|measured|3|302|0|-|3|-1|-|verify|-|0' >/dev/null || fail "fast row with ART: $st"
+  printf '%s\n' "$st" | grep -xF 'app|com.example.hooked|normal|normal|hooks|1|1300|2|it.dhd.oxygencustomizer,com.luckyzyx.luckytool|2|-1|-|-|-|0' >/dev/null \
+    || printf '%s\n' "$st" | grep -xF 'app|com.example.hooked|normal|normal|hooks|1|1300|2|com.luckyzyx.luckytool,it.dhd.oxygencustomizer|2|-1|-|-|-|0' >/dev/null || fail "one hooked slow launch must keep the normal lift: $st"
+  printf '%s\n' "$st" | grep '^app|com.example.hookednolaunch|' >/dev/null && fail "fix287: a hooked app never opened is listed or classed: $st"
+  printf '%s\n' "$st" | grep -xF 'app|com.android.settings|normal|normal|excluded|3|1500|0|-|3|-1|-|-|-|0' >/dev/null || fail "excluded row: $st"
+  printf '%s\n' "$st" | grep -xF 'app|com.example.hookedmid|normal|normal|measured|3|800|1|it.dhd.oxygencustomizer|3|-1|-|-|-|0' >/dev/null || fail "measured beats hooks: $st"
   printf '%s\n' "$st" | awk -F'|' '$1 == "app" && NF != 15 { exit 1 }' || fail 'an app row is not 15 fields'
   [ "$(printf '%s\n' "$st" | sed -n '/^app|/{p;q}' | cut -d'|' -f2)" = com.example.slowapp ] || fail "rows not ordered by action, then use: $st"
   ASB_ZL_ROWS=2 run status | grep -c '^app|' | grep -qx 2 || fail 'row cap ignored'
-  ls "$T/tmp" | grep -q . && fail "status left temporary files: $(ls "$T/tmp")"
+  ls "$T/tmp" | grep . >/dev/null && fail "status left temporary files: $(ls "$T/tmp")"
   # fix321: hooks remain context, not an evidence shortcut. The same app earns the long
   # class only after the ordinary three-sample measured median is available.
   printf '%s\n' "$((now+42))|com.example.hooked|1250|1" "$((now+43))|com.example.hooked|1200|1" >> "$T/asb/zygisk_aot_launch"

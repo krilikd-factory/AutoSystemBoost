@@ -2982,26 +2982,26 @@ printf 'forecast_rate_x10=154\nforecast_basis=now\nsmart_drain_pctph_x10=154\nsm
 a="$(run_action "$T/s0")"; w="$(run_web "$T/s0")"
 [ "${a%%|*}" = 214 ] || fail "action minutes $a, want 214 (55 % / 15.4 %/h)"
 [ "${w%%|*}" = 214 ] || fail "WebUI minutes $w, want 214"
-printf '%s' "$a" | grep -q '(по факту 15.4%/ч)' || fail "action note for the actual drain: $a"
-printf '%s' "$a" | grep -q '|~3 ч 34 мин$' || fail "Smart card time differs from the header: $a"
+printf '%s' "$a" | grep '(по факту 15.4%/ч)' >/dev/null || fail "action note for the actual drain: $a"
+printf '%s' "$a" | grep '|~3 ч 34 мин$' >/dev/null || fail "Smart card time differs from the header: $a"
 [ "${w#*|}" = ' · по факту' ] || fail "WebUI note must be short - '· по факту': $w"
 # 2. An estimate from recent sessions: 9.4 %/h.
 printf 'forecast_rate_x10=94\nforecast_basis=recent\nsmart_drain_pctph_x10=103\nsmart_drain_window_s=300\nsmart_drain_ewma_x10=94\nsmart_bucket_drain_x10=129\nsmart_confidence=1000\n' > "$T/s1"
 a="$(run_action "$T/s1")"; w="$(run_web "$T/s1")"
 [ "${a%%|*}" = 351 ] && [ "${w%%|*}" = 351 ] || fail "estimate minutes: action $a, WebUI $w (want 351)"
-printf '%s' "$a" | grep -q '(оценка по прошлым сессиям 9.4%/ч)' || fail "action estimate note: $a"
+printf '%s' "$a" | grep '(оценка по прошлым сессиям 9.4%/ч)' >/dev/null || fail "action estimate note: $a"
 [ "${w#*|}" = ' · оценка' ] || fail "WebUI estimate note must be short: $w"
 # 3. Slot basis right after boot.
 printf 'forecast_rate_x10=129\nforecast_basis=slot\nsmart_drain_window_s=0\n' > "$T/s2"
 a="$(run_action "$T/s2")"; w="$(run_web "$T/s2")"
 [ "${a%%|*}" = "${w%%|*}" ] || fail "slot forecast differs: action $a, WebUI $w"
-printf '%s' "$a" | grep -q '(оценка по этому часу 12.9%/ч)' || fail "slot note wrong: $a"
+printf '%s' "$a" | grep '(оценка по этому часу 12.9%/ч)' >/dev/null || fail "slot note wrong: $a"
 [ "${w#*|}" = ' · оценка' ] || fail "WebUI slot note wrong: $w"
 # 4. An older governor without forecast keys: both fall back to the same live rate.
 printf 'smart_drain_pctph_x10=103\nsmart_drain_window_s=1200\n' > "$T/s3"
 a="$(run_action "$T/s3")"; w="$(run_web "$T/s3")"
 [ "${a%%|*}" = 320 ] && [ "${w%%|*}" = 320 ] || fail "fallback differs: action $a, WebUI $w (want 320)"
-printf '%s' "$a" | grep -q '(по факту 10.3%/ч)' || fail "live note wrong: $a"
+printf '%s' "$a" | grep '(по факту 10.3%/ч)' >/dev/null || fail "live note wrong: $a"
 # 5. The Monitor tile shows the actual drain, in one word.
 grep -q '"lv_avgdrain": "Расход"' "$ROOT/webroot/i18n/ru.json" || fail "drain tile not the actual drain"
 grep -q "if (_fbs === 'now') _act = _frt;" "$W" || fail "tile does not show the actual rate"
@@ -3063,18 +3063,18 @@ out="$(MODDIR="$T/mod" ASB_GOV_PIDFILE="$T/gov.pid" ASB_SAFE_MODE_FILE="$T/safe"
 sec() { printf '%s\n' "$out" | awk -v s="-- $1" '$0 == s { f = 1; next } /^-- / { f = 0 } f'; }
 [ -z "$(sec none)" ] || f "acted with no pid file: $(sec none)"
 [ -z "$(sec alive)" ] || f "acted on a live governor: $(sec alive)"
-sec dead | grep -q '^START$' || f "dead governor not restarted: $out"
-sec dead | grep -q "^LOG governor: pid $DEAD had died without a clean stop - restarted (1 in 30 min)$" || f "restart not logged: $out"
+sec dead | grep '^START$' >/dev/null || f "dead governor not restarted: $out"
+sec dead | grep "^LOG governor: pid $DEAD had died without a clean stop - restarted (1 in 30 min)$" >/dev/null || f "restart not logged: $out"
 [ -z "$(sec after)" ] || f "acted again on the restarted governor: $(sec after)"
 [ -z "$(sec safe)" ] || f "restarted in safe mode: $(sec safe)"
 [ -z "$(sec stock)" ] || f "restarted under stock: $(sec stock)"
-printf '%s\n' "$out" | grep -q 'PIDFILE KEPT' && f "a stale pid file left where no governor belongs: $out"
-sec loop2 | grep -q 'restarted (2 in 30 min)' || f "second restart: $out"
-sec loop3 | grep -q 'restarted (3 in 30 min)' || f "third restart: $out"
-sec loop4 | grep -q '^START$' && f "a fourth restart inside 30 min (crash loop fed): $out"
-sec loop4 | grep -q 'died again after 3 restarts in 30 min' || f "crash loop not logged: $out"
+printf '%s\n' "$out" | grep 'PIDFILE KEPT' >/dev/null && f "a stale pid file left where no governor belongs: $out"
+sec loop2 | grep 'restarted (2 in 30 min)' >/dev/null || f "second restart: $out"
+sec loop3 | grep 'restarted (3 in 30 min)' >/dev/null || f "third restart: $out"
+sec loop4 | grep '^START$' >/dev/null && f "a fourth restart inside 30 min (crash loop fed): $out"
+sec loop4 | grep 'died again after 3 restarts in 30 min' >/dev/null || f "crash loop not logged: $out"
 [ -z "$(sec loop5)" ] || f "crash-loop line repeated: $(sec loop5)"
-sec window | grep -q 'restarted (1 in 30 min)' || f "no restart once the window passed: $out"
+sec window | grep 'restarted (1 in 30 min)' >/dev/null || f "no restart once the window passed: $out"
 [ -z "$(sec nocpu)" ] || f "restarted with the CPU feature off: $(sec nocpu)"
 # A resident watchdog loop (the no-governor fallback in service.sh) owns recovery; liveness
 # must defer to its marker instead of racing a second restart path.
@@ -3172,7 +3172,7 @@ run_probe
 [ "$(value confidence "$TMP/out")" = "observed_surface" ] || fail "surface confidence"
 
 # The executable body must not contain mutation commands. Comments are not policy paths.
-if sed '/^[[:space:]]*#/d' "$TOOL" | grep -Eqi '(^|[;[:space:]])(setprop|mount|umount|chmod|chown|insmod|rmmod|dd)[[:space:]]|>[[:space:]]*/(sys|proc|data)'; then
+if sed '/^[[:space:]]*#/d' "$TOOL" | grep -Ei '(^|[;[:space:]])(setprop|mount|umount|chmod|chown|insmod|rmmod|dd)[[:space:]]|>[[:space:]]*/(sys|proc|data)' >/dev/null; then
   fail "probe contains a mutation primitive"
 fi
 
@@ -3505,15 +3505,15 @@ echo '0 1 2 3 4 5' > "$T/cpufreq/policy0/related_cpus"; echo 3628800 > "$T/cpufr
 echo '6 7' > "$T/cpufreq/policy6/related_cpus"; echo 4608000 > "$T/cpufreq/policy6/cpuinfo_max_freq"
 run() { printf '%s\n' "$1" > "$T/msm"; printf '%b' "$2" > "$T/state"; ( P() { echo "$*"; }; . "$T/blk.sh" ); }
 out="$(run '0:2227200 1:2227200 2:2227200 3:2227200 4:2227200 5:2227200 6:1632000 7:1632000' 'msm_asb_hold=0\nmsm_asb=3628800,4608000,0\n')"
-printf '%s\n' "$out" | grep -q "NOT ASB's: .*cpu0 2227200, cpu6 1632000" || fail "a vendor ceiling not named as such: $out"
+printf '%s\n' "$out" | grep "NOT ASB's: .*cpu0 2227200, cpu6 1632000" >/dev/null || fail "a vendor ceiling not named as such: $out"
 out="$(run '0:1996800 1:1996800 2:1996800 3:1996800 4:1996800 5:1996800 6:1862400 7:1862400' 'msm_asb_hold=1\nmsm_asb=1996800,1862400,0\n')"
-printf '%s\n' "$out" | grep -q "ASB's own HEAVY/GAMING registration" || fail "ASB's registration not recognised: $out"
+printf '%s\n' "$out" | grep "ASB's own HEAVY/GAMING registration" >/dev/null || fail "ASB's registration not recognised: $out"
 out="$(run '0:1996800 6:1862400' 'msm_asb_hold=0\nmsm_asb=1996800,1862400,0\n')"
-printf '%s\n' "$out" | grep -q "still in the node" || fail "a release that did not land is blamed on the vendor: $out"
+printf '%s\n' "$out" | grep "still in the node" >/dev/null || fail "a release that did not land is blamed on the vendor: $out"
 out="$(run '0:3628800 1:3628800 6:4608000 7:4608000' 'msm_asb_hold=0\n')"
-printf '%s\n' "$out" | grep -q "no ceiling held there" || fail "hardware maximum read as a ceiling: $out"
+printf '%s\n' "$out" | grep "no ceiling held there" >/dev/null || fail "hardware maximum read as a ceiling: $out"
 out="$(run '0:2227200 6:1632000' '')"
-printf '%s\n' "$out" | grep -q "unknown" || fail "an older governor's state is not admitted as unknown: $out"
+printf '%s\n' "$out" | grep "unknown" >/dev/null || fail "an older governor's state is not admitted as unknown: $out"
 grep -q 'below the ${_prime_req} kHz ASB wrote' "$D" || fail "section 7 still credits a foreign ceiling to the profile"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag msm owner: msm_performance's ceilings are named as ASB's, left behind, or the vendor's"
@@ -3561,7 +3561,7 @@ touch -d '2026-10-12 22:40:00' "$D/tombstone_00"; touch -d '2026-10-12 22:41:00'
 sed -n '/^_asb_tombstones() {$/,/^}$/p' "$ROOT/tools/asb_diag.sh" > "$T/fn.sh"
 grep -q '_asb_tombstones' "$T/fn.sh" || fail "function not found in asbdiag"
 out="$(P() { echo "$*"; }; NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_TOMBSTONE_DIR="$D" _asb_tombstones)"
-printf '%s\n' "$out" | grep -q 'audiohalservice.qti  signal 6 (SIGABRT)$' || fail "unrelated audio HAL crash not listed plainly: $out"
+printf '%s\n' "$out" | grep 'audiohalservice.qti  signal 6 (SIGABRT)$' >/dev/null || fail "unrelated audio HAL crash not listed plainly: $out"
 [ "$(printf '%s\n' "$out" | grep -c '<< ASB code in this crash')" = 2 ] || fail "ASB crashes not told apart from the memory map: $out"
 printf '%s\n' "$out" | grep -q 'asb_dsp_attach .*<< ASB code' || fail "a crash of the attach daemon not flagged: $out"
 printf '%s\n' "$out" | grep -q "Abort message: 'FORTIFY" || fail "abort message missing"
@@ -3613,7 +3613,7 @@ backtrace:
 X
 done
 out="$(P() { echo "$*"; }; NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_TOMBSTONE_DIR="$D3" _asb_tombstones)"
-printf '%s\n' "$out" | grep -q '(of$' && fail "a cut '(offset' is printed as the frame's function: $out"
+printf '%s\n' "$out" | grep '(of$' >/dev/null && fail "a cut '(offset' is printed as the frame's function: $out"
 [ "$(printf '%s\n' "$out" | grep -c '^      crashing thread: DexKitWorker$')" = 3 ] || fail "crashing thread not named: $out"
 printf '%s\n' "$out" | grep -q '^      crashed inside code of com.luckyzyx.luckytool: libdexkit.so (dexkit::DexKit::BatchFind(int))$' || fail "failing function not named: $out"
 printf '%s\n' "$out" | grep -q '^      app/hook code on the stack (nearest first): org.luckypray.dexkit.DexKitBridge.nativeBatchFind <- com.luckyzyx.luckytool.hook.scope.launcher.Layout.onHook$' || fail "hook classes not named: $out"
@@ -3622,8 +3622,8 @@ printf '%s\n' "$out" | grep -q '^      the stack passes through the hook framewo
 printf '%s\n' "$out" | grep -q '^NOTE   com.luckyzyx.luckytool - crashed in: com.android.launcher x2, com.android.systemui x1; failing code: libdexkit.so (dexkit::DexKit::BatchFind(int)); its classes on the stack: org.luckypray.dexkit' || fail "module summary: $out"
 out="$( (set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$ROOT/tools/logkit/_asb_logkit_common.sh" >/dev/null 2>&1
          LK_START_EPOCH=0 ASB_TOMBSTONE_DIR="$D3" lk_emit_native_crashes) )"
-printf '%s\n' "$out" | grep -q 'crashed inside code of com.luckyzyx.luckytool: libdexkit.so (dexkit::DexKit::BatchFind(int)) - an installed app' || fail "report: failing function: $out"
-printf '%s\n' "$out" | grep -q 'app/hook code on the stack (nearest first): org.luckypray.dexkit.DexKitBridge.nativeBatchFind <- com.luckyzyx.luckytool.hook.scope.launcher.Layout.onHook' || fail "report: hook classes: $out"
+printf '%s\n' "$out" | grep 'crashed inside code of com.luckyzyx.luckytool: libdexkit.so (dexkit::DexKit::BatchFind(int)) - an installed app' >/dev/null || fail "report: failing function: $out"
+printf '%s\n' "$out" | grep 'app/hook code on the stack (nearest first): org.luckypray.dexkit.DexKitBridge.nativeBatchFind <- com.luckyzyx.luckytool.hook.scope.launcher.Layout.onHook' >/dev/null || fail "report: hook classes: $out"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 
 # Full-day report: only tombstones newer than the capture start.
@@ -3632,8 +3632,8 @@ out="$( (set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$ROOT/tools/logkit/_asb_
 # libasbdsp may appear only as the crashing frame of the one crash it is in, never from a map.
 [ "$(printf '%s\n' "$out" | grep -c 'libasbdsp')" = 1 ] || fail "memory-map library leaked into the report: $out"
 [ "$(printf '%s\n' "$out" | grep -c '^  [0-9]')" = 2 ] || fail "capture window not applied: $out"
-printf '%s\n' "$out" | grep -q '^2 of them with ASB code in the crash' || fail "report summary missing: $out"
-printf '%s\n' "$out" | grep -q 'first frame outside libc: /system/lib64/libaudioclient.so' || fail "report does not name the frame: $out"
+printf '%s\n' "$out" | grep '^2 of them with ASB code in the crash' >/dev/null || fail "report summary missing: $out"
+printf '%s\n' "$out" | grep 'first frame outside libc: /system/lib64/libaudioclient.so' >/dev/null || fail "report does not name the frame: $out"
 grep -q '^    lk_emit_native_crashes$' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "report does not include the section"
 echo "PASS native crash names: crashed processes named, ASB code told apart from the memory map"
 )
@@ -3768,8 +3768,8 @@ queued /odm/etc/mixer_paths.xml || f "/odm as a link: the bind in front was not 
 # 6. Wiring: the reset runs before the audio stage of the non-reference path.
 awk '/asb_reset_odm_binds$/ { r = NR } /asb_apply_device_native_tuning "\$ASB_DEVICE_NAME" "OnePlus"/ { if (!a) a = NR } END { exit !(r && a && r < a) }' "$I" \
   || f "asb_reset_odm_binds is not called before the non-reference audio stage"
-sed -n '/^asb_generate_odm_binds() {/,/^}/p' "$I" | grep -q 'rm -rf "\$_ob_root"' && f "the generator still wipes the payload directory"
-sed -n '/^asb_generate_odm_binds() {/,/^}/p' "$I" | grep -q '/odm/etc/audio_effects_config.xml \\' && f "the generator still writes the effects config"
+sed -n '/^asb_generate_odm_binds() {/,/^}/p' "$I" | grep 'rm -rf "\$_ob_root"' >/dev/null && f "the generator still wipes the payload directory"
+sed -n '/^asb_generate_odm_binds() {/,/^}/p' "$I" | grep '/odm/etc/audio_effects_config.xml \\' >/dev/null && f "the generator still writes the effects config"
 
 [ "$fail" = 0 ] && echo "PASS odm bind reinstall: binds survive an install over a running module, stock snapshots kept, updates handled"
 exit "$fail"
@@ -3882,7 +3882,7 @@ echo "$T/odm/etc/camera/config/vb|$T/p/odm/etc/camera/config/vb" > "$T/man"
 ASB_ODM_MODDIR="$T/mod" sh "$S" apply camera
 grep -q '//' "$T/p/odm/etc/camera/config/vb" && f "comments copied into the payload"
 grep -q '"a": 1' "$T/p/odm/etc/camera/config/vb" || f "commented module copy not synced"
-ls "$T/p/odm/etc/camera/config/" | grep -q 'sync\.' && f "sync temp file left behind"
+ls "$T/p/odm/etc/camera/config/" | grep 'sync\.' >/dev/null && f "sync temp file left behind"
 grep -Fq 'find "$MODPATH/odm" "$MODPATH/system" "$MODPATH/deferred_overlay"' "$ROOT/common/install.sh" \
   || f "installer does not strip comments from the module-root camera copy"
 mv "$T/man.keep" "$T/man"
@@ -3914,15 +3914,15 @@ grep -q "target=$T/odm/camera/vb result=missing" "$T/log" || f "missing payload 
 
 # status
 st="$(sh "$S" status)"
-echo "$st" | grep -q "$T/odm/camera/vb state=live" || f "status: vb should be live: $st"
-echo "$st" | grep -q "$T/odm/camera/zz state=NOT_LIVE mounted=yes" || f "status: zz should be NOT_LIVE: $st"
+echo "$st" | grep "$T/odm/camera/vb state=live" >/dev/null || f "status: vb should be live: $st"
+echo "$st" | grep "$T/odm/camera/zz state=NOT_LIVE mounted=yes" >/dev/null || f "status: zz should be NOT_LIVE: $st"
 
 # Wiring: boot uses it (with a later camera pass), action self-heals, install queues always.
 grep -q 'asb_odm_rebind.sh" apply' "$ROOT/service.sh" || f "service.sh does not use the checked rebind"
 grep -q 'asb_odm_rebind.sh" apply camera' "$ROOT/service.sh" || f "no second camera pass at boot"
 grep -q 'asb_odm_rebind.sh" apply camera' "$ROOT/action.sh" || f "action does not self-heal the camera bind"
 grep -q 'odm_bind_late result=applied" >>' "$ROOT/service.sh" && f "service.sh still logs applied on any mount rc"
-sed -n '/^asb_generate_odm_camera_binds()/,/^}/p' "$ROOT/common/install.sh" | grep -q 'cmp -s' \
+sed -n '/^asb_generate_odm_camera_binds()/,/^}/p' "$ROOT/common/install.sh" | grep 'cmp -s' >/dev/null \
   && f "install still skips a camera bind on a live-file comparison"
 grep -q 'runtime/asb_odm_rebind.sh' "$ROOT/.github/workflows/build-release.yml" || f "release workflow misses the script"
 
@@ -4309,7 +4309,7 @@ done
 printf 'volatile learning\n' > "$VOL"
 
 OUT="$(MODDIR="$MOD" ASB_SMART_STATE="$STATE" ASB_RUNTIME_STATE="$RUNTIME" ASB_SMART_VOLATILE_STATE="$VOL" sh "$RESET")"
-printf '%s\n' "$OUT" | grep -Fq 'session history and learned stats are cleared' || { echo 'FAIL smart reset: outcome message missing' >&2; exit 1; }
+printf '%s\n' "$OUT" | grep -F 'session history and learned stats are cleared' >/dev/null || { echo 'FAIL smart reset: outcome message missing' >&2; exit 1; }
 for f in buckets.bin buckets.bin.bak smart_appheat.bin smart_records.bin smart_prev_profile night_window.conf session_history.jsonl; do
   [ ! -e "$STATE/$f" ] || { echo "FAIL smart reset: retained state/$f" >&2; exit 1; }
 done
@@ -4479,27 +4479,27 @@ out="$(sh -c '
   echo "c5=$(lk_cap_cause "" 1785600 1555200)"
   lk_emit_cap_cause_split "$1"
 ' "$C" "$T/tt" 2>&1)"
-printf '%s\n' "$out" | grep -qx 'c1=vendor'   || f "live under ASB's request is not a foreign ceiling: $out"
-printf '%s\n' "$out" | grep -qx 'c2=asb_trim' || f "live == ASB's trimmed request is not ASB's trim: $out"
-printf '%s\n' "$out" | grep -qx 'c3=-'        || f "at the rail must read '-': $out"
-printf '%s\n' "$out" | grep -qx 'c4=?'        || f "no request must read '?': $out"
-printf '%s\n' "$out" | grep -qx 'c5=?'        || f "no live value must read '?': $out"
-printf '%s\n' "$out" | grep -q 'who held the lower ceiling, per cluster (3 samples):' || f "old rows without *_by must be skipped: $out"
-printf '%s\n' "$out" | grep -qE '^  main: +asb_trim 2$'  || f "main split wrong: $out"
-printf '%s\n' "$out" | grep -qE '^  prime: +vendor 2$'   || f "prime split wrong: $out"
+printf '%s\n' "$out" | grep -x 'c1=vendor' >/dev/null   || f "live under ASB's request is not a foreign ceiling: $out"
+printf '%s\n' "$out" | grep -x 'c2=asb_trim' >/dev/null || f "live == ASB's trimmed request is not ASB's trim: $out"
+printf '%s\n' "$out" | grep -x 'c3=-' >/dev/null        || f "at the rail must read '-': $out"
+printf '%s\n' "$out" | grep -x 'c4=?' >/dev/null        || f "no request must read '?': $out"
+printf '%s\n' "$out" | grep -x 'c5=?' >/dev/null        || f "no live value must read '?': $out"
+printf '%s\n' "$out" | grep 'who held the lower ceiling, per cluster (3 samples):' >/dev/null || f "old rows without *_by must be skipped: $out"
+printf '%s\n' "$out" | grep -E '^  main: +asb_trim 2$' >/dev/null  || f "main split wrong: $out"
+printf '%s\n' "$out" | grep -E '^  prime: +vendor 2$' >/dev/null   || f "prime split wrong: $out"
 
 # The verdict names the vendor when it held the prime in most samples (fix127).
 sed -n '/^lk_emit_cap_ownership_verdict() {/,/^}/p' "$FD" > "$T/v.sh"
 mkdir -p "$T/o"; cp "$T/tt" "$T/o/throttle_trace.txt"
 v="$(LK_OUT_DIR="$T/o" sh -c '. "$1"; lk_emit_cap_ownership_verdict' x "$T/v.sh" 2>&1)"
-printf '%s\n' "$v" | grep -q 'per cluster: the prime sat under a ceiling ASB did not write in 2 of 3 samples' || f "verdict ignores the per-cluster cause: $v"
-printf '%s\n' "$v" | grep -q 'main cores sat under a ceiling' && f "main cores wrongly blamed on the vendor: $v"
+printf '%s\n' "$v" | grep 'per cluster: the prime sat under a ceiling ASB did not write in 2 of 3 samples' >/dev/null || f "verdict ignores the per-cluster cause: $v"
+printf '%s\n' "$v" | grep 'main cores sat under a ceiling' >/dev/null && f "main cores wrongly blamed on the vendor: $v"
 # dev43: cap_owner=asb on every row does not erase a prime vendor majority. The old
 # global verdict denied foreign ownership immediately before printing the opposite
 # per-cluster evidence, which could send a later tuning pass in the wrong direction.
-printf '%s\n' "$v" | grep -q 'verdict: mixed cap ownership - a foreign ceiling leads on at least one cluster' || f "mixed global/per-cluster ownership was not named: $v"
-printf '%s\n' "$v" | grep -q 'verdict: no foreign-owner dominance established' && f "global ASB labels hid the prime vendor ceiling: $v"
-printf '%s\n' "$v" | grep -q 'no universal frequency raise is justified' || f "mixed-owner verdict lost its conservative runtime boundary: $v"
+printf '%s\n' "$v" | grep 'verdict: mixed cap ownership - a foreign ceiling leads on at least one cluster' >/dev/null || f "mixed global/per-cluster ownership was not named: $v"
+printf '%s\n' "$v" | grep 'verdict: no foreign-owner dominance established' >/dev/null && f "global ASB labels hid the prime vendor ceiling: $v"
+printf '%s\n' "$v" | grep 'no universal frequency raise is justified' >/dev/null || f "mixed-owner verdict lost its conservative runtime boundary: $v"
 
 # The recorder and the governor.
 grep -q 'lk_state_kv desired_cpu_max_prime' "$FD" || f "prime compared with slot 1, not the prime"
@@ -4523,7 +4523,7 @@ S="$ROOT/src/asb_smart.h"
 fail() { echo "FAIL topapp pkg: $*" >&2; exit 1; }
 
 # No live call to `dumpsys activity top` anywhere in the native code.
-awk '/^#if 0$/{skip=1} /^#endif$/{skip=0; next} !skip' "$S" | grep -q 'popen(".*dumpsys activity top' \
+awk '/^#if 0$/{skip=1} /^#endif$/{skip=0; next} !skip' "$S" | grep 'popen(".*dumpsys activity top' >/dev/null \
   && fail "dumpsys activity top is still called"
 grep -q 'popen(".*dumpsys activity top\|system(".*dumpsys activity top' "$ROOT/src/asb_governor.c" && fail "governor calls dumpsys activity top"
 grep -q 'int _topapp = asb_smart_pkg_via_topapp(pkg, sizeof(pkg));' "$S" || fail "top-app cgroup not asked first"
@@ -4863,7 +4863,7 @@ cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/
 for f in "$ROOT/runtime/profile_core.sh" "$ROOT/service.sh"; do
   n="$(grep -c 'sched_ravg_window_nr_ticks \] && \[ ! -e /dev/.asb/walt_ravg_rom \] && writef_retry' "$f")"
   [ "$n" -ge 1 ] || fail "${f##*/} still writes the window over the ROM"
-  grep 'writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks' "$f" | grep -vq 'walt_ravg_rom' && fail "${f##*/} has an unguarded window write"
+  grep 'writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks' "$f" | grep -v 'walt_ravg_rom' >/dev/null && fail "${f##*/} has an unguarded window write"
 done
 grep -q '_reason="walt-ravg"' "$ROOT/runtime/asb_reconcile.sh" && fail "reconcile re-applies the whole profile when the ROM moves its window"
 # Smart: both fields blended, packing capped on screen at the kernel default.
@@ -5001,9 +5001,9 @@ grep -qF 'time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S;' "$G" || fail "the
 grep -q 'g_lock_key_kick = 1;' "$G" || fail "the power key with the screen on raises no kick"
 grep -q 'g_lock_key_kick = 0;   /\* answered (fix220) \*/' "$G" || fail "the lock kick is never answered"
 grep -q 'wakes, first touches, app opens/closes, lock presses' "$ROOT/tools/asb_diag.sh" || fail "asbdiag still says wakes + first touches"
-sed -n '/^static void wake_keys_park(int epfd, int park) {/,/^}/p' "$G" | grep -q 'if (g_wake_key_touch\[i\])' \
+sed -n '/^static void wake_keys_park(int epfd, int park) {/,/^}/p' "$G" | grep 'if (g_wake_key_touch\[i\])' >/dev/null \
   || fail "wake_keys_park parks the power key with the screen on"
-sed -n '/^static void wake_keys_park(int epfd, int park) {/,/^}/p' "$G" | grep -q 'e.data.fd = g_wake_key_fd\[i\];' \
+sed -n '/^static void wake_keys_park(int epfd, int park) {/,/^}/p' "$G" | grep 'e.data.fd = g_wake_key_fd\[i\];' >/dev/null \
   || fail "unpark no longer re-adds the keys"
 
 CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
@@ -5995,7 +5995,7 @@ grep -Fq 'if (_rc_prev_chg == 1 && !metrics.bat.charging) _rc_unplug_ms = _ri.no
 grep -Fq 'asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on);   /* fix184 */' "$G" || fail "screen-off setting not applied before the writer"
 [ "$(grep -c 'asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on)' "$G")" -ge 2 ] || fail "the heartbeat write would undo the screen-off setting"
 grep -Fq 'if (screen_on && (g_rec_on_offset != 0 || g_smooth_lean != 0 || g_lab_app_offset != 0)) {' "$G" || fail "screen-on lean not applied in the Smart tick"
-awk '/g_rec_on_applied = _off;/{a=NR} /4\. Safety overrides/{if(a) {print "ok"; exit}}' "$G" | grep -qx ok || fail "the lean must come before the safety layers"
+awk '/g_rec_on_applied = _off;/{a=NR} /4\. Safety overrides/{if(a) {print "ok"; exit}}' "$G" | grep -x ok >/dev/null || fail "the lean must come before the safety layers"
 grep -Fq '(!metrics.misc.screen_on || g_mw_active) &&' "$G" || fail "night checks do not keep the night radio mode"
 grep -Fq 'asb_mw_note((long)g_night_on_since, (long)(now - g_night_on_since));' "$G" || fail "night checks are not learned"
 grep -q '^smart_records=1$' "$ROOT/config/governor.conf" && grep -q '^smart_microwake=1$' "$ROOT/config/governor.conf" || fail "not shipped on"
@@ -6966,7 +6966,7 @@ printf 'capture=100_20\n' > "$LK_SF_FILE"; lk_smart_feedback_clear
 [ ! -e "$LK_SF_FILE" ] || { echo 'owned feedback was not cleared'; exit 1; }
 SH
 sh "$T/publisher_test.sh" "$T" || fail "shell publisher behaviour"
-! sed -n '/^LK_SF_FILE=/,/^lk_init$/p' "$F" | grep -Eq 'scaling_(min|max)|devfreq|sysctl|asb_smooth_window' || fail "logger became a second settings owner"
+! sed -n '/^LK_SF_FILE=/,/^lk_init$/p' "$F" | grep -E 'scaling_(min|max)|devfreq|sysctl|asb_smooth_window' >/dev/null || fail "logger became a second settings owner"
 echo "PASS smart log feedback: two-row bounded hints, freshness/scenario/sequence/cooldown/plateau gates, native-only A/B windows and owner-only cleanup"
 )
 
@@ -7479,26 +7479,26 @@ digest() {
     ASB_GOV_STATE_FILE="$T/live-state" sh "$ROOT/tools/logkit/asb_fullday_digest.sh"
 }
 out="$(digest)"
-printf '%s\n' "$out" | grep -qxF 'smart	watching=15	testing=1	helped=0	nothelped=3	ctxlearn=0' || fail "stored summary changed: $out"
-printf '%s\n' "$out" | grep -q '^smartlive	state=adapting	profile=smart	smart_mode=1	feedback=accepted	coverage=start_latest' || fail "active capture not recognized: $out"
-printf '%s\n' "$out" | grep -q '	accepted_delta=3	' && printf '%s\n' "$out" | grep -q '	rejected_delta=3	' && printf '%s\n' "$out" | grep -q '	suppressed_delta=3	' || fail "native counter deltas wrong: $out"
-printf '%s\n' "$out" | grep -q '999' && fail 'an unrelated current live state leaked into a saved capture'
+printf '%s\n' "$out" | grep -xF 'smart	watching=15	testing=1	helped=0	nothelped=3	ctxlearn=0' >/dev/null || fail "stored summary changed: $out"
+printf '%s\n' "$out" | grep '^smartlive	state=adapting	profile=smart	smart_mode=1	feedback=accepted	coverage=start_latest' >/dev/null || fail "active capture not recognized: $out"
+printf '%s\n' "$out" | grep '	accepted_delta=3	' >/dev/null && printf '%s\n' "$out" | grep '	rejected_delta=3	' >/dev/null && printf '%s\n' "$out" | grep '	suppressed_delta=3	' >/dev/null || fail "native counter deltas wrong: $out"
+printf '%s\n' "$out" | grep '999' >/dev/null && fail 'an unrelated current live state leaked into a saved capture'
 state "$D/after.txt" battery 0 4 5 6
 out="$(digest)"
-printf '%s\n' "$out" | grep -q '^smartlive	state=manual	profile=battery	smart_mode=0	feedback=disabled	coverage=start_latest' || fail "Battery was not distinguished from Smart: $out"
+printf '%s\n' "$out" | grep '^smartlive	state=manual	profile=battery	smart_mode=0	feedback=disabled	coverage=start_latest' >/dev/null || fail "Battery was not distinguished from Smart: $out"
 state "$D/after.txt" smart 0 4 5 6
-digest | grep -q '^smartlive	state=disabled	profile=smart	smart_mode=0' || fail 'Smart mode-off state was hidden'
+digest | grep '^smartlive	state=disabled	profile=smart	smart_mode=0' >/dev/null || fail 'Smart mode-off state was hidden'
 state "$D/after.txt" smart 1 0 5 6
 out="$(digest)"
-printf '%s\n' "$out" | grep -q '^smartlive	state=active.*	deltas=counter_reset_or_restart$' || fail "counter reset was not bounded: $out"
-printf '%s\n' "$out" | grep -q '	accepted_delta=unknown	' || fail 'counter reset invented an accepted delta'
+printf '%s\n' "$out" | grep '^smartlive	state=active.*	deltas=counter_reset_or_restart$' >/dev/null || fail "counter reset was not bounded: $out"
+printf '%s\n' "$out" | grep '	accepted_delta=unknown	' >/dev/null || fail 'counter reset invented an accepted delta'
 rm -f "$D/before.txt"
 out="$(digest)"
-printf '%s\n' "$out" | grep -q '^smartlive	state=active	profile=smart	smart_mode=1	feedback=disabled	coverage=latest_only' || fail "single snapshot state wrong: $out"
-printf '%s\n' "$out" | grep -q '	accepted_delta=unknown	' || fail 'single cumulative counter became an in-capture delta'
+printf '%s\n' "$out" | grep '^smartlive	state=active	profile=smart	smart_mode=1	feedback=disabled	coverage=latest_only' >/dev/null || fail "single snapshot state wrong: $out"
+printf '%s\n' "$out" | grep '	accepted_delta=unknown	' >/dev/null || fail 'single cumulative counter became an in-capture delta'
 rm -f "$D/after.txt"
 state "$D/snapshot_100.txt" smart 1 2 1 0
-digest | grep -q '^smartlive	state=active	profile=smart	smart_mode=1	feedback=accepted	coverage=latest_only' || fail 'latest capture snapshot fallback missing'
+digest | grep '^smartlive	state=active	profile=smart	smart_mode=1	feedback=accepted	coverage=latest_only' >/dev/null || fail 'latest capture snapshot fallback missing'
 # A genuinely running capture alone may use /dev/.asb/state (overridden here). The lock's
 # process identity is still checked by the real digest; no helper is left running.
 state "$D/before.txt" battery 0 0 0 0
@@ -7510,8 +7510,8 @@ printf '%s\n' "$D" > "$T/state/output_dir"
 printf '%s\n' "$_live_pid" > "$T/state/pid"
 out="$(digest)"
 kill "$_live_pid" 2>/dev/null || true; wait "$_live_pid" 2>/dev/null || true
-printf '%s\n' "$out" | grep -q '^smartlive	state=adapting	profile=smart	smart_mode=1	feedback=accepted	coverage=start_latest' || fail "running capture did not use its live state: $out"
-printf '%s\n' "$out" | grep -q '	accepted_delta=2	' || fail 'running capture live delta is wrong'
+printf '%s\n' "$out" | grep '^smartlive	state=adapting	profile=smart	smart_mode=1	feedback=accepted	coverage=start_latest' >/dev/null || fail "running capture did not use its live state: $out"
+printf '%s\n' "$out" | grep '	accepted_delta=2	' >/dev/null || fail 'running capture live delta is wrong'
 echo 'PASS Smart capture state: live/manual/disabled/adapting separation, monotonic deltas, reset, single-snapshot and live-capture source ownership'
 )
 
@@ -7826,11 +7826,11 @@ int main(int argc, char **argv) {
 X
 "$CC" -O2 -Wall -Wextra -Werror -Wno-unused-function -o "$T/lab" "$T/lab.c" || fail "lab fixture did not compile"
 out="$("$T/lab" radio)" || fail "radio run failed"
-echo "$out" | grep -q 'radio champion=1 wins=1 reopen=1' || fail "radio: 5G allowed did not win, or the rise did not re-open it: $out"
-echo "$out" | grep -q 'radio_file_at_verdict=nr retest_challenger=0' || fail "radio: the lab file does not say 5G allowed, or the re-test did not try LTE again: $out"
+echo "$out" | grep 'radio champion=1 wins=1 reopen=1' >/dev/null || fail "radio: 5G allowed did not win, or the rise did not re-open it: $out"
+echo "$out" | grep 'radio_file_at_verdict=nr retest_challenger=0' >/dev/null || fail "radio: the lab file does not say 5G allowed, or the re-test did not try LTE again: $out"
 grep -q '^knob|radio|' "$T/lab.txt" || fail "no radio line in the summary"
 cp "$T/lab.txt" "$T/lab_radio.txt"
-out="$("$T/lab" reload)"; echo "$out" | grep -q 'reload champion=1 converged=0' || fail "the store did not survive a restart: $out"
+out="$("$T/lab" reload)"; echo "$out" | grep 'reload champion=1 converged=0' >/dev/null || fail "the store did not survive a restart: $out"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" share)" || fail "share run failed: $out"
 rb="$(echo "$out" | sed -n 's/.*radio_blocks=\([0-9]*\).*/\1/p')"; mb="$(echo "$out" | sed -n 's/.*mem_blocks=\([0-9]*\).*/\1/p')"
@@ -7843,7 +7843,7 @@ grep -q '|followups=[0-9]*$' "$T/lab.txt" || fail "the now line lacks followups"
 rm -f "$T/lab.bin"
 "$T/lab" mk_v1 || fail "could not write a version-1 store"
 out="$("$T/lab" migrate)" || fail "a version-1 store was not loaded: $out"
-echo "$out" | grep -q 'migrate radio=1 wins=1 memoff_pairs=0 memoff_blocks=0 version=2 dirty=1' || fail "version-1 store not migrated knob by knob: $out"
+echo "$out" | grep 'migrate radio=1 wins=1 memoff_pairs=0 memoff_blocks=0 version=2 dirty=1' >/dev/null || fail "version-1 store not migrated knob by knob: $out"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 # V66 dev12: a re-check of a bus cap at its deepest step tries the softer step, and one of an
 # app's changed lean tries the situation's lean again; the first exploration still stops where
@@ -7858,63 +7858,63 @@ rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 # wake-lift trial measures); the governor starting with the screen on is not a glance.
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" glance)" || fail "glance run failed: $out"
-echo "$out" | grep -q 'glance at_start=1 in_glance=0 after=1' || fail "a screen-on block started inside a glance window, or never after it: $out"
+echo "$out" | grep 'glance at_start=1 in_glance=0 after=1' >/dev/null || fail "a screen-on block started inside a glance window, or never after it: $out"
 # V66 dev14: verdicts are bound to the ROM/kernel build. Same build: nothing moves, and the
 # summary names the last decision and the days to the 21-day re-test. Another build: a decided
 # knob is tested again (its best setting stays in force), a trial under way starts its pairs
 # again, the drift reference is dropped. A store from before dev14 adopts the build silently.
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" build)" || fail "build run failed: $out"
-echo "$out" | grep -q 'build same_ok=1 won_line=1 other_rc=0 radio_conv=0 radio_best=1 radio_last=retest_build reopen=1 ref=0 mem_pairs=0 mem_best=0 mem_last=retest_build retests=1 stored=222' || fail "build binding wrong: $out"
-echo "$out" | grep -q 'legacy adopted=333 retests=0 conv=0' || fail "a store without a build was not adopted quietly: $out"
+echo "$out" | grep 'build same_ok=1 won_line=1 other_rc=0 radio_conv=0 radio_best=1 radio_last=retest_build reopen=1 ref=0 mem_pairs=0 mem_best=0 mem_last=retest_build retests=1 stored=222' >/dev/null || fail "build binding wrong: $out"
+echo "$out" | grep 'legacy adopted=333 retests=0 conv=0' >/dev/null || fail "a store without a build was not adopted quietly: $out"
 grep -q '^# knob|.*|pkg|last|recheck_days$' "$T/lab.txt" || fail "summary header lacks the new fields"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" pause)" || fail "pause run failed: $out"
-echo "$out" | grep -q 'pause run_arm_is_test=1 pause_arm_is_best=1 paused=1 active_s=140 kept=1 short_app=1 pauses=2 resumes=1 taken_over=1' || fail "screen-on block pause/resume wrong: $out"
+echo "$out" | grep 'pause run_arm_is_test=1 pause_arm_is_best=1 paused=1 active_s=140 kept=1 short_app=1 pauses=2 resumes=1 taken_over=1' >/dev/null || fail "screen-on block pause/resume wrong: $out"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" pairable)" || fail "pairable run failed: $out"
-echo "$out" | grep -q 'pairable off_far=0 off_near=1 radio_low=1 off_mid=0 off_unknown=1' || fail "traffic-matched pairing wrong: $out"
+echo "$out" | grep 'pairable off_far=0 off_near=1 radio_low=1 off_mid=0 off_unknown=1' >/dev/null || fail "traffic-matched pairing wrong: $out"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" recheck)" || fail "recheck run failed: $out"
-echo "$out" | grep -q 'recheck mem=1/0 app=0/0 first_off=0/1 first_app=1/1' || fail "re-checks of a moved champion do not run, or the first exploration changed: $out"
+echo "$out" | grep 'recheck mem=1/0 app=0/0 first_off=0/1 first_app=1/1' >/dev/null || fail "re-checks of a moved champion do not run, or the first exploration changed: $out"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" mem_guard)" || fail "mem guard run failed"
-echo "$out" | grep -q 'mem champion=0 wins=0 fails=1' || fail "membus_on: a cap that pins the cores won: $out"
+echo "$out" | grep 'mem champion=0 wins=0 fails=1' >/dev/null || fail "membus_on: a cap that pins the cores won: $out"
 # V66 dev11: 20 points more time at the ceiling ends the trial after three pairs, not six.
-echo "$out" | grep -q 'early=1 last=lost_ceiling' || fail "membus_on: the pinned-cores challenger was run to the full count or not filed as lost_ceiling: $out"
+echo "$out" | grep 'early=1 last=lost_ceiling' >/dev/null || fail "membus_on: the pinned-cores challenger was run to the full count or not filed as lost_ceiling: $out"
 [ "$(cat "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq")" = 4224000 ] || fail "membus_on: the bus was left capped"
 rm -f "$T/lab.bin"
 # V66 dev11: a screen-off bus block that moved 40 KiB/s of mobile data measures the radio, not
 # the bus: it is set aside; at 2 KiB/s the blocks count again.
 out="$("$T/lab" off_net)" || fail "off_net run failed"
-echo "$out" | grep -q 'off_net heavy_blocks=0 heavy_aside=[1-9]' || fail "membus_off: a busy-radio block was counted: $out"
-echo "$out" | grep -Eq 'light_blocks=[1-9]' || fail "membus_off: quiet blocks were not counted: $out"
+echo "$out" | grep 'off_net heavy_blocks=0 heavy_aside=[1-9]' >/dev/null || fail "membus_off: a busy-radio block was counted: $out"
+echo "$out" | grep -E 'light_blocks=[1-9]' >/dev/null || fail "membus_off: quiet blocks were not counted: $out"
 rm -f "$T/lab.bin"
 out="$("$T/lab" lift 0)" || fail "lift run failed"
-echo "$out" | grep -q 'lift champion=1 pct=65 wins=1 converged=1' || fail "lift: 15 points less did not win: $out"
-echo "$out" | grep -q 'jank_pairs=[1-9]' || fail "lift: SystemUI frames were not compared: $out"
+echo "$out" | grep 'lift champion=1 pct=65 wins=1 converged=1' >/dev/null || fail "lift: 15 points less did not win: $out"
+echo "$out" | grep 'jank_pairs=[1-9]' >/dev/null || fail "lift: SystemUI frames were not compared: $out"
 rm -f "$T/lab.bin"
 out="$("$T/lab" lift 2)" || fail "lift jank run failed"
-echo "$out" | grep -q 'lift champion=0 pct=80 wins=0' || fail "lift: a jankier wake won on energy alone: $out"
+echo "$out" | grep 'lift champion=0 pct=80 wins=0' >/dev/null || fail "lift: a jankier wake won on energy alone: $out"
 rm -f "$T/lab.bin"
 # V66 dev11: 3 points more janky frames end the trial after two pairs instead of five.
 out="$("$T/lab" lift 3)" || fail "lift early-stop run failed"
-echo "$out" | grep -q 'lift champion=0 pct=80 wins=0' || fail "lift: a much jankier wake won: $out"
-echo "$out" | grep -q 'jank_pairs=2 early=1 last=lost_jank' || fail "lift: 3 points more janky frames did not stop the trial at two pairs, filed as lost_jank: $out"
+echo "$out" | grep 'lift champion=0 pct=80 wins=0' >/dev/null || fail "lift: a much jankier wake won: $out"
+echo "$out" | grep 'jank_pairs=2 early=1 last=lost_jank' >/dev/null || fail "lift: 3 points more janky frames did not stop the trial at two pairs, filed as lost_jank: $out"
 rm -f "$T/lab.bin"
 out="$("$T/lab" apps)"
-echo "$out" | grep -q 'apps slot2=1 front=1 offset=200 on_block=app2' || fail "apps: lab app in front not owned: $out"
-echo "$out" | grep -q 'apps_mismatch front=0' || fail "apps: another package under the same hash was taken"
+echo "$out" | grep 'apps slot2=1 front=1 offset=200 on_block=app2' >/dev/null || fail "apps: lab app in front not owned: $out"
+echo "$out" | grep 'apps_mismatch front=0' >/dev/null || fail "apps: another package under the same hash was taken"
 printf '4224000\n' > "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq"
 rm -f "$T/lab.bin"
 out="$("$T/lab" mem)"
-echo "$out" | grep -q 'probe=1 voters=2 doms=1 kind=bus_dcvs' || fail "mem: voters not found: $out"
-echo "$out" | grep -q 'cap75 writes=2' || fail "mem: cap not written: $out"
-echo "$out" | grep -q 'free restores=2' || fail "mem: cap not given back: $out"
-echo "$out" | grep -q 'yield yields=1' || fail "mem: an external value was fought over: $out"
-echo "$out" | grep -q 'after external=2092000 own=4224000' || \
+echo "$out" | grep 'probe=1 voters=2 doms=1 kind=bus_dcvs' >/dev/null || fail "mem: voters not found: $out"
+echo "$out" | grep 'cap75 writes=2' >/dev/null || fail "mem: cap not written: $out"
+echo "$out" | grep 'free restores=2' >/dev/null || fail "mem: cap not given back: $out"
+echo "$out" | grep 'yield yields=1' >/dev/null || fail "mem: an external value was fought over: $out"
+echo "$out" | grep 'after external=2092000 own=4224000' >/dev/null || \
   fail "mem: external value overwritten or own cap not given back: $out"
-echo "$out" | grep -q 'rounded back=1 yielded=1 own_after=1 active=0' || fail "mem: a cap that read back as another value was kept or left in place: $out"
+echo "$out" | grep 'rounded back=1 yielded=1 own_after=1 active=0' >/dev/null || fail "mem: a cap that read back as another value was kept or left in place: $out"
 # dev14: only the CPU's own voters are capped - the GPU voter in the fixture is never added
 # (voters=2 above) and keeps its value through every cap.
 [ "$(cat "$T/bus/DDR/soc:qcom,gpubw/max_freq")" = 4224000 ] || fail "mem: a GPU voter was written"
@@ -7975,11 +7975,11 @@ now|radio_arm=1|lift_pct=0|mem_on=0|mem_off=0|app_front=0|on_block=radio|off_blo
 EOF
 out="$(sh -c '. "$1"; lk_state_kv() { :; }; LK_OUT_DIR="$2"; LK_SF_FILE="$2/none"; ASB_LK_RECORDS_FILE="$3"; ASB_LK_LAB_FILE="$4"; lk_emit_smart_records' x "$T/emit.sh" "$T/out" "$T/rec.txt" "$T/lab_sum.txt")" || fail "day-log Smart section failed: $out"
 cmp -s "$T/lab_sum.txt" "$T/out/smart_lab.txt" || fail "the lab summary was not copied into the day log"
-echo "$out" | grep -q '^lab: radio .*testing .*trying nr_allowed, 3 pair(s), -8.2 %' || fail "the testing knob is not shown: $out"
-echo "$out" | grep -q '^lab: membus_off' && fail "a free knob was listed: $out"
-echo "$out" | grep -q '^lab bus: bus_dcvs voters=10' || fail "the bus line is missing: $out"
-echo "$out" | grep -q '^lab now: .*radio_set_aside=3 early_stops=1' || fail "the now line is missing: $out"
-echo "$out" | grep -qx 'lab voters: DDR:soc:qcom,memlat:ddr:gold (free), LLCC:soc:qcom,memlat:llcc:gold (capped)' || fail "the voters line is missing: $out"
+echo "$out" | grep '^lab: radio .*testing .*trying nr_allowed, 3 pair(s), -8.2 %' >/dev/null || fail "the testing knob is not shown: $out"
+echo "$out" | grep '^lab: membus_off' >/dev/null && fail "a free knob was listed: $out"
+echo "$out" | grep '^lab bus: bus_dcvs voters=10' >/dev/null || fail "the bus line is missing: $out"
+echo "$out" | grep '^lab now: .*radio_set_aside=3 early_stops=1' >/dev/null || fail "the now line is missing: $out"
+echo "$out" | grep -x 'lab voters: DDR:soc:qcom,memlat:ddr:gold (free), LLCC:soc:qcom,memlat:llcc:gold (capped)' >/dev/null || fail "the voters line is missing: $out"
 echo "PASS smart lab native: radio, wake lift, apps and memory bus tried in pairs with ceiling/frame/heat guards, dynamics re-open, owned bus writes with yield, store reload"
 )
 

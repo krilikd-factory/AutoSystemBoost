@@ -42,19 +42,19 @@ h="$(ASB_PROC_ROOT="$T/proc" ASB_CPUSET_ROOT="$T/cpuset" sh -c '. "$1"; asb_repo
 printf 'com.termux 1000 10\ncom.android.systemui 2000 20\n' > "$T/a"
 printf 'com.termux 1676 673\ncom.android.systemui 3144 44\n' > "$T/b"
 d="$(sh -c '. "$1"; asb_gfx_run_delta "$(cat "$2")" "$(cat "$3")" 32 com.termux' x "$T/f.sh" "$T/a" "$T/b")"
-printf '%s\n' "$d" | grep -q 'com.termux 663 of 676 frames (20.72/s, the window this report is printed in)' || fail "per-app line: $d"
-printf '%s\n' "$d" | grep -q '^host: com.termux missed 663 of the 676 frames it drew - the report scrolling in it, not a lag$' || fail "host line: $d"
-printf '%s\n' "$d" | grep -q '^steady:' && fail "the report's own window called a steady redraw: $d"
+printf '%s\n' "$d" | grep 'com.termux 663 of 676 frames (20.72/s, the window this report is printed in)' >/dev/null || fail "per-app line: $d"
+printf '%s\n' "$d" | grep '^host: com.termux missed 663 of the 676 frames it drew - the report scrolling in it, not a lag$' >/dev/null || fail "host line: $d"
+printf '%s\n' "$d" | grep '^steady:' >/dev/null && fail "the report's own window called a steady redraw: $d"
 d="$(sh -c '. "$1"; asb_gfx_run_delta "$(cat "$2")" "$(cat "$3")" 32 com.rifsxd.ksunext' x "$T/f.sh" "$T/a" "$T/b")"
-printf '%s\n' "$d" | grep -q '^steady: com.termux missed 663' || fail "another app in front still gets the steady verdict: $d"
+printf '%s\n' "$d" | grep '^steady: com.termux missed 663' >/dev/null || fail "another app in front still gets the steady verdict: $d"
 # fix178: no host found at all (a CPH2691 run from Termux) - a terminal at the top is the host.
 d="$(sh -c '. "$1"; asb_gfx_run_delta "$(cat "$2")" "$(cat "$3")" 32 ""' x "$T/f.sh" "$T/a" "$T/b")"
-printf '%s\n' "$d" | grep -q '^host: com.termux missed 663' || fail "a terminal at the top without a host lookup: $d"
-printf '%s\n' "$d" | grep -q 'the window this report is printed in' || fail "no host label on the terminal's line: $d"
+printf '%s\n' "$d" | grep '^host: com.termux missed 663' >/dev/null || fail "a terminal at the top without a host lookup: $d"
+printf '%s\n' "$d" | grep 'the window this report is printed in' >/dev/null || fail "no host label on the terminal's line: $d"
 printf 'com.example.feed 1000 10\ncom.android.systemui 2000 20\n' > "$T/a2"
 printf 'com.example.feed 1676 673\ncom.android.systemui 3144 44\n' > "$T/b2"
 d="$(sh -c '. "$1"; asb_gfx_run_delta "$(cat "$2")" "$(cat "$3")" 32 ""' x "$T/f.sh" "$T/a2" "$T/b2")"
-printf '%s\n' "$d" | grep -q '^steady: com.example.feed missed 663' || fail "an ordinary app at the top lost its steady verdict: $d"
+printf '%s\n' "$d" | grep '^steady: com.example.feed missed 663' >/dev/null || fail "an ordinary app at the top lost its steady verdict: $d"
 grep -q 'asb_gfx_run_delta "$_gfx_run0" "$_gfx_run1" "$(( $(date +%s) - ${_gfx_run0_t:-0} ))" "$_gfx_host"' "$D" || fail "7c does not pass the host"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag report host: the window the report prints into is named, not read as lag"
@@ -81,9 +81,9 @@ prog="$(grep -m1 "awk -F= 'tolower(\$1) ~ /net(work)?_?speed" "$D" | sed "s/.*aw
 [ -n "$prog" ] || fail "status-bar matcher not found"
 out="$(printf '%s\n' 'system:oplus.radio.smart5g_apk_cfg=ver_num=9;filetrans=com.Wifi.lte5g.speedtest.Internetspeed' \
                      'system:show_network_speed=1' 'secure:clock_seconds=0' 'global:wifi_on=1' | awk -F= "$prog")"
-printf '%s\n' "$out" | grep -q 'smart5g' && fail "a key matched on its value: $out"
-printf '%s\n' "$out" | grep -qx 'system:show_network_speed=1' || fail "network speed key missed: $out"
-printf '%s\n' "$out" | grep -qx 'secure:clock_seconds=0' || fail "clock seconds key missed: $out"
+printf '%s\n' "$out" | grep 'smart5g' >/dev/null && fail "a key matched on its value: $out"
+printf '%s\n' "$out" | grep -x 'system:show_network_speed=1' >/dev/null || fail "network speed key missed: $out"
+printf '%s\n' "$out" | grep -x 'secure:clock_seconds=0' >/dev/null || fail "clock seconds key missed: $out"
 # fix178: the codec of the ACTIVE A2DP device (an inactive one listed first is not it), and the
 # multipoint hint only for a high-bitrate codec. The REAL block runs against a stub dumpsys.
 mkdir -p "$T/bin"
@@ -103,12 +103,12 @@ cat > "$T/dump1" <<'B'
     mCodecConfig: {codecName:LHDC,mCodecType:19,mCodecPriority:9002,mSampleRate:0x2(48000),mBitsPerSample:0x2(24),mChannelMode:0x2(STEREO)}
 B
 out="$(PATH="$T/bin:$PATH" DUMP="$T/dump1" sh "$T/c.sh")"
-printf '%s\n' "$out" | grep -qx 'NOTE active A2DP codec: LHDC 48000 Hz / 24-bit' || fail "active codec line: $out"
-printf '%s\n' "$out" | grep -q 'multipoint' || fail "no multipoint hint on LHDC: $out"
+printf '%s\n' "$out" | grep -x 'NOTE active A2DP codec: LHDC 48000 Hz / 24-bit' >/dev/null || fail "active codec line: $out"
+printf '%s\n' "$out" | grep 'multipoint' >/dev/null || fail "no multipoint hint on LHDC: $out"
 sed 's/codecName:LHDC/codecName:AAC/' "$T/dump1" > "$T/dump2"
 out="$(PATH="$T/bin:$PATH" DUMP="$T/dump2" sh "$T/c.sh")"
-printf '%s\n' "$out" | grep -qx 'NOTE active A2DP codec: AAC 48000 Hz / 24-bit' || fail "AAC codec line: $out"
-printf '%s\n' "$out" | grep -q 'multipoint' && fail "multipoint hint on AAC: $out"
+printf '%s\n' "$out" | grep -x 'NOTE active A2DP codec: AAC 48000 Hz / 24-bit' >/dev/null || fail "AAC codec line: $out"
+printf '%s\n' "$out" | grep 'multipoint' >/dev/null && fail "multipoint hint on AAC: $out"
 out="$(PATH="$T/bin:$PATH" DUMP=/dev/null sh "$T/c.sh")"
 [ -z "$out" ] || fail "no A2DP device still printed: $out"
 # fix178: the Wi-Fi link line names the band, not the network, and skips state-machine rows.
@@ -123,9 +123,9 @@ grep -q 'Frequency' "$T/wf.sh" || fail "wifi link block not found"
 printf '%s\n' '       rec[5]: time=10-18 18:10:22.130 processed=DefaultState org=EnabledState SSID x' \
   'mWifiInfo SSID: "home", BSSID: 11:22:33:44:55:66, Wi-Fi standard: 11ax, RSSI: -61, Link speed: 573Mbps, Tx Link speed: 573Mbps, Rx Link speed: 432Mbps, Frequency: 2437MHz' > "$T/wd"
 out="$(PATH="$T/bin:$PATH" DUMP="$T/wd" CMDOUT=/dev/null sh "$T/wf.sh")"
-printf '%s\n' "$out" | grep -qx '  live wifi link: 2437 MHz (2.4 GHz), RSSI -61 dBm, 573 Mbps, 11ax' || fail "wifi link: $out"
-printf '%s\n' "$out" | grep -q 'home\|11:22' && fail "the network name or BSSID reached the report: $out"
-printf '%s\n' "$out" | grep -q '^NOTE Wi-Fi on 2.4 GHz' || fail "no 2.4 GHz note: $out"
+printf '%s\n' "$out" | grep -x '  live wifi link: 2437 MHz (2.4 GHz), RSSI -61 dBm, 573 Mbps, 11ax' >/dev/null || fail "wifi link: $out"
+printf '%s\n' "$out" | grep 'home\|11:22' >/dev/null && fail "the network name or BSSID reached the report: $out"
+printf '%s\n' "$out" | grep '^NOTE Wi-Fi on 2.4 GHz' >/dev/null || fail "no 2.4 GHz note: $out"
 printf '%s\n' 'Wifi is connected to "home"' 'WifiInfo: SSID: "home", RSSI: -50, Link speed: 1200Mbps, Frequency: 5745MHz' > "$T/wc"
 out="$(PATH="$T/bin:$PATH" DUMP=/dev/null CMDOUT="$T/wc" sh "$T/wf.sh")"
 [ "$out" = '  live wifi link: 5745 MHz (5 GHz), RSSI -50 dBm, 1200 Mbps' ] || fail "cmd wifi status link: $out"
@@ -146,9 +146,9 @@ chmod +x "$T/bin/dumpsys" "$T/bin/pm"
   sed -n '/^  if \[ "\$_mct" -ge 600 \]; then$/,/^  fi$/p' "$D"; } > "$T/mc.sh"
 grep -q 'held since the unplug' "$T/mc.sh" || fail "multicast holder block not found"
 out="$(PATH="$T/bin:$PATH" sh "$T/mc.sh")"
-printf '%s\n' "$out" | grep -qx '    held since the unplug: system  ·  WiFi Multicast Wakelock count = 12 time = 41m2s3ms' || fail "system holder: $out"
-printf '%s\n' "$out" | grep -qx '    held since the unplug: com.instagram.android  ·  WiFi Multicast Wakelock count = 3 time = 11m56s541ms' || fail "app holder: $out"
-printf '%s\n' "$out" | grep -q 'com.other' && fail "a uid prefix matched another app: $out"
+printf '%s\n' "$out" | grep -x '    held since the unplug: system  ·  WiFi Multicast Wakelock count = 12 time = 41m2s3ms' >/dev/null || fail "system holder: $out"
+printf '%s\n' "$out" | grep -x '    held since the unplug: com.instagram.android  ·  WiFi Multicast Wakelock count = 3 time = 11m56s541ms' >/dev/null || fail "app holder: $out"
+printf '%s\n' "$out" | grep 'com.other' >/dev/null && fail "a uid prefix matched another app: $out"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag wake paths: the display path counts in the wake total, status-bar keys are matched by name, the active codec, the Wi-Fi band and the multicast holders are named"
 )
@@ -179,15 +179,15 @@ run() {  # $1 mode, $2 point, $3 screen
   sh "$T/r.sh"
 }
 out="$(run smart 65 1)"
-printf '%s\n' "$out" | grep -q '\[FAIL\]' && fail "load with the screen on still fails the install: $out"
-printf '%s\n' "$out" | grep -q 'hottest live CPU sensor 71C with the screen on.*intended behaviour' || fail "screen-on note: $out"
+printf '%s\n' "$out" | grep '\[FAIL\]' >/dev/null && fail "load with the screen on still fails the install: $out"
+printf '%s\n' "$out" | grep 'hottest live CPU sensor 71C with the screen on.*intended behaviour' >/dev/null || fail "screen-on note: $out"
 out="$(run smart 65 0)"
-printf '%s\n' "$out" | grep -q '\[FAIL\] *throttle point below live CPU sensor with the screen off want=point >= 71C live=65C' || fail "a hot phone at rest is no longer a FAIL: $out"
+printf '%s\n' "$out" | grep '\[FAIL\] *throttle point below live CPU sensor with the screen off want=point >= 71C live=65C' >/dev/null || fail "a hot phone at rest is no longer a FAIL: $out"
 out="$(run manual 65 1)"
-printf '%s\n' "$out" | grep -q '\[WARN\] throttle point below live CPU sensor (manual 65C, live 71C)' || fail "manual point: $out"
+printf '%s\n' "$out" | grep '\[WARN\] throttle point below live CPU sensor (manual 65C, live 71C)' >/dev/null || fail "manual point: $out"
 out="$(run smart 75 1)"
-printf '%s\n' "$out" | grep -q 'headroom ok' || fail "headroom: $out"
-printf '%s\n' "$out" | grep -q '95C' && fail "a hardware trip point was read as a sensor: $out"
+printf '%s\n' "$out" | grep 'headroom ok' >/dev/null || fail "headroom: $out"
+printf '%s\n' "$out" | grep '95C' >/dev/null && fail "a hardware trip point was read as a sensor: $out"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag throttle point: load with the screen on is a note, a hot phone at rest a FAIL, a manual point a WARN, trip zones ignored"
 )
@@ -216,24 +216,24 @@ run() {
   sh "$T/r.sh"
 }
 out="$(run)"
-printf '%s\n' "$out" | grep -q '\[FAIL\]' && fail "a stock policy ASB never delivered failed the install: $out"
-printf '%s\n' "$out" | grep -q '(i) Hi-res 384000 in audio policy: 0 line(s) in stock .*not checked' || fail "stock note: $out"
+printf '%s\n' "$out" | grep '\[FAIL\]' >/dev/null && fail "a stock policy ASB never delivered failed the install: $out"
+printf '%s\n' "$out" | grep '(i) Hi-res 384000 in audio policy: 0 line(s) in stock .*not checked' >/dev/null || fail "stock note: $out"
 printf 'VENDOR_OVERLAY=0\n' > "$T/mod/features.conf"; mkdir -p "$T/mod/system$T/vendor/etc"; : > "$T/mod/system$T/vendor/etc/audio_policy_configuration.xml"
-printf '%s\n' "$(run)" | grep -q '\[FAIL\]' && fail "a disabled overlay counted as delivery"
+printf '%s\n' "$(run)" | grep '\[FAIL\]' >/dev/null && fail "a disabled overlay counted as delivery"
 printf 'VENDOR_OVERLAY=1\n' > "$T/mod/features.conf"
-printf '%s\n' "$(run)" | grep -q '\[FAIL\] Hi-res 384000 present in audio policy want=1 live=0' || fail "an overlay that carries the policy but is stock live is no longer a FAIL: $(run)"
+printf '%s\n' "$(run)" | grep '\[FAIL\] Hi-res 384000 present in audio policy want=1 live=0' >/dev/null || fail "an overlay that carries the policy but is stock live is no longer a FAIL: $(run)"
 printf '<mixPort samplingRates="44100,48000,384000"/>\n' > "$T/vendor/etc/audio_policy_configuration.xml"
-printf '%s\n' "$(run)" | grep -q '\[PASS\] Hi-res 384000 present in audio policy' || fail "overlay pass: $(run)"
+printf '%s\n' "$(run)" | grep '\[PASS\] Hi-res 384000 present in audio policy' >/dev/null || fail "overlay pass: $(run)"
 printf 'VENDOR_OVERLAY=0\n' > "$T/mod/features.conf"; printf '<mixPort samplingRates="44100,48000"/>\n' > "$T/vendor/etc/audio_policy_configuration.xml"
 printf '<mixPort samplingRates="48000,384000"/>\n' > "$T/odm/etc/audio/audio_policy_configuration.xml"
 printf '%s|/data/adb/asb/odm_patched/x\n' "$T/odm/etc/audio/audio_policy_configuration.xml" > "$T/man"
-printf '%s\n' "$(run)" | grep -q '\[PASS\] Hi-res 384000 present in audio policy' || fail "the odm-bound policy is not the one checked: $(run)"
+printf '%s\n' "$(run)" | grep '\[PASS\] Hi-res 384000 present in audio policy' >/dev/null || fail "the odm-bound policy is not the one checked: $(run)"
 printf '<mixPort samplingRates="48000"/>\n' > "$T/odm/etc/audio/audio_policy_configuration.xml"
-printf '%s\n' "$(run)" | grep -q '\[FAIL\] Hi-res 384000 present in audio policy want=1 live=0' || fail "a queued odm bind that is stock live no longer fails: $(run)"
+printf '%s\n' "$(run)" | grep '\[FAIL\] Hi-res 384000 present in audio policy want=1 live=0' >/dev/null || fail "a queued odm bind that is stock live no longer fails: $(run)"
 printf '/odm/etc/camera/media_profiles.xml|/x\n' > "$T/man"
-printf '%s\n' "$(run)" | grep -q '\[FAIL\]' && fail "a camera bind counted as audio policy delivery"
+printf '%s\n' "$(run)" | grep '\[FAIL\]' >/dev/null && fail "a camera bind counted as audio policy delivery"
 rm -f "$T/vendor/etc/audio_policy_configuration.xml"
-printf '%s\n' "$(run)" | grep -q '(i) audio_policy_configuration not found' || fail "missing policy: $(run)"
+printf '%s\n' "$(run)" | grep '(i) audio_policy_configuration not found' >/dev/null || fail "missing policy: $(run)"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag hi-res owner: the 384000 policy check is a verdict only where ASB delivers the policy (odm bind or overlay); a stock file is a note"
 )
@@ -257,16 +257,16 @@ run() {  # $1 transitions, $2 writes, $3 slots, $4 uptime
   sh "$T/r.sh"
 }
 out="$(run 224 2940 0,2,5 22800)"
-printf '%s\n' "$out" | grep -q 'chattering$' && fail "the CPH2691 still reads as chattering: $out"
-printf '%s\n' "$out" | grep -q 'above the 9 nodes one transition writes on 3 cpufreq slot(s).*65 unlock lift(s), 63 prime burst(s) and 296 re-send(s)' || fail "OP12 breakdown: $out"
-printf '%s\n' "$out" | grep -q '35 an hour, one every 101 s on average - not a chattering ladder' || fail "OP12 rate: $out"
+printf '%s\n' "$out" | grep 'chattering$' >/dev/null && fail "the CPH2691 still reads as chattering: $out"
+printf '%s\n' "$out" | grep 'above the 9 nodes one transition writes on 3 cpufreq slot(s).*65 unlock lift(s), 63 prime burst(s) and 296 re-send(s)' >/dev/null || fail "OP12 breakdown: $out"
+printf '%s\n' "$out" | grep '35 an hour, one every 101 s on average - not a chattering ladder' >/dev/null || fail "OP12 rate: $out"
 out="$(run 628 5544 0,6,-1 86186)"
-printf '%s\n' "$out" | grep -q 'writes per transition: 8 - above the 7 nodes one transition writes on 2 cpufreq slot(s)' || fail "OP15 ratio: $out"
+printf '%s\n' "$out" | grep 'writes per transition: 8 - above the 7 nodes one transition writes on 2 cpufreq slot(s)' >/dev/null || fail "OP15 ratio: $out"
 out="$(run 900 3600 0,6,-1 3600)"
-printf '%s\n' "$out" | grep -q 'normal - one transition writes up to 7 nodes' || fail "normal ratio: $out"
-printf '%s\n' "$out" | grep -q '900 an hour, one every 4 s - the ladder is chattering' || fail "real chatter not named: $out"
+printf '%s\n' "$out" | grep 'normal - one transition writes up to 7 nodes' >/dev/null || fail "normal ratio: $out"
+printf '%s\n' "$out" | grep '900 an hour, one every 4 s - the ladder is chattering' >/dev/null || fail "real chatter not named: $out"
 out="$(run 5 40 0,6,-1 3600)"
-printf '%s\n' "$out" | grep -q 'too few to judge' || fail "few transitions: $out"
+printf '%s\n' "$out" | grep 'too few to judge' >/dev/null || fail "few transitions: $out"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag write ratio: writes per transition against the phone's own slots, chatter by how often the state changes"
 )
@@ -327,45 +327,45 @@ EOF
 }
 
 o="$(run "$T/conf" "$T/boot_old" 3)"
-printf '%s\n' "$o" | grep -q '^  A. WHAT YOU CHOSE' || f "part A missing"
+printf '%s\n' "$o" | grep '^  A. WHAT YOU CHOSE' >/dev/null || f "part A missing"
 printf '%s\n' "$o" | awk '/^     Audio$/ { a = 1; next } /^     [A-Z]/ { a = 0 } a && /DSP Loudness/ && /0 -> 25/ && /\[dsp_loudness\]/ { ok = 1 } END { exit !ok }' \
   || f "DSP Loudness not listed under Audio as 0 -> 25 with its key: $o"
-printf '%s\n' "$o" | grep -q 'Camera Grade .*0 -> 10 .*\[CAMERA_LEVEL\]' || f "camera grade change not listed"
-printf '%s\n' "$o" | grep -q 'heavy_gpu_enter' && f "an internal engine key listed as a user choice"
-printf '%s\n' "$o" | grep -Eq '^     3 of [0-9]+ WebUI settings changed' || f "changed-count line wrong: $o"
-printf '%s\n' "$o" | grep -q 'Media Volume Steps .*stock -> 30  (waits for a reboot)' || f "reboot-scoped change not flagged"
-printf '%s\n' "$o" | grep -q '^     waiting for a reboot (changed after this boot, read only at boot):$' || f "waiting-for-reboot heading missing"
-printf '%s\n' "$o" | grep -q '^       Media Volume Steps: stock -> 30   \[media_vol_steps\]$' || f "waiting key not named"
-printf '%s\n' "$o" | grep -q '^       Camera Grade: 0 -> 10   \[CAMERA_LEVEL\]$' || f "reboot-scoped camera grade not listed as waiting"
-printf '%s\n' "$o" | grep -q 'DSP Loudness:' && f "a setting applied live listed as waiting for a reboot"
-printf '%s\n' "$o" | grep -q '^     \[PASS\] DSP gain applied (persist.asb.dsp.gain_mb)  ->  2500$' || f "PASS check not echoed in part B"
-printf '%s\n' "$o" | grep -q '^     \[FAIL\] camera grade live  ->  3$' || f "FAIL check not echoed in part B"
-printf '%s\n' "$o" | grep -q 'applied 1 · already set 1 · refused by Android 1' || f "ledger totals wrong (reconcile rows must not count): $o"
-printf '%s\n' "$o" | grep -q 'refused, not in effect: settings/network_recommendations_enabled (wanted 0, device keeps 1)' || f "refused key not named"
+printf '%s\n' "$o" | grep 'Camera Grade .*0 -> 10 .*\[CAMERA_LEVEL\]' >/dev/null || f "camera grade change not listed"
+printf '%s\n' "$o" | grep 'heavy_gpu_enter' >/dev/null && f "an internal engine key listed as a user choice"
+printf '%s\n' "$o" | grep -E '^     3 of [0-9]+ WebUI settings changed' >/dev/null || f "changed-count line wrong: $o"
+printf '%s\n' "$o" | grep 'Media Volume Steps .*stock -> 30  (waits for a reboot)' >/dev/null || f "reboot-scoped change not flagged"
+printf '%s\n' "$o" | grep '^     waiting for a reboot (changed after this boot, read only at boot):$' >/dev/null || f "waiting-for-reboot heading missing"
+printf '%s\n' "$o" | grep '^       Media Volume Steps: stock -> 30   \[media_vol_steps\]$' >/dev/null || f "waiting key not named"
+printf '%s\n' "$o" | grep '^       Camera Grade: 0 -> 10   \[CAMERA_LEVEL\]$' >/dev/null || f "reboot-scoped camera grade not listed as waiting"
+printf '%s\n' "$o" | grep 'DSP Loudness:' >/dev/null && f "a setting applied live listed as waiting for a reboot"
+printf '%s\n' "$o" | grep '^     \[PASS\] DSP gain applied (persist.asb.dsp.gain_mb)  ->  2500$' >/dev/null || f "PASS check not echoed in part B"
+printf '%s\n' "$o" | grep '^     \[FAIL\] camera grade live  ->  3$' >/dev/null || f "FAIL check not echoed in part B"
+printf '%s\n' "$o" | grep 'applied 1 · already set 1 · refused by Android 1' >/dev/null || f "ledger totals wrong (reconcile rows must not count): $o"
+printf '%s\n' "$o" | grep 'refused, not in effect: settings/network_recommendations_enabled (wanted 0, device keeps 1)' >/dev/null || f "refused key not named"
 # fix221: an absent-on-this-ROM settings key is counted and listed apart from refusals;
 # an unsupported SYSFS node is neither counted nor listed here.
-printf '%s\n' "$o" | grep -q 'refused by Android 1 · not on this ROM 1' || f "absent-on-ROM count missing: $o"
-printf '%s\n' "$o" | grep -q '^       not on this ROM: settings/cloud_dns_happy_eyeballs_priority_enabled (wanted off) - this ROM has no such setting; nothing is wrong$' || f "absent-on-ROM key not listed: $o"
-printf '%s\n' "$o" | grep -q 'some_node' && f "an unsupported sysfs node leaked into the settings list: $o"
-printf '%s\n' "$o" | grep -q '^     FAIL=1 - these did not take effect' || f "verdict does not name the failure count"
-printf '%s\n' "$o" | grep -q '^       camera grade live: want 10, live 3$' || f "failing check not listed in the verdict"
-printf '%s\n' "$o" | grep -q 'Read FAIL, not PASS' || f "PASS-count explanation missing"
+printf '%s\n' "$o" | grep 'refused by Android 1 · not on this ROM 1' >/dev/null || f "absent-on-ROM count missing: $o"
+printf '%s\n' "$o" | grep '^       not on this ROM: settings/cloud_dns_happy_eyeballs_priority_enabled (wanted off) - this ROM has no such setting; nothing is wrong$' >/dev/null || f "absent-on-ROM key not listed: $o"
+printf '%s\n' "$o" | grep 'some_node' >/dev/null && f "an unsupported sysfs node leaked into the settings list: $o"
+printf '%s\n' "$o" | grep '^     FAIL=1 - these did not take effect' >/dev/null || f "verdict does not name the failure count"
+printf '%s\n' "$o" | grep '^       camera grade live: want 10, live 3$' >/dev/null || f "failing check not listed in the verdict"
+printf '%s\n' "$o" | grep 'Read FAIL, not PASS' >/dev/null || f "PASS-count explanation missing"
 
 o="$(run "$T/conf" "$T/boot_same" 10)"
-printf '%s\n' "$o" | grep -q '^     waiting for a reboot: nothing' || f "nothing pending not said when the boot copy matches"
-printf '%s\n' "$o" | grep -q '(waits for a reboot)' && f "a change already booted with flagged as waiting"
-printf '%s\n' "$o" | grep -q '^     FAIL=0 · REFUSED=1 - every live check passed, but 1 Android system setting(s) are not in effect (listed above).$' || f "refused setting disappeared from the FAIL=0 verdict"
-printf '%s\n' "$o" | grep -q 'FAIL=0 - everything this report can check' && f "refused setting still allows the unconditional clean verdict"
+printf '%s\n' "$o" | grep '^     waiting for a reboot: nothing' >/dev/null || f "nothing pending not said when the boot copy matches"
+printf '%s\n' "$o" | grep '(waits for a reboot)' >/dev/null && f "a change already booted with flagged as waiting"
+printf '%s\n' "$o" | grep '^     FAIL=0 · REFUSED=1 - every live check passed, but 1 Android system setting(s) are not in effect (listed above).$' >/dev/null || f "refused setting disappeared from the FAIL=0 verdict"
+printf '%s\n' "$o" | grep 'FAIL=0 - everything this report can check' >/dev/null && f "refused setting still allows the unconditional clean verdict"
 
 mv "$T/state/apply_ledger" "$T/state/apply_ledger.off"
 o="$(run "$T/conf" "$T/boot_same" 10)"
-printf '%s\n' "$o" | grep -q '^     FAIL=0 - everything this report can check for your settings is in effect.$' || f "genuinely clean verdict missing"
+printf '%s\n' "$o" | grep '^     FAIL=0 - everything this report can check for your settings is in effect.$' >/dev/null || f "genuinely clean verdict missing"
 mv "$T/state/apply_ledger.off" "$T/state/apply_ledger"
 
 o="$(run "$S" "$T/missing" 10)"
-printf '%s\n' "$o" | grep -q '^     nothing - every setting is at its shipped default$' || f "all-default config not described: $o"
-printf '%s\n' "$o" | grep -q '^     waiting for a reboot: unknown' || f "missing boot copy not reported as unknown"
-printf '%s\n' "$o" | grep -q 'not an install error' || f "default-is-not-an-error line missing"
+printf '%s\n' "$o" | grep '^     nothing - every setting is at its shipped default$' >/dev/null || f "all-default config not described: $o"
+printf '%s\n' "$o" | grep '^     waiting for a reboot: unknown' >/dev/null || f "missing boot copy not reported as unknown"
+printf '%s\n' "$o" | grep 'not an install error' >/dev/null || f "default-is-not-an-error line missing"
 
 grep -q 'cp -f "$MODDIR/config/governor.conf" /dev/.asb_profile_state/governor.boot.conf' "$ROOT/post-fs-data.sh" \
   || f "post-fs-data does not keep the config this boot used"
@@ -596,10 +596,10 @@ for k in 1 2; do row MODERATE 0 3000 0 com.heytap.market "-"; done
 for k in 1 2 3; do row MODERATE 0 600 130 com.google.android.youtube "com.google.android.youtube:128:590"; done
 for k in 1 2 3 4; do row LIGHT_IDLE 0 500 135 com.google.android.youtube "com.google.android.youtube:134:495"; done
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/c" 2>&1)"
-printf '%s\n' "$out" | grep -q '^main cores below = policy2 and policy5 (the middle clusters, under one ceiling), prime = policy7; the little cluster (policy0) runs no UI and is not in these lines.$' \
+printf '%s\n' "$out" | grep '^main cores below = policy2 and policy5 (the middle clusters, under one ceiling), prime = policy7; the little cluster (policy0) runs no UI and is not in these lines.$' >/dev/null \
   || f "4-cluster layout line: $out"
-printf '%s\n' "$out" | grep -q '^within com.heytap.market (most frames), by ASB state and touch:$' || f "most-frames table: $out"
-printf '%s\n' "$out" | grep -q '^within com.google.android.youtube (most janky frames), by ASB state and touch:$' || f "no table for the app with the most janky frames: $out"
+printf '%s\n' "$out" | grep '^within com.heytap.market (most frames), by ASB state and touch:$' >/dev/null || f "most-frames table: $out"
+printf '%s\n' "$out" | grep '^within com.google.android.youtube (most janky frames), by ASB state and touch:$' >/dev/null || f "no table for the app with the most janky frames: $out"
 printf '%s\n' "$out" | awk '/^within com.google.android.youtube/ { f = 1; next } /^within |^  Compare/ { f = 0 } f' > "$T/yt"
 grep -qE '^  MODERATE +no +3 +1800 +21\.7% +2\.71$' "$T/yt" || f "YouTube MODERATE row: $(cat "$T/yt")"
 grep -qE '^  LIGHT_IDLE +no +4 +2000 +27\.0% +2\.81$' "$T/yt" || f "YouTube LIGHT_IDLE row: $(cat "$T/yt")"
@@ -613,15 +613,15 @@ for k in 1 2; do row LIGHT_IDLE 0 300 20 com.a "com.a:20:300"; done
 for k in 1 2; do row MODERATE 1 200 5 com.b "com.b:5:200"; done
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/d" 2>&1)"
 [ "$(printf '%s\n' "$out" | grep -c '^within ')" = 1 ] || f "two tables for one app: $out"
-printf '%s\n' "$out" | grep -q '^main cores below' && f "cluster line on a 6+2 part: $out"
+printf '%s\n' "$out" | grep '^main cores below' >/dev/null && f "cluster line on a 6+2 part: $out"
 
 # --- 4. throttle split: slot 0 is the little pair there --------------------------------------
 printf '1|active|p0_max=1/2|p6_max=1/2|cpu_temp=40|surface=33|cap_owner=asb|main_by=asb_trim|prime_by=vendor\n' > "$T/thr"
 out="$(LK_OUT_DIR="$T/c" sh -c '. "$0" >/dev/null 2>&1; lk_emit_cap_cause_split "$1"' "$C" "$T/thr")"
-printf '%s\n' "$out" | grep -qE '^  little: asb_trim 1$' || f "4-cluster split still says main: $out"
-printf '%s\n' "$out" | grep -q 'little = policy0, the efficiency cores' || f "little note: $out"
+printf '%s\n' "$out" | grep -E '^  little: asb_trim 1$' >/dev/null || f "4-cluster split still says main: $out"
+printf '%s\n' "$out" | grep 'little = policy0, the efficiency cores' >/dev/null || f "little note: $out"
 out="$(LK_OUT_DIR="$T/d" sh -c '. "$0" >/dev/null 2>&1; lk_emit_cap_cause_split "$1"' "$C" "$T/thr")"
-printf '%s\n' "$out" | grep -qE '^  main: +asb_trim 1$' || f "6+2 split: $out"
+printf '%s\n' "$out" | grep -E '^  main: +asb_trim 1$' >/dev/null || f "6+2 split: $out"
 grep -q 'the LPM feature or the cellular power policy (radio_policy_enable, off by default) is off' "$ROOT/tools/logkit/asb_log_full_day.sh" \
   || f "an empty modem LPM line still prints nothing"
 
@@ -741,7 +741,7 @@ mkdir -p "$TMP/state/asbdiag_webui.lock"
 printf '999999\n' > "$TMP/state/asbdiag_webui.lock/pid"
 STALE_DIAG="$(env "${ENV[@]}" sh "$HELPER" diag-start || true)"
 grep -Fqx 'status=started' <<<"$STALE_DIAG" || { echo 'FAIL debug support: known-dead diag lock not reclaimed' >&2; exit 1; }
-for _diag_try in $(seq 1 100); do sleep 0.1; env "${ENV[@]}" sh "$HELPER" diag-status | grep -Fqx 'status=saved' && break; done
+for _diag_try in $(seq 1 100); do sleep 0.1; env "${ENV[@]}" sh "$HELPER" diag-status | grep -Fx 'status=saved' >/dev/null && break; done
 FAIL_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_FAIL=1 env "${ENV[@]}" sh "$HELPER" diag-start || true)"
 grep -Fqx 'status=started' <<<"$FAIL_DIAG" || { echo 'FAIL debug support: failing diag did not launch' >&2; exit 1; }
 for _diag_try in $(seq 1 100); do
@@ -928,8 +928,8 @@ grep -Fq '|10652|pkg.uid.10652|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" 
 lk_audio_wakelock_live_row "PARTIAL_WAKE_LOCK '*job*r/@androidx.work.systemjobscheduler@ru.vk.store/x' ACQ=-1s (uid=1000 ws=WorkSource{ chains=WorkChain{(10436), (1000, JobScheduler)}});PARTIAL_WAKE_LOCK 'AudioMix' ACQ=-5s (uid=1041 ws=WorkSource{10345});" 125
 grep -Fq '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" || { echo 'FAIL debug support: AudioMix beside a job lock not recorded' >&2; exit 1; }
 grep -Fq '|10436|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" && { echo 'FAIL debug support: a job lock held beside AudioMix was credited to AudioMix' >&2; exit 1; }
-grep -F '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" | grep -q 'ru.vk.store' && { echo 'FAIL debug support: the job lock text was kept as AudioMix evidence' >&2; exit 1; }
-grep -Fq '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" && grep -F '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" | grep -Fq '|10345|pkg.uid.10345|' || { echo 'FAIL debug support: the AudioMix owner beside a job lock was lost' >&2; exit 1; }
+grep -F '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" | grep 'ru.vk.store' >/dev/null && { echo 'FAIL debug support: the job lock text was kept as AudioMix evidence' >&2; exit 1; }
+grep -Fq '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" && grep -F '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" | grep -F '|10345|pkg.uid.10345|' >/dev/null || { echo 'FAIL debug support: the AudioMix owner beside a job lock was lost' >&2; exit 1; }
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_audio_wakelock_attribution_init'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_capture_fsm_media_trace_row "$_phase"'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'rmnetMiB'
@@ -1057,14 +1057,14 @@ printf '%s\n' "$boot" > "$LOCK/boot_id"; printf 'tok\n' > "$LOCK/token"
 printf '%s\n' "$OTHER" > "$LOCK/pid"; printf '%s\n' "$OTHER" > "$LOCK/launcher"
 printf '%s\n' "$TMP/deleted_capture" > "$LOCK/output_dir"
 OUT="$(H full-day-start)"
-echo "$OUT" | grep -q 'status=started' || fail "case 1: stale lock blocked the start: $OUT"
+echo "$OUT" | grep 'status=started' >/dev/null || fail "case 1: stale lock blocked the start: $OUT"
 kill -0 "$OTHER" 2>/dev/null || fail "case 1: an unrelated process was killed"
 sleep 0.6
 P1="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"; [ -n "$P1" ] && kill -0 "$P1" || fail "case 1: recorder not running"
 
 # ---- case 2: our recorder alive, folder present -> already running
 OUT="$(H full-day-start)"
-echo "$OUT" | grep -q 'status=already_running' || fail "case 2: a second recorder was allowed: $OUT"
+echo "$OUT" | grep 'status=already_running' >/dev/null || fail "case 2: a second recorder was allowed: $OUT"
 
 # ---- case 3: folder deleted -> recorder and child stopped, new recorder started
 CHILD="$(cat "$TMP/state/child_$P1" 2>/dev/null)"
@@ -1086,13 +1086,13 @@ case "$OUT" in
     OUT="$OUT
 $(H full-day-start)" ;;
 esac
-if ! printf '%s\n' "$OUT" | grep -q 'orphan_recovered=output_dir_removed'; then
+if ! printf '%s\n' "$OUT" | grep 'orphan_recovered=output_dir_removed' >/dev/null; then
   # The first attempt may have recovered the slot but tripped on the final still-live
   # check; the retry then started over the dead lock without the note line. The contract
   # is "a new start succeeds and the old recorder is gone" - checked either way below.
-  printf '%s\n' "$OUT" | grep -q 'status=started' || fail "case 3: orphan not recovered: $OUT"
+  printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "case 3: orphan not recovered: $OUT"
 fi
-printf '%s\n' "$OUT" | grep -q 'status=started' || fail "case 3: no new start: $OUT"
+printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "case 3: no new start: $OUT"
 sleep 0.4
 alive "$P1" && fail "case 3: old recorder still alive"
 [ -n "$CHILD" ] && alive "$CHILD" && fail "case 3: old sampler child still alive"
@@ -1133,33 +1133,33 @@ ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" AS
 H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
 LOCK="$TMP/state/full_day_webui.lock"
 OUT="$(H full-day-stop)"
-printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "stop with nothing running did not say idle: $OUT"
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "stop with nothing running did not say idle: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "start: $OUT"
 n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 P1="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"; [ -n "$P1" ] && alive "$P1" || fail "recorder not running"
 CAP="$(cat "$LOCK/output_dir")"
 t0="$(date +%s)"
 OUT="$(H full-day-stop)"
 t1="$(date +%s)"
-printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop did not answer stopping: $OUT"
-printf '%s\n' "$OUT" | grep -qx "pid=$P1" || fail "stop named another pid: $OUT"
-printf '%s\n' "$OUT" | grep -qx "output=$CAP" || fail "stop did not name the capture folder: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=stopping' >/dev/null || fail "stop did not answer stopping: $OUT"
+printf '%s\n' "$OUT" | grep -x "pid=$P1" >/dev/null || fail "stop named another pid: $OUT"
+printf '%s\n' "$OUT" | grep -x "output=$CAP" >/dev/null || fail "stop did not name the capture folder: $OUT"
 [ $(( t1 - t0 )) -le 2 ] || fail "the helper held the WebView bridge for $(( t1 - t0 )) s"
 n=0; while alive "$P1" && [ "$n" -lt 40 ]; do sleep 0.1; n=$((n + 1)); done
 alive "$P1" && fail "the recorder did not end on TERM within 4 s (its sleep was not woken)"
 grep -qx finalized "$CAP/_full_day_report.txt" 2>/dev/null || fail "the recorder was killed instead of finalising its report"
 [ -d "$CAP" ] || fail "stopping removed the capture folder"
-OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after stop: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "status after stop: $OUT"
 ENV+=(STUB_IGNORE_TERM=1)
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "second start: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "second start: $OUT"
 n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 P2="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"
-OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop of a stubborn recorder: $OUT"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -x 'status=stopping' >/dev/null || fail "stop of a stubborn recorder: $OUT"
 n=0; while alive "$P2" && [ "$n" -lt 80 ]; do sleep 0.1; n=$((n + 1)); done
 alive "$P2" && fail "a recorder that ignores TERM was never ended"
 n=0; while [ -d "$LOCK" ] && [ "$n" -lt 30 ]; do sleep 0.1; n=$((n + 1)); done
 [ -d "$LOCK" ] && fail "the lock of a force-ended recorder stayed"
-OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after a forced stop: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "status after a forced stop: $OUT"
 H="$ROOT/webroot/index.html"
 grep -Fq "asb_debug_support.sh full-day-stop 2>/dev/null" "$H" || fail "the WebUI does not call full-day-stop"
 grep -Fq "if (action === 'full-day' && _asbLogRunning) {" "$H" || fail "the menu item does not turn into Stop while recording"
@@ -1200,28 +1200,28 @@ EOF_REC
 ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" ASB_DEBUG_SUPPORT_STOP_WAIT_S=20)
 H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
 LOCK="$TMP/state/full_day_webui.lock"
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "start: $OUT"
 n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 P="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"; CAP="$(cat "$LOCK/output_dir")"
-OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop: $OUT"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -x 'status=stopping' >/dev/null || fail "stop: $OUT"
 n=0; while [ ! -f "$CAP/finalizing" ] && [ "$n" -lt 40 ]; do sleep 0.1; n=$((n + 1)); done
 [ -f "$CAP/finalizing" ] || fail 'the recorder never started finalising'
 OUT="$(H status)"
-printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "status while the report is finalised still says: $OUT"
-printf '%s\n' "$OUT" | grep -q '^since=[0-9][0-9]*$' || fail "stopping has no start time: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=stopping' >/dev/null || fail "status while the report is finalised still says: $OUT"
+printf '%s\n' "$OUT" | grep '^since=[0-9][0-9]*$' >/dev/null || fail "stopping has no start time: $OUT"
 OUT="$(H full-day-stop)"
-printf '%s\n' "$OUT" | grep -qx 'status=stopping' && printf '%s\n' "$OUT" | grep -qx "output=$CAP" || fail "a repeated stop: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=stopping' >/dev/null && printf '%s\n' "$OUT" | grep -x "output=$CAP" >/dev/null || fail "a repeated stop: $OUT"
 sleep 0.5
 [ "$(grep -c term "$CAP/terms" 2>/dev/null)" = 1 ] || fail "a repeated stop signalled the finalising recorder again ($(grep -c term "$CAP/terms") signals)"
 : > "$CAP/release"
 n=0; while alive "$P" && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 alive "$P" && fail 'the recorder did not finish'
 grep -qx finalized "$CAP/_full_day_report.txt" || fail 'the report was not finalised'
-OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after the report: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "status after the report: $OUT"
 [ -e "$TMP/state/full_day_stopping" ] && fail 'the stopping marker outlived the recorder'
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "a new start after the stop: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "a new start after the stop: $OUT"
 n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
-OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "a new capture reads as stopping: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -x 'status=running' >/dev/null || fail "a new capture reads as stopping: $OUT"
 H full-day-stop >/dev/null; : > "$(cat "$LOCK/output_dir" 2>/dev/null)/release" 2>/dev/null
 F="$ROOT/tools/logkit/asb_log_full_day.sh"
 awk '/^lk_on_signal\(\) \{/ { f = 1 } f && /trap .. TERM INT HUP/ { t = NR } f && /^  lk_finalize$/ { l = NR } f && /^}/ { exit } END { exit !(t && l && t < l) }' "$F" \
@@ -1305,15 +1305,15 @@ EOF_REC
 ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state"
      ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" ASB_DEBUG_SUPPORT_STOP_WAIT_S=2)
 H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "start: $OUT"
 LOCK="$TMP/state/full_day_webui.lock"
 n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 [ -s "$LOCK/output_dir" ] && [ -s "$LOCK/pid" ] || fail 'recorder did not publish its lock/output'
 CAP="$(cat "$LOCK/output_dir")"; PID="$(tr -dc 0-9 < "$LOCK/pid")"; BOOT="$(cat "$LOCK/boot_id")"
 OUT="$(H status)"
-printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "live process lost Stop-capable status: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'capture_state=unknown' || fail "missing heartbeat was not unknown: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'heartbeat_age_s=-1' || fail "missing heartbeat invented an age: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=running' >/dev/null || fail "live process lost Stop-capable status: $OUT"
+printf '%s\n' "$OUT" | grep -x 'capture_state=unknown' >/dev/null || fail "missing heartbeat was not unknown: $OUT"
+printf '%s\n' "$OUT" | grep -x 'heartbeat_age_s=-1' >/dev/null || fail "missing heartbeat invented an age: $OUT"
 UP="$(awk '{printf "%d", $1}' /proc/uptime)"
 cat > "$CAP/recorder_heartbeat.env" <<EOF_HB
 schema=1
@@ -1326,24 +1326,24 @@ stage=sampling
 boot_id=$BOOT
 EOF_HB
 OUT="$(H status)"
-printf '%s\n' "$OUT" | grep -qx 'capture_state=running' || fail "fresh heartbeat was not running: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'stage=sampling' || fail "fresh stage missing: $OUT"
+printf '%s\n' "$OUT" | grep -x 'capture_state=running' >/dev/null || fail "fresh heartbeat was not running: $OUT"
+printf '%s\n' "$OUT" | grep -x 'stage=sampling' >/dev/null || fail "fresh stage missing: $OUT"
 printf '1600.00 3200.00\n' > "$TMP/uptime"
 sed -i 's/^mono=.*/mono=1000/;s/^stage=.*/stage=dumpsys:batterystats/' "$CAP/recorder_heartbeat.env"
 HS() { env "${ENV[@]}" ASB_DEBUG_SUPPORT_UPTIME_FILE="$TMP/uptime" sh "$HELPER" "$@" 2>/dev/null || true; }
 OUT="$(HS status)"
-printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "stale process must retain Stop: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'capture_state=stale' || fail "old heartbeat was not stale: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'heartbeat_age_s=600' || fail "wrong stale age: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'stage=dumpsys:batterystats' || fail "stale stage missing: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=running' >/dev/null || fail "stale process must retain Stop: $OUT"
+printf '%s\n' "$OUT" | grep -x 'capture_state=stale' >/dev/null || fail "old heartbeat was not stale: $OUT"
+printf '%s\n' "$OUT" | grep -x 'heartbeat_age_s=600' >/dev/null || fail "wrong stale age: $OUT"
+printf '%s\n' "$OUT" | grep -x 'stage=dumpsys:batterystats' >/dev/null || fail "stale stage missing: $OUT"
 OUT="$(HS full-day)"
-printf '%s\n' "$OUT" | grep -qx 'status=already_running' || fail "repeated start did not preserve the single recorder: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'capture_state=stale' || fail "already_running hid stale progress: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=already_running' >/dev/null || fail "repeated start did not preserve the single recorder: $OUT"
+printf '%s\n' "$OUT" | grep -x 'capture_state=stale' >/dev/null || fail "already_running hid stale progress: $OUT"
 sed -i 's/^mono=.*/mono=10x00/' "$CAP/recorder_heartbeat.env"
-OUT="$(HS status)"; printf '%s\n' "$OUT" | grep -qx 'capture_state=unknown' || fail "malformed monotonic evidence was repaired into a timestamp: $OUT"
+OUT="$(HS status)"; printf '%s\n' "$OUT" | grep -x 'capture_state=unknown' >/dev/null || fail "malformed monotonic evidence was repaired into a timestamp: $OUT"
 rm -f "$CAP/recorder_heartbeat.env"
-OUT="$(HS status)"; printf '%s\n' "$OUT" | grep -qx 'capture_state=unknown' || fail "deleted heartbeat did not return to unknown: $OUT"
-OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stale/unknown capture could not be stopped: $OUT"
+OUT="$(HS status)"; printf '%s\n' "$OUT" | grep -x 'capture_state=unknown' >/dev/null || fail "deleted heartbeat did not return to unknown: $OUT"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -x 'status=stopping' >/dev/null || fail "stale/unknown capture could not be stopped: $OUT"
 echo 'PASS debug capture freshness: real status CLI separates fresh/stale/unknown progress from live-process Stop and repeated Start'
 )
 
@@ -1392,26 +1392,26 @@ reboot_now() {
   printf 'old-boot\n' > "$LOCK/boot_id" 2>/dev/null
   sed -i 's/^boot=.*/boot=old-boot/' "$MARK"
 }
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'limit=until_stopped' || fail "the start does not say it runs until stopped: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "start: $OUT"
+printf '%s\n' "$OUT" | grep -x 'limit=until_stopped' >/dev/null || fail "the start does not say it runs until stopped: $OUT"
 n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 CAP="$(sed -n 's/^dir=//p' "$MARK")"
 [ -d "$CAP" ] || fail "no resume marker naming the capture folder"
-OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "a resume in the same boot must do nothing: $OUT"
+OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "a resume in the same boot must do nothing: $OUT"
 reboot_now
 OUT="$(H status)"
-printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "after a reboot the status must say resuming: $OUT"
-printf '%s\n' "$OUT" | grep -qx "output=$CAP" || fail "the resuming status must name the folder: $OUT"
-OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "boot resume: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=resuming' >/dev/null || fail "after a reboot the status must say resuming: $OUT"
+printf '%s\n' "$OUT" | grep -x "output=$CAP" >/dev/null || fail "the resuming status must name the folder: $OUT"
+OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -x 'status=resuming' >/dev/null || fail "boot resume: $OUT"
 n=0; while [ ! -s "$CAP/resumed_by" ] && [ "$n" -lt 80 ]; do sleep 0.1; n=$((n + 1)); done
 [ -s "$CAP/resumed_by" ] || fail "the recorder was not restarted on the same folder"
 P2="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"; [ -n "$P2" ] && alive "$P2" || fail "the resumed recorder is not running"
-OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "status after the resume: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -x 'status=running' >/dev/null || fail "status after the resume: $OUT"
 [ "$(sed -n 's/^dir=//p' "$MARK")" = "$CAP" ] || fail "the resumed recorder lost the marker"
 reboot_now
 printf 'sys.boot_completed=1\nsys.user.0.ce_available=false\n' > "$TMP/props"
 mv "$CAP" "$CAP.locked"
-OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "second boot resume: $OUT"
+OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -x 'status=resuming' >/dev/null || fail "second boot resume: $OUT"
 sleep 3
 [ -s "$MARK" ] || fail "a locked storage must not drop the resume"
 mv "$CAP.locked" "$CAP"
@@ -1419,19 +1419,19 @@ printf 'sys.boot_completed=1\nsys.user.0.ce_available=true\n' > "$TMP/props"
 n=0; while [ "$(wc -l < "$CAP/resumed_by")" -lt 2 ] && [ "$n" -lt 80 ]; do sleep 0.1; n=$((n + 1)); done
 [ "$(wc -l < "$CAP/resumed_by")" -ge 2 ] || fail "the capture did not resume once the storage unlocked"
 P3="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"
-OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop of the resumed capture: $OUT"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -x 'status=stopping' >/dev/null || fail "stop of the resumed capture: $OUT"
 [ -e "$MARK" ] && fail "stopping must clear the resume marker"
 n=0; while alive "$P3" && [ "$n" -lt 40 ]; do sleep 0.1; n=$((n + 1)); done
 grep -qx finalized "$CAP/_full_day_report.txt" 2>/dev/null || fail "the stopped capture did not finalise"
-OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after the stop: $OUT"
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "third start: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "status after the stop: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "third start: $OUT"
 n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 reboot_now
 OUT="$(H full-day-stop)"
-printf '%s\n' "$OUT" | grep -qx 'status=stopped' || fail "stopping a pending resume: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=stopped' >/dev/null || fail "stopping a pending resume: $OUT"
 [ -e "$MARK" ] && fail "a pending resume survived the stop"
-OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after cancelling the resume: $OUT"
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "fourth start: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "status after cancelling the resume: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "fourth start: $OUT"
 n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 CAP4="$(sed -n 's/^dir=//p' "$MARK")"
 reboot_now
@@ -1483,41 +1483,41 @@ ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" AS
      ASB_DEBUG_SUPPORT_STOP_WAIT_S=3 ASB_DEBUG_SUPPORT_PROPS="$TMP/props")
 H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
 LOCK="$TMP/state/full_day_webui.lock"; MARK="$TMP/state/full_day_resume"
-OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep 'status=started' >/dev/null || fail "start: $OUT"
 n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 CAP="$(sed -n 's/^dir=//p' "$MARK")"; [ -d "$CAP" ] || fail "no resume marker"
 P1="$(tr -dc 0-9 < "$LOCK/pid")"
 if command -v setsid >/dev/null 2>&1; then
   [ "$(cat "$CAP/session.$P1" 2>/dev/null)" = own ] || fail "the recorder still shares the launcher's session: $(cat "$CAP/session.$P1" 2>/dev/null)"
 fi
-OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "revive of a live recorder: $OUT"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -x 'status=running' >/dev/null || fail "revive of a live recorder: $OUT"
 kill -KILL "$P1"; n=0; while alive "$P1" && [ "$n" -lt 30 ]; do sleep 0.1; n=$((n + 1)); done
 OUT="$(H status)"
-printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "a recorder lost in this boot must read resuming: $OUT"
-printf '%s\n' "$OUT" | grep -qx 'reason=restart' || fail "the same-boot loss is not named: $OUT"
-printf '%s\n' "$OUT" | grep -qx "output=$CAP" || fail "the folder is not named: $OUT"
-OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "the boot resume must stay boot-only: $OUT"
+printf '%s\n' "$OUT" | grep -x 'status=resuming' >/dev/null || fail "a recorder lost in this boot must read resuming: $OUT"
+printf '%s\n' "$OUT" | grep -x 'reason=restart' >/dev/null || fail "the same-boot loss is not named: $OUT"
+printf '%s\n' "$OUT" | grep -x "output=$CAP" >/dev/null || fail "the folder is not named: $OUT"
+OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "the boot resume must stay boot-only: $OUT"
 printf 'sys.boot_completed=0\nsys.user.0.ce_available=true\n' > "$TMP/props"
-OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "revive before boot completion: $OUT"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -x 'status=resuming' >/dev/null || fail "revive before boot completion: $OUT"
 [ -e "$CAP/resumed_by" ] && fail "revived before the framework finished starting"
 printf 'sys.boot_completed=1\nsys.user.0.ce_available=true\n' > "$TMP/props"
-OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=started' || fail "revive: $OUT"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -x 'status=started' >/dev/null || fail "revive: $OUT"
 n=0; while [ ! -s "$CAP/resumed_by" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 grep -q ' restart$' "$CAP/resumed_by" || fail "the revived recorder was not told it is a same-boot restart: $(cat "$CAP/resumed_by" 2>/dev/null)"
 P2="$(tr -dc 0-9 < "$LOCK/pid")"; [ -n "$P2" ] && [ "$P2" != "$P1" ] && alive "$P2" || fail "no revived recorder"
 grep -q 'revive=start' "$TMP/state/full_day_webui.recovery.log" || fail "the revive left no note"
-OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "second revive: $OUT"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -x 'status=running' >/dev/null || fail "second revive: $OUT"
 [ "$(wc -l < "$CAP/resumed_by")" = 1 ] || fail "a second recorder was started"
-OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop: $OUT"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -x 'status=stopping' >/dev/null || fail "stop: $OUT"
 n=0; while alive "$P2" && [ "$n" -lt 40 ]; do sleep 0.1; n=$((n + 1)); done
 [ -e "$MARK" ] && fail "stop kept the marker"
-OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "revive after a stop: $OUT"
-OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after the stop: $OUT"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "revive after a stop: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "status after the stop: $OUT"
 OUT="$(H full-day-start)"; n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 P3="$(tr -dc 0-9 < "$LOCK/pid")"; CAP3="$(sed -n 's/^dir=//p' "$MARK")"
 kill -KILL "$P3"; n=0; while alive "$P3" && [ "$n" -lt 30 ]; do sleep 0.1; n=$((n + 1)); done
-OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopped' || fail "stopping a pending same-boot revive: $OUT"
-OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "a cancelled revive came back: $OUT"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -x 'status=stopped' >/dev/null || fail "stopping a pending same-boot revive: $OUT"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -x 'status=idle' >/dev/null || fail "a cancelled revive came back: $OUT"
 [ -e "$CAP3/resumed_by" ] && fail "a cancelled capture was revived"
 grep -Fq 'asb_debug_support.sh" full-day-revive' "$ROOT/service.sh" || fail "the service tick does not revive a lost recorder"
 grep -Fq "asb_debug_support.sh full-day-revive" "$ROOT/webroot/index.html" || fail "the WebUI does not revive a lost recorder"
@@ -1629,18 +1629,18 @@ row 3 mixed      0 600 254 com.google.android.youtube
 row 4 MODERATE   3 1300 110 com.google.android.youtube
 row 5 MODERATE   2 900 40 com.rifsxd.ksunext
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T" 2>&1)"
-printf '%s\n' "$out" | grep -q '^within com.google.android.youtube (most frames), by ASB state and touch:$' || fail "no per-app table: $out"
-printf '%s\n' "$out" | grep -qE '^  MODERATE +yes +1 +1300 +8\.5% +2\.29$' || fail "touched MODERATE row: $out"
-printf '%s\n' "$out" | grep -qE '^  LIGHT_IDLE +no +2 +1200 +43\.8% +5\.48$' || fail "untouched LIGHT_IDLE row: $out"
-printf '%s\n' "$out" | grep -qE '^  mixed +no +1 +600 +42\.3% +5\.29$' || fail "untouched mixed row: $out"
-printf '%s\n' "$out" | grep -q 'ksunext .*yes' && fail "another app's rows in the table: $out"
+printf '%s\n' "$out" | grep '^within com.google.android.youtube (most frames), by ASB state and touch:$' >/dev/null || fail "no per-app table: $out"
+printf '%s\n' "$out" | grep -E '^  MODERATE +yes +1 +1300 +8\.5% +2\.29$' >/dev/null || fail "touched MODERATE row: $out"
+printf '%s\n' "$out" | grep -E '^  LIGHT_IDLE +no +2 +1200 +43\.8% +5\.48$' >/dev/null || fail "untouched LIGHT_IDLE row: $out"
+printf '%s\n' "$out" | grep -E '^  mixed +no +1 +600 +42\.3% +5\.29$' >/dev/null || fail "untouched mixed row: $out"
+printf '%s\n' "$out" | grep 'ksunext .*yes' >/dev/null && fail "another app's rows in the table: $out"
 # MODERATE before LIGHT_IDLE before mixed - a fixed order, not awk's hash order.
 printf '%s\n' "$out" | awk '/^  MODERATE/ { m = NR } /^  LIGHT_IDLE/ { l = NR } /^  mixed/ { x = NR } END { exit !(m < l && l < x) }' \
   || fail "rows out of order: $out"
 # One group only: nothing to compare, no table.
 grep -v '|mixed|\||MODERATE|' "$J" > "$T/j2"; mkdir -p "$T/o2"; mv "$T/j2" "$T/o2/jank_trace.tsv"
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/o2" 2>&1)"
-printf '%s\n' "$out" | grep -q '^within ' && fail "table printed for a single group: $out"
+printf '%s\n' "$out" | grep '^within ' >/dev/null && fail "table printed for a single group: $out"
 echo "PASS jank app/state: states compared inside the top app, touched and untouched apart"
 )
 
@@ -1670,18 +1670,18 @@ row() {   # state frames janky pkgs
 for k in 1 2 3 4 5 6; do row LIGHT_IDLE 120 72 "com.android.systemui:70:72,com.instagram.android:2:48"; done
 for k in 1 2 3 4 5 6 7 8; do row MODERATE 4000 76 "com.android.systemui:71:73,com.instagram.android:5:3900"; done
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/a" 2>&1)"
-printf '%s\n' "$out" | grep -qE '^LIGHT_IDLE +6 +720 +60\.0% +1\.50$' || f "state row without janky/s: $out"
-printf '%s\n' "$out" | grep -qE '^MODERATE +8 +32000 +1\.9% +1\.58$' || f "MODERATE row: $out"
-printf '%s\n' "$out" | grep -qE '^  under 5 +6 +1\.50 +60\.0%$' || f "quiet band: $out"
-printf '%s\n' "$out" | grep -qE '^  60 and over +8 +1\.58 +1\.9%$' || f "busy band: $out"
-printf '%s\n' "$out" | grep -q '^steady floor: 1.50 janky frames a second while almost nothing was drawn' || f "no floor verdict: $out"
-printf '%s\n' "$out" | grep -q '^  high share, ordinary rate: LIGHT_IDLE 60.0% janky at 1.50/s$' || f "LIGHT_IDLE not named as share-only: $out"
-printf '%s\n' "$out" | grep -q 'high share, ordinary rate:.*MODERATE' && f "MODERATE named as share-only: $out"
-printf '%s\n' "$out" | grep -qE '^  com\.android\.systemui +988 +1016 +1\.47   14 of 14$' || f "per-app source row: $out"
-printf '%s\n' "$out" | grep -q '^the floor: com.android.systemui drew 97.2% of the janky frames in the quiet intervals.$' || f "floor source not named: $out"
-printf '%s\n' "$out" | grep -q '^com.android.systemui missed deadlines in 14 of 14 screen-on intervals, whatever app was in front' || f "steady redraw line missing: $out"
-printf '%s\n' "$out" | grep -q '^(the app in front is credited with every app' || f "front-app caveat missing: $out"
-printf '%s\n' "$out" | grep -qE 'main cores at the ASB ceiling \(end of interval\): yes - of 0 frames \(-/s\), no 3\.2% of 32720 frames \(1\.55/s\)' || f "ceiling line without janky/s: $out"
+printf '%s\n' "$out" | grep -E '^LIGHT_IDLE +6 +720 +60\.0% +1\.50$' >/dev/null || f "state row without janky/s: $out"
+printf '%s\n' "$out" | grep -E '^MODERATE +8 +32000 +1\.9% +1\.58$' >/dev/null || f "MODERATE row: $out"
+printf '%s\n' "$out" | grep -E '^  under 5 +6 +1\.50 +60\.0%$' >/dev/null || f "quiet band: $out"
+printf '%s\n' "$out" | grep -E '^  60 and over +8 +1\.58 +1\.9%$' >/dev/null || f "busy band: $out"
+printf '%s\n' "$out" | grep '^steady floor: 1.50 janky frames a second while almost nothing was drawn' >/dev/null || f "no floor verdict: $out"
+printf '%s\n' "$out" | grep '^  high share, ordinary rate: LIGHT_IDLE 60.0% janky at 1.50/s$' >/dev/null || f "LIGHT_IDLE not named as share-only: $out"
+printf '%s\n' "$out" | grep 'high share, ordinary rate:.*MODERATE' >/dev/null && f "MODERATE named as share-only: $out"
+printf '%s\n' "$out" | grep -E '^  com\.android\.systemui +988 +1016 +1\.47   14 of 14$' >/dev/null || f "per-app source row: $out"
+printf '%s\n' "$out" | grep '^the floor: com.android.systemui drew 97.2% of the janky frames in the quiet intervals.$' >/dev/null || f "floor source not named: $out"
+printf '%s\n' "$out" | grep '^com.android.systemui missed deadlines in 14 of 14 screen-on intervals, whatever app was in front' >/dev/null || f "steady redraw line missing: $out"
+printf '%s\n' "$out" | grep '^(the app in front is credited with every app' >/dev/null || f "front-app caveat missing: $out"
+printf '%s\n' "$out" | grep -E 'main cores at the ASB ceiling \(end of interval\): yes - of 0 frames \(-/s\), no 3\.2% of 32720 frames \(1\.55/s\)' >/dev/null || f "ceiling line without janky/s: $out"
 
 # --- 1b. fix271: the steady source is not the app with the most janky frames -----------------
 # A feed burst out-janks SystemUI in 4 intervals, while SystemUI janks in all 14. The steady
@@ -1691,10 +1691,10 @@ echo "# header" > "$J"
 for k in 1 2 3 4 5 6 7 8 9 10; do row MODERATE 3000 10 "com.android.systemui:10:12"; done
 for k in 1 2 3 4; do row MODERATE 3000 210 "com.android.systemui:10:12,com.example.feed:200:3000"; done
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/a2" 2>&1)"
-printf '%s\n' "$out" | grep -qE '^  com\.example\.feed +800 ' || f "the burst app is not the top janky row: $out"
-printf '%s\n' "$out" | grep -q '^com.android.systemui missed deadlines in 14 of 14 screen-on intervals, whatever app was in front' \
+printf '%s\n' "$out" | grep -E '^  com\.example\.feed +800 ' >/dev/null || f "the burst app is not the top janky row: $out"
+printf '%s\n' "$out" | grep '^com.android.systemui missed deadlines in 14 of 14 screen-on intervals, whatever app was in front' >/dev/null \
   || f "a steady SystemUI redraw hidden behind a burstier app: $out"
-printf '%s\n' "$out" | grep -q '^com.example.feed missed deadlines' && f "a 4-of-14 burst called a steady redraw: $out"
+printf '%s\n' "$out" | grep '^com.example.feed missed deadlines' >/dev/null && f "a 4-of-14 burst called a steady redraw: $out"
 
 # --- 2. no floor: janky frames only where much is drawn ---------------------------------------
 mkdir -p "$T/b"; J="$T/b/jank_trace.tsv"; i=0
@@ -1702,9 +1702,9 @@ echo "# header" > "$J"
 for k in 1 2 3 4 5 6; do row LIGHT_IDLE 120 1 "-"; done
 for k in 1 2 3 4 5 6 7 8; do row MODERATE 4000 150 "-"; done
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/b" 2>&1)"
-printf '%s\n' "$out" | grep -q 'steady floor' && f "floor claimed where the quiet intervals are clean: $out"
-printf '%s\n' "$out" | grep -q 'janky frames by the app that drew them' && f "per-app table printed with no column 17: $out"
-printf '%s\n' "$out" | grep -q '^  under 5 ' || f "bands missing: $out"
+printf '%s\n' "$out" | grep 'steady floor' >/dev/null && f "floor claimed where the quiet intervals are clean: $out"
+printf '%s\n' "$out" | grep 'janky frames by the app that drew them' >/dev/null && f "per-app table printed with no column 17: $out"
+printf '%s\n' "$out" | grep '^  under 5 ' >/dev/null || f "bands missing: $out"
 
 # --- 3. recorder: column 17 from two dumps ------------------------------------------------------
 gfx() {   # $1 file; then pairs "pkg frames janky"
@@ -1746,9 +1746,9 @@ sed -n '/^# asb_gfx_pkg_begin$/,/^# asb_gfx_pkg_end$/p' "$ROOT/tools/asb_diag.sh
 a="$(sh -c '. "$1"; asb_gfx_pkg < "$2"' x "$T/gp.sh" "$T/g1" | sort)"
 [ "$a" = "$(printf 'com.android.systemui 1000 100\ncom.instagram.android 5000 10\ncom.old.app 900 90')" ] || f "asb_gfx_pkg: $a"
 d="$(sh -c '. "$1"; asb_gfx_run_delta "$(asb_gfx_pkg < "$2")" "$(asb_gfx_pkg < "$3")" 40' x "$T/gp.sh" "$T/g1" "$T/g2")"
-printf '%s\n' "$d" | grep -q '^while this report ran (40 s), janky frames by app: com.android.systemui 48 of 50 frames (1.20/s)  ·  com.new.app 6 of 30 frames (0.15/s)  ·  com.instagram.android 4 of 4000 frames (0.10/s)$' \
+printf '%s\n' "$d" | grep '^while this report ran (40 s), janky frames by app: com.android.systemui 48 of 50 frames (1.20/s)  ·  com.new.app 6 of 30 frames (0.15/s)  ·  com.instagram.android 4 of 4000 frames (0.10/s)$' >/dev/null \
   || f "asbdiag per-app line: $d"
-printf '%s\n' "$d" | grep -q '^steady: com.android.systemui missed 48 of the 50 frames it drew - about 1.2 a second' || f "asbdiag steady line: $d"
+printf '%s\n' "$d" | grep '^steady: com.android.systemui missed 48 of the 50 frames it drew - about 1.2 a second' >/dev/null || f "asbdiag steady line: $d"
 d="$(sh -c '. "$1"; asb_gfx_run_delta "$(asb_gfx_pkg < "$2")" "$(asb_gfx_pkg < "$3")" 3' x "$T/gp.sh" "$T/g1" "$T/g2")"
 [ -z "$d" ] || f "asbdiag printed a 3-second window: $d"
 d="$(sh -c '. "$1"; asb_gfx_run_delta "$(asb_gfx_pkg < "$2")" "$(asb_gfx_pkg < "$2")" 40' x "$T/gp.sh" "$T/g1")"
@@ -1996,10 +1996,10 @@ out="$(PATH="$T/bin:$PATH" RESETS="$T/resets" LK_OUT_DIR="$T/out" BS="$T/bs1" sh
   sed -n "/TOP APPS/,/^$/p" "$LK_OUT_DIR/_wakelock_report.txt"
 ' "$C" 2>&1)"
 [ -f "$T/resets" ] && f "batterystats was reset without ASB_LK_BSTATS_RESET=1"
-printf '%s\n' "$out" | grep -q 'during this capture' || f "section not labelled as the capture window: $out"
-printf '%s\n' "$out" | grep -q '5m 00s  com.sec.android.app.shealth' || f "pedometer delta should be 5m 00s: $out"
-printf '%s\n' "$out" | grep -q '1m 00s  com.example.new' || f "new holder missing: $out"
-printf '%s\n' "$out" | grep -q 'uid 10700' && f "2 s delta must stay under the 5 s floor"
+printf '%s\n' "$out" | grep 'during this capture' >/dev/null || f "section not labelled as the capture window: $out"
+printf '%s\n' "$out" | grep '5m 00s  com.sec.android.app.shealth' >/dev/null || f "pedometer delta should be 5m 00s: $out"
+printf '%s\n' "$out" | grep '1m 00s  com.example.new' >/dev/null || f "new holder missing: $out"
+printf '%s\n' "$out" | grep 'uid 10700' >/dev/null && f "2 s delta must stay under the 5 s floor"
 [ "$fail" = 0 ] && echo "PASS logkit batterystats no-reset runtime"
 exit "$fail"
 )
@@ -2073,8 +2073,8 @@ cat > "$O/wake_live.txt" <<'X'
 X
 printf '10658 com.google.android.youtube\n' > "$O/uid_map.txt"
 live="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_live_wakelock_holders' "$C" "$O" 2>&1)"
-printf '%s\n' "$live" | grep -q '^batterystats disagrees with these samples:$' || fail "no disagreement line: $live"
-printf '%s\n' "$live" | grep -q 'com.google.android.youtube (AudioMix): held 20 min at a stretch with the screen off here, batterystats added 0 s' \
+printf '%s\n' "$live" | grep '^batterystats disagrees with these samples:$' >/dev/null || fail "no disagreement line: $live"
+printf '%s\n' "$live" | grep 'com.google.android.youtube (AudioMix): held 20 min at a stretch with the screen off here, batterystats added 0 s' >/dev/null \
   || fail "holder not compared: $live"
 
 # 2b. fix142: the same 20-minute hold, but the screen went off 20 s before the sample - the
@@ -2084,7 +2084,7 @@ echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA|wake|di
 for e in 800 1950; do echo "$e|d|active|1|900|4094|22|120|-400||2" >> "$O/display_trace.txt"; done
 for e in 2000 2020 2040; do echo "$e|d|audio_bt|0|0|4094|0||-120||" >> "$O/display_trace.txt"; done
 live="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_live_wakelock_holders' "$C" "$O" 2>&1)"
-printf '%s\n' "$live" | grep -q 'batterystats disagrees' && fail "a hold that ran with the screen on compared against batterystats: $live"
+printf '%s\n' "$live" | grep 'batterystats disagrees' >/dev/null && fail "a hold that ran with the screen on compared against batterystats: $live"
 cp "$T/dt.keep" "$O/display_trace.txt"
 
 # 3. On the charger batterystats counts nothing by design: no stall claim, no disagreement.
@@ -2093,7 +2093,7 @@ run_dump "$T/bs_frozen.txt"
 grep -q "not one app's total moved" "$O/_wakelock_report.txt" && fail "stall claimed during a charging capture"
 grep -q 'no app held a partial wakelock for 5 s' "$O/_wakelock_report.txt" || fail "charging capture lost the plain line"
 live="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_live_wakelock_holders' "$C" "$O" 2>&1)"
-printf '%s\n' "$live" | grep -q 'batterystats disagrees' && fail "disagreement printed while charging: $live"
+printf '%s\n' "$live" | grep 'batterystats disagrees' >/dev/null && fail "disagreement printed while charging: $live"
 echo "epoch|datetime|status" > "$O/charge_trace.txt"
 
 # 3b. No charge row but the level held (a phone kept at a charge limit): no claim either.
@@ -2109,7 +2109,7 @@ run_dump "$T/bs_live.txt"
 grep -q 'com.google.android.youtube' "$O/_wakelock_report.txt" || fail "moving totals not ranked"
 grep -q "not one app's total moved" "$O/_wakelock_report.txt" && fail "stall claimed with moving totals"
 live="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_live_wakelock_holders' "$C" "$O" 2>&1)"
-printf '%s\n' "$live" | grep -q 'batterystats disagrees' && fail "disagreement with totals that cover the hold: $live"
+printf '%s\n' "$live" | grep 'batterystats disagrees' >/dev/null && fail "disagreement with totals that cover the hold: $live"
 
 # 5. A short capture with nothing moved is just a quiet window.
 echo $(( $(date +%s) - 1800 )) > "$O/.bstats_base_epoch"
@@ -2173,12 +2173,12 @@ sed -n '/^lk_emit_smart_energy_rows() {/,/^}/p' "$LOGKIT" > "$TMP/energy.sh"
 . "$TMP/energy.sh"
 printf 'class|game|0.0|0|0\nclass|media|1.5|2|30\n' > "$TMP/energy.txt"
 energy_out="$(lk_emit_smart_energy_rows "$TMP/energy.txt")"
-printf '%s\n' "$energy_out" | grep -Fq 'energy: class  game  0.0  0  0' || { echo 'FAIL logkit capture-quality: energy row missing' >&2; exit 1; }
-printf '%s\n' "$energy_out" | grep -Fq 'zero category row is not gameplay detection' || { echo 'FAIL logkit capture-quality: zero game category unexplained' >&2; exit 1; }
+printf '%s\n' "$energy_out" | grep -F 'energy: class  game  0.0  0  0' >/dev/null || { echo 'FAIL logkit capture-quality: energy row missing' >&2; exit 1; }
+printf '%s\n' "$energy_out" | grep -F 'zero category row is not gameplay detection' >/dev/null || { echo 'FAIL logkit capture-quality: zero game category unexplained' >&2; exit 1; }
 printf 'class|game|2.0|1|30\n' > "$TMP/energy.txt"
-lk_emit_smart_energy_rows "$TMP/energy.txt" | grep -Fq 'not gameplay detection' && { echo 'FAIL logkit capture-quality: real game total disclaimed' >&2; exit 1; }
+lk_emit_smart_energy_rows "$TMP/energy.txt" | grep -F 'not gameplay detection' >/dev/null && { echo 'FAIL logkit capture-quality: real game total disclaimed' >&2; exit 1; }
 printf 'class|game|-|-|-\n' > "$TMP/energy.txt"
-lk_emit_smart_energy_rows "$TMP/energy.txt" | grep -Fq 'not gameplay detection' && { echo 'FAIL logkit capture-quality: unknown game total presented as zero' >&2; exit 1; }
+lk_emit_smart_energy_rows "$TMP/energy.txt" | grep -F 'not gameplay detection' >/dev/null && { echo 'FAIL logkit capture-quality: unknown game total presented as zero' >&2; exit 1; }
 
 # Provenance is appended, so every old fsm_media_trace column keeps its index.
 COMMON="$ROOT/tools/logkit/_asb_logkit_common.sh"
@@ -2233,13 +2233,13 @@ _grouped="$(awk -F'|' '
     last=now }
   END{emit()}
 ' "$TMP/throttle_trace.txt")"
-printf '%s\n' "$_grouped" | grep -Fqx 'owner=vendor samples=2 epoch=100..160' || { echo 'FAIL logkit capture-quality: vendor period grouping' >&2; exit 1; }
-printf '%s\n' "$_grouped" | grep -Fqx 'owner=asb samples=1 epoch=400..400' || { echo 'FAIL logkit capture-quality: ASB period grouping' >&2; exit 1; }
+printf '%s\n' "$_grouped" | grep -Fx 'owner=vendor samples=2 epoch=100..160' >/dev/null || { echo 'FAIL logkit capture-quality: vendor period grouping' >&2; exit 1; }
+printf '%s\n' "$_grouped" | grep -Fx 'owner=asb samples=1 epoch=400..400' >/dev/null || { echo 'FAIL logkit capture-quality: ASB period grouping' >&2; exit 1; }
 case "$_grouped" in *'\\n'*) echo 'FAIL logkit capture-quality: literal \\n in fixture output' >&2; exit 1 ;; esac
 # V66 dev14 (audit 8.5): the verdict states the shares, on the real function.
 sed -n '/^lk_emit_cap_ownership_verdict() {/,/^}/p' "$LOGKIT" > "$TMP/own.sh"
 _own="$(sh -c '. "$1"; LK_OUT_DIR="$2"; lk_emit_cap_ownership_verdict' x "$TMP/own.sh" "$TMP")"
-printf '%s\n' "$_own" | grep -Fq 'share of the samples under a ceiling: ASB 33 %, ASB manual profile 0 %, vendor 66 % of 3' || { echo "FAIL logkit capture-quality: ownership shares missing: $_own" >&2; exit 1; }
+printf '%s\n' "$_own" | grep -F 'share of the samples under a ceiling: ASB 33 %, ASB manual profile 0 %, vendor 66 % of 3' >/dev/null || { echo "FAIL logkit capture-quality: ownership shares missing: $_own" >&2; exit 1; }
 need "$LOGKIT" '----- CHARGING-IDLE AWAKE VERDICT -----'
 need "$LOGKIT" 'ASB does not alter charge current or kill apps automatically.'
 need "$LOGKIT" 'lk_charge_idle_observe "$_phase"'
@@ -2262,9 +2262,9 @@ EOF_CLASS
 LK_OUT_DIR="$TMP"
 . "$TMP/screenoff_summary.sh"
 _class_summary="$(lk_emit_screenoff_class_summary)"
-printf '%s\n' "$_class_summary" | grep -Eq '^quiet[[:space:]]+2[[:space:]]+1\.0' || { echo 'FAIL logkit capture-quality: quiet observed coverage' >&2; exit 1; }
-printf '%s\n' "$_class_summary" | grep -Eq '^network[[:space:]]+2[[:space:]]+0\.0' || { echo 'FAIL logkit capture-quality: gap must not be attributed to network class' >&2; exit 1; }
-printf '%s\n' "$_class_summary" | grep -Fq 'not a percentage or causal energy allocation' || { echo 'FAIL logkit capture-quality: causal allocation disclaimer missing' >&2; exit 1; }
+printf '%s\n' "$_class_summary" | grep -E '^quiet[[:space:]]+2[[:space:]]+1\.0' >/dev/null || { echo 'FAIL logkit capture-quality: quiet observed coverage' >&2; exit 1; }
+printf '%s\n' "$_class_summary" | grep -E '^network[[:space:]]+2[[:space:]]+0\.0' >/dev/null || { echo 'FAIL logkit capture-quality: gap must not be attributed to network class' >&2; exit 1; }
+printf '%s\n' "$_class_summary" | grep -F 'not a percentage or causal energy allocation' >/dev/null || { echo 'FAIL logkit capture-quality: causal allocation disclaimer missing' >&2; exit 1; }
 
 # Current and capacity-percent rates are complementary measurements, not source attribution.
 # A synthetic ledger verifies both the aligned path and the explicit >30% quality warning.
@@ -2280,14 +2280,14 @@ EOF_LEDGER
 LK_OUT_DIR="$TMP" LK_BATTERY_CAPACITY_MAH=5000
 . "$TMP/current_soc_summary.sh"
 _consistency="$(lk_emit_current_soc_consistency)"
-printf '%s\n' "$_consistency" | grep -Eq '^sleep[[:space:]]+60\.0[[:space:]]+2\.00[[:space:]]+2\.00[[:space:]]+0\.0%[[:space:]]+aligned$' || { echo 'FAIL logkit capture-quality: aligned current/SOC verdict' >&2; exit 1; }
-printf '%s\n' "$_consistency" | grep -Eq '^idle[[:space:]]+60\.0[[:space:]]+2\.00[[:space:]]+8\.00[[:space:]]+75\.0%[[:space:]]+CHECK high \(>30%\)$' || { echo 'FAIL logkit capture-quality: current/SOC check verdict' >&2; exit 1; }
-printf '%s\n' "$_consistency" | grep -Fq 'not causal energy attribution' || { echo 'FAIL logkit capture-quality: current/SOC causal disclaimer missing' >&2; exit 1; }
-printf '%s\n' "$_consistency" | grep -q "governor's gauge check" && { echo 'FAIL logkit capture-quality: gauge line without a governor state' >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -E '^sleep[[:space:]]+60\.0[[:space:]]+2\.00[[:space:]]+2\.00[[:space:]]+0\.0%[[:space:]]+aligned$' >/dev/null || { echo 'FAIL logkit capture-quality: aligned current/SOC verdict' >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -E '^idle[[:space:]]+60\.0[[:space:]]+2\.00[[:space:]]+8\.00[[:space:]]+75\.0%[[:space:]]+CHECK high \(>30%\)$' >/dev/null || { echo 'FAIL logkit capture-quality: current/SOC check verdict' >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -F 'not causal energy attribution' >/dev/null || { echo 'FAIL logkit capture-quality: current/SOC causal disclaimer missing' >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep "governor's gauge check" >/dev/null && { echo 'FAIL logkit capture-quality: gauge line without a governor state' >&2; exit 1; }
 # fix179: the governor's own gauge factor is named (a CPH2747 read x0.35 over 61 windows).
 lk_state_kv() { case "$1" in current_scale_x100) echo 35 ;; current_scale_windows) echo 61 ;; esac; }
 _consistency="$(lk_emit_current_soc_consistency)"
-printf '%s\n' "$_consistency" | grep -Fq "governor's gauge check: on screen-on windows current_now integrates to x0.35 of the SOC-derived drain (61 windows) - multiply screen-on mA by about 2.9" || { echo "FAIL logkit capture-quality: governor gauge factor: $_consistency" >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -F "governor's gauge check: on screen-on windows current_now integrates to x0.35 of the SOC-derived drain (61 windows) - multiply screen-on mA by about 2.9" >/dev/null || { echo "FAIL logkit capture-quality: governor gauge factor: $_consistency" >&2; exit 1; }
 lk_state_kv() { case "$1" in current_scale_x100) echo 135 ;; current_scale_windows) echo 61 ;; esac; }
 lk_emit_current_soc_consistency | grep -F 'integrates to x1.35 of' >/dev/null || { echo 'FAIL logkit capture-quality: gauge factor above 1' >&2; exit 1; }
 lk_state_kv() { case "$1" in current_scale_x100) echo 92 ;; current_scale_windows) echo 61 ;; esac; }
@@ -2324,9 +2324,9 @@ EOF_SAMPLE_TRACE
 LK_OUT_DIR="$TMP"
 . "$TMP/sampled_current_distribution.sh"
 _sampled_current="$(lk_emit_sampled_current_distribution "$TMP/phase_ledger.tsv")"
-printf '%s\n' "$_sampled_current" | grep -Eq '^active[[:space:]]+3\.3[[:space:]]+6[[:space:]]+250\.0[[:space:]]+100\.0$' || { echo 'FAIL logkit capture-quality: mapped active raw-sample mean/median' >&2; exit 1; }
-printf '%s\n' "$_sampled_current" | grep -Eq '^idle[[:space:]]+1\.7[[:space:]]+1[[:space:]]+900\.0[[:space:]]+900\.0$' || { echo 'FAIL logkit capture-quality: endpoint belongs to next interval once' >&2; exit 1; }
-printf '%s\n' "$_sampled_current" | grep -Fq 'not causal attribution' || { echo 'FAIL logkit capture-quality: sampled-current disclaimer missing' >&2; exit 1; }
+printf '%s\n' "$_sampled_current" | grep -E '^active[[:space:]]+3\.3[[:space:]]+6[[:space:]]+250\.0[[:space:]]+100\.0$' >/dev/null || { echo 'FAIL logkit capture-quality: mapped active raw-sample mean/median' >&2; exit 1; }
+printf '%s\n' "$_sampled_current" | grep -E '^idle[[:space:]]+1\.7[[:space:]]+1[[:space:]]+900\.0[[:space:]]+900\.0$' >/dev/null || { echo 'FAIL logkit capture-quality: endpoint belongs to next interval once' >&2; exit 1; }
+printf '%s\n' "$_sampled_current" | grep -F 'not causal attribution' >/dev/null || { echo 'FAIL logkit capture-quality: sampled-current disclaimer missing' >&2; exit 1; }
 
 # Mobile traffic is a qualified phase context only. Aggregate two active blocks across the
 # 32 MiB report-only threshold and keep a 31 MiB idle block out of the listing.
@@ -2344,12 +2344,12 @@ EOF_TRAFFIC_LEDGER
 LK_OUT_DIR="$TMP" LK_MOBILE_TRAFFIC_CONTEXT_MIN_MIB=32
 . "$TMP/mobile_traffic_context.sh"
 _traffic_context="$(lk_emit_mobile_traffic_context "$TMP/phase_ledger.tsv")"
-printf '%s\n' "$_traffic_context" | grep -Eq '^active[[:space:]]+3\.3[[:space:]]+33\.0[[:space:]]+screen-on$' || { echo 'FAIL logkit capture-quality: aggregated traffic context' >&2; exit 1; }
-if printf '%s\n' "$_traffic_context" | grep -Eq '^idle[[:space:]]'; then
+printf '%s\n' "$_traffic_context" | grep -E '^active[[:space:]]+3\.3[[:space:]]+33\.0[[:space:]]+screen-on$' >/dev/null || { echo 'FAIL logkit capture-quality: aggregated traffic context' >&2; exit 1; }
+if printf '%s\n' "$_traffic_context" | grep -E '^idle[[:space:]]' >/dev/null; then
   echo 'FAIL logkit capture-quality: below-threshold mobile traffic was listed' >&2
   exit 1
 fi
-printf '%s\n' "$_traffic_context" | grep -Fq 'does not prove cause or assign battery percentage' || { echo 'FAIL logkit capture-quality: mobile-traffic disclaimer missing' >&2; exit 1; }
+printf '%s\n' "$_traffic_context" | grep -F 'does not prove cause or assign battery percentage' >/dev/null || { echo 'FAIL logkit capture-quality: mobile-traffic disclaimer missing' >&2; exit 1; }
 
 # New verdict code must remain read-only: no global runtime-policy writes are allowed here.
 # fix244: "reboot" as a command - the recorder now names reboots in its files (reboots.txt).
@@ -2413,19 +2413,19 @@ X
 printf '10383 com.amurcanov.tgwsproxy\n10384 com.whatsapp\n1000 com.oplus.atlas\n10382 org.telegram.messenger\n' > "$O/uid_map.txt"
 
 out="$(LK_CPU_SYSFS="$F" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_cluster_work_summary; lk_emit_live_wakelock_holders' "$C" "$O" 2>&1)"
-printf '%s\n' "$out" | grep -q '^screen-on samples 14: prime cores working in 57%, main cores in 42%$' || fail "cluster split: $out"
-printf '%s\n' "$out" | grep -qE 'level with the prime .*: +4 samples, prime working in 0%' || fail "level bucket: $out"
-printf '%s\n' "$out" | grep -qE "more than 10% below the prime's: +8 samples, prime working in 100%" || fail "below bucket: $out"
-printf '%s\n' "$out" | grep -qE "within 10% of the prime's: +2 samples, prime working in 0%, mean 400 mA$" || fail "near bucket: $out"
-printf '%s\n' "$out" | grep -qE "more than 10% below the prime's: +8 samples, prime working in 100%, mean 480 mA$" || fail "below bucket current: $out"
-printf '%s\n' "$out" | grep -q '^  warm (surface 40 C and above), 7 samples:$' || fail "warm split: $out"
-printf '%s\n' "$out" | grep -qE '^    main level with the prime: +2 samples, prime working in 0%, mean 320 mA$' || fail "warm level row: $out"
-printf '%s\n' "$out" | grep -qE '^    main more than 10% below it: +5 samples, prime working in 100%, mean 480 mA$' || fail "warm below row: $out"
-printf '%s\n' "$out" | grep -q 'main within 10% of the prime.s:   ' && fail "a warm row printed with no warm samples: $out"
-printf '%s\n' "$out" | grep -q '^screen-off samples: 4$' || fail "screen-off samples: $out"
-printf '%s\n' "$out" | grep -qE '^  held in  75% of samples, longest hold   62 min  TgWsProxy::ServiceWakeLock  \(com.amurcanov.tgwsproxy\)$' || fail "proxy not ranked first with its longest hold: $out"
-printf '%s\n' "$out" | grep -q 'com.android.contacts/com.whatsapp  (com.whatsapp)' || fail "compact WorkSource uid not resolved: $out"
-printf '%s\n' "$out" | grep -q 'ScreenOnOnly' && fail "a screen-on sample counted: $out"
+printf '%s\n' "$out" | grep '^screen-on samples 14: prime cores working in 57%, main cores in 42%$' >/dev/null || fail "cluster split: $out"
+printf '%s\n' "$out" | grep -E 'level with the prime .*: +4 samples, prime working in 0%' >/dev/null || fail "level bucket: $out"
+printf '%s\n' "$out" | grep -E "more than 10% below the prime's: +8 samples, prime working in 100%" >/dev/null || fail "below bucket: $out"
+printf '%s\n' "$out" | grep -E "within 10% of the prime's: +2 samples, prime working in 0%, mean 400 mA$" >/dev/null || fail "near bucket: $out"
+printf '%s\n' "$out" | grep -E "more than 10% below the prime's: +8 samples, prime working in 100%, mean 480 mA$" >/dev/null || fail "below bucket current: $out"
+printf '%s\n' "$out" | grep '^  warm (surface 40 C and above), 7 samples:$' >/dev/null || fail "warm split: $out"
+printf '%s\n' "$out" | grep -E '^    main level with the prime: +2 samples, prime working in 0%, mean 320 mA$' >/dev/null || fail "warm level row: $out"
+printf '%s\n' "$out" | grep -E '^    main more than 10% below it: +5 samples, prime working in 100%, mean 480 mA$' >/dev/null || fail "warm below row: $out"
+printf '%s\n' "$out" | grep 'main within 10% of the prime.s:   ' >/dev/null && fail "a warm row printed with no warm samples: $out"
+printf '%s\n' "$out" | grep '^screen-off samples: 4$' >/dev/null || fail "screen-off samples: $out"
+printf '%s\n' "$out" | grep -E '^  held in  75% of samples, longest hold   62 min  TgWsProxy::ServiceWakeLock  \(com.amurcanov.tgwsproxy\)$' >/dev/null || fail "proxy not ranked first with its longest hold: $out"
+printf '%s\n' "$out" | grep 'com.android.contacts/com.whatsapp  (com.whatsapp)' >/dev/null || fail "compact WorkSource uid not resolved: $out"
+printf '%s\n' "$out" | grep 'ScreenOnOnly' >/dev/null && fail "a screen-on sample counted: $out"
 # Not shown on a three-cluster phone.
 mkdir -p "$F/cpufreq/policy2"
 out2="$(LK_CPU_SYSFS="$F" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_cluster_work_summary' "$C" "$O" 2>&1)"
@@ -2625,15 +2625,15 @@ r 'lk_resume_owned' || fail "the recorder does not recognise its own marker"
 r 'LK_MAX_SEC=3600; LK_RESUME_FILE='"'$T/other'"'; lk_resume_mark'
 [ -e "$T/other" ] && fail "a bounded capture must not ask to be resumed"
 r ': > "$LK_OUT_DIR/zygisk_observer_latest.tsv.tmp.$$"; ASB_LK_SHUTDOWN=1 lk_on_signal'
-tail -n 1 "$O/phase_timeline.txt" | grep -q '|idle|shutdown$' || fail "the shutdown was not marked in the timeline"
-ls "$O" | grep -q '\.tmp\.' && fail "a shutdown during an atomic write left its temporary file: $(ls "$O")"
+tail -n 1 "$O/phase_timeline.txt" | grep '|idle|shutdown$' >/dev/null || fail "the shutdown was not marked in the timeline"
+ls "$O" | grep '\.tmp\.' >/dev/null && fail "a shutdown during an atomic write left its temporary file: $(ls "$O")"
 [ -e "$O/finalized" ] && fail "a shutdown ran the full finalisation"
 [ -s "$T/full_day_resume" ] || fail "a shutdown dropped the resume marker"
 [ -s "$O/.phase_live.tsv" ] || fail "a shutdown lost the open phase"
 : > "$O/zygisk_observer_latest.tsv.tmp.16060"; : > "$O/recorder_heartbeat.env.tmp.2534"; : > "$O/zygisk_observer_latest.tsv"
 r 'lk_resume_merge'
 [ "$(grep -vc '^#' "$O/phase_ledger.tsv")" = 3 ] || fail "the open phase was not folded into the ledger on resume"
-ls "$O" | grep -q '\.tmp\.[0-9]' && fail "the resumed capture kept temporaries of the recorder that died: $(ls "$O")"
+ls "$O" | grep '\.tmp\.[0-9]' >/dev/null && fail "the resumed capture kept temporaries of the recorder that died: $(ls "$O")"
 [ -e "$O/zygisk_observer_latest.tsv" ] || fail "the resume cleanup removed a real capture file"
 [ -e "$O/.phase_live.tsv" ] && fail "the folded live row stayed"
 L="$(grep -v '^#' "$O/reboots.txt")"
@@ -2673,12 +2673,12 @@ out="$(sh -c ". '$T/init_run.sh'; LK_OUT_DIR='$N'; LK_SCENARIO=full_day; LK_RESU
 printf 'audio_bt\t%s\t%s\t87\t86\t30\t28\t0\t0\t0\t0\t90\t120\t0\t0\t0\n' $((NOW-500)) $((NOW-100)) > "$O/.phase_live.tsv"
 printf '%s|x|10|V65-test17|ROM2|reboot\n' "$NOW" >> "$O/reboots.txt"
 dout="$(ASB_LK_STATE_DIR="$T/st" ASB_LK_LOCK="$T/nolock" ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$O")"
-printf '%s\n' "$dout" | grep -q '^reboot	n=2	down_min=10	mod=V65-test17	rom=ROM2$' || fail "digest reboot line: $(printf '%s\n' "$dout" | grep '^reboot')"
+printf '%s\n' "$dout" | grep '^reboot	n=2	down_min=10	mod=V65-test17	rom=ROM2$' >/dev/null || fail "digest reboot line: $(printf '%s\n' "$dout" | grep '^reboot')"
 printf '%s\n' "$dout" | grep -q '^phase	name=audio_bt	' || fail "the digest left out the open phase of a running capture"
 printf '%s|x|120|V65-test17|ROM2|same_boot:framework_restart\n%s|x|60|V65-test17|ROM2|same_boot:recorder_lost\n' "$NOW" "$NOW" >> "$O/reboots.txt"
 dout="$(ASB_LK_STATE_DIR="$T/st" ASB_LK_LOCK="$T/nolock" ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$O")"
 printf '%s\n' "$dout" | grep -q '^reboot	n=2	down_min=10	' || fail "same-boot restarts were counted as reboots: $(printf '%s\n' "$dout" | grep '^reboot')"
-printf '%s\n' "$dout" | grep -q '^restart	n=2	framework=1	gap_min=3$' || fail "digest restart line: $(printf '%s\n' "$dout" | grep '^restart')"
+printf '%s\n' "$dout" | grep '^restart	n=2	framework=1	gap_min=3$' >/dev/null || fail "digest restart line: $(printf '%s\n' "$dout" | grep '^restart')"
 grep -Fq 'recorder restarted without a reboot: %d' "$FD" || fail "the text report does not count same-boot restarts"
 grep -Fq 'reboots during the capture: %d' "$FD" || fail "the text report does not count reboots"
 grep -Fq 'lk_fresh phase_ledger.tsv && printf' "$FD" || fail "the ledger header is rewritten on resume"
@@ -2812,18 +2812,18 @@ while [ $i -lt 10 ]; do
   printf '%s|t|active|MODERATE|48|0|0|1|4000|60|60|10|5|1|0|com.twitter.android|com.android.systemui:48:200,com.twitter.android:12:3800\n' "$i" >> "$J"
 done
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/a" 2>&1)"
-printf '%s\n' "$out" | grep -q '^com.android.systemui missed deadlines in 10 of 10 screen-on intervals' || f "steady redraw line missing: $out"
-printf '%s\n' "$out" | grep -q '^status-bar settings read on this phone at the start of the capture:$' || f "settings heading missing: $out"
-printf '%s\n' "$out" | grep -qx '  system: show_network_speed=1' || f "network speed not listed: $out"
-printf '%s\n' "$out" | grep -qx '  secure: clock_seconds=1' || f "clock seconds not listed: $out"
-printf '%s\n' "$out" | grep -q '^  wallpaper: ComponentInfo{com.example.live' || f "wallpaper not listed: $out"
+printf '%s\n' "$out" | grep '^com.android.systemui missed deadlines in 10 of 10 screen-on intervals' >/dev/null || f "steady redraw line missing: $out"
+printf '%s\n' "$out" | grep '^status-bar settings read on this phone at the start of the capture:$' >/dev/null || f "settings heading missing: $out"
+printf '%s\n' "$out" | grep -x '  system: show_network_speed=1' >/dev/null || f "network speed not listed: $out"
+printf '%s\n' "$out" | grep -x '  secure: clock_seconds=1' >/dev/null || f "clock seconds not listed: $out"
+printf '%s\n' "$out" | grep '^  wallpaper: ComponentInfo{com.example.live' >/dev/null || f "wallpaper not listed: $out"
 cp "$J" "$T/b/jank_trace.tsv"
 out2="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/b" 2>&1)"
-printf '%s\n' "$out2" | grep -q 'missed deadlines in 10 of 10' || f "steady redraw line missing without a config file"
-printf '%s\n' "$out2" | grep -q 'status-bar settings read' && f "a settings heading printed with nothing recorded: $out2"
+printf '%s\n' "$out2" | grep 'missed deadlines in 10 of 10' >/dev/null || f "steady redraw line missing without a config file"
+printf '%s\n' "$out2" | grep 'status-bar settings read' >/dev/null && f "a settings heading printed with nothing recorded: $out2"
 sed 's/com.android.systemui:48:200,com.twitter.android:12:3800/com.twitter.android:60:4000/' "$J" > "$T/a/j2" && mv "$T/a/j2" "$J"
 out3="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/a" 2>&1)"
-printf '%s\n' "$out3" | grep -q 'status-bar settings read' && f "status-bar settings printed for an app that is not SystemUI: $out3"
+printf '%s\n' "$out3" | grep 'status-bar settings read' >/dev/null && f "status-bar settings printed for an app that is not SystemUI: $out3"
 # fix186: all three usual sources already off (an OP15 capture) - say so, do not advise them.
 mkdir -p "$T/c" "$T/bin2"
 cat > "$T/bin2/settings" <<'S'
@@ -2843,9 +2843,9 @@ chmod +x "$T/bin2/"*
 PATH="$T/bin2:$PATH" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_display_config_capture' "$C" "$T/c"
 sed 's/com.twitter.android:60:4000/com.android.systemui:48:200,com.twitter.android:12:3800/' "$J" > "$T/c/jank_trace.tsv"
 out4="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/c" 2>&1)"
-printf '%s\n' "$out4" | grep -q '^The usual per-second sources are already off on this phone' || f "all-off case not recognised: $out4"
-printf '%s\n' "$out4" | grep -q '^Turn off one thing at a time that it updates every second' && f "advised switching off what is already off: $out4"
-printf '%s\n' "$out" | grep -q '^Turn off one thing at a time that it updates every second' || f "the advice is gone where it applies: $out"
+printf '%s\n' "$out4" | grep '^The usual per-second sources are already off on this phone' >/dev/null || f "all-off case not recognised: $out4"
+printf '%s\n' "$out4" | grep '^Turn off one thing at a time that it updates every second' >/dev/null && f "advised switching off what is already off: $out4"
+printf '%s\n' "$out" | grep '^Turn off one thing at a time that it updates every second' >/dev/null || f "the advice is gone where it applies: $out"
 [ "$fail" = 0 ] && echo "PASS sysui redraw: the status-bar settings that redraw every second are recorded and named under a steady SystemUI redraw"
 exit "$fail"
 )
@@ -3726,11 +3726,10 @@ echo "PASS webui v66 startup locale: one locale read started in <head>, English 
 )
 
 t_webui_v66_calm_decor_runtime() (
-# Runtime (V66 dev6): the WebUI's decorative loops stop ten seconds after the last touch and
-# on closed pages, and start again at the next touch; progress spinners are never paused.
-# An OP15 capture had the manager hosting the page at 4.1 W in front with 52-59 % of its
-# frames over 8 ms of GPU work, and the idle home screen ran 31 endless animations. The
-# REAL calm timer runs in node over fake timers; the CSS rule is checked for what it pauses.
+# Runtime (V66 dev6/buildfix3): only the separate Smart glow calms ten seconds after the last
+# touch. Every visible header loop, including the wordmark sweep, keeps running; closed-page and
+# reduced-motion ownership stays intact and progress spinners are never paused. The REAL calm
+# timer runs in node over fake timers; the CSS rules are checked for what they pause.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -3746,15 +3745,14 @@ sel = blk[blk.index('*/') + 2:blk.index('{', blk.index('*/'))]
 for need in ('.live-page:not(.open) .logo-sphere-a', '.live-page:not(.open) .logo-sphere-b',
              '.live-page:not(.open) .logo-inner', '.live-page:not(.open) .app-name', '.live-page:not(.open) .dot::after',
              'body.live-active .page:not(.live-page) .logo-sphere-a', 'body.live-active .page:not(.live-page) .logo-sphere-b',
-             'body.live-active .page:not(.live-page) .logo-inner', 'body.live-active .page:not(.live-page) .ai-glow',
-             'html.asb-calm .app-name'):
+             'body.live-active .page:not(.live-page) .logo-inner', 'body.live-active .page:not(.live-page) .ai-glow'):
     assert need in sel, need
-# dev17: ten seconds of idle no longer freezes the header on the page in front. Only the
-# wordmark sweep (a per-frame text repaint) calms there; the composited logo rotations and
-# the indicator dots keep moving, so the interface still reads as alive. The closed/background
-# rules above are unchanged. Guard against the header liveness being pulled back into calm.
+# buildfix3: ten seconds of idle must not freeze any part of the visible header. The previous
+# repair kept the logo alive but still removed the wordmark sweep through a second calm rule.
+# Guard both the pause selector and every calm rule against all header layers returning.
 assert '.logo-glow' not in sel and '.logo-ring' not in sel, 'the retired header layers are still listed'
-for gone in ('html.asb-calm .logo-sphere-a', 'html.asb-calm .logo-sphere-b', 'html.asb-calm .logo-inner',
+assert 'html.asb-calm .app-name' not in s, 'the wordmark still stops after ten seconds'
+for gone in ('html.asb-calm .app-name', 'html.asb-calm .logo-sphere-a', 'html.asb-calm .logo-sphere-b', 'html.asb-calm .logo-inner',
              'html.asb-calm .logo-glow', 'html.asb-calm .logo-ring', 'html.asb-calm .dot',
              'html.asb-calm .ai-glow', 'html.asb-calm .zygisk-header-dot', 'html.asb-calm .dev-zygisk-link-dot',
              'html.asb-calm .metric-charge', 'html.asb-calm .log-menu-item.is-recording'):
@@ -3805,7 +3803,7 @@ advance(1200); chk(cls.has('asb-calm'), 'not calm ten seconds after the last scr
 process.exit(bad ? 1 : 0);
 JS
 node "$T/t.js" "$H" || fail 'calm timer'
-echo "PASS webui v66 calm decor: decorative loops stop ten seconds after the last touch and on closed pages, one timer however much the user scrolls, spinners untouched"
+echo "PASS webui v66 calm decor: every visible header loop survives ten-second calm, only Smart glow idles, closed-page ownership and one bounded timer remain intact, spinners untouched"
 )
 
 t_webui_v66_startup_queue_runtime() (
@@ -4028,15 +4026,15 @@ eval(fs.readFileSync(process.argv[2], 'utf8') + fs.readFileSync(process.argv[3],
 `);
 X
 r="$(node "$T/run.js" "$T/u.js" "$T/s.js")"
-printf '%s\n' "$r" | grep -q 'silentBeforeLook=true' || fail "a cue played before the first look at other audio: $r"
-printf '%s\n' "$r" | grep -q 'tapNotHeld=true' || fail "V66: a stale look ran inside the tap: $r"
-printf '%s\n' "$r" | grep -q 'first=4/1' || fail "first cue: $r"
-printf '%s\n' "$r" | grep -q 'lookedWhilePlaying=2' || fail "no fresh look when the page came back: $r"
-printf '%s\n' "$r" | grep -q 'mutedWhilePlaying=true' || fail "a cue played over another app's audio: $r"
-printf '%s\n' "$r" | grep -q 'backAfterStop=true' || fail "cues did not come back once playback stopped: $r"
-printf '%s\n' "$r" | grep -q 'noLookRightAfterOwnCue=true' || fail "looked while its own stream could be counted: $r"
-printf '%s\n' "$r" | grep -q 'off=true/0' || fail "switch off did not silence or was not stored: $r"
-printf '%s\n' "$r" | grep -q 'on=true/1' || fail "switch on: $r"
+printf '%s\n' "$r" | grep 'silentBeforeLook=true' >/dev/null || fail "a cue played before the first look at other audio: $r"
+printf '%s\n' "$r" | grep 'tapNotHeld=true' >/dev/null || fail "V66: a stale look ran inside the tap: $r"
+printf '%s\n' "$r" | grep 'first=4/1' >/dev/null || fail "first cue: $r"
+printf '%s\n' "$r" | grep 'lookedWhilePlaying=2' >/dev/null || fail "no fresh look when the page came back: $r"
+printf '%s\n' "$r" | grep 'mutedWhilePlaying=true' >/dev/null || fail "a cue played over another app's audio: $r"
+printf '%s\n' "$r" | grep 'backAfterStop=true' >/dev/null || fail "cues did not come back once playback stopped: $r"
+printf '%s\n' "$r" | grep 'noLookRightAfterOwnCue=true' >/dev/null || fail "looked while its own stream could be counted: $r"
+printf '%s\n' "$r" | grep 'off=true/0' >/dev/null || fail "switch off did not silence or was not stored: $r"
+printf '%s\n' "$r" | grep 'on=true/1' >/dev/null || fail "switch on: $r"
 grep -q 'id="cfgSoundBtn" type="button" onclick="uiSoundToggle()"' "$W" || fail "no sound switch in the settings tools row"
 for f in "$ROOT"/webroot/i18n/*.json; do
   for k in ui_sound_aria ui_sound_on ui_sound_off; do grep -q "\"$k\":" "$f" || fail "$k missing in ${f##*/}"; done
@@ -4544,16 +4542,16 @@ out="$(run)"
 for want in 'uptime=1234.5' 'loadavg=1.50 2.00 3.00' 'battery.capacity=77' 'battery.current_now=412000' \
             'cpu.policy0.scaling_max_freq=1996800' 'thermal.cpu-1-1-0=41200' 'thermal.shell_back=29700' \
             'MemAvailable: 5000000 kB' 'settings.global.mobile_data_always_on='; do
-  printf '%s\n' "$out" | grep -qxF "$want" || fail "missing line [$want] in: $out"
+  printf '%s\n' "$out" | grep -xF "$want" >/dev/null || fail "missing line [$want] in: $out"
 done
-printf '%s\n' "$out" | grep -q 'trip\|pm8550' && fail "a trip point or an unshown zone was read: $out"
+printf '%s\n' "$out" | grep 'trip\|pm8550' >/dev/null && fail "a trip point or an unshown zone was read: $out"
 [ -e "$T/settings.log" ] && fail "the settings client ran without refresh"
 run refresh >/dev/null
 i=0; while [ ! -s "$T/mdao" ] && [ "$i" -lt 30 ]; do sleep 0.1; i=$((i + 1)); done
 [ "$(cat "$T/mdao" 2>/dev/null)" = 1 ] || fail "the background refresh did not fill the cache"
 printf '%s\n' "$(run)" | grep -x 'settings.global.mobile_data_always_on=1' >/dev/null || fail "the cached value is not printed"
 # Builtins only: no cat, no date, no grep in the foreground part.
-sed -n '/^_r() {/,$p' "$R" | grep -vE '^[[:space:]]*#' | grep -v 'nohup sh -c' | grep -qE '\$\((cat|date|grep|head|cut) ' \
+sed -n '/^_r() {/,$p' "$R" | grep -vE '^[[:space:]]*#' | grep -v 'nohup sh -c' | grep -E '\$\((cat|date|grep|head|cut) ' >/dev/null \
   && fail "the snapshot forks a reader again"
 echo "PASS rom telemetry: the Stock snapshot is builtin reads of the zones the Monitor shows, the settings value comes from a background cache"
 )
@@ -5265,7 +5263,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -q 'const _b = lvBasisPaint(kv, fb, dp, we, conf, night, veto);' "$H" || fail "the tile does not use lvBasisPaint"
 grep -q "if (key === 'basis' && typeof lviRecordsAppend === 'function') lviRecordsAppend(src, tok);" "$H" || fail "the sheet does not list the records"
 for k in rec_ctx rec_ctx_status rec_ctx_best rec_ctx_test rec_ctx_trial rec_ctx_pairs rec_ctx_need rec_ctx_max rec_ctx_n rec_ctx_gain_x10; do
-  grep -q "\"$k=%" "$G" || grep -q "\\\\n$k=%" "$G" || grep -q "$k=%" "$G" || fail "governor does not publish $k"
+  grep -q "\"$k=%" "$G" || grep "\\\\n$k=%" "$G" >/dev/null || grep "$k=%" "$G" >/dev/null || fail "governor does not publish $k"
 done
 for l in en ru uk de es fr it pt tr id ar hy zh; do
   J="$ROOT/webroot/i18n/$l.json"
@@ -5892,7 +5890,7 @@ printf 'Cmdline: old.crash\n' > "$T/tomb/tombstone_03"; touch -d "@$((NOW-200000
 printf 'Cmdline: com.maps.only\nmemory map:\n7a00000000-7a00010000 r-xp /vendor/lib64/soundfx/libasbdsp.so\n' > "$T/tomb/tombstone_04"; touch -d "@$((NOW-5000))" "$T/tomb/tombstone_04"
 
 out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit"
-printf '%s\n' "$out" | grep -Eq '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' || fail "meta line: $(printf '%s' "$out" | head -1)"
+printf '%s\n' "$out" | grep -E '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' >/dev/null || fail "meta line: $(printf '%s' "$out" | head -1)"
 printf '%s\n' "$out" | grep -F "capture	dir=$CAP"  >/dev/null || fail "capture path for report.json export"
 printf '%s\n' "$out" | grep '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99	segments=2	latest_drop=8	latest_hours=2.0	latest_pctph=4.0$'  >/dev/null || fail "drain line with off-charger segments: $(printf '%s\n' "$out" | grep '^drain')"
 printf '%s\n' "$out" | grep '^night	dur_min=469	drop=8	pctph=1.0	awake=8$'  >/dev/null || fail "night chain"
@@ -5926,7 +5924,7 @@ printf '%s\n' "$negout" | grep '^drain	pctph=3.0	total_drop=6	hours=2.0	ma=0	seg
 printf '%s\n' "$out" | grep '^nightd	ma=36	radio_mib=1.1	cpu_t=31	skin_t=29	wake_pk=5$'  >/dev/null || fail "night detail: $(printf '%s\n' "$out" | grep '^nightd')"
 printf '%s\n' "$out" | grep '^idlemax	awake=25	phase=sleep	dur_min=60$'  >/dev/null || fail "idlemax"
 printf '%s\n' "$out" | grep '^wl	pkg=com.instagram.android	sec=3661$'  >/dev/null || fail "top wakelock app"
-printf '%s\n' "$out" | grep -Eq '^crash	count=3	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' || fail "crash window, backtrace-only ASB attribution or the crash time"
+printf '%s\n' "$out" | grep -E '^crash	count=3	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' >/dev/null || fail "crash window, backtrace-only ASB attribution or the crash time"
 printf '%s\n' "$out" | grep '^sysui	count=2$'  >/dev/null || fail "sysui restarts"
 printf '%s\n' "$out" | grep '^sysuiinj'  >/dev/null && fail "restarts without injected code named a module"
 printf '%s\n' "$out" | grep '^thermal	cpu=41	surf=35$'  >/dev/null || fail "thermal peaks"
@@ -6167,7 +6165,7 @@ EOF
 printf '%s|%s|dumpsys:batterystats|124\n' "$((NOW-600))" "$((UP-600))" > "$FRESH/collector_events.tsv"
 stallout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-stale" sh "$D" "$FRESH")"
 printf '%s\n' "$stallout" | grep '^meta	elapsed_min=0	target_h=0	running=0'  >/dev/null || fail "a live PID without progress still reads as running: $(printf '%s' "$stallout" | head -1)"
-printf '%s\n' "$stallout" | grep -Eq '^recorder	state=stale	process_alive=1	heartbeat_age_s=59[5-9]|^recorder	state=stale	process_alive=1	heartbeat_age_s=60[0-9]' || fail "stale recorder age/state missing: $(printf '%s' "$stallout" | grep '^recorder')"
+printf '%s\n' "$stallout" | grep -E '^recorder	state=stale	process_alive=1	heartbeat_age_s=59[5-9]|^recorder	state=stale	process_alive=1	heartbeat_age_s=60[0-9]' >/dev/null || fail "stale recorder age/state missing: $(printf '%s' "$stallout" | grep '^recorder')"
 printf '%s\n' "$stallout" | grep '	stage=dumpsys:batterystats	tick=7	collector_timeouts=1	last_collector=dumpsys:batterystats$'  >/dev/null || fail "stale stage/timeout evidence missing"
 printf '%s\n' "$stallout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash' || fail "a fresh crash was discarded with stale measurements: $(printf '%s' "$stallout" | grep '^crash')"
 [ ! -e "$T/state3-stale/report_history.tsv" ] || fail "a live but stalled capture entered finished history"
@@ -6212,7 +6210,7 @@ kill "$_lq" 2>/dev/null || true; wait "$_lq" 2>/dev/null || true
 kill "$_lp" 2>/dev/null || true; wait "$_lp" 2>/dev/null || true
 printf '%s\n' "$fout" | grep '^meta	elapsed_min=0	target_h=0	running=1'  >/dev/null || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
 printf '%s\n' "$fout" | grep '^recorder	state=running	process_alive=1	heartbeat_age_s=0	stage=sleep	tick=1'  >/dev/null || fail "fresh monotonic heartbeat was not projected"
-printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=[0-9]{2}:[0-9]{2}$' || fail "a fresh capture's crash window must start at its launch, not 24h ago: $(printf '%s' "$fout" | grep '^crash')"
+printf '%s\n' "$fout" | grep -E '^crash	count=1	asb=0	latest=fresh.crash	ltime=[0-9]{2}:[0-9]{2}$' >/dev/null || fail "a fresh capture's crash window must start at its launch, not 24h ago: $(printf '%s' "$fout" | grep '^crash')"
 # The ledger may lead with a "# phase ..." comment: the window must read the first DATA
 # row, not the comment. The main fixture's ledger has no comment, so pin it here.
 CMNT="$T/asb_log_full_day_cmnt"; mkdir -p "$CMNT"
@@ -6231,7 +6229,7 @@ ra="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST
 printf '%s\n' "$ra" | grep '^hist	'  >/dev/null && fail "the first finished capture must not invent a trend"
 [ -s "$HST/report_history.tsv" ] || fail "a finished capture left no history line"
 rb="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CB")"
-printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2	device=OP611FL1	rom=CPH2745_16.0.10.601\(EX01\)	mod=V65-test	elapsed=720	on_pct=0	off_min=1036	dm=3$' || fail "the second capture must name the first with comparison context: $(printf '%s\n' "$rb" | grep '^hist')"
+printf '%s\n' "$rb" | grep -E '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2	device=OP611FL1	rom=CPH2745_16.0.10.601\(EX01\)	mod=V65-test	elapsed=720	on_pct=0	off_min=1036	dm=3$' >/dev/null || fail "the second capture must name the first with comparison context: $(printf '%s\n' "$rb" | grep '^hist')"
 ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP" >/dev/null
 [ "$(wc -l < "$HST/report_history.tsv")" -eq 2 ] || fail "re-opening the same capture must rewrite its line, not duplicate it"
 rc="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP")"
@@ -7542,7 +7540,7 @@ grep -Fq "'lr_tip_heat_warm'" "$H" || fail "the heat advice is gone"
 grep -Fq "Tcfg('sustained_temp_mode', 'name', 'Throttling Point')" "$H" || fail "the heat advice does not name the thermal switch"
 grep -Fq "T('lr_mwake'," "$H" || fail "the night-habits row is gone"
 grep -Fq "tag === 'hist'" "$H" || fail "the parser drops the history rows"
-grep -Fq 'hist\tstarted=' "$ROOT/tools/logkit/asb_fullday_digest.sh" 2>/dev/null || grep -Fq 'hist\tstarted=%s' "$ROOT/tools/logkit/asb_fullday_digest.sh" || fail "the digest emits no history rows"
+grep -Fq 'hist\tstarted=' "$ROOT/tools/logkit/asb_fullday_digest.sh" 2>/dev/null || grep -F 'hist\tstarted=%s' "$ROOT/tools/logkit/asb_fullday_digest.sh" >/dev/null || fail "the digest emits no history rows"
 grep -Fq 'report_history.tsv' "$ROOT/tools/logkit/asb_fullday_digest.sh" || fail "the digest keeps no capture history"
 echo "PASS webui log report: digest over a fixture capture (drain..cfg, live holders, per-profile drain, charging, LTPO, AOD, wake causes by occurrence fix210), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
 )
@@ -7596,27 +7594,27 @@ who held the lower ceiling, per cluster (26 samples):
   asb_trim = ASB's own thermal-budget/comfort trim (live == what ASB wrote)
 EOF
 out="$(sh "$D" "$CAP" 2>/dev/null)"
-printf '%s\n' "$out" | grep -q '^wlive	tag=contacts	pct=68	min=0	pkg=com.whatsapp	kind=sync$' || fail "sync holder: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
+printf '%s\n' "$out" | grep '^wlive	tag=contacts	pct=68	min=0	pkg=com.whatsapp	kind=sync$' >/dev/null || fail "sync holder: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
 [ "$(printf '%s\n' "$out" | grep -c '^wlive	tag=contacts	')" = 1 ] || fail "the same sync counted twice"
 printf '%s\n' "$out" | grep -q '^wlive	tag=MediaCountUploadWorker	pct=22	min=0	pkg=com.facebook.katana	kind=worker$' || fail "worker holder: $(printf '%s\n' "$out" | grep '^wlive' | sed -n 2p)"
-printf '%s\n' "$out" | grep -q '^wlive	tag=Tick	pct=10	min=2	pkg=com.example	kind=alarm$' || fail "alarm holder: $(printf '%s\n' "$out" | grep '^wlive' | sed -n 3p)"
-printf '%s\n' "$out" | grep -q '^thermal	cpu=57	surf=42$' || fail "trace peak: $(printf '%s\n' "$out" | grep '^thermal')"
+printf '%s\n' "$out" | grep '^wlive	tag=Tick	pct=10	min=2	pkg=com.example	kind=alarm$' >/dev/null || fail "alarm holder: $(printf '%s\n' "$out" | grep '^wlive' | sed -n 3p)"
+printf '%s\n' "$out" | grep '^thermal	cpu=57	surf=42$' >/dev/null || fail "trace peak: $(printf '%s\n' "$out" | grep '^thermal')"
 printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20	warm_episodes=1	warm_run_min=20$' || fail "trace durations: $(printf '%s\n' "$out" | grep '^heat')"
-printf '%s\n' "$out" | grep -q '^nightd	.*	cpu_t=57	skin_t=42	' || fail "night peaks from the trace: $(printf '%s\n' "$out" | grep '^nightd')"
+printf '%s\n' "$out" | grep '^nightd	.*	cpu_t=57	skin_t=42	' >/dev/null || fail "night peaks from the trace: $(printf '%s\n' "$out" | grep '^nightd')"
 printf '%s\n' "$out" | grep -q '^nightw' && fail "the night window leaked into the digest"
 # fix247: the facts the causes card reads - whether the ASB ceiling costs frames, the jank
 # floor and who held the prime cores.
 printf '%s\n' "$out" | grep -q '^jcap_main	yes=5.8	yes_f=26813	yes_jps=2.25	no=5.7	no_f=50927	no_jps=2.06$' || fail "main ceiling split: $(printf '%s\n' "$out" | grep '^jcap_main')"
-printf '%s\n' "$out" | grep -q '^jcap_prime	yes=-	yes_f=0	yes_jps=-	no=5.7	no_f=77740	no_jps=2.12$' || fail "prime ceiling split: $(printf '%s\n' "$out" | grep '^jcap_prime')"
+printf '%s\n' "$out" | grep '^jcap_prime	yes=-	yes_f=0	yes_jps=-	no=5.7	no_f=77740	no_jps=2.12$' >/dev/null || fail "prime ceiling split: $(printf '%s\n' "$out" | grep '^jcap_prime')"
 printf '%s\n' "$out" | grep -q '^jfloor	quiet=1.33	busy=2.52	app=com.android.systemui	share=94.0$' || fail "jank floor: $(printf '%s\n' "$out" | grep '^jfloor')"
-printf '%s\n' "$out" | grep -q '^vcap	n=26	main_vendor=0	main_asb=0	prime_vendor=20	prime_asb=6$' || fail "ceiling holders: $(printf '%s\n' "$out" | grep '^vcap')"
+printf '%s\n' "$out" | grep '^vcap	n=26	main_vendor=0	main_asb=0	prime_vendor=20	prime_asb=6$' >/dev/null || fail "ceiling holders: $(printf '%s\n' "$out" | grep '^vcap')"
 head -n 32 "$CAP/battery_trace.txt" > "$T/bt" && mv "$T/bt" "$CAP/battery_trace.txt"
 printf 'active\t%s\t%s\t80\t78\t44\t41\t1800\t20\t0\t0\t100\t300\t0\t0\t0\n' $((S0)) $((S0+1800)) > "$CAP/phase_ledger.tsv"
 out2="$(sh "$D" "$CAP" 2>/dev/null)"
 printf '%s\n' "$out2" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20	warm_episodes=1	warm_run_min=20$' || fail "screen-on trace: $(printf '%s\n' "$out2" | grep '^heat')"
 printf 'epoch|x\n1|a\n' > "$CAP/battery_trace.txt"
 out3="$(sh "$D" "$CAP" 2>/dev/null)"
-printf '%s\n' "$out3" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=0	skin_min=30	warm_episodes=0	warm_run_min=0$' || fail "ledger fallback: $(printf '%s\n' "$out3" | grep '^heat')"
+printf '%s\n' "$out3" | grep '^heat	peak_phase=active	peak_c=44	warm_min=0	skin_min=30	warm_episodes=0	warm_run_min=0$' >/dev/null || fail "ledger fallback: $(printf '%s\n' "$out3" | grep '^heat')"
 printf '%s\n' "$out3" | grep -q '^thermal	cpu=44	surf=41$' || fail "ledger peak fallback: $(printf '%s\n' "$out3" | grep '^thermal')"
 # fix298: total hot minutes alone cannot distinguish one sustained run from separated spells.
 # Two warm episodes (2 and 3 minutes) must retain their own count and longest continuous run.
@@ -7629,7 +7627,7 @@ printf '%s\n' "$out3" | grep -q '^thermal	cpu=44	surf=41$' || fail "ledger peak 
   done
 } > "$CAP/battery_trace.txt"
 out4="$(sh "$D" "$CAP" 2>/dev/null)"
-printf '%s\n' "$out4" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=5	skin_min=0	warm_episodes=2	warm_run_min=3$' || fail "warm episodes/longest run: $(printf '%s\n' "$out4" | grep '^heat')"
+printf '%s\n' "$out4" | grep '^heat	peak_phase=active	peak_c=44	warm_min=5	skin_min=0	warm_episodes=2	warm_run_min=3$' >/dev/null || fail "warm episodes/longest run: $(printf '%s\n' "$out4" | grep '^heat')"
 
 Z="$T/tz"; for z in 26 15 74 83 76; do mkdir -p "$Z/thermal_zone$z"; done
 echo 34000 > "$Z/thermal_zone26/temp"; echo 33000 > "$Z/thermal_zone15/temp"
@@ -7748,7 +7746,7 @@ _since="$(date -d "@$S0" '+%H:%M' 2>/dev/null || date -r "$S0" '+%H:%M')"
 [ "$(line tspike)" = "$(printf 'tspike\tholds=3\tlast_c=61\tpeer_hi=2\tpeer_n=5')" ] || fail "thermal spike evidence: $(line tspike)"
 [ "$(line bhv)" = "$(printf 'bhv\tapp=com.example.feed\tstate=kept\twithout=10.0\twith=3.0\nbhv\tapp=com.example.chat\tstate=released\twithout=5.0\twith=5.0')" ] || fail "recent hold verdicts: $(line bhv)"
 [ "$(line netma)" = "$(printf 'netma\tlo=250\tlo_n=30\thi=340\thi_n=29')" ] || fail "screen-on current by traffic: $(line netma)"
-[ "$(line hz | wc -l)" = 2 ] && line hz | grep -q 'mode=60' || fail "the refresh table stopped at the '?' row: $(line hz)"
+[ "$(line hz | wc -l)" = 2 ] && line hz | grep 'mode=60' >/dev/null || fail "the refresh table stopped at the '?' row: $(line hz)"
 [ "$(line bright)" = "$(printf 'bright\tavg=14')" ] || fail "average brightness: $(line bright)"
 [ "$(line asbcost)" = "$(printf 'asbcost\tcpu_msh=4977\twrites_h=480\twakes_h=1628\twakes_on=1271\twakes_off=356\tnoalarm=1')" ] || fail "ASB wakes by screen: $(line asbcost)"
 [ "$(line bt)" = "$(printf 'bt\tacl=5\tlost=3\tby_dev=1\tby_phone=1\tmedia=2\twhole=1\tstreams=2')" ] || fail "Bluetooth drops and stream pauses: $(line bt)"
@@ -9298,8 +9296,8 @@ want zygisk_observer enabled 0; want zygisk_observer mode observer; want zygisk_
 want zygisk_observer lifecycle_hints 0; want zygisk_observer crash_count unknown; want zygisk_observer anr_count unknown
 want zygisk_observer policy_hints 0; want zygisk_observer foreground_events 'not exposed without global hooks; is_top_app is not tracking'
 want kernel_runtime hrtimer_migration 0; want kernel_runtime lpm_prediction 1; want kernel_runtime usb_autosuspend -1
-printf '%s\n' "$out" | grep -Eq '^D	asb_caps	(android_api|kernel|model)	' && fail "ASB capabilities repeat firmware/kernel identity instead of capabilities"
-printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
+printf '%s\n' "$out" | grep -E '^D	asb_caps	(android_api|kernel|model)	' >/dev/null && fail "ASB capabilities repeat firmware/kernel identity instead of capabilities"
+printf '%s\n' "$out" | grep 'DO_NOT_COLLECT' >/dev/null && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
 grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"
 # Device Diagnostics runs the real bounded collector mode. It must expose the
@@ -9347,7 +9345,7 @@ rmdir "$T/proc/sdp900ma"
 sed -i 's/^CONFIG_OPLUS_SDP_900MA=y$/# CONFIG_OPLUS_SDP_900MA is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run --kernel)"; want kernel_features oplus_sdp_900ma 'not observed; exposed config says not set'
 printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_bore|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule|companion_modules)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
-printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "--kernel collected a sensitive identifier"
+printf '%s\n' "$out" | grep 'DO_NOT_COLLECT' >/dev/null && fail "--kernel collected a sensitive identifier"
 rm -f "$T/proc/sys/kernel/sched_schedstats"
 sed -i 's/^CONFIG_SCHEDSTATS=y$/# CONFIG_SCHEDSTATS is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run --kernel)"; want kernel_features sched_stats 'not observed; exposed config says not set'
@@ -9474,7 +9472,7 @@ KSUD_MODE=malformed out="$(run)"; want root variant 'not exposed'; want root ver
 KSUD_MODE=empty out="$(run)"; want root variant 'not exposed'; want root version 'not exposed'; want root variant_evidence 'not exposed'
 KSUD_MODE=sanitize out="$(run)"; want root variant 'KernelSU Next'; want root version 1.0.8; want root version_evidence 'KernelSU Next v1.0.8'
 printf '%s
-' "$out" | grep -q 'DO_NOT_READ_SECOND_LINE' && fail "ksud emitted more than the bounded first line"
+' "$out" | grep 'DO_NOT_READ_SECOND_LINE' >/dev/null && fail "ksud emitted more than the bounded first line"
 KSUD_MODE=long out="$(run)"
 [ "$(printf '%s
 ' "$out" | awk -F '	' '$2 == "root" && $3 == "version_evidence" { print length($4) }')" -le 160 ] || fail "ksud evidence was not bounded"
@@ -9485,11 +9483,11 @@ grep -Ev '^--version$' "$T/ksud.log" && fail "a state-changing ksud command ran"
 mkdir -p "$T/data/lspd"
 out="$(ASB_DEVINFO_LSPOSED=0 run)"
 want lsposed_hooks present 1; want lsposed_hooks collection on_demand
-printf '%s\n' "$out" | grep -q '^D	lsposed_hooks	database' && fail 'the quick snapshot still ran the hook collector'
+printf '%s\n' "$out" | grep '^D	lsposed_hooks	database' >/dev/null && fail 'the quick snapshot still ran the hook collector'
 out="$(run --lsposed 2>/dev/null || true)"
 printf '%s\n' "$out" | awk -F '\t' '$2 != "meta" && $2 != "lsposed_hooks" { bad = 1 } END { exit bad }' || fail "--lsposed emitted other sections: $out"
 want lsposed_hooks present 1
-printf '%s\n' "$out" | grep -q '^D	lsposed_hooks	basis	' || fail "--lsposed did not run the collector: $out"
+printf '%s\n' "$out" | grep '^D	lsposed_hooks	basis	' >/dev/null || fail "--lsposed did not run the collector: $out"
 rmdir "$T/data/lspd"
 # dev20: a GKI config is 200-300 KB decompressed. Android's shell has no printf builtin and
 # execve refuses one argument over 128 KB, so piping the whole text through printf returned
@@ -9517,7 +9515,7 @@ if command -v bash >/dev/null 2>&1; then
   want kernel_features bbr_v3 available; want kernel_features wireguard 'built-in config; runtime not independently confirmed'
   want kernel_features net_sch_cake 'built-in config; runtime not independently confirmed'
   want kernel_features overlayfs 'built-in config; runtime not independently confirmed'; want kernel_features cifs 'not exposed in config; runtime not confirmed'
-  printf '%s\n' "$out" | grep -q '^D	kernel_config	CONFIG_FILLER' && fail 'non-whitelisted config lines were emitted'
+  printf '%s\n' "$out" | grep '^D	kernel_config	CONFIG_FILLER' >/dev/null && fail 'non-whitelisted config lines were emitted'
   printf 'not gzip\n' > "$T/proc/config.gz"
   out="$(run)"; want kernel_config available 'present; not decodable here'; want kernel_features lto unknown
 fi
@@ -11157,7 +11155,7 @@ done
 grep -q "manual-status 2>/dev/null" "$H" || fail 'on-demand read-only scan missing'
 grep -q "manual-set ' + shQuote(a.pkg)" "$H" || fail 'explicit package action missing'
 grep -q "if (!a.selected && !wlManualArmed(a.pkg)) {" "$H" || fail 'in-page second-tap confirmation missing'
-sed -n '/^async function wlManualSet(a) {/,/^}/p' "$H" | grep -q 'confirm(' && fail 'wakelock freeze still depends on browser confirm()'
+sed -n '/^async function wlManualSet(a) {/,/^}/p' "$H" | grep 'confirm(' >/dev/null && fail 'wakelock freeze still depends on browser confirm()'
 grep -q "res === 'external_ignore'" "$H" || fail 'external ignore result is not explained'
 grep -q "res === 'uninstalled'" "$H" || fail 'uninstalled entry result is not explained'
 grep -q 'Original AppOps modes restored' "$H" || fail 'restore result is not honest'
@@ -11382,14 +11380,14 @@ s2="$(printf '%s\n' "$det" | grep '|com.android.systemui|' | head -1)"
 [ "$(printf '%s\n' "$det" | grep -c '|com.android.systemui|')" = 3 ] || f "SystemUI rows (none for the pruned day): $det"
 a4="$(printf '%s\n' "$det" | grep '|com.anthropic.claude|' | sed -n 2p)"
 [ "$(printf '%s' "$a4" | cut -d'|' -f4-20)" = "400|50|0|2|0|50|-|-|-|-|-|-|0|-|-|17|160" ] || f "an app back from an idle interval has counters but no times: $a4"
-printf '%s\n' "$out" | sed -n '/^--- x3/,/^--- detail/p' | grep -qx 'com.anthropic.claude|6600|950|3|0|12|950|?|?' || f "an idle app kept its histograms in the per-poll file: $out"
-printf '%s\n' "$out" | sed -n '/^--- x3/,/^--- detail/p' | grep -q '^com.android.systemui|1110|110|105|0|0|110|5:1090,6:2,20:20|1:1090,2:20$' || f "SystemUI's histograms are not kept: $out"
+printf '%s\n' "$out" | sed -n '/^--- x3/,/^--- detail/p' | grep -x 'com.anthropic.claude|6600|950|3|0|12|950|?|?' >/dev/null || f "an idle app kept its histograms in the per-poll file: $out"
+printf '%s\n' "$out" | sed -n '/^--- x3/,/^--- detail/p' | grep '^com.android.systemui|1110|110|105|0|0|110|5:1090,6:2,20:20|1:1090,2:20$' >/dev/null || f "SystemUI's histograms are not kept: $out"
 why="$(printf '%s\n' "$out" | sed -n '/^--- why/,/^--- end/p')"
-printf '%s\n' "$why" | grep -q '^why frames were late' || f "no summary: $why"
-printf '%s\n' "$why" | grep -Eq '^  com.anthropic.claude +LIGHT_IDLE +2000 +48% \| +0% +1% +32% +32% \| +16 ms +34 ms  17 \(160 MHz\)$' || f "summary row: $why"
-printf '%s\n' "$why" | grep -q 'com.anthropic.claude in LIGHT_IDLE: neither the GPU nor the UI thread' || f "pacing verdict: $why"
-printf '%s\n' "$why" | grep -q 'com.android.systemui in LIGHT_IDLE: its UI thread was slow' || f "SystemUI verdict: $why"
-printf '%s\n' "$out" | grep -q 'x kept over screen off' && f "the per-package histograms survived a screen-off stretch"
+printf '%s\n' "$why" | grep '^why frames were late' >/dev/null || f "no summary: $why"
+printf '%s\n' "$why" | grep -E '^  com.anthropic.claude +LIGHT_IDLE +2000 +48% \| +0% +1% +32% +32% \| +16 ms +34 ms  17 \(160 MHz\)$' >/dev/null || f "summary row: $why"
+printf '%s\n' "$why" | grep 'com.anthropic.claude in LIGHT_IDLE: neither the GPU nor the UI thread' >/dev/null || f "pacing verdict: $why"
+printf '%s\n' "$why" | grep 'com.android.systemui in LIGHT_IDLE: its UI thread was slow' >/dev/null || f "SystemUI verdict: $why"
+printf '%s\n' "$out" | grep 'x kept over screen off' >/dev/null && f "the per-package histograms survived a screen-off stretch"
 # The digest's jwhy rows from the same file; a resumed older capture has no detail file.
 touch "$T/out/_full_day_report.txt"
 dg="$(sh "$DG" "$T/out" 2>/dev/null | grep '^jwhy')"
@@ -11568,12 +11566,12 @@ _sb_t="$1"; _sb_d="$2"; _tw="$3"; _tc="$4"
 . "$5/thermal.sh"
 SH
 zero="$(sh "$T/run.sh" 0 0 0 0 "$T")"
-printf '%s\n' "$zero" | grep -q 'bucket avg temp = not learned.*avg drain = not learned'
-printf '%s\n' "$zero" | grep -q 'thermal thresholds (tenths C): warm above not learned, cool below not learned'
-printf '%s\n' "$zero" | grep -q 'thresholds in force' && { echo 'zero thermal state presented as active thresholds' >&2; exit 1; }
+printf '%s\n' "$zero" | grep 'bucket avg temp = not learned.*avg drain = not learned' >/dev/null
+printf '%s\n' "$zero" | grep 'thermal thresholds (tenths C): warm above not learned, cool below not learned' >/dev/null
+printf '%s\n' "$zero" | grep 'thresholds in force' >/dev/null && { echo 'zero thermal state presented as active thresholds' >&2; exit 1; }
 valid="$(sh "$T/run.sh" 503 7 539 381 "$T")"
-printf '%s\n' "$valid" | grep -q 'bucket avg temp = 503.*avg drain = 7'
-printf '%s\n' "$valid" | grep -q 'thresholds in force: warm above 539, cool below 381'
+printf '%s\n' "$valid" | grep 'bucket avg temp = 503.*avg drain = 7' >/dev/null
+printf '%s\n' "$valid" | grep 'thresholds in force: warm above 539, cool below 381' >/dev/null
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag"
 echo "PASS fix309 evidence/presentation: cap success forms, REFUSED verdict, multicast/thermal honesty, scoped ART list, 13 locales and status-bar layering"
 )
@@ -12266,7 +12264,7 @@ command -v python3 >/dev/null 2>&1 || { echo "SKIP slim package: no python3"; ex
 mkdir -p "$T/pkg" "$T/src"
 cp -r "$ROOT/webroot" "$T/pkg/webroot"; cp -r "$ROOT/webroot" "$T/src/webroot"
 out="$(python3 "$ROOT/tools/asb_slim_package.py" "$T/pkg")" || fail "the tool failed: $out"
-echo "$out" | grep -q 'translations -[1-9][0-9]* bytes, page -[1-9][0-9]* bytes (ok;' || fail "nothing was saved: $out"
+echo "$out" | grep 'translations -[1-9][0-9]* bytes, page -[1-9][0-9]* bytes (ok;' >/dev/null || fail "nothing was saved: $out"
 python3 - "$T/src/webroot/i18n" "$T/pkg/webroot/i18n" <<'PY' || fail "a translation changed"
 import json, os, sys
 a, b = sys.argv[1], sys.argv[2]
@@ -12311,7 +12309,7 @@ t_webui_i18n_untranslated_prose() (
 # reads as prose (three lowercase words in a row) is a forgotten translation. Technical
 # labels (CONFIG_ names, product names) never match the pattern.
 set -eu
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." >/dev/null && pwd)"
 fail() { echo "FAIL webui untranslated prose: $*" >&2; exit 1; }
 python3 - "$ROOT/webroot/i18n" <<'P' || fail "English prose left in a locale"
 import json, os, re, sys
@@ -12436,7 +12434,7 @@ echo "PASS debug support lock handoff: a launcher seen mid-exec still owns its l
 )
 
 t_tests_pipefail_grep_q_contract() (
-# dev27: under `set -o pipefail`, `echo "$x" | grep -q pattern` can fail although the pattern is
+# dev27: under `set -o pipefail`, `echo "$x" | grep pattern` can fail although the pattern is >/dev/null
 # there: grep -q exits at the first match and a writer that is still writing gets EPIPE (CI runs
 # with SIGPIPE ignored: its log shows "echo: write error: Broken pipe"). Reproduced here as 1 in
 # 20000 under load, and as two debug-support failures in 80 parallel runs. Tests that set
@@ -13736,12 +13734,12 @@ col() {
   ASB_DEVINFO_DEV="$T/dev" ASB_DEVINFO_TC="$T/none" sh "$ROOT/tools/asb_device_info.sh" 2>/dev/null | grep '^D	companion_modules	'
 }
 out="$(col)"
-printf '%s\n' "$out" | grep -Fqx "$(printf 'D\tcompanion_modules\tnomount\tv2.3.0 (720) · enabled · kernel driver version 23')" || fail "nomount: $out"
-printf '%s\n' "$out" | grep -Fqx "$(printf 'D\tcompanion_modules\tvpnhide\tv1.3.1 (10301) · enabled · update to v1.3.2 (10302) after reboot · kernel interface /proc/vpnhide_ctl present')" || fail "vpnhide: $out"
+printf '%s\n' "$out" | grep -Fx "$(printf 'D\tcompanion_modules\tnomount\tv2.3.0 (720) · enabled · kernel driver version 23')" >/dev/null || fail "nomount: $out"
+printf '%s\n' "$out" | grep -Fx "$(printf 'D\tcompanion_modules\tvpnhide\tv1.3.1 (10301) · enabled · update to v1.3.2 (10302) after reboot · kernel interface /proc/vpnhide_ctl present')" >/dev/null || fail "vpnhide: $out"
 : > "$T/data/modules/nomount/disable"; rm -rf "$T/data/modules/vpnhide_builtin" "$T/proc/vpnhide_ctl"
 out="$(col)"
-printf '%s\n' "$out" | grep -Fq 'nomount	v2.3.0 (720) · disabled' || fail "disabled: $out"
-printf '%s\n' "$out" | grep -Fqx "$(printf 'D\tcompanion_modules\tvpnhide\tv1.3.2 (10302) · installed, active after reboot · kernel interface /proc/vpnhide_ctl not exposed')" || fail "pending install: $out"
+printf '%s\n' "$out" | grep -F 'nomount	v2.3.0 (720) · disabled' >/dev/null || fail "disabled: $out"
+printf '%s\n' "$out" | grep -Fx "$(printf 'D\tcompanion_modules\tvpnhide\tv1.3.2 (10302) · installed, active after reboot · kernel interface /proc/vpnhide_ctl not exposed')" >/dev/null || fail "pending install: $out"
 rm -rf "$T/data/modules_update" "$T/data/modules/nomount"
 out="$(col)"
 [ "$(printf '%s\n' "$out" | grep -c '	not installed · ')" = 2 ] || fail "not installed: $out"
@@ -14005,8 +14003,9 @@ t_webui_dev61_ambient_gpu_pressure() (
 #    (160 MHz): with the WebUI closed the log's GPU busy median was 4 %. The tile now shows
 #    the clock beside the busy share and colours busy x clock / top clock;
 #  - dev61 stepped the idle header from a 100 ms timer, which looked like a ten-second
-#    slowdown/freeze. Dev66 returns visible header loops to the native CSS clock and keeps
-#    the ticker only for the Smart card glow; hidden/reduced-motion rules remain intact;
+#    slowdown/freeze. Dev66 returned the logo to the native CSS clock but left the wordmark
+#    under calm; buildfix3 removes that last header stop and keeps the ticker only for the
+#    Smart card glow. Hidden/reduced-motion rules remain intact;
 #  - the pressure sheet scored loadavg (it counts tasks asleep on storage) and the share of
 #    memory in use (Android keeps apps cached on purpose), which read "moderate" on a phone
 #    doing nothing. With /proc/pressure it now scores stall time, and says which basis it used;
@@ -14019,12 +14018,13 @@ fail() { echo "FAIL webui dev61 ambient/gpu/pressure: $*" >&2; exit 1; }
 python3 - "$ROOT" <<'P' || fail 'static contract and locales'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
-i = h.index('/* dev66: calm never changes the visible header')
+i = h.index('/* dev66/buildfix3: calm never changes any visible header')
 blk = h[i:h.index('}', i) + 1]
 blk = blk[blk.index('*/') + 2:]
 assert 'html.asb-calm .pico-smart .ai-glow' in blk
 assert 'animation-play-state: paused !important;' in blk
-for header in ('.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot',
+assert 'html.asb-calm .app-name' not in h, 'calm still removes the wordmark animation'
+for header in ('.app-name', '.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot',
                '.zygisk-header-dot', '.dev-zygisk-link-dot'):
     assert header not in blk, 'header returned to the 100 ms idle ticker: ' + header
 assert "el.closest('.asb-boot-intro, .header')" in h
@@ -14534,9 +14534,10 @@ python3 - "$ROOT" <<'PY' || fail 'static contract'
 import json, pathlib, re, sys
 r = pathlib.Path(sys.argv[1]); h = (r/'webroot/index.html').read_text(encoding='utf-8')
 assert "const ASB_AMBIENT_NAMES = ['ai-spin'];" in h
-calm = h[h.index('/* dev66: calm never changes the visible header'):]
+calm = h[h.index('/* dev66/buildfix3: calm never changes any visible header'):]
 calm = calm[:calm.index('}')+1]
-for x in ('.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot', '.zygisk-header-dot'):
+assert 'html.asb-calm .app-name' not in h
+for x in ('.app-name', '.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot', '.zygisk-header-dot'):
     assert x not in calm, x
 assert "el.closest('.asb-boot-intro, .header')" in h
 mon = h[h.index('function liveMonitorSchedule(delay) {'):h.index('function livePollTrack(')]
