@@ -731,12 +731,12 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "245" ] || fail "expected 245 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "245" ] || fail "expected 245 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "246" ] || fail "expected 246 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "246" ] || fail "expected 246 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
-for _kc_key in mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore; do
+for _kc_key in io_scheduler mglru_mode kernel_mglru_min_ttl kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost kernel_bore; do
   grep -qx "$_kc_key|advanced|webui_sensitive|shell" "$REG" || fail "$_kc_key consumer is not pinned to shell"
 done
 grep -qx 'net_mtu_probing|advanced|webui_sensitive|shell' "$REG" || fail 'net_mtu_probing consumer is not pinned to shell'
@@ -755,7 +755,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "113" ] || fail "expected 113 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "114" ] || fail "expected 114 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -799,7 +799,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (245 keys; 49 user, 64 advanced, 132 internal)'
+echo 'PASS config ownership registry contract (246 keys; 49 user, 65 advanced, 132 internal)'
 )
 
 t_config_metadata_coherence_buildfix1() (
@@ -826,7 +826,7 @@ cmp -s "$CONF" "$SHIPPED" || fail 'active and shipped config copies differ'
 shape="$(cd "$ROOT" && grep -oE "key:'[a-zA-Z0-9_]+'[^}]*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
   | sed -E "s/.*key:'([a-zA-Z0-9_]+)'.*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)/\1=\2/" \
   | sort | md5sum | cut -c1-12)"
-[ "$shape" = d672ad7af963 ] || fail "unexpected computed WebUI shape: $shape"
+[ "$shape" = a9530704fe92 ] || fail "unexpected computed WebUI shape: $shape"
 grep -Fqx "# CONFIG_SHAPE=$shape" "$CONF" || fail 'governor.conf shape is stale'
 grep -Fqx "# CONFIG_SHAPE=$shape" "$SHIPPED" || fail 'shipped config shape is stale'
 schema="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' "$ROOT/common/install.sh" \
@@ -860,7 +860,7 @@ for rel in ('config/governor.conf', 'config/governor.conf.shipped', 'config/key_
             kept.append(line)
     text = ''.join(kept)
     if separator == '=':
-        text = text.replace('# CONFIG_SHAPE=d672ad7af963',
+        text = text.replace('# CONFIG_SHAPE=a9530704fe92',
                             '# CONFIG_SHAPE=928eea600217', 1)
     path.write_text(text, encoding='utf-8')
 PY
@@ -868,8 +868,8 @@ if (cd "$TMP/stale" && MODE=RELEASE_STRICT bash tools/asb_lint.sh) > "$TMP/befor
   fail 'stale 237-key metadata with dev64 WebUI cards passed lint'
 fi
 need "$TMP/before.log" 'internal-or-unregistered-cards=[feel_dc_dimming feel_game_memc feel_gesture_mistouch feel_pointer_speed ui_nav_handle_autohide ui_recents_corner_radius ui_recents_memory ui_smooth_corners ] stale-public-keys=[]' 'ownership drift no longer reproduces the CI failure'
-need "$TMP/before.log" 'config shape changed (928eea600217 -> d672ad7af963) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
-need "$TMP/before.log" 'Lint: ❌ 2 errors  ⚠️  0 warnings' 'stale fixture has unexpected additional lint findings'
+need "$TMP/before.log" 'config shape changed (928eea600217 -> a9530704fe92) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
+if ! grep -Fq 'Lint: ❌ 2 errors  ⚠️  0 warnings' "$TMP/before.log"; then cat "$TMP/before.log" >&2; fail 'stale fixture has unexpected additional lint findings'; fi
 
 cp "$CONF" "$TMP/stale/config/governor.conf"
 cp "$SHIPPED" "$TMP/stale/config/governor.conf.shipped"
@@ -880,7 +880,7 @@ cp "$REG" "$TMP/stale/config/key_ownership.tsv"
 }
 need "$TMP/after.log" 'config shape matches the recorded fingerprint (schema 4)' 'schema 4 coherence was not reported'
 need "$TMP/after.log" 'Lint: ❌ 0 errors  ⚠️  0 warnings' 'corrected fixture is not lint-clean'
-echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 245-key configs, shape d672ad7af963/schema 4, exact stale-CI failure and three-file repair'
+echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 246-key configs, shape a9530704fe92/schema 4, exact stale-CI failure and three-file repair'
 )
 
 t_config_restore_outcome_runtime() (
@@ -7870,7 +7870,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_wakeup_blocker.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh runtime/asb_junk_cleanup.sh runtime/asb_pressure_snapshot.sh runtime/asb_soter_fix.sh runtime/asb_camera_tools.sh runtime/asb_module_desc.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
+_helpers='runtime/asb_io_scheduler.sh runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_wakeup_blocker.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh runtime/asb_junk_cleanup.sh runtime/asb_pressure_snapshot.sh runtime/asb_soter_fix.sh runtime/asb_camera_tools.sh runtime/asb_module_desc.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
 fail() { echo "FAIL workflow executable modes: $*" >&2; exit 1; }
 
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
@@ -10053,6 +10053,177 @@ grep -Fq '*/asb_log_full_day_*)' "$F" || fail 'nested resume directories are rej
 grep -Fq 'mkdir -p "$LK_OUT_DIR"' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail 'nested output parents are not created'
 sh -n "$F" && sh -n "$D" || fail 'shell syntax'
 echo 'PASS logkit output hierarchy: new full-day captures use ASB/logs/asb_log_full_day_*, nested parents are created, resume accepts them, digest prefers new paths and retains legacy root captures'
+)
+
+
+t_io_scheduler_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+IOS="$ROOT/runtime/asb_io_scheduler.sh"
+T="$(mktemp -d)"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL I/O scheduler runtime: $*" >&2; exit 1; }
+mkdir -p "$T/mod"
+printf 'balanced\n' > "$T/mod/current_profile"
+new_fixture() {
+  rm -rf "$T/block" "$T/state"
+  mkdir -p "$T/block/sda/queue" "$T/block/mmcblk0/queue" "$T/state"
+  printf '0\n' > "$T/block/sda/queue/rotational"
+  printf '0\n' > "$T/block/mmcblk0/queue/rotational"
+  printf 'none [mq-deadline] kyber bfq\n' > "$T/block/sda/queue/scheduler"
+  printf 'none mq-deadline [kyber] bfq\n' > "$T/block/mmcblk0/queue/scheduler"
+}
+run_io() {
+  env MODDIR="$T/mod" ASB_CONF="$T/conf" ASB_IO_BLOCK_ROOT="$T/block" \
+    ASB_IO_SCHEDULER_STATE="$T/state" ${ASB_PROFILE:+ASB_PROFILE="$ASB_PROFILE"} sh "$IOS" "$@"
+}
+new_fixture
+printf 'io_scheduler=stock\n' > "$T/conf"
+out="$(run_io status)"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|writable|stock|mixed|none' || fail "mixed live discovery: $out"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler_options|bfq kyber mq-deadline none' || fail "scheduler union: $out"
+printf 'io_scheduler=auto\n' > "$T/conf"
+out="$(run_io apply)"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|mq-deadline|mixed' || fail "balanced auto/readback/baseline: $out"
+grep -Fq '[mq-deadline]' "$T/block/sda/queue/scheduler" || fail 'sda did not retain/select mq-deadline'
+[ "$(cat "$T/block/mmcblk0/queue/scheduler")" = mq-deadline ] || fail 'mmcblk0 did not select mq-deadline'
+printf 'io_scheduler=stock\n' > "$T/conf"
+out="$(run_io restore)"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|restored|stock|mixed|none' || fail "per-device restore: $out"
+[ "$(cat "$T/block/sda/queue/scheduler")" = mq-deadline ] || fail 'sda baseline was not restored'
+[ "$(cat "$T/block/mmcblk0/queue/scheduler")" = kyber ] || fail 'mmcblk0 baseline was not restored'
+[ ! -e "$T/state/sda.prev" ] && [ ! -e "$T/state/mmcblk0.prev" ] || fail 'restored baselines were not released'
+
+new_fixture
+printf 'io_scheduler=auto\n' > "$T/conf"
+out="$(ASB_PROFILE=performance run_io apply)"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|kyber|mixed' || fail "performance auto: $out"
+
+new_fixture
+printf 'none [mq-deadline] bfq-mq\n' > "$T/block/sda/queue/scheduler"
+printf 'none [mq-deadline] bfq-mq\n' > "$T/block/mmcblk0/queue/scheduler"
+printf 'io_scheduler=bfq-mq\n' > "$T/conf"
+out="$(run_io apply)"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|bfq-mq|bfq-mq|mq-deadline' || fail "custom kernel scheduler: $out"
+
+new_fixture
+before_sda="$(cat "$T/block/sda/queue/scheduler")"
+before_mmc="$(cat "$T/block/mmcblk0/queue/scheduler")"
+printf 'io_scheduler=deadline\n' > "$T/conf"
+if run_io apply > "$T/out" 2>&1; then fail 'unsupported explicit scheduler reported success'; fi
+grep -Fq 'io_scheduler|not_exposed|deadline|' "$T/out" || fail 'unsupported verdict'
+[ "$(cat "$T/block/sda/queue/scheduler")" = "$before_sda" ] && [ "$(cat "$T/block/mmcblk0/queue/scheduler")" = "$before_mmc" ] || fail 'unsupported explicit request changed a queue'
+
+new_fixture
+printf 'none [mq-deadline] kyber\n' > "$T/block/sda/queue/scheduler"
+printf 'none mq-deadline bfq\n' > "$T/block/mmcblk0/queue/scheduler"
+printf 'io_scheduler=kyber\n' > "$T/conf"
+if run_io apply > "$T/out" 2>&1; then fail 'partially supported request reported success'; fi
+[ "$(cat "$T/block/sda/queue/scheduler")" = 'none [mq-deadline] kyber' ] || fail 'preflight changed first queue before second failed'
+
+new_fixture
+printf 'vendor-iosched [vendor-alt]\n' > "$T/block/sda/queue/scheduler"
+printf 'vendor-iosched [vendor-alt]\n' > "$T/block/mmcblk0/queue/scheduler"
+printf 'io_scheduler=auto\n' > "$T/conf"
+if run_io apply > "$T/out" 2>&1; then fail 'auto invented a fallback outside policy'; fi
+grep -Fq 'io_scheduler|not_exposed|auto|vendor-alt|none' "$T/out" || fail 'custom-only auto verdict'
+
+new_fixture
+mkdir -p "$T/block/sda../escape/queue" "$T/block/sdb/queue"
+printf 'none [mq-deadline]\n' > "$T/block/sda../escape/queue/scheduler"
+printf '1\n' > "$T/block/sdb/queue/rotational"
+printf 'none [mq-deadline]\n' > "$T/block/sdb/queue/scheduler"
+printf 'io_scheduler=../../etc/passwd\n' > "$T/conf"
+run_io apply > "$T/out" 2>&1 || fail 'invalid value was not safely reduced to unowned Stock'
+[ ! -e "$T/block/sda../escape/queue/scheduler.prev" ] || fail 'invalid device escaped discovery boundary'
+[ "$(cat "$T/block/sdb/queue/scheduler")" = 'none [mq-deadline]' ] || fail 'rotational queue was touched'
+! grep -Fq '/etc/passwd' "$T/out" || fail 'arbitrary path appeared in output'
+
+new_fixture
+chmod 0444 "$T/block/sda/queue/scheduler" "$T/block/mmcblk0/queue/scheduler"
+chmod 0755 "$T" "$T/block" "$T/block/sda" "$T/block/sda/queue" "$T/block/mmcblk0" "$T/block/mmcblk0/queue"
+printf 'io_scheduler=kyber\n' > "$T/conf"; chmod 0644 "$T/conf"
+if run_io apply > "$T/out" 2>&1; then
+  fail 'read-only queues reported success'
+fi
+grep -Fq 'io_scheduler|not_writable|' "$T/out" || fail "read-only verdict: $(cat "$T/out")"
+chmod 0644 "$T/block/sda/queue/scheduler" "$T/block/mmcblk0/queue/scheduler"
+
+new_fixture
+rm -f "$T/block/mmcblk0/queue/scheduler" "$T/block/sda/queue/scheduler"
+ln -s /dev/full "$T/block/sda/queue/scheduler"
+rm -rf "$T/block/mmcblk0"
+mkdir -p "$T/bin"
+cat > "$T/bin/cat" <<'EOF'
+#!/bin/sh
+case "${1:-}" in
+  */sda/queue/scheduler) printf 'none [mq-deadline] kyber\n' ;;
+  *) exec /bin/cat "$@" ;;
+esac
+EOF
+chmod 0755 "$T/bin/cat"
+printf 'io_scheduler=kyber\n' > "$T/conf"
+if PATH="$T/bin:$PATH" run_io apply > "$T/out" 2>&1; then fail 'write failure reported success'; fi
+grep -Fq 'io_scheduler|write_failed|' "$T/out" || fail "write failure verdict: $(cat "$T/out")"
+
+new_fixture
+rm -rf "$T/block/mmcblk0"
+rm -f "$T/block/sda/queue/scheduler"; ln -s /dev/null "$T/block/sda/queue/scheduler"
+cat > "$T/bin/cat" <<'EOF'
+#!/bin/sh
+case "${1:-}" in
+  */sda/queue/scheduler)
+    n=0; [ ! -f "$CAT_COUNT" ] || n="$(/bin/cat "$CAT_COUNT")"; n=$((n + 1)); printf '%s\n' "$n" > "$CAT_COUNT"
+    if [ "$n" -ge 5 ]; then printf 'none [none] mq-deadline\n'; else printf 'none [mq-deadline]\n'; fi ;;
+  *) exec /bin/cat "$@" ;;
+esac
+EOF
+chmod 0755 "$T/bin/cat"
+printf 'io_scheduler=mq-deadline\n' > "$T/conf"
+if CAT_COUNT="$T/cat-count" PATH="$T/bin:$PATH" run_io apply > "$T/out" 2>&1; then fail 'readback mismatch reported success'; fi
+grep -Fq 'io_scheduler|readback_mismatch|' "$T/out" || fail "readback mismatch verdict: $(cat "$T/out")"
+rm -rf "$T/bin"
+
+new_fixture
+rm -rf "$T/block/mmcblk0"
+printf 'io_scheduler=kyber\n' > "$T/conf"
+run_io apply >/dev/null || fail 'kernel-id fixture apply'
+printf 'different|kernel\n' > "$T/state/sda.prev.kid"
+printf 'io_scheduler=stock\n' > "$T/conf"
+out="$(run_io restore)"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|stock_unowned|' || fail "stale kernel baseline claimed restore: $out"
+[ "$(cat "$T/block/sda/queue/scheduler")" = kyber ] || fail 'stale kernel baseline was written'
+[ ! -e "$T/state/sda.prev" ] || fail 'stale kernel baseline was not discarded'
+
+# Package and dispatch boundaries: one fixed helper, no arbitrary WebUI path/value writer.
+grep -Fq '_akc_io="$ASB_KC_MODDIR/runtime/asb_io_scheduler.sh"' "$ROOT/runtime/asb_kernel_controls.sh" || fail 'kernel-control dispatch missing'
+grep -Fq "io_scheduler=stock" "$ROOT/config/governor.conf.shipped" || fail 'shipped Stock default missing'
+grep -Fq "['stock','auto'].concat(ASB_IO_SCHEDULERS" "$ROOT/webroot/index.html" || fail 'WebUI is not limited to discovered options'
+echo 'PASS I/O scheduler runtime: multi-device discovery, custom names, auto policies, preflight, bounded paths, read-only/write/readback failures, exact Stock restore and kernel-id invalidation'
+)
+
+
+t_smart_manual_mglru_ownership() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL Smart manual MGLRU ownership: $*" >&2; exit 1; }
+S="$ROOT/runtime/asb_system_tweaks.sh"
+D="$ROOT/runtime/smart_dynamic_tune.sh"
+python3 - "$S" "$D" <<'PY' || fail 'apply/dynamic ownership branch'
+import re,sys
+s=open(sys.argv[1]).read(); d=open(sys.argv[2]).read()
+m=re.search(r'case "\$\(_cfg mglru_mode\):\$\(cat "\$MODDIR/current_profile"[\s\S]*?esac',s)
+assert m,'profile ownership case missing'
+b=m.group(0)
+smart=re.search(r'smart:smart\)\s+_kc_keys="([^"]+)"',b)
+manual=re.search(r'\*\)\s+_kc_keys="([^"]+)"',b)
+assert smart and manual,'branch keys missing'
+assert 'mglru_mode' not in smart.group(1).split(),'dynamic Smart value would be overwritten by ordinary apply'
+assert 'mglru_mode' in manual.group(1).split(),'manual on/off/stock is silently dropped in Smart'
+assert 'io_scheduler' in smart.group(1).split() and 'io_scheduler' in manual.group(1).split(),'scheduler no longer applied'
+assert 'if [ "$MODE" != manual ] && [ "$(_cfg mglru_mode)" = smart ]; then' in d,'dynamic writer is not limited to mglru_mode=smart'
+PY
+echo 'PASS Smart manual MGLRU ownership: only smart:smart suppresses ordinary MGLRU apply; on/off/stock remain live and the dynamic writer accepts only explicit smart'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

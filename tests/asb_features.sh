@@ -1783,7 +1783,8 @@ for c in '300 0 0' '420 0 1' '450 0 2' '419 1 1' '399 1 0' '449 1 1' '450 1 2' '
   if [ $# = 3 ]; then got="$(asb_dsp_th_step "$1" "$2")"; want="$3"; else got="$(asb_dsp_th_step "" "$1")"; want="$2"; fi
   [ "$got" = "$want" ] || fail "step table: '$c' gave $got"
 done
-[ "$(asb_dsp_th_cap 3000 0 speaker)" = 2500 ] || fail "cap above +25 dB"
+[ "$(asb_dsp_th_cap 3000 0 speaker)" = 3000 ] || fail "+30 dB request capped"
+[ "$(asb_dsp_th_cap 3100 0 speaker)" = 3000 ] || fail "cap above +30 dB"
 [ "$(asb_dsp_th_cap 900 1 speaker)" = 900 ] || fail "a gain under the step was raised"
 [ "$(asb_dsp_th_cap 2500 2 unknown)" = 800 ] || fail "unknown route is not treated as the speaker"
 [ "$(asb_dsp_th_cap 2500 2 wired)" = 2500 ] || fail "wired reduced"
@@ -2187,13 +2188,19 @@ grep -q 'DSP status: requested' "$ROOT/action.sh" || {
   echo 'FAIL: action UI lacks DSP runtime status' >&2
   exit 1
 }
-# WebUI already permits 25 dB; every runtime/core/diagnostic path must now deliver that
-# same ceiling rather than silently reporting requested +25 but applying legacy +18.
+# WebUI permits 30 dB; every current runtime/core/diagnostic path must expose that same
+# source ceiling. Old prebuilt binaries are explicitly diagnosed rather than treated as proof.
 # fix74: the legacy effect runs the shared core, so its cap IS the core's cap.
-grep -Fq '#include "asb_dsp_core.h"' "$ROOT/src/DSP/asb_dsp.c" || { echo 'FAIL: legacy DSP does not use the shared core (+25 dB cap)' >&2; exit 1; }
-grep -Fq '#define ASB_GAIN_MB_MAX    2500' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" || { echo 'FAIL: AIDL DSP cap is not +25 dB' >&2; exit 1; }
-grep -Fq '[ "$_dsp_applied_mb" -gt 2500 ] && _dsp_applied_mb=2500' "$ROOT/runtime/asb_audio_apply.sh" || { echo 'FAIL: runtime DSP cap is not +25 dB' >&2; exit 1; }
-grep -Fq '[ "$_dsp_expected_mb" -gt 2500 ] && _dsp_expected_mb=2500' "$ROOT/tools/asb_diag.sh" || { echo 'FAIL: diagnostic DSP cap is not +25 dB' >&2; exit 1; }
+grep -Fq '#include "asb_dsp_core.h"' "$ROOT/src/DSP/asb_dsp.c" || { echo 'FAIL: legacy DSP does not use the shared core (+30 dB cap)' >&2; exit 1; }
+grep -Fq '#define ASB_GAIN_MB_MAX    3000' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" || { echo 'FAIL: AIDL DSP cap is not +30 dB' >&2; exit 1; }
+grep -Fq '#define ASB_GAIN_CAP_MARKER "gain_cap_mb=3000"' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" || { echo 'FAIL: DSP capability marker missing' >&2; exit 1; }
+grep -Fq 'ASB_GAIN_CAP_MARKER' "$ROOT/src/DSP_AIDL/asb_effect_aidl.cpp" || { echo 'FAIL: AIDL does not embed the capability marker' >&2; exit 1; }
+grep -Fq 'ASB_GAIN_CAP_MARKER' "$ROOT/src/DSP/asb_dsp.c" || { echo 'FAIL: legacy DSP does not embed the capability marker' >&2; exit 1; }
+grep -Fq '[ "$_dsp_applied_mb" -gt 3000 ] && _dsp_applied_mb=3000' "$ROOT/runtime/asb_audio_apply.sh" || { echo 'FAIL: runtime DSP cap is not +30 dB' >&2; exit 1; }
+grep -Fq '[ "$_dsp_expected_mb" -gt 3000 ] && _dsp_expected_mb=3000' "$ROOT/tools/asb_diag.sh" || { echo 'FAIL: diagnostic DSP cap is not +30 dB' >&2; exit 1; }
+grep -Fq "gain_cap_mb=3000" "$ROOT/tools/asb_diag.sh" || { echo 'FAIL: diagnostic cannot detect an old prebuilt' >&2; exit 1; }
+grep -Fq "max:30" "$ROOT/webroot/index.html" || { echo 'FAIL: WebUI DSP range is not +30 dB' >&2; exit 1; }
+grep -Fq '"gain_cap_mb=3000"' "$ROOT/src/build_ndk_release.sh" || { echo 'FAIL: build freshness gate does not detect old DSP prebuilts' >&2; exit 1; }
 
 # fix320: host package evidence and runtime loading evidence are separate manifest fields.
 # Both workflows must carry every reference/AIDL artifact, but neither may claim that a host
@@ -2428,7 +2435,7 @@ t_dsp_stereo_width_runtime() (
 #   - the side signal grows by 1 + 0.1 * level above the 180 Hz corner (x2.0 at level 10) and
 #     far less at 50 Hz, so the low end stays mono;
 #   - only two-channel streams are processed;
-#   - the limiter still holds the ceiling with +25 dB and full width, in float and int16;
+#   - the sample-peak limiter holds the ceiling with +30 dB and full width, float and int16;
 #   - both effects and the attach daemon read the new property, and the build gate knows it.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -2494,7 +2501,7 @@ int main(void) {
     cfg(&a, 6, 600, 10); if (a.width_on) { puts("FAIL width on a 5.1 stream"); bad++; }
     cfg(&a, 2, 600, 11); if (!a.width_on || a.wside > 1.0001f) { puts("FAIL level not clamped to 10"); bad++; }
     sig(2, 3000.0f, 0.9f, -0.9f);
-    cfg(&a, 2, 2500, 10); asb_core_process_f32(&a, in, o1, N, 0);
+    cfg(&a, 2, 3000, 10); asb_core_process_f32(&a, in, o1, N, 0);
     if (peak(o1, N * 2) > asb_core_mb_to_lin(-30) + 1e-4f) { printf("FAIL ceiling broken with full width: %.4f\n", peak(o1, N * 2)); bad++; }
     {
         static int16_t si[N * 2], so[N * 2];
@@ -2502,7 +2509,7 @@ int main(void) {
         cfg(&a, 2, 600, 10); asb_core_process_s16(&a, si, so, N, 0);
         for (int i = 0; i < N; i++) if (so[i * 2] != so[i * 2 + 1]) { puts("FAIL int16 centred signal split by width"); bad++; break; }
         for (int i = 0; i < N; i++) { int16_t v = (int16_t)(30000.0f * sinf(2.0f * 3.14159265f * 2500.0f * (float)i / (float)R)); si[i * 2] = v; si[i * 2 + 1] = (int16_t)-v; }
-        cfg(&a, 2, 2500, 10); asb_core_process_s16(&a, si, so, N, 0);
+        cfg(&a, 2, 3000, 10); asb_core_process_s16(&a, si, so, N, 0);
         int lim = (int)lrintf(asb_core_mb_to_lin(-30) * 32767.0f) + 1;
         for (int i = 0; i < N * 2; i++) if (so[i] > lim || so[i] < -lim) { printf("FAIL int16 ceiling broken: %d\n", so[i]); bad++; break; }
     }
@@ -5823,7 +5830,8 @@ _kc_block="$(sed -n '/^_kc_helper=/,/^# --- MGLRU working-set protection/p' "$RO
 for key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend kernel_rt_boost; do
   printf '%s\n' "$_kc_block" | grep -F "$key" >/dev/null || fail "$key not routed through profile/boot reapply"
 done
-printf '%s\n' "$_kc_block" | grep -F 'smart:smart|:smart) _kc_keys=' >/dev/null || fail 'Smart ownership branch missing'
+printf '%s\n' "$_kc_block" | grep -F 'smart:smart) _kc_keys=' >/dev/null || fail 'Smart ownership branch missing'
+printf '%s\n' "$_kc_block" | grep -F '*) _kc_keys="mglru_mode io_scheduler' >/dev/null || fail 'manual MGLRU/scheduler ownership branch missing'
 grep -Fq 'sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1' "$ROOT/service.sh" || fail 'post-boot system tweaks owner is not called'
 _direct="$(grep -RInE '> */proc/sys/kernel/(sched_autogroup_enabled|sched_child_runs_first)|sysctlw kernel\.(sched_autogroup_enabled|sched_child_runs_first)' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/runtime" "$ROOT/profiles" "$ROOT/common" 2>/dev/null | grep -v 'runtime/asb_kernel_controls.sh' || true)"
 [ -z "$_direct" ] || fail "competing direct scheduler writer: $_direct"
@@ -6107,7 +6115,8 @@ _direct="$(grep -n '> */sys/kernel/mm/lru_gen/enabled' "$ROOT/service.sh" "$ROOT
 [ -z "$_direct" ] || fail "a direct MGLRU writer bypasses the helper: $_direct"
 grep -Fq 'smart:smart|:smart) : ;;' "$ROOT/service.sh" || fail 'apply_vm does not leave Smart+smart to the tuner'
 grep -Fq 'asb_kernel_controls.sh" apply mglru_mode >/dev/null' "$ROOT/service.sh" || fail 'apply_vm does not route MGLRU through the helper'
-grep -Fq 'smart:smart|:smart) _kc_keys=' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'system tweaks stomp on the Smart tuner'
+grep -Fq 'smart:smart) _kc_keys=' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'system tweaks stomp on the Smart tuner'
+grep -Fq '*) _kc_keys="mglru_mode io_scheduler' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'manual MGLRU is not applied by system tweaks'
 ! grep -q '^[[:space:]]*#' <(tail -n +2 "$ROOT/runtime/asb_kernel_controls.sh") || fail 'comment lines in the helper'
 mkdir -p "$T/mod/config" "$T/mod/runtime" "$T/state" "$T/memo"
 cp "$ROOT/runtime/asb_kernel_controls.sh" "$T/mod/runtime/"

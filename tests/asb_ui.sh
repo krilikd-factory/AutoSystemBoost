@@ -3759,6 +3759,14 @@ for gone in ('html.asb-calm .app-name', 'html.asb-calm .logo-sphere-a', 'html.as
     assert gone not in sel, 'the idle page must keep this alive now: ' + gone
 for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'ld .pchk', 'stock-restoring'):
     assert spinner not in sel, 'a progress indicator would stop: ' + spinner
+# Automatic ui-jank may remove blur, but must not destroy the UFO/orbit/wordmark animation
+# timelines. Only the real OS reduced-motion media query is allowed to stop those clocks.
+auto = re.search(r'html\[data-asb-effects="reduced"\] :is\(([^)]*)\) \{\s*animation:none', s)
+assert auto, 'automatic reduced-effects animation rule not found'
+for header in ('.logo-sphere-a','.logo-sphere-b','.logo-inner','.app-name','.dot'):
+    assert header not in auto.group(1), 'ui-jank still freezes ' + header
+osrm = re.search(r'@media \(prefers-reduced-motion:\s*reduce\) \{([\s\S]*?)\n\}', s)
+assert osrm and '.logo-sphere-a' in osrm.group(1) and '.app-name' in osrm.group(1), 'OS reduced-motion ownership was lost'
 # every decorative loop named above still exists as an endless animation the rule can reach
 for cls, anim in (('.logo-sphere-a', 'asbBootSpin 7s linear infinite'), ('.logo-sphere-b', 'asbBootSpin 10s linear infinite reverse'),
                   ('.logo-inner', 'asbBootPulse 2.2s'), ('.app-name', 'asbSweep 5.5s'), ('.dot', 'pulse 2.5s ease-in-out infinite')):
@@ -3803,7 +3811,7 @@ advance(1200); chk(cls.has('asb-calm'), 'not calm ten seconds after the last scr
 process.exit(bad ? 1 : 0);
 JS
 node "$T/t.js" "$H" || fail 'calm timer'
-echo "PASS webui v66 calm decor: every visible header loop survives ten-second calm, only Smart glow idles, closed-page ownership and one bounded timer remain intact, spinners untouched"
+echo "PASS webui v66 calm decor: every visible header loop survives ten-second calm and automatic ui-jank, OS reduced-motion remains authoritative, closed-page ownership and one bounded timer remain intact"
 )
 
 t_webui_v66_startup_queue_runtime() (
@@ -4416,7 +4424,7 @@ function lvTopSecSync() {} function lvDrainHome() {} function lvTopSec() {} func
 EOF
   sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   sed -n '/^const METRIC_STEPS = /p' "$H"
-  for fn in fmtTempC setLiveLabel fmtStockLoad lvLoadShare lvDurDHM asbMetricPaint asbMetricStep asbThermalMetric asbLoadMetric asbDrainMetric asbRamMetric asbClockMetric asbTrendMetric asbModemMetric asbCeilMetric asbBatLevelMetric paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in fmtTempC setLiveLabel fmtStockLoad lvLoadShare lvDurDHM asbMetricPaint asbMetricStep asbThermalMetric asbLoadMetric asbDrainMetric asbRamMetric asbClockMetric asbTrendMetric asbModemMetric asbCeilMetric asbBatLevelMetric lviTrendSlope paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const kv = {
@@ -7790,7 +7798,7 @@ chk(buttons.filter(b=>b.classes.has('active')).length===5,'not all five switches
 chk(buttons.filter(b=>b.choice==='glass').every(b=>b.attrs['aria-pressed']==='true'&&b.attrs['aria-label']==='Liquid Glass theme'),'glass aria state/label');
 asbSetTheme('light'); chk(attrs['data-asb-theme']==='light'&&!('data-asb-glass' in attrs)&&store.asb_theme==='light'&&store.asb_glass_base==='light','Glass -> light remembers the light base');
 asbSetTheme('glass'); chk(attrs['data-asb-theme']==='light'&&attrs['data-asb-glass']==='1'&&store.asb_theme==='glass'&&store.asb_glass_base==='light','Light -> Glass produces light glass');
-chk(meta.content==='#f3f7f6','light Glass theme-color');
+chk(meta.content==='#f2f4f6','light Glass theme-color matches the solid canvas');
 asbSetTheme('dark'); chk(!('data-asb-theme' in attrs)&&!('data-asb-glass' in attrs)&&store.asb_theme==='dark'&&store.asb_glass_base==='dark','light Glass -> dark remembers the dark base');
 asbSetTheme('glass'); chk(!('data-asb-theme' in attrs)&&attrs['data-asb-glass']==='1'&&store.asb_theme==='glass'&&store.asb_glass_base==='dark','Dark -> Glass produces black glass');
 store.asb_glass_base='light'; asbPaintThemeControls();
@@ -10185,13 +10193,21 @@ for token in (
     '--glass-edge:rgba(70,85,80,.15)',
     '--glass-underlight:rgba(255,255,255,.50)',
     '--glass-wash:linear-gradient(135deg,rgba(255,255,255,.64),rgba(255,255,255,.18) 50%,rgba(244,248,255,.36))',
-    'linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%)',
+    '--glass-canvas-image:#000', '--glass-canvas-image:#edf4f1',
+    '--glass-scrim:#000', '--glass-scrim:#edf4f1',
 ):
     assert token in b, token
 # fix351: every painted surface family carries the lower inner edge light; the count is
 # exact so a silently dropped family fails here instead of on the device.
 assert b.count('inset 0 -1px 0 var(--glass-underlight)') == 10
-# The same canvas reaches drill-in pages; the status scrim has no hard opaque cutoff.
+# The same SOLID canvas reaches root/body/drill-in pages and the status scrim. Card materials
+# may keep their own washes; the canvas itself must not reintroduce radial/linear paint.
+for selector in ('html:root[data-asb-glass="1"] {', 'html:root[data-asb-glass="1"][data-asb-theme="light"] {'):
+    block = re.search(re.escape(selector) + r'([^}]*)\}', b)
+    assert block, selector
+    for prop in ('--glass-canvas-image', '--glass-scrim'):
+        value = re.search(re.escape(prop) + r':([^;]+);', block.group(1))
+        assert value and 'gradient' not in value.group(1), (selector, prop, value.group(1) if value else None)
 assert 'background:var(--glass-canvas-image) !important' in b
 assert 'html:root[data-asb-glass="1"] #reportPage,\nhtml:root[data-asb-glass="1"] #devicePage,\nhtml:root[data-asb-glass="1"] #zygiskPage' in b
 assert 'background:var(--glass-scrim)' in b
@@ -10256,7 +10272,7 @@ for bg, colors in {'#151c18':('#f2fff9','#b8cec4','#91aa9f'),
     for fg in colors:
         assert contrast(fg, bg) >= 4.5, (fg, bg, contrast(fg, bg))
 PY
-echo "PASS WebUI fix322 Liquid Glass: layered dark/light materials with ColorOS-style underlight and blur ladder (fix351), neutral floating chrome, quiet nesting, pressed states and no-blur/reduced-transparency/forced-colours fallbacks"
+echo "PASS WebUI fix322 Liquid Glass: solid dark/light canvas and scrim, layered card materials, neutral floating chrome, quiet nesting, pressed states and accessibility fallbacks"
 )
 
 t_webui_fix324_boot_intro() (
@@ -10270,18 +10286,16 @@ python3 - "$ROOT" <<'PY' || fail 'source/visual/localization contract'
 import json, re, sys
 from pathlib import Path
 root=Path(sys.argv[1]); s=(root/'webroot/index.html').read_text(encoding='utf-8')
-# Rejected on-device: a green full-screen wash. The dark base stays genuinely black;
-# fix351 adds only a faint NEUTRAL ambient (cool greys, no accent hue) over that base so
-# the backdrop blur has real texture, as on the ColorOS 17 reference surfaces.
+# Rejected on-device: every full-screen wash/gradient. Dark and light Glass use one
+# solid canvas/scrim colour; only the card material retains translucent washes.
 dark=re.search(r'html:root\[data-asb-glass="1"\] \{([\s\S]*?)\n\}',s).group(1)
-canvas=dark[dark.index('--glass-canvas-image:'):]
-canvas=canvas[:canvas.index(';')]
-assert canvas.endswith(',#000'), canvas
-assert 'radial-gradient' in canvas and '#151c18' not in dark
-# No accent hue in the dark ambient: green/teal light stays on controls, never the canvas.
-assert '130,157,143' not in canvas and '0,240,180' not in canvas and '0,124,99' not in canvas
 light=re.search(r'html:root\[data-asb-glass="1"\]\[data-asb-theme="light"\] \{([\s\S]*?)\n\}',s).group(1)
-assert 'radial-gradient' in light and 'linear-gradient(180deg,#e4e5f9' in light
+for block, colour in ((dark,'#000'),(light,'#edf4f1')):
+    for prop in ('--glass-canvas-image','--glass-scrim'):
+        value=re.search(re.escape(prop)+r':([^;]+);',block)
+        assert value and value.group(1)==colour,(prop,value.group(1) if value else None)
+assert '#151c18' not in dark
+# Material washes in this block are intentional; the two canvas/scrim values above are not gradients.
 mark=s[s.index('<div class="asb-boot-intro"'):s.index('<div class="status-bar-scrim"')]
 assert mark.count('id="asbBootIntro"')==1 and 'hidden aria-hidden="true"' in mark
 assert 'role="status"' in mark and 'aria-live="polite"' in mark
@@ -10384,7 +10398,7 @@ critical_start=s.index('<style>')
 critical_end=s.index('</style>',critical_start)+len('</style>')
 critical=s[critical_start:critical_end]
 assert 'html,body{background:#000}' in critical and 'html{color-scheme:dark}' in critical
-assert 'html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f3f7f6;color-scheme:light}' in critical
+assert 'html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f2f4f6;color-scheme:light}' in critical
 assert 'localStorage.getItem(\'asb_theme\')' in s[critical_end:s.index('<style>',critical_end)]
 assert s.index("link.rel = 'stylesheet'") > critical_end
 head=s[:s.index('<style>\n:root {')]
@@ -10941,9 +10955,8 @@ b = s[s.index(marker):s.index('/* WebViews without backdrop filtering', s.index(
 # Fixed pages do not contribute to body height: the root, not that short body, owns canvas.
 assert 'html:root[data-asb-glass="1"] { background:var(--glass-canvas-image); }' in b
 assert 'html:root[data-asb-glass="1"] .page,\nhtml:root[data-asb-glass="1"] .live-page,\nhtml:root[data-asb-glass="1"] .config-page' in b and 'background:transparent !important' in b
-# fix324: dark Glass keeps a genuinely black base; the coloured full-screen wash was
-# rejected on-device. fix351 layers only a faint neutral ambient over that base.
-assert 'radial-gradient(ellipse 70% 30% at 62% 46%,rgba(64,76,88,.05),transparent 70%),#000;' in s
+# Dark/light Glass now own an explicitly solid canvas; no ambient layer may return.
+assert '--glass-canvas-image:#000;' in s and '--glass-canvas-image:#edf4f1;' in s
 assert 'radial-gradient(ellipse 120% 48% at 0% 0%,rgba(130,157,143,.28)' not in s
 assert 'linear-gradient(180deg,#111713 0%,#050807 48%,#000 100%)' not in s
 # Parent dock keeps the shared floating material; child buttons cannot become loose circles.
@@ -12762,6 +12775,8 @@ global.CFG_ITEMS=[
  {key:'zygisk_ledger',type:'bool',def:'1',name:'Ledger',desc:'Ledger'}
 ];
 global._cfgVals={zygisk_enabled:'0',zygisk_hints:'1',zygisk_launch:'0',zygisk_ledger:'1'};
+global._selectedProfile='manual';global.ASB_TCP_ALGS=null;global.ASB_IO_SCHEDULERS=null;global._tcpAlgLoadStarted=true;global._isReference=true;
+eval(grab('cfgOptsFor'));eval(grab('cfgSmartOwner'));
 eval(between('const ZYGISK_CONTROL_KEYS','const CFG_GROUP_SECTIONS').replace(/^const /gm,'var '));
 eval(between('const CFG_REQUIRES = [','/* What else must change').replace(/^const /gm,'var '));
 eval(between('function cfgRenderRow','let _cfgSearch'));eval(grab('cfgRenderZygiskCard'));
@@ -13857,7 +13872,7 @@ assert "bfxEl('div', 'cfg-row bfx-card camtools-card cat-camera')" in h
 assert '.bfx-card.cfg-row.cat-camera .bfx-emblem { --tech-icon:var(--cat); color:var(--cat);' in h
 assert "camera: 'Processing, webcam, fast start'" in h
 row = h[h.index('function cfgRenderRow('):h.index('let _cfgSearch')]
-assert "const dBool = it.type === 'bool';" in row and "(dBool ? ['1', '0'] : (it.opts || Object.keys(dOpt)))" in row
+assert "const dBool = it.type === 'bool';" in row and "(dBool ? ['1', '0'] : (it.opts ? cfgOptsFor(it) : Object.keys(dOpt)))" in row
 assert "T('cfg_sw_on', 'On')" in row and "T('cfg_sw_off', 'Off')" in row
 hub = h[h.index('function cfgGroupHiddenKeys('):h.index('// Settings whose effect lands in a file')]
 assert 'const total = items.length + extras.length;' in hub and 'cfgHubExtrasEnsure();' in hub
@@ -13909,7 +13924,12 @@ for name, d in L.items():
             keys = set(c['descOpt'])
             if typ == 'bool': assert keys == {'1', '0'}, (name, k, keys)
             elif typ == 'range': assert all(re.fullmatch(r'-?[0-9]+', x) for x in keys), (name, k, keys)
-            else: assert opts and keys <= set(opts), (name, k, keys, opts)
+            else:
+                assert opts, (name, k, 'missing static seed options')
+                # TCP algorithms are discovered from the running kernel; descOpt also covers
+                # known custom-kernel names that cannot be listed in the static seed opts.
+                if not re.fullmatch(r'net_congestion(?:_(?:wifi|mobile))?', k):
+                    assert keys <= set(opts), (name, k, keys, opts)
             assert keys == set(en['cfg'][k]['descOpt']), (name, k, 'option set differs from English')
     for k in ('cool_gaming', 'smart_lab', 'ltpo_force', 'gnss_trim', 'wakelock_action', 'net_congestion_wifi', 'gms_freeze'):
         assert 'descOpt' in d['cfg'][k], (name, k)
@@ -14577,6 +14597,16 @@ const find=(e,cls)=>e.className===cls?e:(e.children||[]).map(c=>find(c,cls)).fin
  chk(find(b,'lvt-line').attrs.points.split(' ').length===3,'Smart did not chart CPU history');
  chk(find(b,'lvt-overall').attrs.x2==='296.0','overall regression line missing');
  chk(b.textContent.includes('30 °C → 32 °C')&&b.textContent.includes('+2.0'),'Smart summary: '+b.textContent);
+ /* The badge and dashed line share the native control slope even when the shorter visible
+  * WebUI series moves the other way. SVG Y grows downwards: warming means y2 < y1. */
+ _lviHist['smart:cpu']=[{t:1000,n:42},{t:31000,n:40},{t:61000,n:38}];
+ _smartTrendSlopePerMin=2.5;b=mk('div');lviTrendRender(b,'trend','green');
+ let overall=find(b,'lvt-overall').attrs;
+ chk(Number(overall.y2)<Number(overall.y1)&&b.textContent.includes('+2.5'),'warming badge would still have a cooling dashed line');
+ _smartTrendSlopePerMin=-2.5;b=mk('div');lviTrendRender(b,'trend','green');
+ overall=find(b,'lvt-overall').attrs;
+ chk(Number(overall.y2)>Number(overall.y1)&&b.textContent.includes('−2.5'),'cooling badge would still have a warming dashed line');
+ _smartTrendSlopePerMin=null;
  b=mk('div');lviTrendRender(b,'strend','amber');
  chk(b.textContent.includes('40 °C → 41 °C'),'Stock samples not used: '+b.textContent);
  chk(find(b,'lvt-chart').attrs.role==='img','chart has no accessible name');
@@ -14605,6 +14635,104 @@ JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI dev66: native-clock header, navigation-safe root timers, explicit system load band, measured+overall Trend charts for Smart/Stock, denser Glass popups, 13 locales'
+)
+
+
+t_webui_smart_scheduler_options_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI Smart/scheduler options: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'source/locales'
+import json,sys
+from pathlib import Path
+root=Path(sys.argv[1]); h=(root/'webroot/index.html').read_text()
+assert "const ASB_KERNEL_STATUS_KEYS = ['io_scheduler','mglru_mode'" in h
+assert 'function kernelSchedulerOptionsParse(txt)' in h
+assert "['stock','auto'].concat(ASB_IO_SCHEDULERS" in h
+assert h.index('main.appendChild(badge);') < h.index('const _smartOwner = cfgSmartOwner')
+assert "if (_selectedProfile !== 'smart' || !it) return null;" in h
+assert "it.key === 'mglru_mode' && v === 'smart'" in h
+assert "it.key === 'io_scheduler'" not in h[h.index('function cfgSmartOwner'):h.index('function cfgVerify',h.index('function cfgSmartOwner'))]
+for p in (root/'webroot/i18n').glob('*.json'):
+ d=json.loads(p.read_text()); c=d['cfg']['io_scheduler']
+ assert c['name'] and c['desc'] and all(k in c['descOpt'] for k in ('stock','auto','mq-deadline','kyber','bfq','none')),p.name
+ assert d['optFor']['io_scheduler']['stock'] and d['optFor']['io_scheduler']['auto']
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI Smart/scheduler runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const m=h.match(new RegExp('function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0]}
+for(const n of ['kernelSchedulerOptionsParse','cfgOptsFor','cfgSmartOwner'])eval(grab(n));
+let found=kernelSchedulerOptionsParse('io_scheduler_options|bfq kyber mq-deadline none bfq-mq\nio_scheduler_options|kyber bad/name UPPER x\n');
+if(found.join(',')!=='bfq,kyber,mq-deadline,none,bfq-mq,x')throw Error('discovery parse '+found);
+global.ASB_IO_SCHEDULERS=found;global.ASB_TCP_ALGS=null;global._tcpAlgLoadStarted=true;global._isReference=false;
+const opts=cfgOptsFor({key:'io_scheduler',opts:['stock','auto']});
+if(opts.join(',')!=='stock,auto,bfq,kyber,mq-deadline,none,bfq-mq,x')throw Error('bounded options '+opts);
+ASB_IO_SCHEDULERS=null;if(cfgOptsFor({key:'io_scheduler',opts:['stock','auto']}).join(',')!=='stock,auto')throw Error('unknown discovery offered unverified scheduler');
+global._selectedProfile='smart';global._cfgVals={dsp_outputs:'speaker',audio_profile:'stock'};
+const own=(key,v)=>cfgSmartOwner({key},v);
+if(own('mglru_mode','smart')!=='dynamic')throw Error('Smart MGLRU owner missing');
+for(const v of ['on','off','stock'])if(own('mglru_mode',v)!==null)throw Error('manual MGLRU incorrectly owned '+v);
+if(own('wifi_powersave','screen_off')!=='dynamic'||own('wifi_powersave','always')!=='dynamic'||own('wifi_powersave','off')!==null)throw Error('Wi-Fi ownership');
+for(const k of ['net_screen_off_lte','net_lte_light'])if(own(k,'1')!=='radio'||own(k,'0')!==null)throw Error('radio ownership '+k);
+if(own('dsp_loudness','30')!=='thermal'||own('dsp_loudness','0')!==null||own('dsp_loudness','31')!==null)throw Error('DSP ownership');
+_cfgVals.dsp_outputs='off';if(own('dsp_loudness','30')!==null)throw Error('disabled DSP has owner');_cfgVals.dsp_outputs='speaker';_cfgVals.audio_profile='eq_compat';if(own('dsp_loudness','30')!==null)throw Error('EQ compatibility has owner');
+if(own('io_scheduler','auto')!==null||own('kernel_bore','auto')!==null)throw Error('non-dynamic card marked Smart-owned');
+_selectedProfile='balanced';if(own('mglru_mode','smart')!==null||own('wifi_powersave','always')!==null)throw Error('non-Smart profile marked Smart-owned');
+console.log('ok');
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI Smart/scheduler options: runtime-only discovery, bounded custom names, conditional Smart indicators and manual MGLRU ownership in 13 locales'
+)
+
+
+t_webui_tcp_congestion_discovery_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI TCP congestion discovery: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'source/locales/runtime availability contract'
+import json,sys
+from pathlib import Path
+root=Path(sys.argv[1]); h=(root/'webroot/index.html').read_text(); n=(root/'runtime/asb_net_apply.sh').read_text()
+assert "cat /proc/sys/net/ipv4/tcp_available_congestion_control" in h
+assert "return ['auto'].concat(ASB_TCP_ALGS.filter" in h
+assert "case \" $_avail \" in" in n and 'tcp_available_congestion_control' in n
+assert 'congctl "$_want"' in n and '_sysctl_w net.ipv4.tcp_congestion_control "$_cc"' in n
+assert "cfg_net_cc_discovered" in h and 'v.textContent = optionDesc' in h
+for p in (root/'webroot/i18n').glob('*.json'):
+ d=json.loads(p.read_text()); assert d.get('cfg_net_cc_discovered') and d.get('cfg_io_scheduler_discovered')
+ for key in ('net_congestion','net_congestion_wifi','net_congestion_mobile'):
+  opts=d['cfg'][key]['descOpt']
+  assert opts.get('bic') and opts.get('westwood') and opts.get('bbr') and opts.get('cubic'),(p.name,key)
+  desc=d['cfg'][key]['desc']
+  assert '⚡' in desc and 'qdisc' in desc and 'RTT' in desc,(p.name,key,'missing path caveats')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI TCP runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0]}
+eval(grab('cfgLoadTcpAlgorithms'));eval(grab('cfgOptsFor'));
+let reads=0,renders=0;global.run=async cmd=>{reads++;if(!cmd.includes('tcp_available_congestion_control'))throw Error('wrong probe '+cmd);return{stdout:'cubic bbr bic westwood reno dctcp vegas custom_cc bad/name UPPER cubic\n'}};
+global.cfgRender=()=>renders++;global.ASB_TCP_ALGS=null;global._tcpAlgLoadStarted=false;global.ASB_IO_SCHEDULERS=[];global._isReference=false;
+(async()=>{
+ await cfgLoadTcpAlgorithms();
+ if(reads!==1||renders!==1)throw Error('discovery lifecycle '+reads+'/'+renders);
+ await cfgLoadTcpAlgorithms();if(reads!==1)throw Error('duplicate probe');
+ for(const key of ['net_congestion','net_congestion_wifi','net_congestion_mobile']){
+  const got=cfgOptsFor({key,opts:['auto']}).join(',');
+  if(got!=='auto,cubic,bbr,bic,westwood,reno,dctcp,vegas,custom_cc')throw Error(key+' '+got);
+ }
+ console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI TCP congestion discovery: BIC, Westwood and other kernel-exposed algorithms on all three cards, unsafe names filtered, one read-only probe, localized path/qdisc caveats'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
