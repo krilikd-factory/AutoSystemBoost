@@ -3800,5 +3800,8 @@
   "t_cfg_restored": " · original value restored",
   "t_cfg_stock_unowned": " · stock value left untouched",
   "t_cfg_restore_failed": "original value could not be restored",
-  "t_cfg_write_rejected": "the ROM did not confirm the setting"
+  "t_cfg_write_rejected": "the ROM did not confirm the setting",
+  "lvp_system_band": "System: {band}",
+  "lvi_trend_chart_wait": "The diagram appears after two temperature readings in the same window.",
+  "lvi_trend_chart_range": "%1 °C → %2 °C"
 }

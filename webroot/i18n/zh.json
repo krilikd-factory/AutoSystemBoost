@@ -3906,5 +3906,8 @@
   "t_cfg_restored": " · 已恢复原值",
   "t_cfg_stock_unowned": " · 未修改 Stock 值",
   "t_cfg_restore_failed": "无法恢复原值",
-  "t_cfg_write_rejected": "系统未确认该设置"
+  "t_cfg_write_rejected": "系统未确认该设置",
+  "lvp_system_band": "系统：{band}",
+  "lvi_trend_chart_wait": "在同一时间窗口内完成两次温度测量后显示图表。",
+  "lvi_trend_chart_range": "%1 °C → %2 °C"
 }

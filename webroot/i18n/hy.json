@@ -3906,5 +3906,8 @@
   "t_cfg_restored": " · նախկին արժեքը վերականգնված է",
   "t_cfg_stock_unowned": " · Stock արժեքը չի փոխվել",
   "t_cfg_restore_failed": "նախկին արժեքը չհաջողվեց վերականգնել",
-  "t_cfg_write_rejected": "համակարգը չհաստատեց կարգավորումը"
+  "t_cfg_write_rejected": "համակարգը չհաստատեց կարգավորումը",
+  "lvp_system_band": "Համակարգ՝ {band}",
+  "lvi_trend_chart_wait": "Գծապատկերը կհայտնվի նույն ժամանակահատվածում ջերմաստիճանի երկու չափումից հետո։",
+  "lvi_trend_chart_range": "%1 °C → %2 °C"
 }

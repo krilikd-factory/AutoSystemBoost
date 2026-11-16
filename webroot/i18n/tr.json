@@ -3906,5 +3906,8 @@
   "t_cfg_restored": " · özgün değer geri yüklendi",
   "t_cfg_stock_unowned": " · Stock değeri değiştirilmedi",
   "t_cfg_restore_failed": "özgün değer geri yüklenemedi",
-  "t_cfg_write_rejected": "ROM ayarı doğrulamadı"
+  "t_cfg_write_rejected": "ROM ayarı doğrulamadı",
+  "lvp_system_band": "Sistem: {band}",
+  "lvi_trend_chart_wait": "Grafik, aynı zaman penceresinde iki sıcaklık ölçümünden sonra görünür.",
+  "lvi_trend_chart_range": "%1 °C → %2 °C"
 }

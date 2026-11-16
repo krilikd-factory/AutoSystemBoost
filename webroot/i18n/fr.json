@@ -3906,5 +3906,8 @@
   "t_cfg_restored": " · valeur d’origine restaurée",
   "t_cfg_stock_unowned": " · valeur Stock inchangée",
   "t_cfg_restore_failed": "impossible de restaurer la valeur d’origine",
-  "t_cfg_write_rejected": "le ROM n’a pas confirmé le réglage"
+  "t_cfg_write_rejected": "le ROM n’a pas confirmé le réglage",
+  "lvp_system_band": "Système : {band}",
+  "lvi_trend_chart_wait": "Le graphique apparaît après deux relevés de température dans la même fenêtre.",
+  "lvi_trend_chart_range": "%1 °C → %2 °C"
 }
