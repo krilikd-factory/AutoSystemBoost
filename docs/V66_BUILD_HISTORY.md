@@ -4,6 +4,39 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 - foreground-game provenance and WebUI motion/read coherence
+
+Input: the dev65 buildfix1 source, a full-day ASB capture and diagnostic report, and the owner's
+six WebUI/runtime findings. The game finding is a code-level repair supported by the capture, not
+a measured on-device smoothness result.
+
+- **Foreground game provenance:** the capture showed Brawl Stars jank while Smart remained
+  `MODERATE`, with `pkg_detect_ok=0` and `pkg_source=0`; Android's own snapshot simultaneously
+  named the game in `topResumedActivity` / `ResumedActivity`. The top-app resolver now accepts an
+  adj-0 group only when exactly one unique positively classified visible game is present. Two
+  visible games stay ambiguous, and a non-adj-0 background game cannot outrank the visible app.
+  The resumed-ActivityRecord fallback recognizes current ColorOS and legacy field names. New
+  counters expose locally resolved game groups. No frequencies, thermal limits, vendor thermal
+  ownership, Safe mode or static device tables changed.
+- **Header motion:** visible UFO/header CSS animations remain on the native animation clock after
+  the ten-second calm transition. The existing 100 ms ambient ticker now advances only `ai-spin`
+  and defensively excludes boot/header elements; hidden-page, closed-page and reduced-effects
+  ownership remains intact.
+- **Navigation:** the existing Monitor and background root-read timers now defer around the
+  existing page-transition deadline. No second poller, persistent worker or interval was added.
+- **Monitor semantics and Trend:** the foreground-app Load sheet labels its pressure bar
+  `System: {band}` so it cannot be read as a second app-class verdict. Trend now draws the existing
+  measured temperature series plus a dashed least-squares overall-direction line for Smart and
+  Stock, using their existing sample owners. Fewer than two valid readings produce an honest wait
+  message, not a fabricated diagram.
+- **Liquid Glass:** strong/popup surfaces use 0.90 opacity in dark and light themes; the existing
+  blur/material structure and component geometry are unchanged.
+- **Regressions:** targeted runtime tests cover current/legacy ActivityRecord parsing, ambiguous
+  top-app groups, background-game exclusion, native-clock header ownership, navigation-timer
+  deferral, Smart/Stock trend data, one-point no-chart behaviour, explicit system-load wording and
+  all 13 locale files. Browser/host checks do not establish physical ColorOS WebView behaviour or
+  improved game frame times.
+
 ## V66 dev65 buildfix1 - coherent WebUI/config metadata for CI
 
 Input: the three failed GitHub Actions shards from the owner's build log. Every shard stopped in
