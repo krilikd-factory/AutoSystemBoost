@@ -16,7 +16,7 @@
  * following parser-local script selects the saved light palette before first paint. */
 html,body{background:#000}
 html{color-scheme:dark}
-html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f3f7f6;color-scheme:light}
+html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f2f4f6;color-scheme:light}
 </style>
 <script>(function(){try{var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))document.documentElement.setAttribute('data-asb-theme','light');if(t==='glass')document.documentElement.setAttribute('data-asb-glass','1');}catch(e){}})();</script>
 <script>document.documentElement.classList.add('asb-home-pending');</script>
@@ -2918,6 +2918,25 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
   color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.06);
 }
+.cfg-smart-owner {
+  display:inline-block;
+  margin:6px 0 0 6px;
+  padding:2px 7px;
+  border:1px solid rgba(0,240,180,.24);
+  border-radius:7px;
+  color:var(--accent);
+  background:rgba(0,240,180,.07);
+  font-size:9px;
+  font-weight:750;
+  letter-spacing:.35px;
+  line-height:1.35;
+  vertical-align:top;
+}
+html[data-asb-theme="light"] .cfg-smart-owner {
+  color:#006c56;
+  border-color:rgba(0,124,99,.24);
+  background:rgba(0,124,99,.08);
+}
 .cfg-collapse {
   display: grid;
   grid-template-rows: 0fr;
@@ -5033,9 +5052,7 @@ html[data-asb-glass="1"][data-asb-theme="light"] {
   color-scheme:light;
 }
 html[data-asb-glass="1"][data-asb-theme="light"] body {
-  background:
-    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,124,99,.10),transparent 68%),
-    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(101,239,201,.15),transparent 72%),#f2f4f6 !important;
+  background:var(--bg) !important;
 }
 html[data-asb-glass="1"][data-asb-theme="light"] .page,
 html[data-asb-glass="1"][data-asb-theme="light"] .live-page,
@@ -5481,10 +5498,7 @@ html:root[data-asb-glass="1"] {
    * fix351: a faint NEUTRAL ambient (cool greys, no accent hue) now sits under the
    * black, as on the ColorOS 17 surfaces, so the 22px backdrop blur has real texture
    * to work with instead of blurring a flat void into flat grey. */
-  --glass-canvas-image:
-    radial-gradient(ellipse 120% 52% at 8% -8%,rgba(118,138,158,.085),transparent 68%),
-    radial-gradient(ellipse 96% 44% at 104% 90%,rgba(96,116,108,.07),transparent 72%),
-    radial-gradient(ellipse 70% 30% at 62% 46%,rgba(64,76,88,.05),transparent 70%),#000;
+  --glass-canvas-image:#000;
   --glass-surface:rgba(12,18,15,.52);
   --glass-surface-quiet:rgba(8,13,10,.42);
   --glass-surface-strong:rgba(10,15,13,.90);
@@ -5502,7 +5516,7 @@ html:root[data-asb-glass="1"] {
   --glass-wash:linear-gradient(135deg,rgba(255,255,255,.115),rgba(255,255,255,.024) 46%,rgba(196,214,255,.05));
   --glass-shadow:0 12px 30px rgba(0,0,0,.25);
   --glass-blur:blur(22px) saturate(1.28);
-  --glass-scrim:linear-gradient(180deg,rgba(0,0,0,.96),rgba(0,0,0,.76) 62%,transparent);
+  --glass-scrim:#000;
   --surface:var(--glass-surface);
   --surface-hover:rgba(255,255,255,.10);
   --tabbar-bg:var(--glass-surface-strong);
@@ -5512,11 +5526,7 @@ html:root[data-asb-glass="1"] {
   --cap-shadow:0 8px 24px rgba(0,0,0,.24),inset 0 1px 0 var(--glass-highlight);
 }
 html:root[data-asb-glass="1"][data-asb-theme="light"] {
-  --glass-canvas-image:
-    radial-gradient(ellipse 100% 44% at 4% 0%,rgba(255,255,255,.82),transparent 72%),
-    radial-gradient(ellipse 110% 46% at 100% 45%,rgba(125,145,180,.09),transparent 74%),
-    radial-gradient(ellipse 84% 40% at 100% 78%,rgba(0,124,99,.075),transparent 74%),
-    linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%);
+  --glass-canvas-image:#edf4f1;
   --glass-surface:rgba(255,255,255,.42);
   --glass-surface-quiet:rgba(255,255,255,.32);
   --glass-surface-strong:rgba(250,252,251,.90);
@@ -5528,7 +5538,7 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] {
   --glass-underlight:rgba(255,255,255,.50);
   --glass-wash:linear-gradient(135deg,rgba(255,255,255,.64),rgba(255,255,255,.18) 50%,rgba(244,248,255,.36));
   --glass-shadow:0 12px 30px rgba(40,50,65,.11);
-  --glass-scrim:linear-gradient(180deg,rgba(237,240,244,.96),rgba(237,240,244,.74) 62%,transparent);
+  --glass-scrim:#edf4f1;
   --text-tertiary:#65717b;
   --border-active:rgba(0,124,99,.40);
   --cap-shadow:0 8px 24px rgba(40,50,65,.10),inset 0 1px 0 var(--glass-highlight);
@@ -6191,7 +6201,12 @@ html[data-asb-effects="reduced"] .live-info-src {
   -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.10) !important;
 }
-html[data-asb-effects="reduced"] :is(.logo-sphere-a,.logo-sphere-b,.logo-inner,.app-name,.dot,.dot::after,.zygisk-header-dot,.zygisk-header-dot::after,.dev-zygisk-link-dot,.dev-zygisk-link-dot::after,.pico-smart .ai-glow) {
+/* Automatic jank fallback reduces expensive glass work, but must never destroy the visible
+ * header's native animation clocks. The old rule did exactly that after three slow UI frames:
+ * UFO/orbits then stayed frozen until their nodes were recreated. Real OS reduced-motion is
+ * still honoured by the media query above; temporary rendering pressure is not a motion
+ * preference and no longer stops the emblem, wordmark or status indicators. */
+html[data-asb-effects="reduced"] :is(.zygisk-header-dot,.zygisk-header-dot::after,.dev-zygisk-link-dot,.dev-zygisk-link-dot::after,.pico-smart .ai-glow) {
   animation:none !important;
 }
 </style>
@@ -7722,7 +7737,7 @@ function asbPaintThemeControls() {
   if (theme === 'glass') document.documentElement.setAttribute('data-asb-glass', '1');
   else document.documentElement.removeAttribute('data-asb-glass');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', light ? '#f3f7f6' : '#000000');
+  if (meta) meta.setAttribute('content', light ? '#f2f4f6' : '#000000');
   document.querySelectorAll('[data-theme-choice]').forEach(function(btn) {
     const choice = btn.getAttribute('data-theme-choice');
     const active = choice === theme;
@@ -9661,6 +9676,20 @@ function lviTrendData(key) {
     return { t: Number(x.t), n: Number(key === 'strend' ? x.c : x.n) };
   }).filter(function (x) { return x.t > 0 && Number.isFinite(x.n); }).sort(function (a, b) { return a.t - b.t; });
 }
+/* One direction calculation for the Stock badge and chart. Smart is different by design:
+ * its badge is the governor's own control signal, not a second estimate made by the page.
+ * The dashed Smart line and rate therefore use that exact signal; the solid line remains
+ * the measured CPU history visible to WebUI. This prevents a warming badge with a dashed
+ * cooling line merely because the native governor and the page use different windows. */
+var _smartTrendSlopePerMin = null;
+function lviTrendSlope(h) {
+  if (!h || h.length < 2) return 0;
+  const mt = h.reduce(function (p, x) { return p + x.t; }, 0) / h.length;
+  const mv = h.reduce(function (p, x) { return p + x.n; }, 0) / h.length;
+  let num = 0, den = 0;
+  h.forEach(function (x) { num += (x.t - mt) * (x.n - mv); den += (x.t - mt) * (x.t - mt); });
+  return den > 0 ? num / den * 60000 : 0;
+}
 function lviTrendRender(box, key, color) {
   box.textContent = '';
   const h = lviTrendData(key);
@@ -9672,13 +9701,12 @@ function lviTrendRender(box, key, color) {
   }
   const mt = h.reduce(function (p, x) { return p + x.t; }, 0) / h.length;
   const mv = h.reduce(function (p, x) { return p + x.n; }, 0) / h.length;
-  let num = 0, den = 0;
-  h.forEach(function (x) { num += (x.t - mt) * (x.n - mv); den += (x.t - mt) * (x.t - mt); });
-  const slope = den > 0 ? num / den : 0;
+  const smartSignal = key === 'trend' && _selectedProfile === 'smart' && Number.isFinite(_smartTrendSlopePerMin);
+  const perMin = smartSignal ? _smartTrendSlopePerMin : lviTrendSlope(h);
+  const slope = perMin / 60000;
   const fit0 = mv + (t0 - mt) * slope, fit1 = mv + (t1 - mt) * slope;
   const values = h.map(function (x) { return x.n; }).concat([fit0, fit1]);
   const lo = Math.min.apply(null, values), hi = Math.max.apply(null, values), range = (hi - lo) || 1;
-  const perMin = slope * 60000;
   const rangeText = T('lvi_trend_chart_range', '%1 °C → %2 °C')
     .replace('%1', lviFmt(h[0].n)).replace('%2', lviFmt(h[h.length - 1].n));
   const rateText = T('lvi_trend_rate', '%1 °C per minute over the last %2 s')
@@ -9963,6 +9991,7 @@ const CFG_FILE = MD + '/config/governor.conf';
  * Keys mirrored into the external snapshot when changed here.
  */
 const SNAP_KEYS = [
+  'io_scheduler',
   'wifi_powersave',
   'net_wifi_leave',
   'ltpo_force',
@@ -10098,8 +10127,8 @@ const CFG_ITEMS = [
     desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU.\n\n🔋 Battery life: Auto or On\n🎛️ Bluetooth equaliser apps: Off\n✋ Not sure: Auto' },
   { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['off','all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
     desc:'Choose which outputs ASB DSP may process: the built-in speaker, wired headphones/USB DACs, or Bluetooth. Unavailable outputs are ignored. Off bypasses the whole DSP while preserving every level for later. Bluetooth processing can move playback away from hardware offload and increase screen-off CPU use; exclude Bluetooth if long listening sessions matter more than the effect.' },
-  { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
-    desc:'ASB DSP adds up to +25 dB of gain, with optional compression and a final sample-peak limiter. Start at +3 dB: high settings can sound heavily compressed even when peaks are limited. The first enable needs a reboot. DSP is bypassed in the external-EQ audio profile. On the speaker, gain is reduced when the battery reaches 42 °C and restored below 40 °C; wired and Bluetooth gains are not reduced by this rule.' },
+  { key:'dsp_loudness', type:'range', def:'0', min:0, max:30, step:1, name:'DSP Loudness',
+    desc:'ASB DSP adds up to +30 dB of gain, with optional compression and a final sample-peak limiter. Start at +3 dB: high settings can sound heavily compressed even when peaks are limited. The first enable needs a reboot. DSP is bypassed in the external-EQ audio profile. On the speaker, gain is reduced when the battery reaches 42 °C and restored below 40 °C; wired and Bluetooth gains are not reduced by this rule. Values above +25 dB require DSP libraries rebuilt from this source; old prebuilts remain capped at +25 dB.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
     desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
   { key:'dsp_voice', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Voice Tone',
@@ -10171,11 +10200,11 @@ const CFG_ITEMS = [
   { key:'net_lte_light', type:'bool', def:'0', name:'5G Only When Needed',
     desc:'With the screen on, switches from 5G to LTE after three minutes of light traffic below 2 Mbit/s and back to 5G for heavy traffic. Not during calls, tethering, games or Wi-Fi.\n\n🔋 Battery life: On\n📶 Fastest mobile data: Off\n✋ Not sure: Off' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
-    desc:'How downloads ramp up on links the Wi-Fi and mobile cards do not cover: USB and Bluetooth tethering, VPN, Ethernet.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: Stock' },
+    desc:'How downloads ramp up on links the Wi-Fi and mobile cards do not cover: USB and Bluetooth tethering, VPN, Ethernet.\n\n🔋 Autonomy: no universal winner\n⚡ Performance: depends on RTT, loss, buffers and qdisc\n✋ Not sure: Stock' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
-    desc:'Download ramp for Wi-Fi only.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: As global' },
+    desc:'Download ramp for Wi-Fi only.\n\n🔋 Autonomy: no universal winner\n⚡ Performance: depends on RTT, loss, buffers and qdisc\n✋ Not sure: As global' },
   { key:'net_congestion_mobile', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 mobile',
-    desc:'Download ramp for mobile data only. bbr often helps on mobile links with loss and changing delay.\n\n🔋 Battery life: no measurable difference\n⚡ Performance: bbr\n✋ Not sure: As global' },
+    desc:'Download ramp for mobile data only. bbr often helps on mobile links with loss and changing delay.\n\n🔋 Autonomy: no universal winner\n⚡ Performance: depends on RTT, loss, buffers and qdisc\n✋ Not sure: As global' },
   { key:'net_qdisc', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 other links',
     desc:'How packets queue on links the Wi-Fi and mobile cards do not cover.\n\n🔋 Battery life: no measurable difference\n⚡ Low latency: fq_codel\n✋ Not sure: Stock' },
   { key:'net_qdisc_wifi', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 WiFi',
@@ -10253,6 +10282,8 @@ const CFG_ITEMS = [
     desc:'In the Battery profile a game counts as ordinary heavy load instead of switching to the gaming state with its higher limits. Other profiles are not affected.\n\n🔋 Battery life: On\n⚡ Performance: Off\n✋ Not sure: On' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['off','safe','aggressive'], name:'Background Trim Level',
     desc:'How strongly ASB holds back apps you are not using: rarely used apps go to stricter Android standby buckets. Calls, messages, alarms and the keyboard stay protected.\n\n🔋 Battery life: Aggressive\n🔔 Notifications on time: Off or Safe\n✋ Not sure: Safe' },
+  { key:'io_scheduler', type:'enum', def:'stock', opts:['stock','auto'], icon:'kernel', group:'kernel', cat:'tune',
+    name:'I/O scheduler', desc:'Chooses only schedulers exposed by each block device. Auto prefers mq-deadline in Balanced/Smart/Battery and kyber in Performance, using only discovered fallbacks. Stock restores the exact per-device baseline. An unavailable explicit choice fails without substitution.\n\n🔋 Balanced default: Auto\n⚡ Performance policy: kyber when exposed\n✋ Not sure: Stock' },
   { key:'mglru_mode', type:'seg', def:'smart', stock:'stock',
     opts:['stock','off','on','smart'], name:'MGLRU Mode', cat:'battery',
     desc:'How the kernel picks which memory to free when RAM runs low. MGLRU is the newer method: it is designed to keep the apps you use in memory more reliably and to need less CPU work for reclaiming.\n\n🔋 Battery life: Smart\n⚡ Performance: On\n✋ Not sure: Smart (the default)' },
@@ -10501,7 +10532,7 @@ const CFG_GROUP_OF = {
    * so it never rendered on the hub or in any category; search was the only way in. */
   net_wifi_leave:'net',
   /* Each advanced owner has one hub destination; diagnostics remains a separate read-only page. */
-  mglru_mode:'kernel', kernel_mglru_min_ttl:'kernel', kernel_timer_migration:'kernel', kernel_hrtimer_migration:'kernel', kernel_lpm_prediction:'kernel',
+  io_scheduler:'kernel', mglru_mode:'kernel', kernel_mglru_min_ttl:'kernel', kernel_timer_migration:'kernel', kernel_hrtimer_migration:'kernel', kernel_lpm_prediction:'kernel',
   kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel', kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel', kernel_usb_autosuspend:'kernel', kernel_rt_boost:'kernel', kernel_bore:'kernel',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'feel',
@@ -10595,7 +10626,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'controls', icon:'kernel', titleKey:'cfg_kernel_section_controls',
       title:'Kernel management', hintKey:'cfg_kernel_section_controls_hint',
       hint:'Registered kernel controls and the optional exact-name wakeup list live together. Availability and live readback come from the running kernel.',
-      keys:['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'], card:'wakeup' }
+      keys:['io_scheduler','mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'], card:'wakeup' }
   ],
   zygisk: [
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
@@ -11692,7 +11723,7 @@ function asbKernelControlVerdict(status, live, mode) {
 /* Settings → System → Kernel management. One on-demand batch reads only the registered
  * control owner and wakeup owner. Read-only kernel evidence belongs to Device Diagnostics.
  * No timer, polling worker, duplicate diagnostics probe or direct browser sysfs write. */
-const ASB_KERNEL_STATUS_KEYS = ['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'];
+const ASB_KERNEL_STATUS_KEYS = ['io_scheduler','mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'];
 let _kernelPanel = { loaded:false, loading:false, controls:Object.create(null), wakeup:null };
 let _wbDraft = null, _wbBusy = false;
 let _wbSourceView = { open:false, query:'', filter:'all', sort:'events' };
@@ -11705,6 +11736,16 @@ function kernelControlParse(txt) {
     out[p[0]] = { state:p[1], mode:p[2], live:p[3], baseline:p[4] };
   });
   return out;
+}
+function kernelSchedulerOptionsParse(txt) {
+  const found = [];
+  String(txt || '').split(/\r?\n/).forEach(function (line) {
+    if (line.indexOf('io_scheduler_options|') !== 0) return;
+    line.slice(21).split(/\s+/).forEach(function (name) {
+      if (/^[a-z0-9_-]{1,32}$/.test(name) && found.indexOf(name) < 0) found.push(name);
+    });
+  });
+  return found;
 }
 function kernelWakeupParse(txt) {
   const wb = { node:'unknown', policy:'unknown', events:'unknown', abi:'legacy', ruleStats:'not_exposed',
@@ -11756,6 +11797,7 @@ async function kernelPanelLoad(force) {
       ['wakeup', 'sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh') + ' status']
     ]);
   } catch (e) {}
+  ASB_IO_SCHEDULERS = b && b.controls && b.controls.errno === 0 ? kernelSchedulerOptionsParse(b.controls.stdout) : null;
   _kernelPanel.controls = b && b.controls && b.controls.errno === 0 ? kernelControlParse(b.controls.stdout) : Object.create(null);
   _kernelPanel.wakeup = b && b.wakeup && b.wakeup.errno === 0 ? kernelWakeupParse(b.wakeup.stdout) : null;
   _kernelPanel.loaded = true;
@@ -12403,7 +12445,7 @@ async function cfgLoadCaps() {
 const CFG_ICONS = {
   wifi_powersave:'wifipm',
   net_wifi_leave:'wifileave',
-  mglru_mode:'mglru_mode', kernel_mglru_min_ttl:'mglru_ttl', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
+  io_scheduler:'kernel', mglru_mode:'mglru_mode', kernel_mglru_min_ttl:'mglru_ttl', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
   kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend', kernel_rt_boost:'rt_boost', kernel_bore:'bore_scheduler',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
@@ -12790,6 +12832,22 @@ function cfgScanLabel(v) {
   const m = { 1: 10, 2: 5, 3: 2, 5: 30 }[v];
   return m ? T('wst_every', 'every %s min').replace('%s', m) : String(v);
 }
+/* Smart ownership is deliberately narrower than "a setting Smart reads". Policy switches,
+ * limits and guards remain user-controlled. This badge appears only where the running Smart
+ * runtime actually changes a live value after the user's selection: dynamic MGLRU, the
+ * opted-in Wi-Fi/LTE screen state transitions and DSP thermal back-off. It is separate from
+ * cfgStatus/kernel evidence, so an apply failure can never be hidden by a green Smart tag. */
+function cfgSmartOwner(it, cur) {
+  if (_selectedProfile !== 'smart' || !it) return null;
+  const v = String(cur == null ? '' : cur);
+  if (it.key === 'mglru_mode' && v === 'smart') return 'dynamic';
+  if (it.key === 'wifi_powersave' && (v === 'screen_off' || v === 'always')) return 'dynamic';
+  if ((it.key === 'net_screen_off_lte' || it.key === 'net_lte_light') && v === '1') return 'radio';
+  if (it.key === 'dsp_loudness' && /^([1-9]|[12][0-9]|30)$/.test(v) &&
+      String(_cfgVals.dsp_outputs || 'all') !== 'off' &&
+      String(_cfgVals.audio_profile || 'stock') !== 'eq_compat') return 'thermal';
+  return null;
+}
 function cfgStatus(it, cur) {
   // returns {cls, text} — a short colored badge describing the active state Kernel reality
   // first.
@@ -13149,7 +13207,7 @@ const APPLY_MODE = {
   net_wifi_leave: APPLY_LIVE,
   /* Live: asb_system_tweaks writes the sysfs node on save, and the value can be read
      straight back from /sys/kernel/mm/lru_gen/min_ttl_ms - no reboot, verifiable. */
-  mglru_hold: APPLY_LIVE, mglru_mode: APPLY_LIVE, kernel_mglru_min_ttl: APPLY_LIVE, kernel_timer_migration: APPLY_LIVE, kernel_sched_nr_migrate: APPLY_LIVE, kernel_sched_stats: APPLY_LIVE,
+  mglru_hold: APPLY_LIVE, io_scheduler: APPLY_LIVE, mglru_mode: APPLY_LIVE, kernel_mglru_min_ttl: APPLY_LIVE, kernel_timer_migration: APPLY_LIVE, kernel_sched_nr_migrate: APPLY_LIVE, kernel_sched_stats: APPLY_LIVE,
   kernel_sched_autogroup: APPLY_LIVE, kernel_sched_child_runs_first: APPLY_LIVE,
   kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE, kernel_rt_boost: APPLY_LIVE, kernel_bore: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
@@ -13267,6 +13325,7 @@ var _profSwitchAt = 0;
 // Drop options this device should not be offered. Done at render rather than in the item
 // list so the same build serves every model.
 let ASB_TCP_ALGS = null;
+let ASB_IO_SCHEDULERS = null;
 let _tcpAlgLoadStarted = false;
 async function cfgLoadTcpAlgorithms() {
   if (_tcpAlgLoadStarted) return;
@@ -13285,6 +13344,11 @@ function cfgOptsFor(it) {
     if (ASB_TCP_ALGS !== null)
       return ['auto'].concat(ASB_TCP_ALGS.filter(x => x !== 'auto'));
     return ['auto'];
+  }
+  if (it.key === 'io_scheduler') {
+    if (ASB_IO_SCHEDULERS !== null)
+      return ['stock','auto'].concat(ASB_IO_SCHEDULERS.filter(x => x !== 'stock' && x !== 'auto'));
+    return ['stock','auto'];
   }
   if (it.key === 'ui_effects_level' && !_isReference) {
     return it.opts.filter(function(o) { return o !== 'flat'; });
@@ -13398,6 +13462,19 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       cfgVerify(it.key, badge);
     }
     main.appendChild(badge);
+    const _smartOwner = cfgSmartOwner(it, cur);
+    if (_smartOwner) {
+      const so = document.createElement('span');
+      so.className = 'cfg-smart-owner';
+      so.textContent = T('cfg_smart_owner', 'SMART · AUTO');
+      const _smartWhy = {
+        dynamic:'Smart dynamically changes this live value within the mode you selected. Do not force it manually: that would fight the governor. Choose a manual value or another profile to take ownership back.',
+        radio:'Smart performs this opted-in radio transition with screen and traffic state. Keep the policy enabled rather than repeatedly toggling it; turn it off or leave Smart to take ownership back.',
+        thermal:'Your gain is the requested level; Smart may temporarily reduce it on the speaker when the battery is hot. Do not raise it to compensate for thermal protection. Leave Smart or set DSP Loudness to 0 to take ownership back.'
+      };
+      so.title = T('cfg_smart_owner_' + _smartOwner, _smartWhy[_smartOwner]);
+      main.appendChild(so);
+    }
     top.appendChild(main);
 
     if (it.type === 'bool') {
@@ -13750,15 +13827,20 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       const ul = document.createElement("div");
       ul.className = "cfg-desc-opts";
       const dBool = it.type === 'bool';
-      (dBool ? ['1', '0'] : (it.opts || Object.keys(dOpt))).forEach(function (o) {
-        if (dOpt[o] == null) return;
+      (dBool ? ['1', '0'] : (it.opts ? cfgOptsFor(it) : Object.keys(dOpt))).forEach(function (o) {
+        let optionDesc = dOpt[o];
+        if (optionDesc == null && /^net_congestion(?:_(?:wifi|mobile))?$/.test(it.key))
+          optionDesc = T('cfg_net_cc_discovered', 'Exposed by this kernel. Its behaviour depends on the exact algorithm, RTT, loss, buffers and qdisc; no universal speed or battery advantage is claimed.');
+        if (optionDesc == null && it.key === 'io_scheduler')
+          optionDesc = T('cfg_io_scheduler_discovered', 'Exposed by this kernel as a custom I/O scheduler. ASB can select and verify it, but does not infer its latency, throughput or power policy from the name.');
+        if (optionDesc == null) return;
         const li = document.createElement("div");
         li.className = "cfg-desc-opt" + (String(o) === String(cur) ? " is-cur" : "");
         const k = document.createElement("span");
         k.className = "cfg-desc-opt-k";
         k.textContent = dBool ? (o === '1' ? T('cfg_sw_on', 'On') : T('cfg_sw_off', 'Off')) : Topt(o, it.key);
         const v = document.createElement("span");
-        v.className = "cfg-desc-opt-v"; v.textContent = dOpt[o];
+        v.className = "cfg-desc-opt-v"; v.textContent = optionDesc;
         li.appendChild(k); li.appendChild(v); ul.appendChild(li);
       });
       if (ul.children.length) inner.appendChild(ul);
@@ -24135,12 +24217,7 @@ function paintStockLive(stockKv = null) {
       _stockTrendSamples = _stockTrendSamples.filter(x => sampleMs - x.t <= 120000);
       const span = sampleMs - _stockTrendSamples[0].t;
       if (_stockTrendSamples.length >= 2 && span >= 8000) {
-        const m = _stockTrendSamples.length;
-        const mt = _stockTrendSamples.reduce((p, x) => p + x.t, 0) / m;
-        const mc = _stockTrendSamples.reduce((p, x) => p + x.c, 0) / m;
-        let num = 0, den = 0;
-        _stockTrendSamples.forEach(x => { num += (x.t - mt) * (x.c - mc); den += (x.t - mt) * (x.t - mt); });
-        const perMin = den > 0 ? (num / den) * 60000 : 0;
+        const perMin = lviTrendSlope(_stockTrendSamples.map(x => ({ t: x.t, n: x.c })));
         _stockTrendLast = { slope: perMin, span: span, t: sampleMs };
       }
       _stockTrendSave();
@@ -25192,12 +25269,15 @@ async function pollLive(visible) {
           }
           _lastProfSeen = _profNow;
           if (_profSwitchAt && (Date.now() - _profSwitchAt) < 120000) slope = 0;
+          _smartTrendSlopePerMin = slope / 1000;
           const trEl = _el('bnTrend');
           if (trEl) {
             trEl.className = 'smart-banner-value';
             if (slope > 300) trEl.textContent = '\u2191 ' + T('lv_trend_up', 'warming');
             else if (slope < -300) trEl.textContent = '\u2193 ' + T('lv_trend_dn', 'cooling');
             else trEl.textContent = '\u2192 ' + T('lv_trend_fl', 'steady');
+            trEl.title = T('lvi_trend_native_rate', '%1 °C per minute · governor control signal')
+              .replace('%1', (_smartTrendSlopePerMin >= 0 ? '+' : '−') + Math.abs(_smartTrendSlopePerMin).toFixed(1));
             asbMetricPaint('bnTrend', (slope > 300 || slope < -300) ? asbTrendMetric(slope / 1000) : 'metric-info');
           }
 
