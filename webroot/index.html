@@ -2261,8 +2261,14 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-table td.lgr-td-name { overflow-wrap:anywhere; white-space:normal; }
 .lgr-table td.lgr-td-num, .lgr-table th.lgr-td-num { text-align: end; }
 .lgr-table td.lgr-warn, .lgr-table td .lgr-warn { color: var(--perf); }
-.lgr-tip { display: flex; gap: 9px; align-items: flex-start; padding: 5px 0; font-size: 12.5px;
+.lgr-tip { display: flex; flex-wrap: wrap; gap: 9px; align-items: flex-start; padding: 5px 0; font-size: 12.5px;
   line-height: 1.45; color: var(--text); }
+.lgr-tip > span:nth-child(2) { flex: 1 1 0; min-width: 0; }
+.lgr-recommend-value { flex: 1 0 100%; padding-inline-start: 22px; color: var(--accent); font-size: 12px; font-weight: 700; }
+.lgr-action .lgr-recommend-value { grid-column: 2; padding-inline-start: 0; }
+.inf-advice-rows { display: grid; gap: 7px; }
+.inf-advice-row { align-items: flex-start; }
+.inf-advice-row .bfx-note { flex: 1 0 100%; }
 .lgr-ic { flex: 0 0 auto; font-size: 13px; line-height: 1.45; }
 .lgr-empty { text-align: center; padding: 26px 16px; }
 .lgr-empty-emo { display: block; font-size: 34px; line-height: 1; margin-bottom: 10px; }
@@ -6294,11 +6300,12 @@ html[data-asb-effects="reduced"] :is(.zygisk-header-dot,.zygisk-header-dot::afte
     <div class="asb-boot-brand app-name">AutoSystem<b>Boost</b></div>
     <div class="asb-boot-status" id="asbBootIntroStatus">Preloading ASB metrics…</div>
     <div class="asb-boot-progress" id="asbBootIntroProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="asbBootIntroBar"></i></div>
-    <div class="asb-boot-count" id="asbBootIntroCount">0 / 4</div>
+    <div class="asb-boot-count" id="asbBootIntroCount">0 / 5</div>
     <div class="asb-boot-stages" aria-hidden="true">
       <span class="asb-boot-stage is-active" data-boot-stage="live">LIVE</span>
       <span class="asb-boot-stage" data-boot-stage="config">CONFIG</span>
       <span class="asb-boot-stage" data-boot-stage="device">DEVICE</span>
+      <span class="asb-boot-stage" data-boot-stage="log">LOG</span>
       <span class="asb-boot-stage" data-boot-stage="zygisk">ZYGISK</span>
     </div>
   </div>
@@ -10880,10 +10887,7 @@ function bfxPaintFrom(f) {
   const started = bfxNum(f.started), finished = bfxNum(f.finished), tnow = bfxNum(f.now);
   const running = cs === 'running';
   let artText = T('bfx_art_idle', 'Not run yet'), artState = 'off', ratio = -1, nowText = '';
-  if (running && f.phase === 'bulk') {
-    artState = 'run'; ratio = total ? done / total : 0;
-    artText = T('bfx_art_bulk', 'Android is compiling all apps in one system operation…');
-  } else if (running && f.phase === 'finishing') {
+  if (running && f.phase === 'finishing') {
     artState = 'run'; ratio = 1;
     artText = T('bfx_art_finishing', 'Final background optimisation…');
   } else if (running) {
@@ -10900,6 +10904,9 @@ function bfxPaintFrom(f) {
   } else if (cs === 'done') {
     artState = 'ok'; ratio = 1;
     artText = bfxT('bfx_art_done', 'Done: {ok} succeeded, failed: {fail} · {min} min', { ok: ok, fail: fail, min: Math.max(1, Math.round((finished - started) / 60)) });
+  } else if (cs === 'partial') {
+    artState = 'wait'; ratio = total ? done / total : 0;
+    artText = bfxT('bfx_art_partial', 'Stopped early after repeated Binder refusals: {ok} succeeded, {fail} failed, {left} not attempted. Only package-scoped results are counted; no aggregate success is inferred. The battery reset remains scheduled.', { ok: ok, fail: fail, left: Math.max(0, total - done) });
   } else if (cs === 'stopped') {
     artState = 'wait'; ratio = total ? done / total : 0;
     artText = bfxT('bfx_art_stopped', 'Stopped at {done} of {total}', { done: done, total: total });
@@ -10913,7 +10920,7 @@ function bfxPaintFrom(f) {
     artState = 'fail';
     const artErr = f.err_text || T('bfx_art_refused_none', 'no reason given');
     artText = /Failed transaction/i.test(artErr)
-      ? bfxT('bfx_art_binder', 'Android rejected the per-package Binder call, its pm fallback and the all-package compile fallback. No verified recompilation was completed. The battery reset is still scheduled. Android said: {err}', { err: artErr })
+      ? bfxT('bfx_art_binder', 'Android repeatedly rejected both package-scoped compile calls. The run stopped early; unprocessed apps were not counted as compiled, and no all-package fallback or ART/Dalvik cleanup was used. The battery reset is still scheduled. Android said: {err}', { err: artErr })
       : bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: artErr });
   }
   bfxSetStep('bfxStepArt', artState, artText);
@@ -11011,6 +11018,148 @@ function asbPharmacyCross(gid) {
     + '<path d="M9.6 4.4h4.8M4.6 9.4" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-linecap="round"/></svg>';
 }
 function cfgOpenInfirmary() { uiSound('nav'); cfgShowGroup('infirmary'); }
+
+/* Evidence-backed Infinite Log recommendations. The card reuses the report snapshot;
+ * only its explicit Refresh button reads a new digest. Applying is a two-tap preview,
+ * refuses values whose live setting changed since that preview, and finishes with a real
+ * governor.conf read-back. No report text is parsed as a shell argument. */
+let _infAdviceData = null, _infAdviceLoading = false, _infAdviceBusy = false;
+let _infAdviceArmed = 0, _infAdviceResults = [], _infAdviceError = '';
+function infAdviceValue(vals, key) {
+  const item = CFG_ITEMS.filter(function (x) { return x.key === key; })[0];
+  return vals && vals[key] !== undefined ? String(vals[key]) : String(item ? item.def : '');
+}
+function infAdviceCurrent(key) { return infAdviceValue(_cfgVals, key); }
+/* A writer's optimistic in-memory update is not read-back evidence. This bounded read is
+ * used at the preview boundary and after the last write; errno must say that governor.conf
+ * itself was read before any result can be called applied. */
+async function infAdviceReadConfig() {
+  let r = null;
+  try { r = await run('cat ' + CFG_FILE); } catch (e) { return null; }
+  if (!r || r.errno !== 0) return null;
+  const vals = {};
+  String(r.stdout || '').split(/\r?\n/).forEach(function (line) {
+    const t = line.trim();
+    if (!t || t.charAt(0) === '#') return;
+    const eq = t.indexOf('=');
+    if (eq > 0) vals[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+  });
+  return vals;
+}
+function infAdvicePaint() {
+  const host = _el('infAdviceRows'), apply = _el('infAdviceApply'), refresh = _el('infAdviceRefresh'), chip = _el('infAdviceChip');
+  if (!host || !apply || !refresh) return;
+  host.textContent = '';
+  const recs = logReportRecommendations(_infAdviceData);
+  if (_infAdviceLoading) {
+    host.appendChild(bfxEl('div', 'bfx-note', T('inf_advice_loading', 'Reading the existing evidence snapshot…')));
+    if (chip) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('inf_advice_loading_chip', 'Reading'); }
+  } else if (!_infAdviceData) {
+    host.appendChild(bfxEl('div', 'bfx-note', _infAdviceError || T('inf_advice_none', 'No readable Infinite Log report yet. Start the log and collect a representative capture first.')));
+    if (chip) { chip.className = 'bfx-chip is-off'; chip.textContent = T('inf_advice_no_data', 'No data'); }
+  } else if (!recs.length) {
+    host.appendChild(bfxEl('div', 'bfx-note', T('inf_advice_no_changes', 'This capture supports no whitelisted setting change. Existing settings stay untouched.')));
+    if (chip) { chip.className = 'bfx-chip is-ok'; chip.textContent = T('inf_advice_no_changes_chip', 'No change'); }
+  } else {
+    recs.forEach(function (rec) {
+      const row = bfxEl('div', 'junk-cat inf-advice-row');
+      row.appendChild(bfxEl('div', 'junk-cat-name', Tcfg(rec.key, 'name', rec.key)));
+      row.appendChild(bfxEl('div', 'junk-cat-meta', Topt(rec.from, rec.key) + ' → ' + Topt(rec.value, rec.key)));
+      row.appendChild(bfxEl('div', 'bfx-note', logReportTipText(rec.tip)));
+      host.appendChild(row);
+    });
+    if (chip) { chip.className = 'bfx-chip is-ready'; chip.textContent = bfxT('inf_advice_count', '{n} change(s)', { n: recs.length }); }
+  }
+  _infAdviceResults.forEach(function (res) {
+    const text = Tcfg(res.key, 'name', res.key) + ' · ' + T('inf_advice_result_' + res.state, res.state);
+    host.appendChild(bfxEl('div', 'bfx-note', text));
+  });
+  apply.disabled = _infAdviceBusy || _infAdviceLoading || !recs.length;
+  refresh.disabled = _infAdviceBusy || _infAdviceLoading;
+  apply.textContent = _infAdviceBusy ? T('inf_advice_applying', 'Applying and reading back…') :
+    (_infAdviceArmed && Date.now() - _infAdviceArmed <= 6000 ? T('inf_advice_confirm', 'Confirm the listed changes') : T('inf_advice_apply', 'Apply recommended values'));
+}
+async function infAdviceLoad(manual) {
+  if (_infAdviceBusy || _infAdviceLoading) return;
+  if (!manual && _infAdviceData) { infAdvicePaint(); return; }
+  const cache = !manual && typeof logReportCacheGet === 'function' ? logReportCacheGet() : null;
+  if (cache) {
+    const cached = parseLogReport(cache.raw);
+    if (cached.ok) { _infAdviceData = cached; _infAdviceError = ''; infAdvicePaint(); return; }
+  }
+  _infAdviceLoading = true; _infAdviceError = ''; infAdvicePaint();
+  let out = '';
+  try { out = runText(await run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null')); } catch (e) {}
+  const d = parseLogReport(out);
+  _infAdviceLoading = false;
+  if (d.ok) { _infAdviceData = d; logReportCacheSet(out); }
+  else { _infAdviceData = null; _infAdviceError = T('inf_advice_read_failed', 'The log digest is unavailable or has no capture; no setting was changed.'); }
+  _infAdviceArmed = 0; infAdvicePaint();
+}
+async function infAdviceApply() {
+  if (_infAdviceBusy || _infAdviceLoading) return;
+  const recs = logReportRecommendations(_infAdviceData);
+  if (!recs.length) return;
+  const now = Date.now();
+  if (!_infAdviceArmed || now - _infAdviceArmed > 6000) {
+    _infAdviceArmed = now; uiSound('capture'); infAdvicePaint(); return;
+  }
+  _infAdviceArmed = 0; _infAdviceBusy = true; _infAdviceResults = []; infAdvicePaint();
+  /* Refresh all related state for cfgSet(), but use the separate direct read below as the
+   * authoritative changed-since-preview guard: cfgLoad() also returns false for an unchanged
+   * successful read, so its boolean alone cannot prove that the config was readable. */
+  try { await cfgLoad(true); } catch (e) {}
+  const before = await infAdviceReadConfig();
+  if (!before) {
+    recs.forEach(function (rec) { _infAdviceResults.push({ key: rec.key, target: rec.value, state: 'failed' }); });
+  } else {
+    _cfgVals = before;
+    for (let i = 0; i < recs.length; i++) {
+      const rec = recs[i];
+      if (infAdviceValue(before, rec.key) !== rec.from) {
+        _infAdviceResults.push({ key: rec.key, target: rec.value, state: 'changed' });
+        continue;
+      }
+      /* cfgSet() can repaint the whole Infirmary after governor-owned writes. The operation
+       * deliberately keeps its own immutable recs/result records and reacquires the new DOM
+       * nodes in infAdvicePaint(); no detached button or optimistic _cfgVals value decides
+       * whether the write succeeded. */
+      try { await cfgSet(rec.key, rec.value, null); } catch (e) {}
+      _infAdviceResults.push({ key: rec.key, target: rec.value, state: 'pending' });
+    }
+  }
+  const after = await infAdviceReadConfig();
+  _infAdviceResults.forEach(function (res) {
+    if (res.state === 'changed') return;
+    res.state = after && infAdviceValue(after, res.key) === res.target ? 'applied' : 'failed';
+  });
+  if (_infAdviceData && after) _infAdviceData.cfg = Object.assign({}, _infAdviceData.cfg || {}, after);
+  try { await cfgLoad(true); } catch (e) {}
+  _infAdviceBusy = false;
+  const applied = _infAdviceResults.filter(function (x) { return x.state === 'applied'; }).length;
+  const failed = _infAdviceResults.filter(function (x) { return x.state === 'failed'; }).length;
+  const skipped = _infAdviceResults.length - applied - failed;
+  toast(bfxT('inf_advice_finished', 'Applied: {applied} · failed: {failed} · left unchanged: {skipped}', { applied: applied, failed: failed, skipped: skipped }), failed ? 'err' : 'ok');
+  infAdvicePaint();
+}
+function cfgRenderInfirmaryAdvice(list) {
+  const card = bfxEl('div', 'cfg-row bfx-card inf-advice-card'); card.id = 'infAdviceCard';
+  const head = bfxEl('div', 'bfx-head');
+  const titles = bfxEl('div', 'bfx-titles');
+  titles.appendChild(bfxEl('div', 'bfx-title', T('inf_advice_title', 'Infinite Log recommendations')));
+  const chip = bfxEl('span', 'bfx-chip is-off'); chip.id = 'infAdviceChip'; titles.appendChild(chip);
+  head.appendChild(titles); card.appendChild(head);
+  card.appendChild(bfxEl('div', 'bfx-desc', T('inf_advice_desc', 'Shows only setting changes supported by the captured evidence. Review each current → recommended value; nothing is applied automatically.')));
+  const rows = bfxEl('div', 'inf-advice-rows'); rows.id = 'infAdviceRows'; card.appendChild(rows);
+  const actions = bfxEl('div', 'bfx-actions');
+  const apply = bfxEl('button', 'bfx-btn bfx-primary', T('inf_advice_apply', 'Apply recommended values'));
+  apply.type = 'button'; apply.id = 'infAdviceApply'; apply.onclick = function (e) { e.stopPropagation(); infAdviceApply(); }; actions.appendChild(apply);
+  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('inf_advice_refresh', 'Refresh recommendations'));
+  refresh.type = 'button'; refresh.id = 'infAdviceRefresh'; refresh.onclick = function (e) { e.stopPropagation(); infAdviceLoad(true); }; actions.appendChild(refresh);
+  card.appendChild(actions);
+  card.appendChild(bfxEl('div', 'bfx-note', T('inf_advice_note', 'The first tap only confirms the preview. A setting changed elsewhere since the snapshot is skipped. Read-back verifies the saved value; it does not prove a battery, heat or smoothness improvement.')));
+  list.appendChild(card); infAdviceLoad(false);
+}
 
 /* Infirmary → System Repairs → SOTER Repair (dev47). Tencent SOTER is the TEE-backed key
  * server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps.
@@ -11400,6 +11549,7 @@ function cfgRenderGroup(list, groupId) {
     sectionItems.forEach(it => { rendered[it.key] = true; });
     if (groupId === 'kernel' && section.id === 'controls') cfgRenderKernelControlsHelp(list);
     if (section.card === 'batteryfix') {
+      cfgRenderInfirmaryAdvice(list);
       cfgRenderBatteryFixCard(list);
       /* SOTER belongs to the same repair flow, directly after Battery Fix rather than
        * below the unrelated package repairs. Both cards keep their own status owner. */
@@ -17017,9 +17167,13 @@ function logReportTips(d, all) {
      row the same lesson) - under two hours the stretch is evidence, not a verdict. */
   if (night && (+night.pctph || 0) > 0.8 && (+night.dur_min || 0) >= 120) {
     if (cfg.night_modem_idle === '0')
-      tips.push({ ic: 'warn', key: 'lr_tip_night_modem', vars: { pct: (+night.pctph).toFixed(1), set: Tcfg('night_modem_idle', 'name', 'Quiet Radio at Night') } });
+      tips.push({ ic: 'warn', key: 'lr_tip_night_modem', vars: { pct: (+night.pctph).toFixed(1), set: Tcfg('night_modem_idle', 'name', 'Quiet Radio at Night') },
+        op: { key: 'night_modem_idle', value: '1' } });
     else
       tips.push({ ic: 'warn', key: 'lr_tip_night', vars: { pct: (+night.pctph).toFixed(1) } });
+    if ((cfg.doze_level || 'stock') === 'stock')
+      tips.push({ ic: 'warn', key: 'lr_tip_night_doze', vars: { pct: (+night.pctph).toFixed(1), set: Tcfg('doze_level', 'name', 'Deep Sleep') },
+        op: { key: 'doze_level', value: 'night' } });
   }
   /* fix222: the awake verdict needs a stretch that can carry it - a five-minute gap fully
      awake is noise, and the worst-stretch row used to turn red over exactly that. Under
@@ -17109,6 +17263,10 @@ function logReportTips(d, all) {
         if (fairCap || romHeld) {
           const cap = fairCap || badCap[1];
           tips.push({ ic: 'info', key: 'lr_tip_jank_bad_evidence', vars: { pct: String(jank.pct), yes: String(cap.yes), no: String(cap.no) } });
+        } else if (badCap && /^[0-9]+$/.test(String(cfg.perf_ceiling_pct || '')) && +cfg.perf_ceiling_pct < 100) {
+          tips.push({ ic: 'warn', key: 'lr_tip_jank_cap_set', vars: { pct: String(jank.pct), from: String(cfg.perf_ceiling_pct),
+            yes: String(badCap[1].yes), no: String(badCap[1].no), set: Tcfg('perf_ceiling_pct', 'name', 'Performance Ceiling') },
+            op: { key: 'perf_ceiling_pct', value: '100' } });
         } else
           tips.push({ ic: 'warn', key: jp === 'battery' ? 'lr_tip_jank_bad_bat' :
             (jp === 'balanced' || jp === 'performance' || jp === 'stock') ? 'lr_tip_jank_bad_man' :
@@ -17154,8 +17312,14 @@ function logReportTips(d, all) {
      saving switch exists and is off, the card names it; an old capture without the cfg
      snapshot is treated as the shipped default (off). Under 50 MiB it is just messengers. */
   const sradio = s.sradio || null;
-  if (sradio && (+sradio.mib || 0) >= 50 && (cfg.net_screen_off_lte || '0') === '0')
-    tips.push({ ic: 'info', key: 'lr_tip_sradio', vars: { mib: String(sradio.mib), set: Tcfg('net_screen_off_lte', 'name', 'LTE While Screen Off') } });
+  if (sradio && (+sradio.mib || 0) >= 50 && (cfg.net_screen_off_lte || '0') === '0') {
+    const radioTip = { ic: 'info', key: 'lr_tip_sradio', vars: { mib: String(sradio.mib), set: Tcfg('net_screen_off_lte', 'name', 'LTE While Screen Off') } };
+    /* Traffic alone is not an energy verdict. Make this machine-applicable only beside
+     * a separately measured, long overnight drain; the confirmation still names the cost. */
+    if (night && (+night.pctph || 0) > 0.8 && (+night.dur_min || 0) >= 120)
+      radioTip.op = { key: 'net_screen_off_lte', value: '1' };
+    tips.push(radioTip);
+  }
   /* fix213 (audit 8.3/К9): heat finally speaks. A peak number alone says nothing about
      cost - the DURATION above 45 °C does. Half an hour hot is advice-worthy (and when
      the thermal protection is deliberately on Stock, the advice names the switch);
@@ -17171,9 +17335,15 @@ function logReportTips(d, all) {
       const hv = { min: logReportDur(wm), phase: ph };
       if (cfg.sustained_temp_mode === 'stock') {
         hv.set = Tcfg('sustained_temp_mode', 'name', 'Throttling Point');
-        tips.push({ ic: 'warn', key: 'lr_tip_heat_warm_set', vars: hv });
+        tips.push({ ic: 'warn', key: 'lr_tip_heat_warm_set', vars: hv,
+          op: { key: 'sustained_temp_mode', value: 'smart' } });
       } else {
         tips.push({ ic: 'warn', key: 'lr_tip_heat_warm', vars: hv });
+        if (cfg.sustained_temp_mode === 'manual' && /^[0-9]+$/.test(String(cfg.sustained_temp_enter || '')) && +cfg.sustained_temp_enter > 65) {
+          tips.push({ ic: 'warn', key: 'lr_tip_heat_manual_set', vars: Object.assign({ from: String(cfg.sustained_temp_enter),
+            set: Tcfg('sustained_temp_enter', 'name', 'Throttling Temperature') }, hv),
+            op: { key: 'sustained_temp_enter', value: '65' } });
+        }
       }
     } else if (cpuPeak > 0 && wm === 0 && clamps === 0) {
       tips.push({ ic: 'ok', key: 'lr_tip_heat_calm', vars: { cpu: String(cpuPeak) } });
@@ -17236,6 +17406,39 @@ function logReportTips(d, all) {
     tips.push({ ic: hasEvidence ? 'ok' : 'info', key: hasEvidence ? 'lr_tip_ok' : 'lr_tip_wait', vars: {} });
   }
   return all ? tips : tips.slice(0, 6);
+}
+
+/* dev66 buildfix9: only the evidence rules above may create an operation. This second,
+ * closed whitelist is intentional defence in depth: a malformed digest or a future prose
+ * tip cannot become an arbitrary config writer. Values are ordinary CFG_ITEMS values and
+ * are committed through cfgSet(), never through sed/echo. */
+const LOG_REPORT_APPLY_WHITELIST = {
+  night_modem_idle: ['1'], net_screen_off_lte: ['1'], doze_level: ['night'],
+  sustained_temp_mode: ['smart'], sustained_temp_enter: ['65'], perf_ceiling_pct: ['100']
+};
+function logReportRecommendations(d) {
+  const out = [], seen = {};
+  if (!d || !d.ok) return out;
+  logReportTips(d, true).forEach(function (tip) {
+    const op = tip && tip.op;
+    if (!op || seen[op.key] || !Object.prototype.hasOwnProperty.call(LOG_REPORT_APPLY_WHITELIST, op.key)) return;
+    if (LOG_REPORT_APPLY_WHITELIST[op.key].indexOf(String(op.value)) < 0) return;
+    const item = CFG_ITEMS.filter(function (x) { return x.key === op.key; })[0];
+    if (!item) return;
+    const current = d.cfg && d.cfg[op.key] !== undefined ? String(d.cfg[op.key]) : String(item.def);
+    if (current === String(op.value)) return;
+    seen[op.key] = true;
+    out.push({ key: op.key, value: String(op.value), from: current, tip: tip });
+  });
+  return out;
+}
+function logReportRecommendationLine(tip, d) {
+  const op = tip && tip.op;
+  if (!op || !Object.prototype.hasOwnProperty.call(LOG_REPORT_APPLY_WHITELIST, op.key) ||
+      LOG_REPORT_APPLY_WHITELIST[op.key].indexOf(String(op.value)) < 0) return '';
+  const current = d && d.cfg && d.cfg[op.key] !== undefined ? String(d.cfg[op.key]) : String(cfgDefOf(op.key));
+  return logReportT('lr_recommend_value', '{set}: {from} → {to}', {
+    set: Tcfg(op.key, 'name', op.key), from: Topt(current, op.key), to: Topt(String(op.value), op.key) });
 }
 /* fix248: data volumes the way people read them, and the setting that tames each kind of
  * app that moved the most mobile data - an app store updating apps, a messenger
@@ -17504,11 +17707,11 @@ function logReportAnalyze(d) {
   chains.sort(function (a, b) { return b.weight - a.weight; });
 
   const weights = {
-    lr_tip_crash: 100, lr_tip_cost_hi: 96, lr_tip_heat_warm_set: 92, lr_tip_heat_warm: 92,
+    lr_tip_crash: 100, lr_tip_cost_hi: 96, lr_tip_heat_warm_set: 92, lr_tip_heat_warm: 92, lr_tip_heat_manual_set: 92,
     lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
     lr_tip_awake_sync: 87, lr_tip_awake_worker: 84, lr_tip_sync_loop: 80, lr_tip_worker: 60,
-    lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
-    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_game: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_bad_pace: 72, lr_tip_jank_bad_evidence: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
+    lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78, lr_tip_night_doze: 77,
+    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_game: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_bad_pace: 72, lr_tip_jank_bad_evidence: 72, lr_tip_jank_cap_set: 73, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
     lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_hooks: 50, lr_tip_sysui_other: 30,
     lr_tip_sysui_inj: 90,
     lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15,
@@ -18037,7 +18240,9 @@ function openReportPage() {
   requestAnimationFrame(function () {
     requestAnimationFrame(function () { if (_rpOpen) p.classList.add('open'); });
   });
-  asbLogReportLoad();
+  /* The splash may already have collected this manual snapshot. Reuse it as-is; only the
+   * explicit Refresh button (or a first open with no usable snapshot) reads the digest. */
+  if (!logReportCachedPaint(logReportCacheGet(), false)) asbLogReportLoad();
   setTimeout(asbNavSync, 60);
   asbUiFrame.request(asbFitPages);  zygiskHeaderRefreshLazy();
 }
@@ -18082,6 +18287,7 @@ const DEVICE_SECTION_ORDER = [
   ['kernel', 'dev_sec_kernel', 'Kernel build', 'kernel'],
   ['kernel_origin', 'dev_sec_kernel_origin', 'Kernel origin evidence', 'kernel'],
   ['kernel_bore', 'dev_sec_kernel_bore', 'BORE scheduler', 'kernel'],
+  ['adios', 'dev_sec_adios', 'ADIOS I/O scheduler', 'kernel'],
   ['kernel_btf', 'dev_sec_kernel_btf', 'BTF evidence', 'kernel'],
   ['kernel_ebpf', 'dev_sec_kernel_ebpf', 'eBPF evidence', 'kernel'],
   ['kernel_fuse_bpf', 'dev_sec_kernel_fuse_bpf', 'FUSE-BPF evidence', 'kernel'],
@@ -18097,6 +18303,7 @@ const DEVICE_SECTION_ORDER = [
   ['zygisk_observer', 'dev_sec_zygisk_observer', 'Zygisk observer', 'root'],
   ['lsposed_hooks', 'dev_sec_lsposed_hooks', 'LSPosed hooks: problems and battery evidence', 'root'],
   ['asb', 'dev_sec_asb', 'ASB runtime', 'asb'],
+  ['asb_properties', 'dev_sec_asb_properties', 'ASB system properties', 'asb'],
   ['asb_caps', 'dev_sec_asb_caps', 'ASB device capabilities', 'asb'],
   ['meta', 'dev_sec_meta', 'Collection metadata', 'asb']
 ];
@@ -18119,7 +18326,9 @@ const DEVICE_SECTION_GUIDES = {
   zygisk_observer: ['dev_guide_zygisk_observer', 'Process telemetry plus an optional bounded request for fresh governor evidence. Configuration, injection evidence, hint acknowledgement and overhead are separate facts. Missing crash/ANR attribution and app activity sources remain unknown or not exposed.'],
   lsposed_hooks: ['dev_guide_lsposed_hooks', 'LSPosed does not count individual hook calls or their energy, and ASB adds no hook of its own to measure them. This card joins evidence per hooked app: enabled modules and their scope, LSPosed log volume and errors, crash and ANR records whose stack passes through a hook, CPU time of hooked apps and restart loops from the Zygisk start ledger. A finding is a correlation to check by disabling one module for one app, not a proven cause.'],
   kernel_origin: ['dev_guide_kernel_origin', 'Stock-like and custom-like describe exposed indicators, not a guaranteed builder or provenance. Capability decisions still use each exposed control node.'],
-  kernel_bore: ['dev_guide_kernel_bore', 'CONFIG_SCHED_BORE is build evidence; /proc/sys/kernel/sched_bore is the runtime interface. This read-only diagnostic never writes it. The separate Kernel setting accepts Stock, conservative Auto, Off and On; an apply is successful only after read-back.'], 
+  kernel_bore: ['dev_guide_kernel_bore', 'CONFIG_SCHED_BORE is build evidence; /proc/sys/kernel/sched_bore is the runtime interface. This read-only diagnostic never writes it. The separate Kernel setting accepts Stock, conservative Auto, Off and On; an apply is successful only after read-back.'],
+  adios: ['dev_guide_adios', 'ADIOS schedules block I/O; BORE schedules CPU tasks. Build config and symbols do not prove runtime selection. Queue scheduler lists show exposure, and [adios] shows actual selection. No latency, throughput or battery gain is inferred.'],
+  asb_properties: ['dev_guide_asb_properties', 'Static and validated managed properties are listed separately. Selected means the corresponding ASB owner and feature block were active; readback compares the live value. A mismatch is not rewritten here. Other unrelated Android/vendor properties are not dumped.'],
   kernel_btf: ['dev_guide_kernel_btf', 'BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.'],
   kernel_ebpf: ['dev_guide_kernel_ebpf', 'Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.'],
   kernel_fuse_bpf: ['dev_guide_kernel_fuse_bpf', 'FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.'],
@@ -18192,6 +18401,9 @@ function deviceValueClass(sec, key, value) {
   const v = String(value || '').toLowerCase();
   if (deviceIsLimitedValue(value)) return ' dev-unknown';
   if (key === 'uname_consistency') return v === 'mismatch' ? ' dev-warn' : (v === 'match' ? ' dev-good' : '');
+  if (sec === 'asb_properties' && v.indexOf('readback=') >= 0)
+    return v.indexOf('readback=match') >= 0 ? ' dev-good' : (v.indexOf('readback=mismatch') >= 0 ? ' dev-warn' : ' dev-unknown');
+  if (sec === 'adios' && key === 'selection') return v.indexOf('active on') === 0 ? ' dev-good' : '';
   if ((sec === 'susfs' && key === 'interface') || (sec === 'kernel_config' && key === 'available'))
     return (v === 'available' || v === 'yes') ? ' dev-good' : '';
   if (sec === 'kernel_features' && key === 'net_sch_cake') return v.indexOf('available;') === 0 ? ' dev-good' : '';
@@ -20381,8 +20593,10 @@ function openZygiskPage() {
   zygiskPageRender(window._asbZygiskLinkData || null);
   const save = _el('zySave'); if (save) save.disabled = !window._asbZygiskLinkData;
   const status = _el('zygiskStatus');
-  if (status) status.textContent = window._asbZygiskLinkData ? T('zy_status_cached', 'Last snapshot · refreshing…') : T('zy_status_loading', 'Reading…');
-  asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);
+  if (status) status.textContent = window._asbZygiskLinkData ? T('zy_status_snapshot', 'Last snapshot · tap Refresh to collect again') : T('zy_status_loading', 'Reading…');
+  /* A complete splash snapshot is already rendered. Do not repeat its eight-part read on
+   * navigation; Refresh remains the explicit live re-read, and a missing snapshot loads once. */
+  if (!window._asbZygiskLinkData) asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);
   setTimeout(asbNavSync, 60);
   asbUiFrame.request(asbFitPages);
 }
@@ -20617,13 +20831,11 @@ function openDevicePage() {
   p.scrollTop = 0;
   document.body.classList.add('live-active', 'device-active');
   asbTabbarVisibility();
-  /* fix276: visibility is navigation, not a consequence of evidence collection. Add the
-   * open class in this gesture, paint the shell/skeleton, then start the read-only collector.
-   * The old double-rAF plus immediate collector could leave a slow WebView looking untouched. */
+  /* Navigation never performs another collection when the splash already supplied a usable
+   * snapshot. A bounded persistent snapshot is the fallback; the read-only collector runs
+   * here only when no snapshot exists, or from the explicit Refresh button. */
   p.classList.add('open');
-  /* The loader paints cache/loading and awaits asbPaintYield before its collector; a separate
-   * 50 ms timer only postponed that first useful frame. */
-  asbDeviceInfoLoad();
+  if (!deviceInfoPresentSnapshot()) asbDeviceInfoLoad();
   setTimeout(asbNavSync, 60);
   asbUiFrame.request(asbFitPages);
 }
@@ -20693,11 +20905,40 @@ function deviceInfoCacheGet() {
   return null;
 }
 function deviceInfoCacheSet(raw) {
-  try { localStorage.setItem(DEV_CACHE_KEY, JSON.stringify({ t: Date.now(), raw: String(raw || '') })); } catch (e) {}
+  const at = Date.now();
+  try { localStorage.setItem(DEV_CACHE_KEY, JSON.stringify({ t: at, raw: String(raw || '') })); } catch (e) {}
+  return at;
 }
 function deviceInfoStamp(t) {
   try { return new Date(t).toLocaleString(ASB_LANG || undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
   catch (e) { return ''; }
+}
+function deviceInfoReusableSnapshot() {
+  const d = window._asbDeviceInfoData;
+  if (d && d.count) return { data: d, raw: String(window._asbDeviceInfoRaw || ''), t: window._asbDeviceInfoAt || Date.now(), memory: true };
+  const cache = deviceInfoCacheGet();
+  if (!cache) return null;
+  const parsed = parseDeviceInfo(cache.raw);
+  return parsed.count ? { data: parsed, raw: cache.raw, t: cache.t, memory: false } : null;
+}
+function deviceInfoPresentSnapshot() {
+  const body = _el('deviceBody'), status = _el('deviceStatus');
+  if (!body || !status) return false;
+  const snap = deviceInfoReusableSnapshot();
+  if (!snap) return false;
+  window._asbDeviceInfoData = snap.data;
+  window._asbDeviceInfoRaw = snap.raw;
+  window._asbDeviceInfoAt = snap.t;
+  deviceInfoRender(snap.data);
+  body.dataset.devShown = '1'; body.dataset.devAt = String(snap.t);
+  body.classList.toggle('dev-stale', !snap.memory);
+  status.classList.remove('dev-status-busy');
+  status.textContent = T('dev_snapshot_status', 'Snapshot from %s · tap Refresh to collect again').replace('%s', deviceInfoStamp(snap.t));
+  const save = _el('devSave'), refresh = _el('devRefresh');
+  if (save) save.disabled = !snap.raw;
+  if (refresh) refresh.disabled = false;
+  asbUiFrame.request(asbFitPages);
+  return true;
 }
 async function asbDeviceInfoLoad() {
   const background = arguments[0] === true;
@@ -20743,7 +20984,7 @@ async function asbDeviceInfoLoad() {
     if (r && r.errno === 0 && d.count) {
       window._asbDeviceInfoData = d;
       window._asbDeviceInfoRaw = runText(r);
-      deviceInfoCacheSet(window._asbDeviceInfoRaw);
+      window._asbDeviceInfoAt = deviceInfoCacheSet(window._asbDeviceInfoRaw);
       zygiskHeaderPublish(d);
     }
     return;
@@ -20769,7 +21010,7 @@ async function asbDeviceInfoLoad() {
   } else {
     window._asbDeviceInfoData = d;
     window._asbDeviceInfoRaw = runText(r);
-    deviceInfoCacheSet(window._asbDeviceInfoRaw);
+    window._asbDeviceInfoAt = deviceInfoCacheSet(window._asbDeviceInfoRaw);
     zygiskHeaderPublish(d);
     const shown = deviceInfoRender(d);
     body.dataset.devShown = '1';
@@ -20820,7 +21061,7 @@ function logReportLoading(body) {
   sub.textContent = T('lr_loading_sub', 'The report is already open. The read-only digest will replace this card; nothing is being changed.');
   card.appendChild(orbit); card.appendChild(title); card.appendChild(sub); body.appendChild(card);
 }
-function logReportCachedPaint(cache) {
+function logReportCachedPaint(cache, refreshing) {
   const body = _el('reportBody'), status = _el('reportStatus');
   if (!cache || !body || !status) return false;
   const d = parseLogReport(cache.raw);
@@ -20829,7 +21070,9 @@ function logReportCachedPaint(cache) {
   window._asbLogReportRaw = cache.raw; window._asbLogReportAt = cache.t;
   if (!reuse) logReportRender(d);
   body.classList.add('lv-stale'); body.dataset.lrShown = '1'; body.dataset.lrAt = String(cache.t);
-  status.textContent = T('lr_cached_status', 'Snapshot from %s · refreshing…').replace('%s', deviceInfoStamp(cache.t));
+  status.textContent = refreshing === false
+    ? T('lr_snapshot_status', 'Snapshot from %s · tap Refresh to collect again').replace('%s', deviceInfoStamp(cache.t))
+    : T('lr_cached_status', 'Snapshot from %s · refreshing…').replace('%s', deviceInfoStamp(cache.t));
   return true;
 }
 async function asbLogReportLoad() {
@@ -21003,6 +21246,8 @@ function logReportTipText(tip) {
     lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.',
     lr_tip_wl_enable: '{app} held the phone awake for {min} min - turn on "{set}" in Settings and ASB will rein such apps in for you.',
     lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
+    lr_tip_night_doze: 'Overnight the phone lost ~{pct}%/h while "{set}" was Stock. Night-only Doze can defer background work during this window; timely notifications are not guaranteed to be unchanged.',
+    lr_tip_jank_cap_set: 'About {pct}% of frames missed their deadline. Measured jank at the cap was {yes}% against {no}% below it; "{set}" is {from}%, so restoring the ASB ceiling to 100% is a bounded test, not proof of causation.',
     lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; the Smoothness section lists where frames are lost.',
     lr_tip_jank_bad_game: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
     lr_tip_jank_bad_bat: 'About {pct}% of frames missed their deadline - stutter is visible. Battery keeps the ceilings low on purpose; for heavy apps Smart or Balanced give more room. The Smoothness section lists the apps that drop the most.',
@@ -21015,6 +21260,7 @@ function logReportTipText(tip) {
     lr_tip_prof_save: 'Your own measurements: {cheap} cost {x}%/h at the screen against {y}%/h on {busy} - for reading and music it is noticeably cheaper.',
     lr_tip_heat_warm: 'The phone spent {min} hot in total; the hottest named phase was {phase}. Reduce sustained load or use a gentler profile.',
     lr_tip_heat_warm_set: 'The phone spent {min} hot, mostly in {phase} - check "{set}" in Settings if you want ASB thermal protection.',
+    lr_tip_heat_manual_set: 'The phone spent {min} hot while "{set}" was {from}°C. A 65°C ASB threshold starts limiting sustained load earlier; the vendor thermal limits remain active.',
     lr_tip_heat_calm: 'No sustained heat or throttling detected; peak CPU temperature was {cpu}°C.',
     lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
     lr_tip_cost_hi: 'ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.',
@@ -21734,6 +21980,8 @@ function logReportAppendAnalysis(body, d, analysis) {
       const n = document.createElement('span'); n.className = 'lgr-action-n'; n.textContent = String(i + 1) + '.';
       const tx = document.createElement('span'); tx.textContent = logReportTipText(tip);
       row.appendChild(n); row.appendChild(tx);
+      const recommendation = logReportRecommendationLine(tip, d);
+      if (recommendation) { const rv = document.createElement('span'); rv.className = 'lgr-recommend-value'; rv.textContent = recommendation; row.appendChild(rv); }
       const ref = logReportTipRef(tip); if (ref) row.appendChild(ref);
       sec.appendChild(row);
     });
@@ -22538,7 +22786,7 @@ function logReportRender(d) {
       } else {
         s.appendChild(logReportRow(T('lr_sm_feedback', 'Infinite Log → Smart'), T('lr_sm_feedback_unknown', 'In-capture delta unknown')));
       }
-      s.appendChild(logReportNote(T('lr_sm_feedback_note', 'The log supplies sustained-jank evidence only. Smart re-reads Android frame statistics and owns A/B windows, plateau and cooldown decisions; report recommendations are never executed as settings.')));
+      s.appendChild(logReportNote(T('lr_sm_feedback_note', 'The log supplies sustained-jank evidence only. Smart re-reads Android frame statistics and owns A/B windows, plateau and cooldown decisions. Infirmary can apply only the separately whitelisted report values after confirmation and read-back; it never reproduces Smart’s A/B decisions.')));
     }
     if (smart) {
       s.appendChild(logReportRow(T('lr_sm_ctx', 'Tracked situations'), String(smart.ctxlearn || 0)));
@@ -22799,6 +23047,8 @@ function logReportRender(d) {
       tx.textContent = logReportTipText(tip);
       row.appendChild(ic);
       row.appendChild(tx);
+      const recommendation = logReportRecommendationLine(tip, d);
+      if (recommendation) { const rv = document.createElement('span'); rv.className = 'lgr-recommend-value'; rv.textContent = recommendation; row.appendChild(rv); }
       s.appendChild(row);
     });
     body.appendChild(s);
@@ -25551,7 +25801,8 @@ async function asbBootIntroStart() {
     ['live', function () { return Promise.resolve(pollLive(true)).then(function () { homeMeterPaint(); }); }],
     ['config', function () { return cfgLoad(); }],
     ['device', function () { return Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)]); }],
-    ['zygisk', function () { return zygiskHeaderRefresh(); }]
+    ['log', function () { return asbLogReportLoad(true); }],
+    ['zygisk', function () { return zygiskPageLoad(false); }]
   ];
   asbBootIntroPaint(0, jobs.length);
   const started = Date.now();
