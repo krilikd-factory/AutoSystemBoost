@@ -1978,7 +1978,6 @@ body.config-category-active #configPage.cfg-short-fit .cfg-list { padding-bottom
 .lv-stale { opacity:.6; transition:opacity .35s ease; }
 .zygisk-page .zy-auto-btn.is-busy { display:inline-flex; align-items:center; gap:8px; opacity:.92; }
 .zygisk-page .zy-auto-btn.is-busy::before { content:''; width:13px; height:13px; flex:0 0 auto; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:devEvidenceSpin 1s linear infinite; }
-.dev-stale { opacity:.62; transition:opacity .35s ease; }
 .dev-status-busy::before { content:''; display:inline-block; width:10px; height:10px; margin-right:6px; vertical-align:-1px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:devEvidenceSpin 1s linear infinite; }
 @media (prefers-reduced-motion:reduce) { .zygisk-page .zy-auto-btn.is-busy::before, .dev-status-busy::before { animation:none; } }
 .wl-manual-copy { padding:11px 12px; border:1px solid rgba(255,165,2,.28); border-radius:12px; color:var(--text-secondary); background:rgba(255,165,2,.055); }
@@ -7201,6 +7200,7 @@ const TECH_ICON_PATHS = {
   grain: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="13.2" cy="7.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="16.4" cy="10.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="7.6" cy="12.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="11.8" cy="12.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.4" cy="14.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.2" cy="16.4" r="1.1" fill="currentColor" stroke="none"/>',
   portrait: '<rect x="4.5" y="3.5" width="15" height="17" rx="2.5"/><circle cx="12" cy="9.8" r="2.6"/><path d="M7 17.2c1-2.6 2.9-3.9 5-3.9s4 1.3 5 3.9"/>',
   lowlight: '<rect x="3" y="8.5" width="15" height="11.5" rx="2.4"/><path d="M7.8 8.5 9 6.2h3.4l1.2 2.3"/><circle cx="10.5" cy="14" r="2.7"/><path d="M20.6 3.4a3.1 3.1 0 1 0 2 4.9 2.5 2.5 0 0 1-2-4.9z"/>',
+  camera_preview: '<rect x="3" y="6" width="18" height="14" rx="2.5"/><circle cx="9" cy="13" r="2.6"/><path d="M14 10.5c.9-1.5 1.5-1.5 2.3 0s1.5 1.5 2.3 0M14 15.5c.9-1.5 1.5-1.5 2.3 0s1.5 1.5 2.3 0"/>',
   camera_hold: '<rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.5 7.5 9.8 5h4.4l1.3 2.5"/><rect x="9.2" y="11" width="5.6" height="4.6" rx="1.2"/><path d="M10.6 11v-1a1.4 1.4 0 0 1 2.8 0v1"/>',
   camera_aggressive: '<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
   camera_inject: '<rect x="3" y="9.5" width="14" height="10.5" rx="2.4"/><path d="M7.4 9.5 8.6 7.3h3.2L13 9.5"/><circle cx="10" cy="14.8" r="2.5"/><path d="M16 13.5h5M19 11.5l2 2-2 2"/>',
@@ -10031,6 +10031,7 @@ const SNAP_KEYS = [
   'CAMERA_CONTRAST',
   'CAMERA_PORTRAIT',
   'CAMERA_LOWLIGHT',
+  'CAMERA_PREVIEW_TNR',
   'CAMERA_AGGRESSIVE',
   'CAMERA_AGGRESSIVE_INJECT',
   'smart_battery_bias',
@@ -10187,6 +10188,8 @@ const CFG_ITEMS = [
     desc:'Adjusts neural face and skin blending in supported portrait modes. Stock firmware may ship these weights at zero; higher levels can restore texture reduced by denoising, but can also make skin look artificial. Level 6 reaches the implemented blend-weight ceiling. Start at 1–2. This does not affect every camera mode. Reboot to apply.' },
   { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:10, step:1, name:'Macro & Low-light Sharpening',
     desc:'Controls separate sharpening scales for macro and low-light processing. 0 follows Camera Grade; higher values add a progressively stronger correction, with 10 targeting 3.2× before firmware limits. Close subjects and high ISO can make halos more visible. Raise this only when those modes are genuinely soft. Reboot to apply.' },
+  { key:'CAMERA_PREVIEW_TNR', type:'seg', def:'stock', stock:'stock', opts:['stock','off','on'], name:'Preview Noise Reduction',
+    desc:'Controls the camera\'s existing preview temporal noise reduction properties. Off can reduce preview processing at the cost of more visible noise; On requests stronger preview noise reduction. Stock restores the values captured before ASB first owned them. The properties apply live and are read back, but a successful write does not prove that every camera HAL mode honours them. Recorded-video quality or smoothness is not directly changed or guaranteed.' },
   { key:'camera_hold_enable', type:'bool', def:'1', name:'Hold Performance While Camera Runs',
     desc:'While the camera is streaming, the governor keeps the CPU ceiling and cores instead of lowering them. Thermal and vendor limits still apply.\n\n🔋 Battery life: Off\n⚡ Performance: On\n✋ Not sure: On' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
@@ -10329,9 +10332,9 @@ const CFG_ITEMS = [
   { key:'kernel_sched_nr_migrate', type:'seg', def:'auto', stock:'stock',
     opts:['stock','auto','1','2','4','8','16'], name:'Scheduler Migration Batch', cat:'system',
     desc:'How many tasks the scheduler may move between CPU cores in one balancing step. Small numbers: short, light steps, but load evens out more slowly. Large numbers: load spreads faster, with more moving around.\n\n🔋 Battery life: 2 or Auto\n⚡ Performance: 8 or Auto\n✋ Not sure: Auto' },
-  { key:'kernel_sched_stats', type:'seg', def:'stock', stock:'stock',
-    opts:['stock','off'], name:'Scheduler Debug Accounting', cat:'system',
-    desc:'Extra statistics the scheduler collects for debugging tools. Everyday use does not need them. Most kernels have them off already; then both choices are the same.\n\n🔋 Battery life: Off\n⚡ Performance: Off\n✋ Not sure: Off' },
+  { key:'kernel_sched_stats', type:'seg', def:'auto', stock:'stock',
+    opts:['stock','auto','off'], name:'Scheduler Debug Accounting', cat:'system',
+    desc:'Extra statistics the scheduler collects for debugging tools. Everyday use does not need them. Most kernels have them off already; then both choices are the same. Auto disables them only while Smart is active and releases the exact baseline in other profiles; Off disables them in every profile. Stock restores the kernel value. No measurable battery gain is promised.\n\n🔋 Battery life: Off or Auto\n⚡ Performance: Off or Auto\n✋ Not sure: Auto' },
   { key:'kernel_sched_autogroup', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'Scheduler Autogroup', cat:'system',
     desc:'A desktop Linux feature that groups processes by session for fair CPU sharing. Phone GKI kernels are built without it, so the card usually shows "not exposed" and nothing is written. Android already groups apps itself (foreground, background).\n\n🔋 Battery life: Stock\n⚡ Performance: Stock\n✋ Not sure: Stock' },
@@ -10485,7 +10488,7 @@ const CFG_CAT = {
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
-  CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
+  CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_PREVIEW_TNR:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
   smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery',
@@ -10570,12 +10573,12 @@ const CFG_GROUP_OF = {
   heytap_mcs:'infirmary', documentsui_fix:'infirmary',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
-  camera_hold_enable:'camera', bt_a2dp_offload:'audio',
+  camera_hold_enable:'camera', CAMERA_PREVIEW_TNR:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', lsposed_verbose:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
   bt_absvol_mode:'audio', bt_link_stability:'audio',
-  CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
+  CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera', CAMERA_PREVIEW_TNR:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
@@ -10686,7 +10689,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'perf', icon:'camera_hold', titleKey:'cfg_camera_section_perf',
       title:'Camera Performance', hintKey:'cfg_camera_section_perf_hint',
       hint:'Keep the phone responsive while the camera is open.',
-      keys:['camera_hold_enable'] },
+      keys:['camera_hold_enable','CAMERA_PREVIEW_TNR'] },
     { id:'tools', icon:'webcam', titleKey:'cfg_camera_section_tools',
       title:'Camera Tools', hintKey:'cfg_camera_section_tools_hint',
       hint:'Use the phone as a USB webcam and keep the camera app fully compiled, with measured launch times.',
@@ -11398,7 +11401,7 @@ async function soterFixRun() {
 /* Infirmary → Junk Cleanup (dev32). A manual dry-run/readback flow around one bounded shell
  * owner. The card never accepts a path from the browser and never starts a polling worker. */
 const JUNK_CLEANUP_SCRIPT = MD + '/runtime/asb_junk_cleanup.sh';
-const JUNK_CLEANUP_CATS = ['dropbox','tombstones','anr','environment','installer','logs','backup','local','trash','screenshots','coloros'];
+const JUNK_CLEANUP_CATS = ['dropbox','tombstones','anr','environment','installer','logs','backup','trash','screenshots','coloros'];
 let _junkArmed = 0, _junkBusy = false, _junkSeq = 0;
 function junkNum(v) { const n = Number(v); return isFinite(n) && n >= 0 ? Math.floor(n) : 0; }
 function junkBytes(v) {
@@ -12643,7 +12646,7 @@ const CFG_ICONS = {
   kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend', kernel_rt_boost:'rt_boost', kernel_bore:'bore_scheduler',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
-  CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
+  CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', CAMERA_PREVIEW_TNR:'camera_preview', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   ui_recents_memory:'recents_memory', ui_recents_corner_radius:'recents_radius', ui_smooth_corners:'smooth_corners', ui_nav_handle_autohide:'nav_handle_hide',
   feel_pointer_speed:'pointer_speed', feel_gesture_mistouch:'gesture_mistouch', feel_game_memc:'game_memc', feel_dc_dimming:'dc_dimming',
@@ -13043,6 +13046,9 @@ function cfgSmartOwner(it, cur) {
   if (it.key === 'heavy_prime_escape' && v === '1') return 'dynamic';
   if ((it.key === 'prime_escape_burst_s' || it.key === 'prime_escape_rest_s') &&
       String(_cfgVals.heavy_prime_escape || '0') === '1') return 'limit';
+  const dynamicAuto = ['kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction',
+    'kernel_sched_nr_migrate','kernel_sched_stats','kernel_rt_boost'];
+  if (v === 'auto' && dynamicAuto.indexOf(it.key) >= 0) return 'dynamic';
   const profileAuto = ['io_scheduler','kernel_timer_migration','kernel_hrtimer_migration',
     'kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_mglru_min_ttl',
     'kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend',
@@ -13445,7 +13451,7 @@ const APPLY_MODE = {
   // label is reboot even though the bind lands on save.
   disable_blur:APPLY_REBOOT, ui_effects_level:APPLY_REBOOT,
   CAMERA_LEVEL:APPLY_REBOOT, CAMERA_CONTRAST:APPLY_REBOOT, CAMERA_GRAIN:APPLY_REBOOT,
-  CAMERA_PORTRAIT:APPLY_REBOOT, CAMERA_LOWLIGHT:APPLY_REBOOT, camera_hold_enable:APPLY_REBOOT,
+  CAMERA_PORTRAIT:APPLY_REBOOT, CAMERA_LOWLIGHT:APPLY_REBOOT, CAMERA_PREVIEW_TNR:APPLY_LIVE, camera_hold_enable:APPLY_REBOOT,
   audio_dac_hifi:APPLY_REBOOT, media_loudness:APPLY_REBOOT,
   UX_ANIM_FORCE_RESTART:APPLY_REBOOT,
 
@@ -14894,6 +14900,21 @@ async function cfgSet(key, val, ctl) {
       // immediate and the popup confirmed nothing. Not a contradiction, but the one
       // place a user cannot tell a working setting from a silently ignored one.
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+    } else if (key === 'CAMERA_PREVIEW_TNR') {
+      let cr = null;
+      try { cr = await run('sh ' + shQuote(CAMTOOLS_SCRIPT) + ' preview apply'); } catch (e) {}
+      const cl = String((cr && cr.stdout) || '').trim().split('\n').filter(function(line) {
+        return line.indexOf('camtools|preview|') === 0;
+      }).pop() || '';
+      const cp = {};
+      cl.split('|').slice(2).forEach(function(part) { const q = part.split('='); if (q.length === 2) cp[q[0]] = q[1]; });
+      if (cr && cr.errno === 0 && ['applied','restored','stock_unowned'].indexOf(cp.state) >= 0) {
+        const cs = cp.state === 'applied' ? T('t_cfg_live', ' · applied') : cp.state === 'restored' ? T('t_cfg_restored', ' · original value restored') : T('t_cfg_stock_unowned', ' · stock value left untouched');
+        toast(cfgToastText(key, val) + cs, 'good');
+      } else {
+        uiSound('error');
+        toast(cfgToastText(key, val).replace(/^✓\s*/, '') + ' · ' + T('t_cfg_write_rejected', 'the ROM did not confirm the setting'), 'err');
+      }
     } else if (ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0) {
       /* The kernel, not the saved config, decides whether this was applied. The helper's
        * scalar verdict is rendered as text; unsupported/read-only/mismatch never become success. */
@@ -20954,7 +20975,6 @@ function deviceInfoPresentSnapshot() {
   window._asbDeviceInfoAt = snap.t;
   deviceInfoRender(snap.data);
   body.dataset.devShown = '1'; body.dataset.devAt = String(snap.t);
-  body.classList.toggle('dev-stale', !snap.memory);
   status.classList.remove('dev-status-busy');
   status.textContent = T('dev_snapshot_status', 'Snapshot from %s · tap Refresh to collect again').replace('%s', deviceInfoStamp(snap.t));
   const save = _el('devSave'), refresh = _el('devRefresh');
@@ -20983,10 +21003,8 @@ async function asbDeviceInfoLoad() {
     deviceInfoRender(cd);
     body.dataset.devShown = '1';
     body.dataset.devAt = String(cache.t);
-    body.classList.add('dev-stale');
     status.textContent = T('dev_cached_status', 'Snapshot from %s · refreshing…').replace('%s', deviceInfoStamp(cache.t));
   } else if (!background && body.dataset.devShown === '1') {
-    body.classList.add('dev-stale');
     status.textContent = T('dev_loading_status', 'Collecting read-only data…');
   } else if (!background) {
     status.textContent = T('dev_loading_status', 'Collecting read-only data…');
@@ -21013,7 +21031,6 @@ async function asbDeviceInfoLoad() {
     return;
   }
   status.classList.remove('dev-status-busy');
-  body.classList.remove('dev-stale');
   if ((!r || r.errno !== 0 || !d.count) && body.dataset.devShown === '1') {
     status.textContent = T('dev_cached_failed', 'Could not refresh · the snapshot from %s is shown').replace('%s', deviceInfoStamp(parseInt(body.dataset.devAt, 10) || Date.now()));
     if (btn) btn.disabled = false;
