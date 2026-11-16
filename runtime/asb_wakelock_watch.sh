@@ -25,6 +25,11 @@ _cfg() {
     | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]'
 }
 _has() { command -v "$1" >/dev/null 2>&1; }
+if [ -f "$MODDIR/runtime/asb_appops.sh" ]; then
+  . "$MODDIR/runtime/asb_appops.sh"
+else
+  asb_appops() { appops "$@"; }
+fi
 
 _wl_bs_read() {
   _br="$(dumpsys batterystats --charged 2>/dev/null)"
@@ -107,7 +112,7 @@ _wl_mc_line() {
   awk -F'|' -v p="$1" '$1 == p { print; exit }' "$D/multicast_restricted" 2>/dev/null
 }
 _wl_mc_mode() {
-  _mcm="$(appops get "$1" WIFI_MULTICAST 2>/dev/null | grep -v 'Uid mode' \
+  _mcm="$(asb_appops get "$1" WIFI_MULTICAST 2>/dev/null | grep -v 'Uid mode' \
     | sed -n 's/.*WIFI_MULTICAST: \([a-z_]*\).*/\1/p' | head -1)"
   printf '%s' "${_mcm:-default}"
 }
@@ -118,7 +123,7 @@ _wl_mc_release() {
   # Never overwrite another owner's newer mode. If ASB's ignore is gone, the entry is
   # already released; if it is still ours, hand back the exact recorded original.
   if [ "$(_wl_mc_mode "$1")" = ignore ]; then
-    appops set "$1" WIFI_MULTICAST "$_mco" >/dev/null 2>&1 || return 1
+    asb_appops set "$1" WIFI_MULTICAST "$_mco" >/dev/null 2>&1 || return 1
   fi
   awk -F'|' -v p="$1" 'NF >= 4 && $1 != p { print }' "$D/multicast_restricted" 2>/dev/null > "$D/multicast_restricted.tmp" 2>/dev/null
   if [ -s "$D/multicast_restricted.tmp" ]; then
@@ -207,7 +212,7 @@ asb_wl_relax_multicast() {
         # A ROM reset is re-asserted only while fresh cached-holder evidence remains.
         _mc_reapplied=0
         if [ "$(_wl_mc_mode "$_p")" != ignore ]; then
-          appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1 || true
+          asb_appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1 || true
           _mc_reapplied=1
         fi
         if [ "$(_wl_mc_mode "$_p")" = ignore ]; then
@@ -241,7 +246,7 @@ asb_wl_relax_multicast() {
               if [ "$_act" = 1 ] && [ "$_mcs" -ge 600 ] && _has appops; then
                 _mc_orig="$(_wl_mc_mode "$_p")"
                 # An ignore already owned by the user/another tool is never adopted.
-                if [ "$_mc_orig" != ignore ] && appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1 \
+                if [ "$_mc_orig" != ignore ] && asb_appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1 \
                    && [ "$(_wl_mc_mode "$_p")" = ignore ]; then
                   printf '%s|%s|%s|%s\n' "$_p" "$_mc_now" "$_mc_now" "$_mc_orig" >> "$D/multicast_restricted"
                   echo "wakelock: $_p held multicast while cached - limited; restored on use, policy off, or after 20 min without qualifying observations"
@@ -543,18 +548,20 @@ _wl_fitness() {
 FIT="$D/wakelock_fitness_limited"
 FIT_IGN="$D/wakelock_fitness_ignored"
 _wl_fit_mode() { _cfg wakelock_fitness; }
-# The package's own mode. appops get prints "Uid mode: WAKE_LOCK: <m>" FIRST when a per-uid
+# The package's own mode. asb_appops get prints "Uid mode: WAKE_LOCK: <m>" FIRST when a per-uid
 # mode is set (fix177), and this read whichever WAKE_LOCK line came first: with a uid line a
 # freshly set package "ignore" read back as the uid's mode, the limit counted as not accepted
 # and no ledger was written - one way the owner's Samsung Health and Renpho ended up in no
 # ledger with limit chosen, and the WebUI read "no fitness apps".
 _wl_fit_orig() {
-  _o="$(appops get "$1" WAKE_LOCK 2>/dev/null | grep -v 'Uid mode' \
+  _o_raw="$(asb_appops get "$1" WAKE_LOCK 2>/dev/null)" || { printf 'unknown'; return; }
+  _o="$(printf '%s\n' "$_o_raw" | grep -v 'Uid mode' \
         | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
   printf '%s' "${_o:-default}"
 }
 _wl_fit_uidmode() {
-  appops get "$1" WAKE_LOCK 2>/dev/null | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1
+  _fu_raw="$(asb_appops get "$1" WAKE_LOCK 2>/dev/null)" || { printf 'unknown'; return; }
+  printf '%s\n' "$_fu_raw" | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1
 }
 # What Android goes by: AppOpsService checks a uid mode before the package's own.
 _wl_fit_eff() {
@@ -567,7 +574,7 @@ FIT_UID="$D/wakelock_fitness_uidmode"
 FIT_REF="$D/wakelock_fitness_refused"
 FIT_RA="$D/wakelock_fitness_reapply"
 _wl_fit_note() {
-  _fn_raw="$(appops get "$1" WAKE_LOCK 2>/dev/null | grep -m1 . | tr -d '|\r' | cut -c1-80)"
+  _fn_raw="$(asb_appops get "$1" WAKE_LOCK 2>/dev/null | grep -m1 . | tr -d '|\r' | cut -c1-80)" || _fn_raw="appops transport unavailable"
   { grep -v "^$1|" "$FIT_RA" 2>/dev/null; printf '%s|%s|%s|%s\n' "$1" "$(date +%s 2>/dev/null || echo 0)" "$2" "${_fn_raw:--}"; } > "$FIT_RA.tmp" 2>/dev/null \
     && mv -f "$FIT_RA.tmp" "$FIT_RA" 2>/dev/null
   rm -f "$FIT_RA.tmp" 2>/dev/null
@@ -575,14 +582,14 @@ _wl_fit_note() {
 _wl_fit_uid_limit() {
   _fu="$(_wl_fit_uidmode "$1")"
   case "$_fu" in ''|default|ignore) return 0 ;; esac
-  appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 0
+  asb_appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 0
   grep -q "^$1|" "$FIT_UID" 2>/dev/null || echo "$1|$_fu" >> "$FIT_UID"
 }
 _wl_fit_uid_release() {
   [ -s "$FIT_UID" ] || return 0
   _fl="$(grep "^$1|" "$FIT_UID" 2>/dev/null | head -1)"
   [ -n "$_fl" ] || return 0
-  appops set --uid "$1" WAKE_LOCK "${_fl#*\|}" >/dev/null 2>&1
+  asb_appops set --uid "$1" WAKE_LOCK "${_fl#*\|}" >/dev/null 2>&1
   grep -v "^$1|" "$FIT_UID" > "$FIT_UID.tmp" 2>/dev/null
   if [ -s "$FIT_UID.tmp" ]; then mv -f "$FIT_UID.tmp" "$FIT_UID"; else rm -f "$FIT_UID.tmp" "$FIT_UID"; fi
 }
@@ -597,7 +604,7 @@ _wl_fit_limit() {
   if grep -q "^$1|" "$FIT" 2>/dev/null; then
     [ "$(_wl_fit_eff "$1")" = ignore ] && return 0
     if [ "$(_wl_fit_orig "$1")" != ignore ]; then
-      appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
+      asb_appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
     fi
     _wl_fit_uid_limit "$1"
     _fn_eff="$(_wl_fit_eff "$1")"
@@ -618,13 +625,13 @@ _wl_fit_limit() {
   # Already ignored by someone else (the user, another tool): not ours to record or undo.
   [ "$(_wl_fit_eff "$1")" = ignore ] && return 1
   if [ "$_orig" != ignore ]; then
-    appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
+    asb_appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
   fi
   _wl_fit_uid_limit "$1"
   if [ "$(_wl_fit_eff "$1")" != ignore ]; then
     # Not accepted: put back what was changed, so nothing unrecorded is left behind, and
     # say so - the WebUI badge reads it instead of waiting on "pending" for good (fix177).
-    [ "$_orig" != ignore ] && appops set "$1" WAKE_LOCK "$_orig" >/dev/null 2>&1
+    [ "$_orig" != ignore ] && asb_appops set "$1" WAKE_LOCK "$_orig" >/dev/null 2>&1
     _wl_fit_uid_release "$1"
     grep -qxF "$1" "$FIT_REF" 2>/dev/null || echo "$1" >> "$FIT_REF"
     echo "wakelock: $1 - the WAKE_LOCK app-op did not take (reads back $(_wl_fit_eff "$1")); left as it was"
@@ -645,7 +652,7 @@ _wl_fit_release() {
   _has appops || return 0
   while IFS='|' read -r _fp _fo; do
     [ -n "$_fp" ] || continue
-    appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
+    asb_appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
     _wl_fit_uid_release "$_fp"
   done < "$FIT"
   rm -f "$FIT" "$FIT_IGN" "$FIT_UID" "$FIT_REF" "$FIT_RA" 2>/dev/null
@@ -807,7 +814,7 @@ _wl_man_gone() {
   return 0
 }
 _wl_man_eff() {
-  _me_o="$(appops get "$1" WAKE_LOCK 2>/dev/null)"
+  _me_o="$(asb_appops get "$1" WAKE_LOCK 2>/dev/null)"
   _me_u="$(printf '%s\n' "$_me_o" | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
   case "$_me_u" in
     ''|default) _me_u="$(printf '%s\n' "$_me_o" | grep -v 'Uid mode' | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
@@ -829,8 +836,8 @@ _wl_man_apply() {
   [ "$(_wl_fit_eff "$1")" = ignore ] && return 0
   _mo="$(printf '%s' "$_ml" | cut -d'|' -f2)"
   _mu="$(printf '%s' "$_ml" | cut -d'|' -f3)"
-  [ "$(_wl_fit_orig "$1")" = ignore ] || appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
-  case "${_mu:-default}" in ''|default) : ;; *) appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || : ;; esac
+  [ "$(_wl_fit_orig "$1")" = ignore ] || asb_appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
+  case "${_mu:-default}" in ''|default) : ;; *) asb_appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || : ;; esac
   [ "$(_wl_fit_eff "$1")" = ignore ]
 }
 _wl_man_limit() {
@@ -845,16 +852,16 @@ _wl_man_limit() {
     printf 'result=external_ignore\neffective=ignore\n'; return 1
   fi
   _mo="$(_wl_fit_orig "$1")"; _mu="$(_wl_fit_uidmode "$1")"; _mu="${_mu:-default}"
-  [ "$_mo" = ignore ] || appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1
-  case "$_mu" in default) : ;; *) appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || : ;; esac
+  [ "$_mo" = ignore ] || asb_appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1
+  case "$_mu" in default) : ;; *) asb_appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || : ;; esac
   if [ "$(_wl_fit_eff "$1")" = ignore ]; then
     mkdir -p "$D" 2>/dev/null
     printf '%s|%s|%s\n' "$1" "${_mo:-default}" "$_mu" >> "$MAN"
     printf 'result=limited\neffective=ignore\n'; return 0
   fi
   # Refusal is rolled back immediately; no unrecorded half-change is left behind.
-  appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1
-  [ "$_mu" = default ] || appops set --uid "$1" WAKE_LOCK "$_mu" >/dev/null 2>&1
+  asb_appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1
+  [ "$_mu" = default ] || asb_appops set --uid "$1" WAKE_LOCK "$_mu" >/dev/null 2>&1
   printf 'result=not_enforced\neffective=%s\n' "$(_wl_fit_eff "$1")"
   return 1
 }
@@ -866,8 +873,8 @@ _wl_man_restore() {
   fi
   _has appops || { printf 'result=unavailable\n'; return 1; }
   _mo="$(printf '%s' "$_ml" | cut -d'|' -f2)"; _mu="$(printf '%s' "$_ml" | cut -d'|' -f3)"
-  appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1 || { printf 'result=restore_failed\n'; return 1; }
-  [ "${_mu:-default}" = default ] || appops set --uid "$1" WAKE_LOCK "$_mu" >/dev/null 2>&1
+  asb_appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1 || { printf 'result=restore_failed\n'; return 1; }
+  [ "${_mu:-default}" = default ] || asb_appops set --uid "$1" WAKE_LOCK "$_mu" >/dev/null 2>&1
   # Verify the individual modes too: a stale uid override must not survive a "Restore" tap.
   _rp="$(_wl_fit_orig "$1")"; _ru="$(_wl_fit_uidmode "$1")"; _ru="${_ru:-default}"
   if [ "$_rp" = "${_mo:-default}" ] && [ "$_ru" = "${_mu:-default}" ]; then

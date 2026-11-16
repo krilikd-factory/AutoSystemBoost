@@ -145,8 +145,10 @@ _ios_choose() {
     _ios_has "$_iosch_node" "$_iosch_mode" || return 1
     printf '%s\n' "$_iosch_mode"; return 0
   fi
-  case "$_iosch_profile" in performance) _iosch_order='kyber mq-deadline none bfq' ;;
-    *) _iosch_order='mq-deadline none kyber bfq' ;; esac
+  # ADIOS is opt-in by kernel exposure, never assumed from a config or version string.
+  # Keep upstream ADIOS defaults: ASB owns only the bounded scheduler selector.
+  case "$_iosch_profile" in performance) _iosch_order='adios kyber mq-deadline none bfq' ;;
+    *) _iosch_order='adios mq-deadline none kyber bfq' ;; esac
   for _iosch_name in $_iosch_order; do
     if _ios_has "$_iosch_node" "$_iosch_name"; then printf '%s\n' "$_iosch_name"; return 0; fi
   done
