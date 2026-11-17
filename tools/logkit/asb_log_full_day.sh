@@ -1852,8 +1852,8 @@ lk_emit_full_day_report() {
       echo ""
       # What the module itself cost, in one block.
       #
-      # The validation table asks for governor CPU time, physical writes and FSM transitions
-      # per hour. All three are already published to the state file - and all three had to be
+      # The validation table asks for governor CPU time, writer attempts, actual write calls
+      # and FSM transitions per hour. They are published to the state file - and had to be
       # pulled from asbdiag by hand, which means a capture taken overnight and read the next
       # morning did not contain them at all.
       #
@@ -1906,7 +1906,13 @@ lk_emit_full_day_report() {
         # Per hour, like every other line under this header. It printed the lifetime total
         # here, and an audit read "4371 ms" as 4371 ms/h - three times the real figure.
         printf "  governor cpu             : %s ms/h (%s ms total)\n" "$(_ph "$(_mc_get governor_cpu_ms)")" "$(_mc_get governor_cpu_ms)"
-        printf "  physical writes          : %s/h\n" "$(_ph "$(_mc_get governor_writes)")"
+        _mca="$(_mc_get governor_write_attempts)"
+        [ -n "$_mca" ] && printf "  writer attempts          : %s/h\n" "$(_ph "$_mca")"
+        printf "  physical write calls     : %s/h\n" "$(_ph "$(_mc_get governor_writes)")"
+        _mcn="$(_mc_get governor_already_set)"
+        [ -n "$_mcn" ] && printf "  already-set confirms     : %s/h (no physical write)\n" "$(_ph "$_mcn")"
+        _mcp="$(_mc_get governor_precheck_reads)"; _mcr="$(_mc_get governor_readbacks)"
+        [ -n "$_mcp" ] && printf "  writer reads             : %s/h precheck + %s/h confirmation\n" "$(_ph "$_mcp")" "$(_ph "${_mcr:-0}")"
         printf "  fsm transitions          : %s/h\n" "$(_ph "$(_mc_get governor_transitions)")"
         printf "  timer wakeups            : %s/h\n" "$(_ph "$(_mc_get governor_timer_wakeups)")"
         # Where the ticks were and what they cost (fix133). An audit read 578/h as 578

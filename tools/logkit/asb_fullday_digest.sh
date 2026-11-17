@@ -1287,7 +1287,9 @@ if [ -f "$_RPT" ]; then
   # ASB's own cost.
   _cc="$(sed -n 's/^  governor cpu[ ]*: \([0-9][0-9]*\) ms\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
   if [ -n "$_cc" ]; then
-    _cw="$(sed -n 's/^  physical writes[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
+    _cw="$(sed -n 's/^  physical write calls[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
+    # Reports from older releases used the old label; keep their saved captures readable.
+    [ -n "$_cw" ] || _cw="$(sed -n 's/^  physical writes[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
     _ck="$(sed -n 's/^  timer wakeups[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
     _cbs="$(grep -m1 '^    by screen state[ ]*: screen on [0-9]*/h, screen off [0-9]*/h' "$_RPT" 2>/dev/null)"
     _cbo="$(printf '%s\n' "$_cbs" | sed -n 's/.*screen on \([0-9][0-9]*\)\/h.*/\1/p')"
