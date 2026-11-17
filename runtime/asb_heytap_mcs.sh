@@ -1,24 +1,19 @@
 #!/system/bin/sh
 # Opt-in HeyTap MCS / OPPO push transport switch (no .replace overlay).
-# stock: restore only a package state ASB itself changed and cancel a pending ART request.
-# off:   disable com.heytap.mcs now and request one `pm compile -m speed-profile -a`
-#        after the next completed boot. Disabling MCS can delay or stop HeyTap push messages.
+# stock: restore only a package state ASB itself changed.
+# off:   disable com.heytap.mcs now. No ART job is requested. Disabling MCS can delay or
+#        stop HeyTap push messages; package-state readback and exact restore remain mandatory.
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="${ASB_CONF:-$MODDIR/config/governor.conf}"
 STATE_DIR="${ASB_HEYTAP_STATE_DIR:-/data/adb/asb/heytap_mcs}"
 BASELINE="$STATE_DIR/baseline.conf"
 PKG="com.heytap.mcs"
-ART="$MODDIR/runtime/asb_art_compile.sh"
 
 [ -f "$MODDIR/runtime/asb_package_state.sh" ] && . "$MODDIR/runtime/asb_package_state.sh"
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | tail -1 | sed 's/^[^=]*=//; s/#.*//' | tr -d ' \r'
-}
-_art() {
-  [ -f "$ART" ] || return 1
-  MODDIR="$MODDIR" ASB_CONF="$CONF" sh "$ART" "$@"
 }
 _save_baseline() {
   mkdir -p "$STATE_DIR" 2>/dev/null || return 1
@@ -60,15 +55,13 @@ _status() {
     echo 'enabled_state=unknown'
   fi
   rm -f "$STATE_DIR/package.dump" 2>/dev/null
-  if [ -f "$ART" ]; then _art status; else echo 'state=unknown'; fi
+  echo 'art=not_required'
 }
 _apply() {
-  case "$(_cfg heytap_mcs)" in off) : ;; *) _art cancel >/dev/null 2>&1; _restore; return ;; esac
+  case "$(_cfg heytap_mcs)" in off) : ;; *) _restore; return ;; esac
 
   command -v pm >/dev/null 2>&1 || { echo 'result=pm_unavailable'; return 0; }
-  [ -f "$ART" ] || { echo 'result=compile_helper_absent'; return 0; }
   if ! asb_pkg_present "$PKG"; then
-    _art cancel >/dev/null 2>&1
     echo 'result=absent'
     return 0
   fi
@@ -98,21 +91,14 @@ _apply() {
     2|3) : ;;
     *) _restore >/dev/null 2>&1; echo 'result=readback_mismatch'; return 0 ;;
   esac
-  _art_out="$(_art request 2>/dev/null)" || {
-    _restore >/dev/null 2>&1
-    echo 'result=compile_request_failed'
-    return 0
-  }
-  _compile="$(printf '%s\n' "$_art_out" | sed -n 's/.*result=\([a-z_]*\).*/\1/p' | head -1)"
-  case "$_compile" in pending|running|done|failed) : ;; *) _compile=unknown ;; esac
   rm -f "$STATE_DIR/package.dump" 2>/dev/null
-  echo "result=$_result compile=$_compile"
+  echo "result=$_result art=not_required"
 }
 
 case "${1:-apply}" in
   apply) _apply ;;
   status) _status ;;
-  restore) _art cancel >/dev/null 2>&1; _restore ;;
+  restore) _restore ;;
   *) echo 'usage: asb_heytap_mcs.sh apply|status|restore' >&2; exit 2 ;;
 esac
 exit 0

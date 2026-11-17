@@ -11,9 +11,9 @@ READY_STEPS="${ASB_SOTER_READY_STEPS:-6}"
 PASSES="${ASB_SOTER_PASSES:-2}"
 UNLOCK_MAX="${ASB_SOTER_UNLOCK_MAX:-21600}"
 UNLOCK_STEP="${ASB_SOTER_UNLOCK_STEP:-5}"
-SETTLE="${ASB_SOTER_SETTLE:-600}"
-RETRY_WAIT="${ASB_SOTER_RETRY_WAIT:-120}"
-VERIFY_WAIT="${ASB_SOTER_VERIFY_WAIT:-180}"
+SETTLE="${ASB_SOTER_SETTLE:-90}"
+RETRY_WAIT="${ASB_SOTER_RETRY_WAIT:-60}"
+VERIFY_WAIT="${ASB_SOTER_VERIFY_WAIT:-120}"
 LOG_KEEP="${ASB_SOTER_LOG_KEEP:-120}"
 LOCK="$STATE/run.lock"
 AUTO="$STATE/auto"
@@ -135,13 +135,13 @@ _sf_status() {
   _sf_installed
   case $? in 0) _si=1 ;; 1) _si=0 ;; *) _si=unknown ;; esac
   _nl="$(_sf_notify_lang)"
-  printf 'soter|status|installed=%s|services=%s|%s|auto=%s|%s|notify_lang=%s\n' \
+  printf 'soter|status|installed=%s|services=%s|%s|auto=%s|%s|key_status=unverified|after_sale=required|notify_lang=%s\n' \
     "$_si" "$(_sf_services_line)" "$(_sf_last)" "$(_sf_auto)" "$(_sf_boot_fields)" "${_nl:-none}"
 }
 
 _sf_record() {
   mkdir -p "$STATE" 2>/dev/null || return 0
-  printf 'time=%s\nresult=%s\ntrigger=%s\npasses=%s\nboot_id=%s\nup=%s\n' "$(_sf_now)" "$1" "${TRIGGER:-manual}" "${_pass:-0}" "$(_sf_boot_id)" "$(_sf_up)" > "$STATE/last.tmp" 2>/dev/null &&
+  printf 'time=%s\nresult=%s\ntrigger=%s\npasses=%s\nboot_id=%s\nup=%s\nkey_status=unverified\nafter_sale=required\n' "$(_sf_now)" "$1" "${TRIGGER:-manual}" "${_pass:-0}" "$(_sf_boot_id)" "$(_sf_up)" > "$STATE/last.tmp" 2>/dev/null &&
     mv -f "$STATE/last.tmp" "$STATE/last" 2>/dev/null
   chmod 0600 "$STATE/last" 2>/dev/null
 }
@@ -155,7 +155,7 @@ _sf_manual_this_boot() {
 }
 
 _sf_result() {
-  printf 'soter|result|state=%s|cleared=%s|passes=%s|services=%s\n' "$1" "$2" "${_pass:-0}" "$(_sf_services_line)"
+  printf 'soter|result|state=%s|cleared=%s|passes=%s|services=%s|key_status=unverified|after_sale=required\n' "$1" "$2" "${_pass:-0}" "$(_sf_services_line)"
 }
 
 _sf_wait() {
@@ -259,7 +259,7 @@ _sf_notify() {
   [ -n "$_nt" ] || _nt='SOTER'
   if [ -z "$_nb" ]; then
     case "$_nk" in
-      done) _nb='SOTER server data were cleared after the reboot; app functionality was not tested. Switch fingerprint payment on again in your payment apps.' ;;
+      done) _nb='The automatic SOTER reset and service restart completed, but the physical key is unverified. Check AfterSale, Key Status, SOTER key. Switch fingerprint payment on again in your payment apps.' ;;
       *) _nb='The automatic SOTER repair did not finish. Open ASB, Infirmary, SOTER Repair.' ;;
     esac
   fi
@@ -269,11 +269,6 @@ _sf_notify() {
   else
     _sf_log "boot: notification command failed ($_nk)"
   fi
-}
-
-_sf_final() {
-  case "$1" in done|done_no_service|not_installed) return 0 ;; esac
-  return 1
 }
 
 _sf_verify() {
@@ -298,7 +293,7 @@ _sf_verify() {
 
 _sf_boot() {
   if [ ! -f "$AUTO" ]; then
-    printf 'soter|result|state=auto_off|cleared=0|passes=0|services=%s\n' "$(_sf_services_line)"
+    _pass=0; _sf_result auto_off 0
     return 0
   fi
   _bw=0; _bvia=none; _bfirst=none
@@ -317,7 +312,7 @@ _sf_boot() {
     if [ "$_bw" -ge "$UNLOCK_MAX" ]; then
       _sf_log "boot: skipped, the phone was not unlocked within ${_bw}s of boot_completed"
       _sf_brec skipped no_unlock
-      printf 'soter|result|state=no_unlock|cleared=0|passes=0|services=%s\n' "$(_sf_services_line)"
+      _pass=0; _sf_result no_unlock 0
       return 0
     fi
     sleep "$UNLOCK_STEP"
@@ -331,31 +326,40 @@ _sf_boot() {
   if ! _sf_unlocked 1; then
     _sf_brec skipped no_unlock
     _sf_log "boot: skipped because CE storage was no longer unlocked after the settle; no SOTER data was touched"
-    printf 'soter|result|state=no_unlock|cleared=0|passes=0|services=%s
-' "$(_sf_services_line)"
+    _pass=0; _sf_result no_unlock 0
     return 0
   fi
   if [ ! -f "$AUTO" ]; then
     _sf_brec skipped auto_off
     _sf_log "boot: skipped because automatic repair was switched off during the settle"
-    printf 'soter|result|state=auto_off|cleared=0|passes=0|services=%s\n' "$(_sf_services_line)"
+    _pass=0; _sf_result auto_off 0
     return 0
   fi
   if _sf_manual_this_boot; then
     _sf_brec skipped recent_manual
     _sf_log "boot: skipped because a manual repair already completed in this boot"
-    printf 'soter|result|state=skipped_recent_manual|cleared=0|passes=0|services=%s\n' "$(_sf_services_line)"
+    _pass=0; _sf_result skipped_recent_manual 0
     return 0
   fi
   TRIGGER=boot
   _sf_run
-  if ! _sf_final "$_st"; then
-    _bfirst="$_st"
-    _sf_log "boot: first try $_st, retry in ${RETRY_WAIT}s"
-    sleep "$RETRY_WAIT"
-    TRIGGER=boot
-    _sf_run
-  fi
+  case "$_st" in
+    done|done_no_service|clear_failed|service_down)
+      _bfirst="$_st"
+      _sf_log "boot: first automatic pass $_st, second pass in ${RETRY_WAIT}s; key_status=unverified"
+      sleep "$RETRY_WAIT"
+      if [ ! -f "$AUTO" ]; then
+        _sf_log "boot: second pass skipped because automatic repair was switched off"
+      elif ! _sf_unlocked 1; then
+        _sf_log "boot: second pass skipped because CE storage was locked again; no SOTER data was touched"
+      elif _sf_manual_this_boot; then
+        _sf_log "boot: second pass skipped because a manual repair completed during the wait"
+      else
+        TRIGGER=boot
+        _sf_run
+      fi
+      ;;
+  esac
   _sf_brec done "$_st"
   case "$_st" in
     done|done_no_service) _sf_notify done ;;

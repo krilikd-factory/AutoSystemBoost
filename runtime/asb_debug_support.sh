@@ -70,7 +70,7 @@ RECOVERY_LOG="${ASB_DEBUG_SUPPORT_RECOVERY_LOG:-$STATE_DIR/full_day_webui.recove
 PROC_ROOT="${ASB_DEBUG_SUPPORT_PROC_ROOT:-/proc}"
 RESUMEFILE="$STATE_DIR/full_day_resume"
 STOPFILE="$STATE_DIR/full_day_stopping"
-DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/Download}"
+DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/ASB/logs}"
 # A WebView bridge waits for stdout to close. Long actions therefore need a deliberately
 # detached launcher and a tiny status file: otherwise the browser cannot paint feedback
 # until asbdiag has already finished. This state never touches policy.
@@ -513,17 +513,17 @@ diag_status() {
 
 write_diag() {
   _outdir="$DIAG_OUTDIR"
-  # Create it rather than only testing for it.
-  #
-  # The fallback to /sdcard is right on a phone and meaningless on a build host, where the
-  # configured directory simply does not exist yet - the write then failed, the helper
-  # returned non-zero, and the regression aborted at the first assertion line with nothing
-  # but "exit code 8" to show for it.
-  #
-  # mkdir -p is safe in both worlds: on a device the directory already exists and this is a
-  # no-op, and if creation is genuinely impossible the /sdcard fallback still applies.
-  [ -d "$_outdir" ] || mkdir -p "$_outdir" 2>/dev/null || true
-  [ -d "$_outdir" ] || _outdir="/sdcard"
+  # Keep asbdiag beside Infinite Log. The override exists for host tests; production never
+  # falls back to Download or /sdcard, because that would silently recreate the old copies.
+  # Failure to create the requested directory is an explicit export failure, not a success
+  # under a different path.
+  if [ ! -d "$_outdir" ]; then
+    mkdir -p "$_outdir" 2>/dev/null || {
+      echo 'error=diag_outdir_failed'
+      return 5
+    }
+  fi
+  [ -d "$_outdir" ] || { echo 'error=diag_outdir_failed'; return 5; }
   _stamp="$(date '+%Y%m%d_%H%M%S' 2>/dev/null || echo now)"
   _out="$_outdir/asbdiag_${_stamp}.txt"
   _tmp="${_out}.tmp.$$"

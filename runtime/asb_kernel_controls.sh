@@ -354,6 +354,8 @@ asb_kc_smart_value() {
     kernel_rt_boost:heavy) printf '256\n' ;;
     kernel_rt_boost:light) printf '128\n' ;;
     kernel_rt_boost:idle|kernel_rt_boost:conserve) printf '0\n' ;;
+    kernel_bore:light|kernel_bore:heavy) printf '1\n' ;;
+    kernel_bore:idle|kernel_bore:conserve) printf '0\n' ;;
     kernel_sched_stats:idle|kernel_sched_stats:light|kernel_sched_stats:heavy|kernel_sched_stats:conserve) printf '0\n' ;;
     *) return 1 ;;
   esac
@@ -382,7 +384,7 @@ asb_kc_smart() {
   _aksm_tmp="$_aksm_plan.tmp.$$"
   (umask 077; printf '%s\n' "$_aksm_scenario" > "$_aksm_tmp" 2>/dev/null) && mv -f "$_aksm_tmp" "$_aksm_plan" 2>/dev/null || { rm -f "$_aksm_tmp" 2>/dev/null; printf 'smart_kernel|state=state_failed\n'; return 1; }
   _aksm_rc=0
-  for _aksm_key in kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost; do
+  for _aksm_key in kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_hrtimer_migration kernel_lpm_prediction kernel_rt_boost kernel_bore; do
     [ "$(asb_kc_mode "$_aksm_key")" = auto ] || continue
     asb_kc_run apply "$_aksm_key" "$_aksm_scenario" smart || _aksm_rc=1
   done
@@ -412,7 +414,7 @@ asb_kc_apply() {
   _aka_dynamic=""
   if [ "$_aka_mode" = auto ] && [ "$_aka_profile" = smart ]; then
     case "$_aka_key" in
-      kernel_timer_migration|kernel_sched_nr_migrate|kernel_sched_stats|kernel_hrtimer_migration|kernel_lpm_prediction|kernel_rt_boost)
+      kernel_timer_migration|kernel_sched_nr_migrate|kernel_sched_stats|kernel_hrtimer_migration|kernel_lpm_prediction|kernel_rt_boost|kernel_bore)
         _aka_scenario="$_aka_smart"
         case "$_aka_scenario" in idle|light|heavy|conserve) ;; *) _aka_scenario="$(cat "$(asb_kc_smart_plan)" 2>/dev/null)" ;; esac
         _aka_dynamic="$(asb_kc_smart_value "$_aka_key" "$_aka_scenario" 2>/dev/null)" ;;

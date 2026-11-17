@@ -1045,6 +1045,79 @@ _wl_svc_restore() {
   fi
   printf 'result=restore_failed\neffective=%s\n' "$_after"; return 1
 }
+# On-demand Activity + Service discovery. Android exposes only records it currently has;
+# absence from this list is not proof that a manifest component does not exist.
+_wl_cmp_running() {
+  _has dumpsys || return 1
+  _cp="${1:-}"
+  _wl_man_pkgok "$_cp" || return 1
+  for _ck in activities services; do
+    dumpsys activity "$_ck" "$_cp" 2>/dev/null | awk -v p="$_cp" -v k="${_ck%s}" '
+      { s=$0; while(match(s,/[A-Za-z0-9_.$]+\/[A-Za-z0-9_.$]+/)) {
+          c=substr(s,RSTART,RLENGTH); if(index(c,p "/")==1) print k "|" c
+          s=substr(s,RSTART+RLENGTH) } }'
+  done | sort -u
+}
+_wl_cmp_status() {
+  _sp="${1:-}"
+  _wl_man_installed "$_sp" || { printf 'result=not_user_app\nscan=unavailable\n'; return 1; }
+  _has dumpsys || { printf 'result=unavailable\nscan=unavailable\n'; return 1; }
+  _sd="$(dumpsys package "$_sp" 2>/dev/null)"; [ -n "$_sd" ] || { printf 'result=unavailable\nscan=unavailable\n'; return 1; }
+  _cr="$(_wl_cmp_running "$_sp")"
+  printf 'version=2\nscan=ok\n'
+  _sn=0; [ -s "$SVC" ] && _sn="$(awk -F'|' -v p="$_sp" '$1 == p { n++ } END { print n+0 }' "$SVC")"
+  printf 'selected=%s\n' "${_sn:-0}"
+  { printf '%s\n' "$_cr"; [ -s "$SVC" ] && awk -F'|' -v p="$_sp" '$1 == p { print (($4 == "activity") ? "activity" : "service") "|" $2 }' "$SVC"; } \
+    | awk -F'|' 'NF == 2 && $2 != "" && !seen[$2]++ { print }' | while IFS='|' read -r _ck _sc; do
+        _wl_svc_compok "$_sp" "$_sc" || continue
+        [ "$_ck" = activitie ] && _ck=activity
+        _sl="$(_wl_svc_line "$_sp" "$_sc")"; _ss=0; [ -n "$_sl" ] && _ss=1
+        _st="$(_wl_svc_state "$_sd" "$_sc")"; _st="${_st:-default}"
+        _run=0; printf '%s\n' "$_cr" | cut -d'|' -f2 | grep -qxF "$_sc" && _run=1
+        [ "$_ss" = 1 ] || [ "$_run" = 1 ] || continue
+        [ "$_ss" = 1 ] || [ "$_st" != disabled ] || continue
+        printf 'component|%s|%s|%s|%s|%s\n' "$_ck" "$_sc" "$_ss" "$_st" "$_run"
+      done
+}
+_wl_cmp_disable() {
+  _sp="${1:-}"; _sc="${2:-}"; _ck="${3:-service}"
+  _wl_svc_compok "$_sp" "$_sc" || { printf 'result=bad_request\n'; return 1; }
+  _wl_man_installed "$_sp" || { printf 'result=not_user_app\n'; return 1; }
+  _has dumpsys && _has pm || { printf 'result=unavailable\n'; return 1; }
+  _sd="$(dumpsys package "$_sp" 2>/dev/null)"; [ -n "$_sd" ] || { printf 'result=unavailable\n'; return 1; }
+  _sl="$(_wl_svc_line "$_sp" "$_sc")"
+  if [ -n "$_sl" ]; then
+    _st="$(_wl_svc_state "$_sd" "$_sc")"
+    [ "$_st" = disabled ] && { printf 'result=disabled\neffective=disabled\n'; return 0; }
+    printf 'result=not_enforced\neffective=%s\n' "${_st:-unknown}"; return 1
+  fi
+  _st="$(_wl_svc_state "$_sd" "$_sc")"
+  [ "$_st" = disabled ] && { printf 'result=external_disabled\neffective=disabled\n'; return 1; }
+  if [ "$_st" = enabled ]; then _orig=enabled
+  elif [ -z "$_st" ] && _wl_cmp_running "$_sp" | cut -d'|' -f2 | grep -qxF "$_sc"; then _orig=default
+  else printf 'result=not_running\neffective=%s\n' "${_st:-unknown}"; return 1
+  fi
+  pm disable --user 0 "$_sc" >/dev/null 2>&1 || { printf 'result=not_enforced\neffective=%s\n' "$_orig"; return 1; }
+  _after="$(_wl_svc_state "$(dumpsys package "$_sp" 2>/dev/null)" "$_sc")"
+  if [ "$_after" != disabled ]; then
+    _wl_svc_restore_state "$_sc" "$_orig" >/dev/null 2>&1 || :
+    printf 'result=not_enforced\neffective=%s\n' "${_after:-unknown}"; return 1
+  fi
+  mkdir -p "$D" 2>/dev/null && printf '%s|%s|%s|%s\n' "$_sp" "$_sc" "$_orig" "$_ck" >> "$SVC" || {
+    _wl_svc_restore_state "$_sc" "$_orig" >/dev/null 2>&1 || :
+    printf 'result=not_recorded\neffective=%s\n' "$_orig"; return 1;
+  }
+  printf 'result=disabled\neffective=disabled\n'; return 0
+}
+if [ "${1:-}" = component-list ]; then _wl_cmp_status "${2:-}"; exit $?; fi
+if [ "${1:-}" = component-set ]; then
+  case "${3:-}" in
+    disable) _wl_cmp_disable "${2:-}" "${4:-}" "${5:-service}" ;;
+    restore) _wl_svc_restore "${2:-}" "${4:-}" ;;
+    *) printf 'result=bad_request\n'; exit 2 ;;
+  esac
+  exit $?
+fi
 if [ "${1:-}" = service-list ]; then _wl_svc_status "${2:-}"; exit $?; fi
 if [ "${1:-}" = service-set ]; then
   case "${3:-}" in
