@@ -3482,6 +3482,7 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
  * too (asb_fsm.h, touch floor), which also covers the taps the warm-die veto keeps from
  * lifting. The lift itself is unchanged. */
 #define ASB_UNLOCK_TOUCH_WINDOW_MS 20000L
+#define ASB_TOUCH_LIFT_GAP_MS ASB_UNLOCK_TOUCH_WINDOW_MS
 #define ASB_LAUNCH_LIFT_GAP_MS 5000L
 static int    g_unlock_prev_screen = -1;  /* screen state of the last pass, -1 before the first */
 static long   g_unlock_on_ms       = 0;   /* boottime ms the screen last came on, 0 = off */
@@ -3493,7 +3494,10 @@ static int    g_unlock_edge        = 0;   /* the lift started or ended: this pas
 static unsigned long g_unlock_lifts = 0;  /* lifts started: screen-on edges and touch re-arms */
 static unsigned long g_unlock_skips = 0;  /* edges that did not lift */
 static char   g_unlock_skip_why[16] = "-";/* why the last one did not: off/profile/thermal/warm */
-static long   g_launch_arm_ms      = 0;   /* boottime ms of the last app-switch arm */
+static long   g_launch_arm_ms      = 0;   /* boottime ms of the last app-switch/lock arm */
+static long   g_touch_arm_ms       = 0;   /* last routine-touch arm; independent of app launches */
+static unsigned long g_unlock_touch_lifts = 0;
+static unsigned long g_unlock_touch_defers = 0;
 static int    g_unlock_profile     = -1;  /* profile the last update ran for (fix243) */
 static const char *g_unlock_arm_why = "-";/* what armed the running lift, for the log line */
 static long   g_unlock_armed_ms    = 0;   /* boottime ms of the arm behind the running lift (fix248) */
@@ -3569,7 +3573,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
                                   int lock_kick, int launch_kick,
                                   long now_ms, int profile_idx, int thermal_cap, int die_c) {
     int prev = g_unlock_prev_screen;
-    int arm = 0, cold = 0;
+    int arm = 0, cold = 0, touch_arm = 0;
     /* fix272: a cold start is heard once, whatever this pass decides. */
     int cold_kick = g_unlock_cold_kick;
     long cold_ms = asb_cold_lift_ms(cold_kick, g_asb_cfg.unlock_lift_s);
@@ -3622,15 +3626,29 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
             cold = 1;
             g_unlock_arm_why = "cold start";
         }
-    } else if ((touch_kick || lock_kick || launch_kick) && g_unlock_until_ms <= now_ms &&
-               now_ms - g_launch_arm_ms >= ASB_LAUNCH_LIFT_GAP_MS) {
-        /* fix212: a foreground-app change. fix220: the tap that starts an open/close and
-         * the lock press are the same burst, heard earlier than the app hash can change.
-         * Rate-limited and refused while a lift runs, so scrolling through the recents
-         * list buys one window, not an unbroken boost. */
-        g_launch_arm_ms = now_ms;
+    } else if (g_unlock_until_ms <= now_ms &&
+               ((touch_kick && now_ms - g_touch_arm_ms >= ASB_TOUCH_LIFT_GAP_MS) ||
+                ((lock_kick || launch_kick) &&
+                 now_ms - g_launch_arm_ms >= ASB_LAUNCH_LIFT_GAP_MS))) {
+        /* A foreground-app change and the lock press keep their short anti-chatter gap.
+         * Routine touches are different: ASB_TOUCH_RECENT_S is only three seconds, so the
+         * old shared five-second gap could raise and restore every ceiling twice in ten
+         * seconds during ordinary reading/scrolling. A field capture accumulated hundreds
+         * of these pairs without an FSM transition. Keep the immediate wake, first-touch,
+         * app-switch, cold-start and lock paths, but buy at most one routine-touch lift in
+         * the existing 20-second interaction window. Its timestamp is independent: a touch
+         * must not suppress the app switch that follows it. */
+        if (touch_kick && now_ms - g_touch_arm_ms >= ASB_TOUCH_LIFT_GAP_MS) {
+            g_touch_arm_ms = now_ms;
+            touch_arm = 1;
+            g_unlock_arm_why = "touch";
+        } else {
+            g_launch_arm_ms = now_ms;
+            g_unlock_arm_why = lock_kick ? "lock key" : "app switch";
+        }
         arm = 1;
-        g_unlock_arm_why = touch_kick ? "touch" : (lock_kick ? "lock key" : "app switch");
+    } else if (touch_kick && !lock_kick && !launch_kick) {
+        g_unlock_touch_defers++;
     }
     if (arm) {
         const char *why = NULL;
@@ -3647,6 +3665,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
             if (until > g_unlock_until_ms) g_unlock_until_ms = until;
             g_unlock_armed_ms = now_ms;
             g_unlock_lifts++;
+            if (touch_arm) g_unlock_touch_lifts++;
             if (cold) g_unlock_cold_lifts++;
             if (cold && cold_kick == ASB_COLD_LONG) g_unlock_cold_long++;
         }
@@ -4392,10 +4411,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                "unlock_cold_long=%lu\nunlock_cold_trims=%lu\n",
             g_zygisk_launch_long, g_zygisk_launch_short,
             g_unlock_cold_long, g_unlock_cold_trims);
-    fprintf(f, "governor_transitions=%lu\ngovernor_writes=%lu\n"
-               "governor_readbacks=%lu\ngovernor_vendor_overrides=%lu\n",
-            g_stat_transitions, g_stat_writes, g_stat_readbacks,
-            g_stat_vendor_overrides);
+    fprintf(f, "governor_transitions=%lu\ngovernor_write_attempts=%lu\n"
+               "governor_writes=%lu\ngovernor_already_set=%lu\n"
+               "governor_precheck_reads=%lu\ngovernor_readbacks=%lu\n"
+               "governor_vendor_overrides=%lu\n",
+            g_stat_transitions, g_stat_write_attempts, g_stat_writes, g_stat_already_set,
+            g_stat_precheck_reads, g_stat_readbacks, g_stat_vendor_overrides);
     fprintf(f, "governor_event_wakeups=%lu\ngovernor_timer_wakeups=%lu\n"
                "governor_cpu_ms=%ld\n",
             g_governor_event_wakeups, g_governor_timer_wakeups,
@@ -4985,6 +5006,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * touches), wakes that did not lift and why the last one did not. */
     fprintf(f, "unlock_lift=%d\nunlock_lifts=%lu\nunlock_lift_skips=%lu\nunlock_lift_skip_why=%s\n",
             g_unlock_applied, g_unlock_lifts, g_unlock_skips, g_unlock_skip_why);
+    fprintf(f, "unlock_touch_lifts=%lu\nunlock_touch_defers=%lu\n",
+            g_unlock_touch_lifts, g_unlock_touch_defers);
     fprintf(f, "unlock_level_khz=%d\nunlock_levels=%lu\n", g_unlock_level_khz, g_unlock_levels);
     fprintf(f, "unlock_gpu=%d\nunlock_gpu_lifts=%lu\n", g_unlock_gpu_on, g_unlock_gpu_lifts);
     {

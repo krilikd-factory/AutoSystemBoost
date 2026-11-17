@@ -87,9 +87,9 @@ typedef struct {
 } asb_write_health_t;
 
 /* Overhead attribution, defined here because this is where writes happen and this header
-   is included before anything that reports them. One write and one confirming read per
-   attempt - see write_state in asb_governor.c for why the aggregate counters were not
-   enough to find the state oscillation. */
+   is included before anything that reports them. Attempts, no-op confirmations, physical
+   write calls and reads are separate: an already-set request returns before sysfs_write_int
+   and must never be reported as physical I/O. */
 /* JSON publish accounting - stage 1 of the lightening plan asks for it by name.
  *
  * Three files now skip identical content: state, conflicts and learner. Skipped counts the
@@ -106,8 +106,12 @@ static unsigned long g_stat_write_batches    = 0;
 static unsigned long g_stat_json_written     = 0;
 static unsigned long g_stat_json_skipped     = 0;
 static unsigned long g_stat_noop_ticks       = 0;
-static unsigned long g_stat_writes           = 0;
-static unsigned long g_stat_readbacks        = 0;
+static unsigned long g_stat_write_attempts   = 0;
+static unsigned long g_stat_already_set      = 0;
+static unsigned long g_stat_writes           = 0;  /* actual sysfs_write_int calls */
+static unsigned long g_stat_precheck_reads   = 0;
+static unsigned long g_stat_readbacks        = 0;  /* confirmation reads after a write */
+static int           g_writer_apply_had_physical = 0;
 static unsigned long g_stat_transitions      = 0;
 static unsigned long g_stat_vendor_overrides = 0;
 
@@ -214,11 +218,7 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
      * (below) and ASB's low request stays in the QoS set, taking effect the moment the
      * vendor lets go. That is the correct behaviour, so the request is sent as asked. */
     h->attempts++;
-    /* Overhead attribution: one write and one confirming read per attempt. Defined in
-       asb_governor.c, which includes this header - see write_state for why they are split
-       out from the aggregate counters. */
-    g_stat_writes++;
-    g_stat_readbacks++;
+    g_stat_write_attempts++;
     h->requested = requested;
     snprintf(h->path, sizeof(h->path), "%s", path);
     /* Skip the write when the node already holds the value.
@@ -243,8 +243,13 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
      *
      * The text-aware comparison further down handles these correctly; this fast path
      * cannot, so it does not try. */
-    int pre = writer_node_is_uclamp(node) ? INT_MIN : sysfs_read_int(path, INT_MIN);
+    int pre = INT_MIN;
+    if (!writer_node_is_uclamp(node)) {
+        g_stat_precheck_reads++;
+        pre = sysfs_read_int(path, INT_MIN);
+    }
     if (pre != INT_MIN && pre == requested) {
+        g_stat_already_set++;
         h->observed = pre;
         h->applied++;
         h->consecutive_failures = 0;
@@ -256,8 +261,14 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
     }
 
     if (node >= 0 && node < ASB_WRITE_NODE_COUNT) g_write_tally[node]++;
+    g_stat_writes++;
+    g_writer_apply_had_physical = 1;
     int rc = sysfs_write_int(path, requested);
-    int observed = (rc == 0) ? sysfs_read_int(path, INT_MIN) : INT_MIN;
+    int observed = INT_MIN;
+    if (rc == 0) {
+        g_stat_readbacks++;
+        observed = sysfs_read_int(path, INT_MIN);
+    }
     h->observed = observed;
     if (rc == 0 && observed == requested) {
         h->applied++;
@@ -294,6 +305,7 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
          * empty file, so the percent-format confirmation never executed and every uclamp
          * write still counted as a failure. The device kept reporting 0.00 with
          * writer health failures=8, which is what sent me looking here a second time. */
+        g_stat_readbacks++;
         if (sysfs_read_str(path, _uc_buf, sizeof(_uc_buf)) > 0) {
             int _uc_seen;
             if (strncmp(_uc_buf, "max", 3) == 0) {
@@ -1765,6 +1777,7 @@ static int writer_reassert_target(int slot, int rail, asb_state_t state) {
 
 static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_state_t state, int thermal_cap) {
     int writes = 0;
+    g_writer_apply_had_physical = 0;
     writer_init_paths();
     if (g_asb_cfg.shadow_mode) {
         writer_shadow_record(caps, state, thermal_cap);
@@ -2522,8 +2535,9 @@ skip_cpu_caps: ;
         }
     }
 
-    /* Count the batch, not just its nodes - see g_stat_write_batches. */
-    if (writes > 0) g_stat_write_batches++;
+    /* A batch exists only when at least one node reached sysfs_write_int. A pass whose
+     * requests were all already set is useful confirmation work, but not a write batch. */
+    if (g_writer_apply_had_physical) g_stat_write_batches++;
     return writes;
 }
 
