@@ -1858,6 +1858,11 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .lgr-v.dev-warn { color: var(--bal); }
 .device-page .lgr-v.dev-bad { color: var(--perf); }
 .device-page .dev-evidence { border-inline-start: 2px solid var(--accent); padding-inline-start: 10px; }
+.device-page .dev-collapsible > summary { min-height:40px; display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; list-style:none; }
+.device-page .dev-collapsible > summary::-webkit-details-marker { display:none; }
+.device-page .dev-collapsible > summary::after { content:'›'; flex:0 0 auto; color:var(--text-tertiary); font-size:20px; line-height:1; transition:transform .18s ease-out; }
+.device-page .dev-collapsible[open] > summary::after { transform:rotate(90deg); }
+.device-page .dev-collapsible > summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:4px; }
 .device-page .dev-group { display: flex; align-items: center; gap: 10px; margin: 12px 4px -2px;
   font: 700 11px/1.2 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--text-tertiary); }
 .device-page .dev-group::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--border); }
@@ -2264,8 +2269,9 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-recommend-value { flex: 1 0 100%; padding-inline-start: 22px; color: var(--accent); font-size: 12px; font-weight: 700; }
 .lgr-action .lgr-recommend-value { grid-column: 2; padding-inline-start: 0; }
 .inf-advice-rows { display: grid; gap: 7px; }
-.inf-advice-row { align-items: flex-start; }
-.inf-advice-row .bfx-note { flex: 1 0 100%; }
+.inf-advice-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:4px 12px; }
+.inf-advice-row .junk-cat-meta { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.inf-advice-row .bfx-note { grid-column:1 / -1; min-width:0; margin-top:2px; line-height:1.45; overflow-wrap:anywhere; }
 .lgr-ic { flex: 0 0 auto; font-size: 13px; line-height: 1.45; }
 .lgr-empty { text-align: center; padding: 26px 16px; }
 .lgr-empty-emo { display: block; font-size: 34px; line-height: 1; margin-bottom: 10px; }
@@ -3803,6 +3809,15 @@ html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disa
 .kernel-source-name { color:var(--text); font:600 11px/1.35 var(--mono); overflow-wrap:anywhere; }
 .kernel-source-metrics { margin-top:3px; color:var(--text-secondary); font-size:10.5px; line-height:1.35; }
 .kernel-source-purpose { margin-top:6px; color:var(--text-secondary); font-size:11px; line-height:1.42; }
+.kernel-source-details { margin-top:6px; color:var(--text-secondary); font-size:10.5px; }
+.kernel-source-details > summary { cursor:pointer; color:var(--accent); }
+.kernel-sources-open { margin-top:12px; align-self:flex-start; }
+.kernel-observe { display:flex; flex-direction:column; align-items:stretch; }
+.kernel-observe .bfx-actions { margin-top:10px; }
+.kernel-sleep-title { margin-top:14px; }
+.kernel-input-row { flex-wrap:wrap; }
+.kernel-input-row .kernel-input { flex-basis:100%; }
+.kernel-source-block + .kernel-source-block { margin-left:2px; }
 .kernel-source-risk { margin-top:3px; color:var(--text-tertiary); font-size:10.5px; line-height:1.4; }
 .kernel-source-risk.is-high,.kernel-source-risk.is-critical { color:var(--m-warm); }
 .kernel-source-block { flex:0 0 auto; min-height:32px; padding:6px 9px; font-size:10.5px; }
@@ -5952,7 +5967,7 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
 .asb-boot-brand b { color:var(--boot-accent); font-weight:inherit; }
 .asb-boot-status { min-height:20px; margin-top:13px; color:var(--boot-muted); font-size:12px; font-weight:550; }
 .asb-boot-progress {
-  position:relative; height:3px; margin:25px 8px 0; overflow:hidden; border-radius:99px; background:rgba(120,150,139,.20);
+  position:relative; height:6px; margin:22px 8px 0; overflow:hidden; border-radius:99px; background:rgba(120,150,139,.20);
 }
 .asb-boot-progress::after {
   content:""; position:absolute; inset:0; width:34%; border-radius:inherit; pointer-events:none;
@@ -5966,14 +5981,6 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
   transition:transform .28s ease;
 }
 .asb-boot-count { margin-top:9px; color:var(--boot-muted); font:600 10px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:1.4px; }
-.asb-boot-stages { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:29px; }
-.asb-boot-stage { position:relative; color:var(--boot-muted); font:600 9px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.8px; opacity:.52; transition:opacity .2s,color .2s; }
-.asb-boot-stage::before { content:""; display:block; width:4px; height:4px; margin:0 auto 8px; border-radius:50%; background:currentColor; }
-.asb-boot-stage::after { content:""; position:absolute; left:18%; right:18%; bottom:-7px; height:1px; background:currentColor; opacity:0; transform:scaleX(.25); }
-.asb-boot-stage.is-active { color:var(--boot-accent2); opacity:1; }
-.asb-boot-stage.is-active::before { animation:asbBootBeacon 1.05s ease-out infinite; }
-.asb-boot-stage.is-active::after { opacity:.7; animation:asbBootStageLine 1.35s ease-in-out infinite; }
-.asb-boot-stage.is-done { color:var(--boot-accent); opacity:1; }
 .asb-boot-intro.is-ready .asb-boot-ufo { animation:asbBootReady .48s cubic-bezier(.16,1,.3,1) both; }
 .asb-boot-intro.is-ready .asb-boot-progress::after { animation:none; opacity:0; }
 html[data-asb-theme="light"] .asb-boot-intro {
@@ -5987,24 +5994,21 @@ html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
 @keyframes asbBootScan { 0%,100% { transform:translateY(8vh); opacity:0; } 15%,85% { opacity:.52; } 50% { transform:translateY(82vh); } }
 @keyframes asbBootArrive { from { opacity:0; transform:translateY(12px) scale(.985); } to { opacity:1; transform:none; } }
 @keyframes asbBootHalo { 50% { transform:scale(1.15); opacity:.48; } }
-@keyframes asbBootBeacon { 0% { box-shadow:0 0 0 0 currentColor; } 70%,100% { box-shadow:0 0 0 7px transparent; } }
-@keyframes asbBootStageLine { 0%,100% { transform:scaleX(.25); opacity:.2; } 50% { transform:scaleX(1); opacity:.85; } }
 @keyframes asbBootTrackShine { from { transform:translateX(-110%); } to { transform:translateX(395%); } }
 @keyframes asbBootReady { 45% { transform:scale(1.075); box-shadow:0 0 42px rgba(0,240,180,.28); } to { transform:scale(1); } }
 @media (max-height:640px) {
   .asb-boot-core { --k:.8256; margin:24px auto 20px; }
-  .asb-boot-stages { margin-top:20px; }
 }
 @media (prefers-reduced-motion:reduce) {
-  .asb-boot-intro,.asb-boot-progress > i,.asb-boot-stage { transition:none !important; }
+  .asb-boot-intro,.asb-boot-progress > i { transition:none !important; }
   .asb-boot-panel,.asb-boot-scan,.asb-boot-orbit,.asb-boot-ufo,.asb-boot-core::before,
-  .asb-boot-progress::after,.asb-boot-stage::before,.asb-boot-stage::after { animation:none !important; }
+  .asb-boot-progress::after { animation:none !important; }
 }
 @media (forced-colors:active) {
   .asb-boot-intro { color:CanvasText !important; }
   .asb-boot-bg { background:Canvas !important; }
   .asb-boot-grid,.asb-boot-scan,.asb-boot-core::before,.asb-boot-progress::after { display:none; }
-  .asb-boot-kicker,.asb-boot-status,.asb-boot-count,.asb-boot-stage { color:CanvasText !important; }
+  .asb-boot-kicker,.asb-boot-status,.asb-boot-count { color:CanvasText !important; }
   .asb-boot-orbit,.asb-boot-ring,.asb-boot-ufo,.asb-boot-progress { border-color:CanvasText !important; }
   .asb-boot-ufo { background:Canvas !important; color:CanvasText !important; box-shadow:none; }
   .asb-boot-progress > i { background:Highlight !important; box-shadow:none; }
@@ -6020,7 +6024,7 @@ html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
  * reduced-motion branch never enters this path; the old opacity fade (is-leaving) remains. */
 .asb-boot-warp .asb-boot-grid, .asb-boot-warp .asb-boot-scan, .asb-boot-warp .asb-boot-kicker,
 .asb-boot-warp .asb-boot-brand, .asb-boot-warp .asb-boot-status, .asb-boot-warp .asb-boot-progress,
-.asb-boot-warp .asb-boot-count, .asb-boot-warp .asb-boot-stages {
+.asb-boot-warp .asb-boot-count {
   opacity:0 !important; transition:opacity .3s ease;
 }
 
@@ -6298,13 +6302,6 @@ html[data-asb-effects="reduced"] :is(.zygisk-header-dot,.zygisk-header-dot::afte
     <div class="asb-boot-status" id="asbBootIntroStatus">Preloading ASB metrics…</div>
     <div class="asb-boot-progress" id="asbBootIntroProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="asbBootIntroBar"></i></div>
     <div class="asb-boot-count" id="asbBootIntroCount">0 / 5</div>
-    <div class="asb-boot-stages" aria-hidden="true">
-      <span class="asb-boot-stage is-active" data-boot-stage="live">LIVE</span>
-      <span class="asb-boot-stage" data-boot-stage="config">CONFIG</span>
-      <span class="asb-boot-stage" data-boot-stage="device">DEVICE</span>
-      <span class="asb-boot-stage" data-boot-stage="log">LOG</span>
-      <span class="asb-boot-stage" data-boot-stage="zygisk">ZYGISK</span>
-    </div>
   </div>
 </div>
 <div class="status-bar-scrim" aria-hidden="true"></div>
@@ -7003,10 +7000,6 @@ html[data-asb-effects="reduced"] :is(.zygisk-header-dot,.zygisk-header-dot::afte
         <button class="live-chip" id="zySave" type="button" onclick="asbSavePage('zygisk')" aria-label="Save the whole page as a text file" disabled>
           <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>
           <span data-i18n="page_save">Save</span>
-        </button>
-        <button class="live-chip rpt-refresh" id="zyRefresh" type="button" onclick="zygiskPageLoad(true)">
-          <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3"></path><path d="M20 5v6h-6"></path></svg>
-          <span data-i18n="dev_refresh">Refresh</span>
         </button>
       </div>
     </div>
@@ -8077,8 +8070,8 @@ async function debugDiagPoll() {
   // holding the original bridge call open, otherwise the WebView cannot render feedback.
   /* 90 attempts at 350 ms is 31 seconds, and a full asbdiag takes longer than that on a
    * busy phone - it walks every thermal zone, reads the whole config, dumps battery
-   * stats and formats the report. The file lands in Downloads exactly as it should, but
-   * the UI had already given up and said the action failed.
+   * stats and formats the report. The file lands beside Infinite Log in ASB/logs exactly
+   * as it should, but the UI had already given up and said the action failed.
    *
    * 300 attempts is a little over 100 seconds. The poll is cheap - one status read per
    * cycle - and the loop still exits the moment the collector reports done, so the extra
@@ -8513,29 +8506,25 @@ function openLivePage() {
   const p = _el('livePage');
   if (!p) return;
   /* Reset scroll before any class change. Restore the last complete display snapshot while
-   * the page is still hidden, then give that finished layer one rendered frame before motion. */
+   * the page is still hidden, then open it immediately without dimming it while fresh reads run. */
   p.scrollTop = 0;
   p.setAttribute('aria-hidden', 'false');
   _liveOpen = true;
-  const openSeq = ++_livePageSeq;
+  _livePageSeq++;
   liveBackgroundSchedule();
   liveHeaderSync();
-  if (lvMonTilesRestore()) lvStale(true);
-  if (lvMonSmartRestore()) lvStale(true);
+  lvMonTilesRestore();
+  lvMonSmartRestore();
   if (_selectedProfile !== 'smart') {
     if (!Object.keys(_stockTelemetryKv).length && _lvMonCache.rom && Object.keys(_lvMonCache.rom).length) {
       paintStockLive(_lvMonCache.rom);
-      lvStale(true);
     } else paintStockLive(_stockTelemetryKv);
   }
+  lvStale(false);
   asbNavAnimMark();
   document.body.classList.add('live-active');
   asbTabbarVisibility();
-  requestAnimationFrame(function () {
-    requestAnimationFrame(function () {
-      if (_liveOpen && openSeq === _livePageSeq) p.classList.add('open');
-    });
-  });
+  p.classList.add('open');
   /* No root call on the tap. A just-completed splash/background pass is reused briefly;
    * the next mandatory live read is still bounded and never replaced by the snapshot. */
   liveMonitorSchedule(liveOpenRefreshDelay());
@@ -8585,6 +8574,7 @@ const NAV_OVERLAYS = [
   { id: 'liveDrainSheet',   close: function () { liveDrainClose(); } },
   { id: 'liveInfoSheet',    close: function () { liveInfoClose(); } },
   { id: 'wlServiceModal',   close: function () { wlServiceClose(); } },
+  { id: 'kernelWakeupSourcesModal', close: function () { kernelWakeupSourceDialogClose(); } },
   { id: 'wlManualModal',    close: function () { wlManualClose(); } },
   { id: 'cfgFm',            close: function () { cfgFmClose(); } },
   { id: 'dozeKeepModal',    close: function () { dozeKeepClose(); } },
@@ -10349,7 +10339,7 @@ const CFG_ITEMS = [
     desc:'The minimum CPU speed that real-time threads ask for: sound playback and recording, screen composition, some camera threads and interrupt handlers. A higher floor gives them a faster start, which may help against crackling sound or dropped frames when the CPU runs slow, but costs power whenever these threads run. 1024 means full speed, 0 means only as fast as the load needs. Snapdragon phones usually set 0 at boot; ASB\'s CPU limits per app group still apply on top.\n\n🔋 Battery life: 0 or Auto\n⚡ Performance: 256 or Auto\n✋ Not sure: Auto' },
   { key:'kernel_bore', type:'seg', def:'stock', stock:'stock',
     opts:['stock','auto','off','on'], name:'BORE Scheduler', cat:'system',
-    desc:'BORE (Burst-Oriented Response Enhancer) changes how the kernel scheduler scores interactive and CPU-intensive tasks. On requests the BORE policy; Off disables it. Conservative Auto enables it only in Performance with fresh native thermal evidence and a normal active state, and otherwise restores the exact baseline. Stock restores the exact value this kernel had before ASB first changed it. This card appears as writable only when /proc/sys/kernel/sched_bore exposes 0 or 1 and permits root writes; every change requires read-back. No responsiveness, smoothness or battery gain is promised.\n\n🔋 Battery life: Stock until measured on this kernel\n⚡ Responsiveness: Auto or On can be tried; return to Stock if worse\n✋ Not sure: Stock' },
+    desc:'BORE (Burst-Oriented Response Enhancer) changes how the kernel scheduler scores interactive and CPU-intensive tasks. On requests the BORE policy; Off disables it. Conservative Auto enables it only in Performance with fresh native thermal evidence and a normal active state, and otherwise restores the exact baseline. Stock restores the exact value this kernel had before ASB first changed it. This card appears as writable only when /proc/sys/kernel/sched_bore exposes 0 or 1 and permits root writes; every change requires read-back. No responsiveness, smoothness or battery gain is promised. In Smart, Auto instead follows the active scenario: light/heavy select 1; idle/conserve select 0, with read-back and the same exact baseline.\n\n🔋 Battery life: Stock until measured on this kernel\n⚡ Responsiveness: Auto or On can be tried; return to Stock if worse\n✋ Not sure: Stock' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces Google Play services background work without turning components off.\n\n🔋 Battery life: Strict\n🔔 Notifications on time: Stock or Light\n✋ Not sure: Light' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -10850,17 +10840,10 @@ function cfgRenderBatteryFixCard(list) {
   titles.appendChild(chip);
   head.appendChild(titles);
   card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', T('bfx_summary', "Recompiles apps, then resets Android battery statistics after reboot. Available at 100% on charge; it does not add capacity.")));
-  kernelMoreBlock(card, 'bfx', [bfxEl('div', 'bfx-desc', T('bfx_desc', 'Two steps. First every app is recompiled in place (speed-profile), with progress shown below app by app. Then, on the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and the learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.'))]);
+  card.appendChild(bfxEl('div', 'bfx-desc', T('bfx_summary', "Schedules an Android battery-statistics reset after reboot. Available at 100% on charge; it does not add capacity and does not run ART compilation.")));
+  kernelMoreBlock(card, 'bfx', [bfxEl('div', 'bfx-desc', T('bfx_desc', 'At the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. ART compilation is not part of this repair, so an unrelated Binder/dex2oat refusal cannot fail the reset workflow. Available only at 100% on charge.'))]);
   const steps = bfxEl('ol', 'bfx-steps');
   steps.appendChild(bfxStep('bfxStepCond', 'bfx_step_cond', 'Condition: 100% on charge'));
-  const art = bfxStep('bfxStepArt', 'bfx_step_art', 'Recompile apps (ART)');
-  const bar = bfxEl('div', 'bfx-bar'); bar.id = 'bfxBarWrap'; bar.hidden = true;
-  const fill = bfxEl('i'); fill.id = 'bfxBar'; bar.appendChild(fill);
-  art.querySelector('.bfx-step-body').appendChild(bar);
-  const now = bfxEl('div', 'bfx-step-now'); now.id = 'bfxArtNow';
-  art.querySelector('.bfx-step-body').appendChild(now);
-  steps.appendChild(art);
   steps.appendChild(bfxStep('bfxStepReset', 'bfx_step_reset', 'Reset battery statistics'));
   card.appendChild(steps);
   const actions = bfxEl('div', 'bfx-actions');
@@ -10900,57 +10883,11 @@ function bfxSetStep(id, state, text) {
 }
 function bfxPaintFrom(f) {
   const chip = _el('bfxChip'), runBtn = _el('bfxRun'), cancelBtn = _el('bfxCancel'), note = _el('bfxNote');
-  const bar = _el('bfxBar'), barWrap = _el('bfxBarWrap'), now = _el('bfxArtNow');
   if (!runBtn) return 'idle';
   const eligible = f.eligible === '1';
   const level = /^[0-9]+$/.test(f.level || '') ? f.level : '—';
   const plug = f.charging === '1' ? T('bfx_plug_on', 'on charge') : T('bfx_plug_off', 'not on charge');
   bfxSetStep('bfxStepCond', eligible ? 'ok' : 'off', bfxT('bfx_cond_state', '{level}% · {plug}', { level: level, plug: plug }));
-  const cs = f.compile || 'idle';
-  const total = bfxNum(f.total), done = bfxNum(f.done), ok = bfxNum(f.ok), fail = bfxNum(f.fail);
-  const started = bfxNum(f.started), finished = bfxNum(f.finished), tnow = bfxNum(f.now);
-  const running = cs === 'running';
-  let artText = T('bfx_art_idle', 'Not run yet'), artState = 'off', ratio = -1, nowText = '';
-  if (running && f.phase === 'finishing') {
-    artState = 'run'; ratio = 1;
-    artText = T('bfx_art_finishing', 'Final background optimisation…');
-  } else if (running) {
-    artState = 'run'; ratio = total ? done / total : 0;
-    artText = bfxT('bfx_art_run', '{done} of {total} · failed: {fail}', { done: done, total: total, fail: fail });
-    if (done >= 3 && tnow > started) {
-      const left = Math.max(1, Math.ceil(((tnow - started) / done) * (total - done) / 60));
-      artText += ' · ' + bfxT('bfx_art_eta', 'about {min} min left', { min: left });
-    }
-    if (f.cur && f.cur !== '-') nowText = bfxT('bfx_art_now', 'Now: {pkg}', { pkg: f.cur });
-  } else if (cs === 'scheduled') {
-    artState = 'wait'; ratio = -1;
-    artText = bfxT('bfx_art_scheduled', 'Immediate recompilation was rejected, so Android’s background optimisation job was started instead. This does not confirm speed-profile compilation; its result will be decided by Android. The battery reset remains scheduled.');
-  } else if (cs === 'done') {
-    artState = 'ok'; ratio = 1;
-    artText = bfxT('bfx_art_done', 'Done: {ok} succeeded, failed: {fail} · {min} min', { ok: ok, fail: fail, min: Math.max(1, Math.round((finished - started) / 60)) });
-  } else if (cs === 'partial') {
-    artState = 'wait'; ratio = total ? done / total : 0;
-    artText = bfxT('bfx_art_partial', 'Stopped early after repeated Binder refusals: {ok} succeeded, {fail} failed, {left} not attempted. Only package-scoped results are counted; no aggregate success is inferred. The battery reset remains scheduled.', { ok: ok, fail: fail, left: Math.max(0, total - done) });
-  } else if (cs === 'stopped') {
-    artState = 'wait'; ratio = total ? done / total : 0;
-    artText = bfxT('bfx_art_stopped', 'Stopped at {done} of {total}', { done: done, total: total });
-  } else if (cs === 'interrupted') {
-    artState = 'wait'; ratio = total ? done / total : 0;
-    artText = bfxT('bfx_art_interrupted', 'Interrupted at {done} of {total}', { done: done, total: total });
-  } else if (cs === 'failed') {
-    artState = 'fail';
-    artText = T('bfx_art_failed', 'Could not read the list of apps');
-  } else if (cs === 'refused') {
-    artState = 'fail';
-    const artErr = f.err_text || T('bfx_art_refused_none', 'no reason given');
-    artText = /Failed transaction/i.test(artErr)
-      ? bfxT('bfx_art_binder', 'Android repeatedly rejected both package-scoped compile calls. The run stopped early; unprocessed apps were not counted as compiled, and no all-package fallback or ART/Dalvik cleanup was used. The battery reset is still scheduled. Android said: {err}', { err: artErr })
-      : bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: artErr });
-  }
-  bfxSetStep('bfxStepArt', artState, artText);
-  if (barWrap) barWrap.hidden = ratio < 0;
-  if (bar) bar.style.transform = 'scaleX(' + Math.max(0, Math.min(1, ratio < 0 ? 0 : ratio)).toFixed(4) + ')';
-  if (now) now.textContent = nowText;
   const pending = f.reset === 'pending';
   const lastReset = f.last_reset && f.last_reset !== '-' ? f.last_reset : '';
   const removed = bfxList(f.removed), absent = bfxList(f.absent), missing = bfxList(f.missing);
@@ -10964,31 +10901,28 @@ function bfxPaintFrom(f) {
     bfxSetStep('bfxStepReset', removed ? 'ok' : (missing ? 'fail' : 'wait'), rtext + ' · ' + fresh);
   } else bfxSetStep('bfxStepReset', 'off', T('bfx_reset_none', 'Not scheduled'));
   let chipState = 'off', chipText = T('bfx_chip_off', 'Unavailable');
-  if (running) { chipState = 'run'; chipText = T('bfx_chip_run', 'Running'); }
-  else if (pending) { chipState = 'wait'; chipText = T('bfx_chip_reboot', 'Reboot needed'); }
-  else if (lastReset && cs === 'done') { chipState = 'ok'; chipText = T('bfx_chip_done', 'Done'); }
+  if (pending) { chipState = 'wait'; chipText = T('bfx_chip_reboot', 'Reboot needed'); }
+  else if (lastReset && removed && !missing) { chipState = 'ok'; chipText = T('bfx_chip_done', 'Done'); }
   else if (eligible) { chipState = 'ready'; chipText = T('bfx_chip_ready', 'Ready'); }
   if (chip) { chip.className = 'bfx-chip is-' + chipState; chip.textContent = chipText; }
   if (cancelBtn) cancelBtn.hidden = !pending;
-  if (running) {
-    runBtn.textContent = T('bfx_stop', 'Stop recompiling'); runBtn.dataset.mode = 'stop'; runBtn.disabled = false;
-  } else if (pending) {
+  if (pending) {
     runBtn.textContent = T('bfx_reboot_finish', 'Reboot to finish'); runBtn.dataset.mode = 'reboot'; runBtn.disabled = false;
   } else {
     runBtn.textContent = T('bfx_run', 'Run Battery Fix'); runBtn.dataset.mode = 'run'; runBtn.disabled = !eligible;
   }
-  if (note) note.textContent = (!running && !pending && !eligible) ? T('bfx_need', 'Available only at 100% on charge') : '';
-  return running ? 'running' : (pending ? 'pending' : 'idle');
+  if (note) note.textContent = (!pending && !eligible) ? T('bfx_need', 'Available only at 100% on charge') : '';
+  return pending ? 'pending' : 'idle';
 }
 async function batteryFixPaint() {
   if (_bfxTimer) { clearTimeout(_bfxTimer); _bfxTimer = 0; }
   if (!_el('bfxRun')) return;
   let txt = '';
   try { const r = await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' status'); txt = String((r && (r.stdout != null ? r.stdout : r)) || ''); } catch (e) {}
-  const mode = bfxPaintFrom(bfxParse(txt));
+  bfxPaintFrom(bfxParse(txt));
   const card = _el('bfxCard');
   const onScreen = !!(card && (typeof document === 'undefined' || !document.body || !document.body.contains || document.body.contains(card)));
-  if (onScreen) _bfxTimer = setTimeout(batteryFixPaint, mode === 'running' ? 2000 : 8000);
+  if (onScreen) _bfxTimer = setTimeout(batteryFixPaint, 8000);
 }
 async function batteryFixRun() {
   const runBtn = _el('bfxRun');
@@ -10996,12 +10930,6 @@ async function batteryFixRun() {
   if (mode === 'reboot') {
     uiSound('success'); toast(T('t_rebooting', 'Rebooting…'), 'perf');
     await run('svc power reboot 2>/dev/null || reboot');
-    return;
-  }
-  if (mode === 'stop') {
-    try { await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' stop'); } catch (e) {}
-    toast(T('bfx_stopping', 'Recompiling stops after the current app'), 'perf');
-    batteryFixPaint();
     return;
   }
   const t = Date.now();
@@ -11014,8 +10942,7 @@ async function batteryFixRun() {
   uiSound('success');
   let out = '';
   try { const r = await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' run'); out = String((r && (r.stdout != null ? r.stdout : r)) || ''); } catch (e) {}
-  if (/compile=busy/.test(out)) toast(T('bfx_busy', 'Recompiling is already running'), 'perf');
-  else if (/result=armed/.test(out)) toast(T('bfx_started', 'Started: apps are being recompiled; the statistics reset follows the reboot'), 'ok');
+  if (/result=armed/.test(out)) toast(T('bfx_started', 'Scheduled: Android battery statistics will be reset after the reboot; no ART compilation is run'), 'ok');
   else toast(T('bfx_refused', 'Not available right now — needs 100% on charge'), 'error');
   batteryFixPaint();
 }
@@ -11220,8 +11147,8 @@ function soterServices(raw) {
 }
 function soterResultText(state) {
   const fb = {
-    done: 'SOTER server data cleared; the init service is running. App and payment functionality was not tested',
-    done_no_service: 'SOTER server data cleared; this ROM declares no separate SOTER service. App functionality was not tested',
+    done: 'SOTER data reset and service restart completed. The physical key is unverified: check AfterSale → Key Status → SOTER key',
+    done_no_service: 'SOTER data reset completed; no separate service is exposed. The physical key is unverified: check AfterSale → Key Status → SOTER key',
     service_down: 'SOTER data reset, but its service did not start again - restart the phone',
     clear_failed: 'Android refused to clear the SOTER server data; its service was only restarted',
     not_installed: 'The SOTER server is not installed on this ROM - nothing to repair',
@@ -11260,6 +11187,8 @@ function soterPaint(parsed) {
   soterRow(host, T('soter_row_service', 'Service'),
     svcs.length ? svcs.map(function (x) { return x.name + ' · ' + (x.state === 'running' ? T('soter_svc_running', 'running') : x.state === 'stopped' ? T('soter_svc_stopped', 'stopped') : x.state); }).join(', ')
       : T('soter_no_service', 'not declared by the ROM'), down.length > 0);
+  if (f.installed === '1') soterRow(host, T('soter_row_key', 'Physical SOTER key'),
+    T('soter_key_unverified', 'Unverified — confirm PASS in AfterSale → Key Status → SOTER key'), true);
   const lt = parseInt(f.last_time, 10);
   soterRow(host, T('soter_row_last', 'Last repair'),
     (lt > 0 && f.last_result && f.last_result !== 'none')
@@ -11282,7 +11211,7 @@ function soterPaint(parsed) {
 function soterBootText(f) {
   const st = f.boot_state || 'none', res = f.boot_result || 'none';
   if (st === 'waiting') return T('soter_boot_waiting', 'waiting for the first unlock');
-  if (st === 'unlocked') return T('soter_boot_unlocked', 'phone unlocked - the repair starts about ten minutes later');
+  if (st === 'unlocked') return T('soter_boot_unlocked', 'phone unlocked - the first automatic pass starts after a short settle');
   if (st === 'skipped') {
     if (res === 'recent_manual') return T('soter_boot_recent_manual', 'not needed - a manual repair already completed in this boot');
     if (res === 'auto_off') return T('soter_boot_auto_off', 'cancelled - automatic repair was switched off');
@@ -11307,7 +11236,7 @@ function soterLang() { return String((typeof ASB_LANG === 'string' && ASB_LANG) 
 function soterStoreTexts() {
   const cmd = 'sh ' + shQuote(SOTER_FIX_SCRIPT) + ' texts ' + shQuote(soterLang()) + ' '
     + shQuote(T('soter_notify_title', 'SOTER Repair')) + ' '
-    + shQuote(T('soter_notify_done', 'SOTER server data were cleared after the reboot; app functionality was not tested. Switch fingerprint payment on again in your payment apps.')) + ' '
+    + shQuote(T('soter_notify_done', 'The automatic SOTER reset and service restart completed, but the physical key is unverified. Check AfterSale → Key Status → SOTER key. Switch fingerprint payment on again in your payment apps.')) + ' '
     + shQuote(T('soter_notify_failed', 'The automatic SOTER repair did not finish. Open ASB, Infirmary, SOTER Repair.'));
   return run(cmd).catch(function () { return null; });
 }
@@ -11347,7 +11276,7 @@ function cfgRenderSoterFixCard(list) {
   const chip = bfxEl('span', 'bfx-chip is-off', T('junk_scan', 'Scanning…')); chip.id = 'soterChip'; titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
   card.appendChild(bfxEl('div', 'bfx-desc', T('soter_summary', "Rebuilds SOTER keys for fingerprint payments when supported apps fail their device check. Root and bootloader state are not hidden.")));
-  kernelMoreBlock(card, 'soter', [bfxEl('div', 'bfx-desc', T('soter_desc', 'SOTER is the Tencent key server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps. If those apps report a failed device check although everything else works, the repair stops the SOTER service, clears only the SOTER server data so it creates fresh keys, and starts the service again. Afterwards switch fingerprint payment on again in those apps. It does not hide root or an unlocked bootloader. One run makes two passes in a row, because a single pass was not always enough.'))]);
+  kernelMoreBlock(card, 'soter', [bfxEl('div', 'bfx-desc', T('soter_desc', 'SOTER is the Tencent key server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps. If those apps report a failed device check although everything else works, the repair stops the SOTER service, clears only the SOTER server data so it creates fresh keys, and starts the service again. Afterwards switch fingerprint payment on again in those apps. It does not hide root or an unlocked bootloader. A successful clear and running service do not prove a physical PASS: confirm the key in AfterSale → Key Status → SOTER key.'))]);
   const rows = bfxEl('div', 'junk-cats'); rows.id = 'soterRows'; card.appendChild(rows);
   const actions = bfxEl('div', 'bfx-actions');
   const runBtn = bfxEl('button', 'bfx-btn bfx-primary', T('soter_run', 'Repair SOTER'));
@@ -11359,8 +11288,8 @@ function cfgRenderSoterFixCard(list) {
   const auto = bfxEl('div', 'soter-auto');
   const autoText = bfxEl('div', 'soter-auto-text');
   autoText.appendChild(bfxEl('div', 'soter-auto-title', T('soter_auto', 'Repair automatically after every reboot')));
-  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note_short', "After each reboot, runs the repair once storage is unlocked. Fingerprint payment must be enabled again in affected apps.")));
-  kernelMoreBlock(card, 'soter_auto', [bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair after each reboot, about ten minutes after you first unlock the phone: SOTER keys need the unlocked storage, and keys created in the first minutes after a reboot did not work on this phone while a repair made later did. A notification comes when it has finished. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.'))]);
+  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note_short', "After each reboot, runs two bounded automatic passes once storage is unlocked. Physical PASS still requires AfterSale verification; fingerprint payment must be enabled again in affected apps.")));
+  kernelMoreBlock(card, 'soter_auto', [bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'After the first unlock, waits 90 seconds and runs a repair pass, then waits 60 seconds and runs one more bounded pass when automatic repair is still enabled and storage remains unlocked. Each pass can clear and restart the SOTER server twice. Completion means only that the reset/service workflow finished: check AfterSale → Key Status → SOTER key for physical PASS. A notification reports this distinction. Every clear creates new SOTER keys, so fingerprint payment has to be switched on again in affected apps.'))]);
   auto.appendChild(autoText);
   const sw = bfxEl('div', 'cfg-switch'); sw.id = 'soterAuto';
   sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', 'false'); sw.setAttribute('aria-disabled', 'true');
@@ -11922,6 +11851,14 @@ function asbKernelControlVerdict(status, live, mode) {
 const ASB_KERNEL_STATUS_KEYS = ['io_scheduler','mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'];
 let _kernelPanel = { loaded:false, loading:false, controls:Object.create(null), wakeup:null };
 let _wbDraft = null, _wbBusy = false;
+function kernelWakeupDrafts() {
+  const wb = _kernelPanel.wakeup;
+  if (!_wbDraft) _wbDraft = {
+    always: ((wb && wb.savedAlways.length ? wb.savedAlways : (wb ? wb.saved : [])) || []).slice(),
+    sleep: ((wb && wb.savedSleep) || []).slice()
+  };
+  return _wbDraft;
+}
 let _wbSourceView = { open:false, query:'', filter:'all', sort:'events' };
 function kernelPanelEnsure() { if (!_kernelPanel.loaded && !_kernelPanel.loading) kernelPanelLoad(false); }
 function kernelControlParse(txt) {
@@ -11944,8 +11881,8 @@ function kernelSchedulerOptionsParse(txt) {
   return found;
 }
 function kernelWakeupParse(txt) {
-  const wb = { node:'unknown', policy:'unknown', events:'unknown', abi:'legacy', ruleStats:'not_exposed',
-    saved:[], current:[], blocked:Object.create(null),
+  const wb = { node:'unknown', policy:'unknown', sleepPolicy:'unknown', screen:'unknown', events:'unknown', abi:'legacy', ruleStats:'not_exposed',
+    saved:[], savedAlways:[], savedSleep:[], current:[], blocked:Object.create(null),
     observe:{ state:'idle', elapsed:0, started:0, resets:0 }, sources:[], seen:false };
   String(txt || '').split(/\r?\n/).forEach(function (line) {
     if (line.indexOf('wakeup_blocker|status|') === 0) {
@@ -11955,10 +11892,16 @@ function kernelWakeupParse(txt) {
         if (k === 'blocked_events') wb.events = /^\d{1,20}$/.test(v) ? v : 'unknown';
         else if (k === 'node') wb.node = v;
         else if (k === 'policy') wb.policy = v;
+        else if (k === 'sleep_policy') wb.sleepPolicy = v;
+        else if (k === 'screen') wb.screen = /^(on|off|unknown)$/.test(v) ? v : 'unknown';
         else if (k === 'abi') wb.abi = /^\d{1,4}$/.test(v) ? v : (v === 'legacy' ? v : 'unknown');
         else if (k === 'rule_stats') wb.ruleStats = v;
       });
       wb.seen = true;
+    } else if (line.indexOf('wakeup_rule|saved_always|') === 0 && wb.savedAlways.length < 64) {
+      wb.savedAlways.push(line.slice(25));
+    } else if (line.indexOf('wakeup_rule|saved_sleep|') === 0 && wb.savedSleep.length < 64) {
+      wb.savedSleep.push(line.slice(24));
     } else if (line.indexOf('wakeup_rule|saved|') === 0 && wb.saved.length < 64) {
       wb.saved.push(line.slice(18));
     } else if (line.indexOf('wakeup_rule|current|') === 0 && wb.current.length < 64) {
@@ -12020,7 +11963,7 @@ function kernelControlAvailability(key) {
   if (ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0) {
     const c = _kernelPanel.controls[key];
     if (!c) return { state:_kernelPanel.loading ? 'loading' : 'unknown', live:'' };
-    return { state:c.state === 'writable' ? 'available' : (c.state === 'not_writable' ? 'read_only' : c.state), live:c.live };
+    return { state:c.state === 'writable' ? 'available' : (c.state === 'not_writable' ? 'read_only' : c.state), live:c.live, mode:c.mode };
   }
   return { state:_kernelPanel.loading ? 'loading' : 'unknown', live:'' };
 }
@@ -12102,7 +12045,8 @@ function kernelDecorateControlRow(row, key) {
   const badge = row.querySelector('.cfg-status');
   if (badge) {
     const showLive = a.live && a.live !== 'unknown' && a.state !== 'not_readable';
-    badge.textContent = kernelStateText(a.state) + (showLive ? ' · ' + String(a.live).slice(0, 16) : '');
+    const livePrefix = key === 'kernel_bore' && a.mode === 'auto' && _selectedProfile === 'smart' ? 'Smart' : kernelStateText(a.state);
+    badge.textContent = livePrefix + (showLive ? ' · ' + String(a.live).slice(0, 16) : '');
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
@@ -12204,11 +12148,10 @@ function kernelWakeupValidName(name) {
   const s = String(name || '');
   return s.length > 0 && s.length <= 63 && !/[^\x21-\x7e]/.test(s) && !/[\/\\]/.test(s);
 }
-function kernelWakeupDraft() {
-  if (_wbDraft) return _wbDraft;
-  return (_kernelPanel.wakeup && _kernelPanel.wakeup.saved ? _kernelPanel.wakeup.saved : []).slice();
+function kernelWakeupDraft(kind) {
+  return kernelWakeupDrafts()[kind === 'sleep' ? 'sleep' : 'always'];
 }
-function kernelWakeupChipList(card, rules, editable) {
+function kernelWakeupChipList(card, rules, editable, kind) {
   const wrap = bfxEl('div', 'kernel-chips');
   if (!rules.length) { wrap.appendChild(bfxEl('span', 'kernel-empty', T('kernel_wb_empty', 'No rules — nothing is blocked by ASB.'))); card.appendChild(wrap); return; }
   rules.forEach(function (name, index) {
@@ -12217,7 +12160,7 @@ function kernelWakeupChipList(card, rules, editable) {
     if (editable) {
       const del = bfxEl('button', 'kernel-chip-remove', '×'); del.type = 'button';
       del.disabled = _wbBusy; del.setAttribute('aria-label', T('kernel_wb_remove', 'Remove {name}').replace('{name}', name));
-      del.onclick = function () { _wbDraft = kernelWakeupDraft(); _wbDraft.splice(index, 1); cfgRender(); };
+      del.onclick = function () { kernelWakeupDraft(kind).splice(index, 1); cfgRender(); };
       chip.appendChild(del);
     }
     wrap.appendChild(chip);
@@ -12254,6 +12197,7 @@ function kernelWakeupRisk(name, shared) {
 }
 function kernelWakeupInfo(name) {
   const n = String(name || '');
+  if (/^asb_logkit_[0-9]+$/.test(n)) return { risk:'asb', key:'asb_logkit' };
   if (/^(eventpoll|eventfd)$/.test(n)) return { risk:'high', key:'event' };
   if (/thermal|watchdog|wdog/i.test(n)) return { risk:'critical', key:'safety' };
   if (/alarmtimer|PowerManagerService|alarm|rtc/i.test(n)) return { risk:'critical', key:'timing' };
@@ -12268,31 +12212,32 @@ function kernelWakeupInfo(name) {
   return { risk:'unknown', key:'unknown' };
 }
 let _wbConfirm = '';
-function kernelWakeupConfirmText(name, risk) {
+function kernelWakeupConfirmText(name, risk, kind) {
   const parts = [];
   if (risk.shared > 1) parts.push(T('kernel_wb_confirm_shared', '{n} sources share this name; the rule blocks all of them.').replace('{n}', risk.shared));
   if (risk.critical) parts.push(T('kernel_wb_confirm_critical', 'This looks like a system source (alarms, power manager, charging, input or thermal). Blocking it can stop alarms, wake-up or charging from working.'));
-  parts.push(T('kernel_wb_confirm_plain', 'Block “{name}” for all future events?').replace('{name}', name));
+  parts.push(T(kind === 'sleep' ? 'kernel_wb_confirm_sleep' : 'kernel_wb_confirm_plain', kind === 'sleep' ? 'Block “{name}” only while the screen is off? This is a screen-off window, not proof of CPU suspend.' : 'Block “{name}” for all future events?').replace('{name}', name));
   return parts.join(' ');
 }
-function kernelWakeupBlockObserved(name) {
+function kernelWakeupBlockObserved(name, kind) {
   if (_wbBusy || !kernelWakeupValidName(name)) return;
-  const draft = kernelWakeupDraft();
+  const draft = kernelWakeupDraft(kind);
   if (draft.indexOf(name) >= 0) return;
-  kernelWakeupAdd(name);
-  if (_wbDraft && _wbDraft.indexOf(name) >= 0) return kernelWakeupSave(false);
+  kernelWakeupAdd(name, kind);
+  if (kernelWakeupDraft(kind).indexOf(name) >= 0) return kernelWakeupSave(false);
   return null;
 }
 function kernelWakeupSourceDialogClose() {
   const m = document.getElementById('kernelWakeupSourcesModal');
   _wbSourceView.open = false; _wbConfirm = '';
   if (m) { m.hidden = true; m.setAttribute('aria-hidden','true'); }
+  navSyncSoon();
 }
-function kernelWakeupSelectSources(wb, draft, view) {
+function kernelWakeupSelectSources(wb, drafts, view) {
   const query = String(view.query || '').trim().toLowerCase();
   let sources = wb && wb.sources ? wb.sources.slice() : [];
   sources = sources.filter(function (src) {
-    const blocked = draft.indexOf(src.name) >= 0;
+    const blocked = drafts.always.indexOf(src.name) >= 0 || drafts.sleep.indexOf(src.name) >= 0;
     if (query && src.name.toLowerCase().indexOf(query) < 0) return false;
     if (view.filter === 'unblocked' && blocked) return false;
     if (view.filter === 'blocked' && !blocked) return false;
@@ -12312,8 +12257,8 @@ function kernelWakeupSourcesDrawList(m) {
   const listEl = m.querySelector('.kernel-sources-scroll');
   if (!listEl) return;
   listEl.textContent = '';
-  const draft = kernelWakeupDraft();
-  const sources = kernelWakeupSelectSources(wb, draft, _wbSourceView);
+  const drafts = kernelWakeupDrafts();
+  const sources = kernelWakeupSelectSources(wb, drafts, _wbSourceView);
   sources.forEach(function (src) {
     const row = bfxEl('div', 'kernel-source');
     const main = bfxEl('div', 'kernel-source-main');
@@ -12321,8 +12266,12 @@ function kernelWakeupSourcesDrawList(m) {
     const metric = T('kernel_wb_source_metrics', '+{events} events · +{active} activations · +{time} active').replace('{events}', src.events).replace('{active}', src.active).replace('{time}', kernelWakeupDuration(src.time));
     main.appendChild(bfxEl('div', 'kernel-source-metrics', metric + (src.reset ? ' · ' + T('kernel_wb_reset_short', 'counter reset') : '')));
     const info = kernelWakeupInfo(src.name);
-    main.appendChild(bfxEl('div', 'kernel-source-purpose', T('kernel_wb_info_' + info.key, 'The exact owner of this kernel name is unknown. Observe it in several idle windows before considering a rule.')));
-    main.appendChild(bfxEl('div', 'kernel-source-risk is-' + info.risk, T('kernel_wb_risk_' + info.risk, 'Blocking risk: unknown — do not block until the owner and consumers are identified.')));
+    main.appendChild(bfxEl('div', 'kernel-source-purpose', T('kernel_wb_short_' + info.key, 'Owner not identified; inspect the details before adding a rule.')));
+    const more = bfxEl('details', 'kernel-source-details');
+    more.appendChild(bfxEl('summary', '', T('kernel_wb_source_details', 'Purpose and blocking risk')));
+    more.appendChild(bfxEl('div', 'kernel-source-purpose', T('kernel_wb_info_' + info.key, 'The exact owner of this kernel name is unknown. Observe it in several idle windows before considering a rule.')));
+    more.appendChild(bfxEl('div', 'kernel-source-risk is-' + info.risk, T('kernel_wb_risk_' + info.risk, 'Blocking risk: unknown — do not block until the owner and consumers are identified.')));
+    main.appendChild(more);
     row.appendChild(main);
     const risk = kernelWakeupRisk(src.name, src.shared);
     const tags = [];
@@ -12330,20 +12279,26 @@ function kernelWakeupSourcesDrawList(m) {
     if (risk.shared > 1) tags.push(T('kernel_wb_shared_short', 'shared name ×{n}').replace('{n}', risk.shared));
     if (risk.critical) tags.push(T('kernel_wb_critical_short', 'system source'));
     if (tags.length) main.appendChild(bfxEl('div', 'kernel-source-tags' + (risk.critical ? ' is-critical' : ''), tags.join(' · ')));
-    const blocked = draft.indexOf(src.name) >= 0;
-    const btn = bfxEl('button', 'bfx-btn bfx-secondary kernel-source-block' + (blocked ? ' is-blocked' : ''), blocked ? T('kernel_wb_blocked', 'Blocked') : T('kernel_wb_block', 'Block'));
-    btn.type = 'button'; btn.disabled = blocked || _wbBusy || (!blocked && draft.length >= 16);
-    btn.onclick = function () { _wbConfirm = _wbConfirm === src.name ? '' : src.name; kernelWakeupSourcesDrawList(m); };
-    row.appendChild(btn); listEl.appendChild(row);
-    if (_wbConfirm === src.name && !blocked) {
+    const inAlways = drafts.always.indexOf(src.name) >= 0, inSleep = drafts.sleep.indexOf(src.name) >= 0;
+    const blocked = inAlways || inSleep;
+    const btn = bfxEl('button', 'bfx-btn bfx-secondary kernel-source-block' + (inAlways ? ' is-blocked' : ''), inAlways ? T('kernel_wb_always_short', 'Always') : T('kernel_wb_block', 'Block'));
+    btn.type = 'button'; btn.disabled = inAlways || _wbBusy || (!blocked && drafts.always.length + drafts.sleep.length >= 16);
+    btn.onclick = function () { _wbConfirm = _wbConfirm === src.name + '|always' ? '' : src.name + '|always'; kernelWakeupSourcesDrawList(m); };
+    row.appendChild(btn);
+    const sleepBtn = bfxEl('button', 'bfx-btn bfx-secondary kernel-source-block' + (inSleep ? ' is-blocked' : ''), inSleep ? T('kernel_wb_sleep_short', 'Screen off') : T('kernel_wb_sleep_add', 'Sleep only'));
+    sleepBtn.type = 'button'; sleepBtn.disabled = inSleep || _wbBusy || (!blocked && drafts.always.length + drafts.sleep.length >= 16);
+    sleepBtn.onclick = function () { _wbConfirm = _wbConfirm === src.name + '|sleep' ? '' : src.name + '|sleep'; kernelWakeupSourcesDrawList(m); };
+    row.appendChild(sleepBtn); listEl.appendChild(row);
+    const confirmKind = _wbConfirm === src.name + '|sleep' ? 'sleep' : _wbConfirm === src.name + '|always' ? 'always' : '';
+    if (confirmKind && !(confirmKind === 'sleep' ? inSleep : inAlways)) {
       const box = bfxEl('div', 'kernel-source-confirm' + (risk.critical ? ' is-critical' : ''));
       box.setAttribute('role', 'alertdialog');
-      box.appendChild(bfxEl('div', 'kernel-source-confirm-text', kernelWakeupConfirmText(src.name, risk)));
+      box.appendChild(bfxEl('div', 'kernel-source-confirm-text', kernelWakeupConfirmText(src.name, risk, confirmKind)));
       const acts = bfxEl('div', 'bfx-actions');
-      const yes = bfxEl('button', 'bfx-btn bfx-primary', T('kernel_wb_block', 'Block'));
+      const yes = bfxEl('button', 'bfx-btn bfx-primary', confirmKind === 'sleep' ? T('kernel_wb_sleep_add', 'Sleep only') : T('kernel_wb_block', 'Block'));
       if (risk.critical) yes.setAttribute('data-mode', 'stop');
       yes.type = 'button'; yes.disabled = _wbBusy;
-      yes.onclick = function () { _wbConfirm = ''; kernelWakeupBlockObserved(src.name); };
+      yes.onclick = function () { _wbConfirm = ''; kernelWakeupBlockObserved(src.name, confirmKind); };
       const no = bfxEl('button', 'bfx-btn bfx-secondary', T('cfg_fm_cancel', 'Cancel'));
       no.type = 'button'; no.onclick = function () { _wbConfirm = ''; kernelWakeupSourcesDrawList(m); };
       acts.appendChild(yes); acts.appendChild(no); box.appendChild(acts); listEl.appendChild(box);
@@ -12409,7 +12364,7 @@ function kernelWakeupSourceDialogOpen() {
     document.body.appendChild(m);
   }
   _wbSourceView.open = true; m.hidden = false; m.setAttribute('aria-hidden','false');
-  kernelWakeupSourceDialogRender();
+  navSyncSoon(); kernelWakeupSourceDialogRender();
   const close = m.querySelector('#kernelWakeupSourcesClose'); if (close) close.focus();
 }
 function kernelWakeupObservedList(card, wb) {
@@ -12445,7 +12400,7 @@ function cfgRenderWakeupBlockerCard(list) {
   head.appendChild(titles);
   head.appendChild(kernelStateBadge(wb ? (wb.node === 'writable' ? 'available' : (wb.node === 'not_writable' ? 'read_only' : wb.node)) : (_kernelPanel.loading ? 'loading' : 'unknown')));
   card.appendChild(head);
-  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_summary', 'Blocks only the names you add here, after a measured idle window shows them. A wrong name can delay alarms, calls or notifications.')));
+  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_summary', 'Two exact-name lists: Always applies in every window; Screen off is added only while Android reports the screen off. On wake or unknown screen state, only Always remains. A wrong name can delay alarms, calls or notifications.')));
   const details = kernelMoreBlock(card, 'wb', [bfxEl('div', 'kernel-card-sub', T('kernel_wb_sub', 'Up to 16 names, 1–63 printable ASCII characters each. No spaces, paths, patterns or automatic rules.')), bfxEl('div', 'kernel-note', T('kernel_wb_warning', 'Only add a name after diagnosing a concrete wakeup source. Blocking can delay notifications, networking or sensors. Existing locks are not force-released.'))]);
   if (wb) kernelWakeupObservedList(card, wb);
   const editor = bfxEl('div', 'kernel-editor');
@@ -12454,14 +12409,22 @@ function cfgRenderWakeupBlockerCard(list) {
   input.autocomplete = 'off'; input.spellcheck = false; input.disabled = !wb || _wbBusy;
   input.placeholder = T('kernel_wb_placeholder', 'Exact kernel wakeup-source name');
   input.setAttribute('aria-label', input.placeholder);
-  const add = bfxEl('button', 'bfx-btn bfx-secondary kernel-add', T('kernel_wb_add', 'Add')); add.type = 'button'; add.disabled = !wb || _wbBusy;
-  add.onclick = function () { kernelWakeupAdd(input.value); };
-  input.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); kernelWakeupAdd(input.value); } };
-  inputRow.appendChild(input); inputRow.appendChild(add); editor.appendChild(inputRow); card.appendChild(editor);
-  kernelWakeupChipList(card, kernelWakeupDraft(), true);
-  const same = wb && JSON.stringify(wb.saved) === JSON.stringify(wb.current);
+  const add = bfxEl('button', 'bfx-btn bfx-secondary kernel-add', T('kernel_wb_add_always', 'Add Always')); add.type = 'button'; add.disabled = !wb || _wbBusy;
+  add.onclick = function () { kernelWakeupAdd(input.value, 'always'); };
+  const addSleep = bfxEl('button', 'bfx-btn bfx-secondary kernel-add', T('kernel_wb_add_sleep', 'Add Screen off')); addSleep.type = 'button'; addSleep.disabled = !wb || _wbBusy;
+  addSleep.onclick = function () { kernelWakeupAdd(input.value, 'sleep'); };
+  input.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); kernelWakeupAdd(input.value, 'always'); } };
+  inputRow.appendChild(input); inputRow.appendChild(add); inputRow.appendChild(addSleep); editor.appendChild(inputRow); card.appendChild(editor);
+  card.appendChild(bfxEl('div', 'kernel-observe-title', T('kernel_wb_always_title', 'Always blocked')));
+  kernelWakeupChipList(card, kernelWakeupDraft('always'), true, 'always');
+  card.appendChild(bfxEl('div', 'kernel-observe-title kernel-sleep-title', T('kernel_wb_sleep_title', 'Blocked only while the screen is off')));
+  kernelWakeupChipList(card, kernelWakeupDraft('sleep'), true, 'sleep');
+  const expected = wb ? (wb.screen === 'off' ? wb.savedAlways.concat(wb.savedSleep) : wb.savedAlways).filter(function (n, i, a) { return a.indexOf(n) === i; }) : [];
+  const same = wb && JSON.stringify(expected) === JSON.stringify(wb.current);
   const meta = bfxEl('div', 'kernel-meta');
-  meta.appendChild(bfxEl('span', '', T('kernel_wb_saved_count', 'Saved: {n}').replace('{n}', wb ? wb.saved.length : '—')));
+  meta.appendChild(bfxEl('span', '', T('kernel_wb_saved_always_count', 'Always saved: {n}').replace('{n}', wb ? wb.savedAlways.length : '—')));
+  meta.appendChild(bfxEl('span', '', T('kernel_wb_saved_sleep_count', 'Screen-off saved: {n}').replace('{n}', wb ? wb.savedSleep.length : '—')));
+  meta.appendChild(bfxEl('span', '', T('kernel_wb_screen_state', 'Screen window: {v}').replace('{v}', wb ? T('kernel_wb_screen_' + wb.screen, wb.screen) : 'unknown')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_current_count', 'In kernel: {n}').replace('{n}', wb && wb.node !== 'not_exposed' && wb.node !== 'not_readable' ? wb.current.length : '—')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_events', 'Blocked events: {n}').replace('{n}', wb ? wb.events : 'unknown')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_abi', 'Kernel blocker ABI: {v}').replace('{v}', wb ? wb.abi : 'unknown')));
@@ -12482,13 +12445,14 @@ function cfgRenderWakeupBlockerCard(list) {
   actions.appendChild(apply); actions.appendChild(clear); actions.appendChild(kernelRefreshButton('kernelWakeupRefresh')); card.appendChild(actions);
   list.appendChild(card);
 }
-function kernelWakeupAdd(raw) {
-  const name = String(raw || '').trim();
+function kernelWakeupAdd(raw, kind) {
+  const name = String(raw || '').trim(), drafts = kernelWakeupDrafts();
+  kind = kind === 'sleep' ? 'sleep' : 'always';
   if (!kernelWakeupValidName(name)) { uiSound('error'); toast(T('kernel_wb_invalid', 'Use one exact printable ASCII name without spaces, slashes or backslashes'), 'err'); return; }
-  const draft = kernelWakeupDraft().slice();
+  const draft = drafts[kind];
   if (draft.indexOf(name) >= 0) { toast(T('kernel_wb_duplicate', 'This name is already in the list'), 'warn'); return; }
-  if (draft.length >= 16) { uiSound('error'); toast(T('kernel_wb_limit', 'The kernel accepts at most 16 rules'), 'err'); return; }
-  draft.push(name); _wbDraft = draft; cfgRender();
+  if (drafts.always.length + drafts.sleep.length >= 16) { uiSound('error'); toast(T('kernel_wb_limit', 'The combined Always + Screen-off union accepts at most 16 rules'), 'err'); return; }
+  draft.push(name); cfgRender();
   if (kernelWakeupRisk(name, 1).critical) toast(T('kernel_wb_confirm_critical', 'This looks like a system source (alarms, power manager, charging, input or thermal). Blocking it can stop alarms, wake-up or charging from working.'), 'warn');
 }
 function kernelWakeupVerdict(v, count) {
@@ -12503,14 +12467,14 @@ function kernelWakeupVerdict(v, count) {
 }
 async function kernelWakeupSave(clearAll) {
   if (_wbBusy) return;
-  const rules = clearAll ? [] : kernelWakeupDraft().slice();
-  if (rules.length > 16 || rules.some(function (n) { return !kernelWakeupValidName(n); })) {
+  const drafts = kernelWakeupDrafts(), always = clearAll ? [] : drafts.always.slice(), sleep = clearAll ? [] : drafts.sleep.slice();
+  if (always.length + sleep.length > 16 || always.concat(sleep).some(function (n) { return !kernelWakeupValidName(n); })) {
     toast(T('kernel_wb_invalid', 'Use one exact printable ASCII name without spaces, slashes or backslashes'), 'err'); return;
   }
   _wbBusy = true; cfgRender();
   let r = null;
   try {
-    r = await run('sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh') + ' set' + rules.map(function (n) { return ' ' + shQuote(n); }).join(''));
+    r = await run('sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh') + ' set --always' + always.map(function (n) { return ' ' + shQuote(n); }).join('') + ' --sleep' + sleep.map(function (n) { return ' ' + shQuote(n); }).join(''));
   } catch (e) {}
   const line = String(r && r.stdout || '').split(/\r?\n/).filter(function (x) { return x.indexOf('wakeup_blocker|') === 0; })[0] || '';
   const p = line.split('|'), verdict = p[1] || 'failed';
@@ -12872,10 +12836,6 @@ function packageTweakBadge(key, cur) {
     if (cur !== 'off') return { cls:'neutral', text:T('st_off', 'Disabled') };
     const s = _heyTweak || {};
     if (s.present === '0') return { cls:'neutral', text:T('st_hey_absent', 'MCS not installed') };
-    if (s.state === 'pending') return { cls:'warn', text:T('st_hey_pending', 'MCS off · ART after reboot, on charger') };
-    if (s.state === 'running') return { cls:'warn', text:T('st_hey_running', 'ART compiling') };
-    if (s.state === 'done') return { cls:'good', text:T('st_hey_done', 'MCS off · ART done') };
-    if (s.state === 'failed') return { cls:'bad', text:T('st_hey_failed', 'MCS off · ART failed') };
     return { cls:'good', text:T('st_hey_off', 'MCS disabled') };
   }
   if (key === 'documentsui_fix') {
@@ -13047,12 +13007,12 @@ function cfgSmartOwner(it, cur) {
   if ((it.key === 'prime_escape_burst_s' || it.key === 'prime_escape_rest_s') &&
       String(_cfgVals.heavy_prime_escape || '0') === '1') return 'limit';
   const dynamicAuto = ['kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction',
-    'kernel_sched_nr_migrate','kernel_sched_stats','kernel_rt_boost'];
+    'kernel_sched_nr_migrate','kernel_sched_stats','kernel_rt_boost','kernel_bore'];
   if (v === 'auto' && dynamicAuto.indexOf(it.key) >= 0) return 'dynamic';
   const profileAuto = ['io_scheduler','kernel_timer_migration','kernel_hrtimer_migration',
     'kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_mglru_min_ttl',
     'kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend',
-    'kernel_rt_boost','kernel_bore','net_congestion','net_congestion_wifi','net_congestion_mobile',
+    'kernel_rt_boost','net_congestion','net_congestion_wifi','net_congestion_mobile',
     'net_qdisc','net_qdisc_wifi','net_qdisc_mobile'];
   if (v === 'auto' && profileAuto.indexOf(it.key) >= 0) return 'profile';
   return null;
@@ -13274,7 +13234,7 @@ function cfgGroupExtraCards(groupId) {
   if (groupId === 'camera') return [!!(ctf && ctf.webcam === '1'), !!(ctf && ctf.launch === '1')];
   if (groupId === 'kernel') {
     const kp = typeof _kernelPanel !== 'undefined' ? _kernelPanel : null;
-    return [!!(kp && kp.wakeup && kp.wakeup.saved && kp.wakeup.saved.length)];
+    return [!!(kp && kp.wakeup && ((kp.wakeup.savedAlways && kp.wakeup.savedAlways.length) || (kp.wakeup.saved && kp.wakeup.saved.length) || (kp.wakeup.savedSleep && kp.wakeup.savedSleep.length)))];
   }
   if (groupId === 'battery') return [!!(typeof _nf !== 'undefined' && _nf && _nf.count)];
   return [];
@@ -13312,6 +13272,7 @@ function cfgRenderHub(list) {
     });
     extras.forEach(b => { if (b) on++; });
     const total = items.length + extras.length;
+    const counted = cfgLoadFresh();
     const tile = document.createElement('button');
     const tileCat = g.id === 'ui' ? 'ux' : g.id;
     tile.className = 'cfg-tile cat-' + tileCat;
@@ -13336,15 +13297,15 @@ function cfgRenderHub(list) {
     const foot = document.createElement('div');
     foot.className = 'cfg-tile-foot';
     const cnt = document.createElement('div');
-    cnt.className = 'cfg-tile-count' + (on ? ' has-on' : '');
-    cnt.textContent = on ? (on + ' / ' + total) : String(total);
+    cnt.className = 'cfg-tile-count' + (counted && on ? ' has-on' : '');
+    cnt.textContent = counted ? (on + ' / ' + total) : ('… / ' + total);
     foot.appendChild(cnt);
     tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + cnt.textContent);
     const bar = document.createElement('div');
     bar.className = 'cfg-tile-bar';
     bar.setAttribute('aria-hidden', 'true');
     const fill = document.createElement('i');
-    fill.style.width = Math.round(on * 100 / items.length) + '%';
+    fill.style.width = (counted && total > 0 ? Math.round(on * 100 / total) : 0) + '%';
     bar.appendChild(fill);
     foot.appendChild(bar);
     tile.appendChild(foot);
@@ -14258,7 +14219,7 @@ var _cfgShownScreen = null;
  * before the slide can start. Any other paint of the list clears it. */
 var _cfgHubSig = '';
 function cfgHubSig() {
-  return ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + JSON.stringify(_cfgVals) + '|' + cfgHubExtraSig();
+  return ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + (cfgLoadFresh() ? 1 : 0) + '|' + JSON.stringify(_cfgVals) + '|' + cfgHubExtraSig();
 }
 // When the running entrance ends, and the one repaint waiting for it (fix145).
 var _cfgEnterUntil = 0, _cfgRepaintTimer = 0;
@@ -15516,9 +15477,9 @@ async function wlManualSet(a) {
   if (tok === _wlManual.tok && !_el('wlManualModal').hidden) await wlManualLoad();
 }
 
-/* Individual service components are a different operation from package WAKE_LOCK AppOps.
- * The runtime lists only currently running services plus components already disabled through
- * this ledger. No process/package freeze and no background polling are involved. */
+/* Individual Activity/Service components are different from package WAKE_LOCK AppOps.
+ * Discovery is on demand from Android's current activity/service records plus ASB's exact
+ * restoration ledger. No process/package freeze and no background polling are involved. */
 const _wlService = { tok: 0, busy: false, pkg: '', rows: [], armed: '', armedAt: 0, armTimer: 0 };
 function wlServiceArmed(comp) { return !!comp && _wlService.armed === comp && Date.now() - _wlService.armedAt < 5000; }
 function wlServiceEnsure() {
@@ -15544,10 +15505,12 @@ function wlServiceParse(out, pkg) {
   String(out || '').split('\n').forEach(function (ln) {
     if (ln.indexOf('scan=') === 0) { d.scan = ln.slice(5); return; }
     if (ln.indexOf('selected=') === 0) { d.selected = Math.max(0, parseInt(ln.slice(9), 10) || 0); return; }
-    const f = ln.split('|'), comp = f[1] || '';
-    if (f[0] !== 'service' || f.length !== 5 || comp.indexOf(pkg + '/') !== 0) return;
+    const f = ln.split('|'), legacy = f[0] === 'service';
+    const comp = legacy ? (f[1] || '') : (f[2] || '');
+    if ((!legacy && f[0] !== 'component') || f.length !== (legacy ? 5 : 6) || comp.indexOf(pkg + '/') !== 0) return;
     if (!/^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+$/.test(comp)) return;
-    d.rows.push({ comp: comp, selected: f[2] === '1', state: /^(default|enabled|disabled)$/.test(f[3]) ? f[3] : 'unknown', running: f[4] === '1' });
+    const kind = legacy ? 'service' : f[1];
+    d.rows.push({ kind:/^(activity|service|component)$/.test(kind) ? kind : 'component', comp:comp, selected:f[legacy ? 2 : 3] === '1', state:/^(default|enabled|disabled)$/.test(f[legacy ? 3 : 4]) ? f[legacy ? 3 : 4] : 'unknown', running:f[legacy ? 4 : 5] === '1' });
   });
   return d;
 }
@@ -15561,19 +15524,24 @@ function wlServiceRow(a) {
   const row = document.createElement('div');
   row.className = 'wl-manual-row wl-service-row' + (a.selected ? ' is-selected' : '') + (a.selected && a.state !== 'disabled' ? ' is-lapsed' : '');
   const tx = document.createElement('div'), name = document.createElement('div'), sub = document.createElement('div');
-  name.className = 'wl-manual-name'; name.textContent = a.comp.slice(_wlService.pkg.length + 1);
+  name.className = 'wl-manual-name'; name.textContent = (a.kind === 'activity' ? T('wl_component_activity', 'Activity') : a.kind === 'service' ? T('wl_component_service', 'Service') : T('wl_component_saved', 'Saved component')) + ' · ' + a.comp.slice(_wlService.pkg.length + 1);
   sub.className = 'wl-manual-sub'; sub.textContent = a.comp + ' · ' + wlServiceState(a);
   tx.appendChild(name); tx.appendChild(sub); row.appendChild(tx);
   const b = document.createElement('button'); b.type = 'button';
   b.className = 'wl-manual-action' + (a.selected ? ' is-restore' : '');
   const armed = !a.selected && wlServiceArmed(a.comp);
-  b.textContent = a.selected ? T('wl_service_restore', 'Restore service') : armed ? T('wl_service_confirm_tap', 'Tap again to disable') : T('wl_service_disable', 'Disable service');
+  b.textContent = a.selected ? T('wl_component_restore', 'Restore component') : armed ? T('wl_service_confirm_tap', 'Tap again to disable') : T('wl_component_disable', 'Disable component');
   if (armed) {
     b.classList.add('is-armed');
     const warn = document.createElement('div'); warn.className = 'wl-manual-sub wl-manual-risk';
     warn.textContent = T('wl_service_confirm', 'Disable only %s? The app package is not frozen, but this service can stop working until restored. Notifications, sync, media, calls, alarms or other app features may break. ASB records and restores the exact original component state.')
       .replace('%s', a.comp);
     tx.appendChild(warn);
+    if (/\/androidx\.work\.impl\.background\.systemjob\.SystemJobService$/.test(a.comp)) {
+      const broad = document.createElement('div'); broad.className = 'wl-manual-sub wl-manual-risk';
+      broad.textContent = T('wl_component_systemjob_warning', 'SystemJobService is shared by WorkManager jobs in this package. Disabling it does not select only MediaCountUploadWorker or any other single worker; other jobs can stop too.');
+      tx.appendChild(broad);
+    }
   }
   b.disabled = _wlService.busy; b.onclick = function () { wlServiceSet(a); }; row.appendChild(b);
   return row;
@@ -15583,26 +15551,26 @@ function wlServicePaint(d) {
   const list = _el('wlServiceList'); list.textContent = '';
   if (!_wlService.rows.length) {
     const e = document.createElement('div'); e.className = 'cfg-profile-empty';
-    e.textContent = d.scan === 'ok' ? T('wl_service_empty', 'No running service components are exposed for this app right now. This does not prove that the app has no services; start or use the app, then refresh. Components already disabled through ASB remain listed for Restore.')
+    e.textContent = d.scan === 'ok' ? T('wl_component_empty', 'No running Activity or Service components are exposed for this app right now. This does not prove that none are declared; open or use the relevant screen, then refresh. Components already disabled through ASB remain listed for Restore.')
       : T('wl_service_unavailable', 'Service records or component state are not exposed right now. Nothing was changed.');
     list.appendChild(e);
   } else _wlService.rows.forEach(function (a) { list.appendChild(wlServiceRow(a)); });
-  _el('wlServiceMeta').textContent = T('wl_service_meta', '%s service(s) selected · on-demand read · no automatic freezing or polling').replace('%s', String(d.selected || 0));
+  _el('wlServiceMeta').textContent = T('wl_component_meta', '%s component(s) selected · Activity/Service read on demand · no automatic freezing or polling').replace('%s', String(d.selected || 0));
 }
 async function wlServiceLoad() {
   const m = wlServiceEnsure(), tok = ++_wlService.tok, pkg = _wlService.pkg;
   if (!pkg) return;
-  _el('wlServiceTitle').textContent = T('wl_service_title', 'Services · %s').replace('%s', _wlManual.labels[pkg] || pkg);
-  _el('wlServiceCopy').textContent = T('wl_service_copy', 'Disable one Android service component, not the whole app. This is component disabling, not a process freezer. The list comes from currently running service records; it does not prove that a service holds a wakelock or costs energy. Restore returns the recorded default/enabled state.');
+  _el('wlServiceTitle').textContent = T('wl_component_title', 'Activities and services · %s').replace('%s', _wlManual.labels[pkg] || pkg);
+  _el('wlServiceCopy').textContent = T('wl_component_copy', 'Disable one exact Android Activity or Service component, not the whole app. This is component disabling, not a process freezer. Android exposes current records on demand; presence here does not prove energy cost. Restore returns the recorded default/enabled state.');
   _el('wlServiceDone').textContent = T('doze_keep_done', 'Done');
   _el('wlServiceMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
   const list = _el('wlServiceList'); list.textContent = '';
   const loading = document.createElement('div'); loading.className = 'wl-manual-loading';
-  loading.textContent = T('wl_service_loading', 'Reading running services and actual component states…'); list.appendChild(loading);
+  loading.textContent = T('wl_component_loading', 'Reading current Activity/Service records and actual component states…'); list.appendChild(loading);
   await asbPaintYield();
   if (tok !== _wlService.tok || m.hidden || pkg !== _wlService.pkg) return;
   let r = null;
-  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' service-list ' + shQuote(pkg) + ' 2>/dev/null'); } catch (e) {}
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' component-list ' + shQuote(pkg) + ' 2>/dev/null'); } catch (e) {}
   if (tok !== _wlService.tok || m.hidden || pkg !== _wlService.pkg) return;
   wlServicePaint(r && r.errno === 0 ? wlServiceParse(runText(r), pkg) : { scan: 'unavailable', selected: 0, rows: [] });
 }
@@ -15637,12 +15605,12 @@ async function wlServiceSet(a) {
   _el('wlServiceRefresh').disabled = true;
   wlServicePaint({ scan: 'ok', selected: _wlService.rows.filter(function (x) { return x.selected; }).length, rows: _wlService.rows });
   let r = null;
-  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' service-set ' + shQuote(pkg) + ' ' + (a.selected ? 'restore ' : 'disable ') + shQuote(a.comp)); } catch (e) {}
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' component-set ' + shQuote(pkg) + ' ' + (a.selected ? 'restore ' : 'disable ') + shQuote(a.comp) + (a.selected ? '' : ' ' + shQuote(a.kind || 'service'))); } catch (e) {}
   const out = r ? runText(r) : '', res = (/^result=([a-z_]+)/m.exec(out) || [])[1] || 'failed';
   if (tok === _wlService.tok) {
     let msg;
-    if (res === 'disabled') msg = T('wl_service_result_disabled', 'Service disabled; component read-back confirmed');
-    else if (res === 'restored') msg = T('wl_service_result_restored', 'Original service component state restored');
+    if (res === 'disabled') msg = T('wl_component_result_disabled', 'Component disabled; exact read-back confirmed');
+    else if (res === 'restored') msg = T('wl_component_result_restored', 'Original component state restored');
     else if (res === 'uninstalled') msg = T('wl_manual_result_uninstalled', 'App is no longer installed; its entry was removed');
     else if (res === 'external_disabled') msg = T('wl_service_external', 'Already disabled outside ASB; it was not adopted and will not be restored by ASB');
     else if (res === 'not_running') msg = T('wl_service_not_running', 'The service is no longer running or its original state is not exposed; nothing was changed');
@@ -19416,8 +19384,7 @@ function zygiskPageRender(d, state) {
   if (!d || !d.sections || !d.sections.zygisk_observer) {
     if (state === 'error') {
       const card = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
-      card.appendChild(logReportNote(T(window._asbZygiskLinkData ? 'zy_status_failed' : 'zy_status_failed_empty',
-        window._asbZygiskLinkData ? 'Could not read the state; the last snapshot is shown' : 'Could not read the Zygisk state. No snapshot is available; tap Refresh to try again.'), true));
+      card.appendChild(logReportNote(T('zy_status_failed_empty', 'Could not read the current Zygisk state. No stale data is shown; reopen the page to try again.'), true));
       body.appendChild(card);
     } else {
       asbCosmicLoading(body, { kind:'zygisk', titleKey:'zy_loading', title:'Reading the Zygisk state…',
@@ -20565,10 +20532,14 @@ function zygiskLinkCard() {
 }
 async function zygiskPageLoad(user) {
   const seq = ++_zygiskLoadSeq;
-  const status = _el('zygiskStatus'), btn = _el('zyRefresh');
-  if (btn) btn.disabled = true;
-  if (status) status.textContent = T('zy_status_loading', 'Reading…');
-  if (_zygiskOpen && !window._asbZygiskLinkData) zygiskPageRender(null);
+  const status = _el('zygiskStatus');
+  if (status) status.textContent = T('zy_status_loading', 'Reading current state…');
+  if (_zygiskOpen) {
+    window._asbZygiskLinkData = null;
+    window._asbZygiskRaw = '';
+    const save = _el('zySave'); if (save) save.disabled = true;
+    zygiskPageRender(null);
+  }
   await asbPaintYield();
   if (seq !== _zygiskLoadSeq) return;
   let b = null;
@@ -20587,7 +20558,6 @@ async function zygiskPageLoad(user) {
   if (b && b.s7l) _zyS7L = smart7LearnParse(b.s7l.stdout || '');
   if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
   if (b && b.lsp && b.lsp.errno === 0) { _zyLsp = lspLiteParse(b.lsp.stdout); lspLiteAutoRefresh(); }
-  if (btn) btn.disabled = false;
   const r = b ? b.link : null;
   if (b && b.guard && b.guard.errno === 0) _zyGuard = zygiskGuardParse(b.guard.stdout);
   if (b && b.aot && b.aot.errno === 0) _zyAot = zygiskAotParse(b.aot.stdout);
@@ -20599,9 +20569,10 @@ async function zygiskPageLoad(user) {
     if (_zygiskOpen) zygiskPageRender(d);
     if (status) status.textContent = T('zy_status_ready', 'Current snapshot · read-only');
   } else {
-    if (_zygiskOpen && (user || !window._asbZygiskLinkData)) zygiskPageRender(window._asbZygiskLinkData || null, 'error');
-    if (status) status.textContent = T(window._asbZygiskLinkData ? 'zy_status_failed' : 'zy_status_failed_empty',
-      window._asbZygiskLinkData ? 'Could not read the state; the last snapshot is shown' : 'Could not read the Zygisk state. No snapshot is available; tap Refresh to try again.');
+    window._asbZygiskLinkData = null;
+    window._asbZygiskRaw = '';
+    if (_zygiskOpen) zygiskPageRender(null, 'error');
+    if (status) status.textContent = T('zy_status_failed_empty', 'Could not read the current Zygisk state. No stale data is shown; reopen the page to try again.');
   }
   const save = _el('zySave'); if (save) save.disabled = !window._asbZygiskLinkData;
 }
@@ -20634,13 +20605,14 @@ function openZygiskPage() {
   document.body.classList.add('live-active', 'zygisk-active');
   asbTabbarVisibility();
   p.classList.add('open');
-  zygiskPageRender(window._asbZygiskLinkData || null);
-  const save = _el('zySave'); if (save) save.disabled = !window._asbZygiskLinkData;
+  window._asbZygiskLinkData = null;
+  window._asbZygiskRaw = '';
+  zygiskPageRender(null);
+  const save = _el('zySave'); if (save) save.disabled = true;
   const status = _el('zygiskStatus');
-  if (status) status.textContent = window._asbZygiskLinkData ? T('zy_status_snapshot', 'Last snapshot · tap Refresh to collect again') : T('zy_status_loading', 'Reading…');
-  /* A complete splash snapshot is already rendered. Do not repeat its eight-part read on
-   * navigation; Refresh remains the explicit live re-read, and a missing snapshot loads once. */
-  if (!window._asbZygiskLinkData) asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);
+  if (status) status.textContent = T('zy_status_loading', 'Reading current state…');
+  /* Every opening is a new read. A splash or earlier visit is never presented as current. */
+  asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);
   setTimeout(asbNavSync, 60);
   asbUiFrame.request(asbFitPages);
 }
@@ -20805,7 +20777,15 @@ function deviceInfoRender(d) {
         }
       }
     }
-    const card = logReportSec(T(spec[1], spec[2]));
+    let card;
+    if (spec[0] === 'asb_properties') {
+      card = document.createElement('details');
+      card.className = 'lgr-sec dev-collapsible';
+      const summary = document.createElement('summary');
+      summary.className = 'lgr-sec-t';
+      summary.textContent = T(spec[1], spec[2]);
+      card.appendChild(summary);
+    } else card = logReportSec(T(spec[1], spec[2]));
     card.id = 'dev-sec-' + spec[1].slice(8).replace(/_/g, '-');
     if (spec[0] === 'system_load') card.appendChild(devicePressureScale(d));
     if (spec[0] === 'zygisk_observer') {
@@ -25704,11 +25684,6 @@ function asbBootIntroPaint(done, total) {
   if (bar) bar.style.transform = 'scaleX(' + (pct / 100) + ')';
   if (progress) progress.setAttribute('aria-valuenow', String(pct));
   if (count) count.textContent = done + ' / ' + total;
-  const stages = document.querySelectorAll('.asb-boot-stage');
-  stages.forEach(function (el, i) {
-    el.classList.toggle('is-done', i < done);
-    el.classList.toggle('is-active', i === done && done < total);
-  });
 }
 /* Resolve when a WAAPI animation finishes, or after a hard timeout - a dropped onfinish must
  * never strand the hand-off with the overlay still up. */
