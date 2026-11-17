@@ -3808,6 +3808,11 @@ asb_gov_liveness() {
   _wd_last="$_ho_last"
   while true; do
     sleep 300
+    # Reconcile the two exact-name wakeup policies on this existing bounded pass. The helper
+    # writes only when screen state, policy or kernel readback changed; it starts no worker.
+    if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_wakeup_blocker.sh" ]; then
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakeup_blocker.sh" apply auto >/dev/null 2>&1 || true
+    fi
     # The fitness limit right after boot (fix143): OPlus' boot-time sweep resets the
     # WAKE_LOCK app-op and the hourly screen-off pass below was the first to set it again.
     # The first two ticks (about 5 and 10 minutes of awake time) put it back, screen on or
@@ -4243,15 +4248,7 @@ esac
   if [ -r "$MODDIR/runtime/asb_ltpo_apply.sh" ]; then
     MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" apply >/dev/null 2>&1 || true
   fi
-  # HeyTap's ART request is consumed once, after every ordinary post-boot tweak is done.
-  # It runs beside this worker so an all-package compile cannot delay governor/network restore.
-  # Neither package tweak is re-applied here: PackageManager states persist across reboots.
-  if [ -f "$MODDIR/runtime/asb_art_compile.sh" ]; then
-    case "$(grep -E '^[[:space:]]*heytap_mcs=' "$MODDIR/config/governor.conf" 2>/dev/null \
-            | tail -1 | sed 's/.*=//' | tr -d ' \r')" in
-      off) ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_art_compile.sh" run-pending >/dev/null 2>&1 ) & ;;
-    esac
-  fi
+  # HeyTap MCS package state persists in PackageManager; no ART job belongs to this tweak.
   asb_log "post_boot_tweaks: complete"
   asb_timeline_mark post_boot_tweaks_complete
 ) >/dev/null 2>&1 &
