@@ -192,30 +192,21 @@ t_heytap_mcs_lifecycle() (
   fail() { echo "FAIL HeyTap lifecycle: $*" >&2; exit 1; }
   _fixture "$ROOT" "$T"
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep 'result=disabled compile=pending' >/dev/null || fail "apply: $_out"
+  printf '%s\n' "$_out" | grep -Fx 'result=disabled art=not_required' >/dev/null || fail "apply: $_out"
   [ "$(_state mcs)" = 2 ] || fail 'MCS was not disabled'
   grep -qx 'previous_enabled=1' "$ASB_HEYTAP_STATE_DIR/baseline.conf" || fail 'baseline not saved'
-  grep -qx 'state=pending' "$ASB_ART_COMPILE_STATE" || fail 'ART not pending'
+  [ ! -e "$ASB_ART_COMPILE_STATE" ] || fail 'apply created an obsolete ART request'
   _before="$(cksum < "$ASB_HEYTAP_STATE_DIR/baseline.conf")"
   _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep 'result=already_disabled compile=pending' >/dev/null || fail "repeat apply: $_out"
+  printf '%s\n' "$_out" | grep -Fx 'result=already_disabled art=not_required' >/dev/null || fail "repeat apply: $_out"
   [ "$(cksum < "$ASB_HEYTAP_STATE_DIR/baseline.conf")" = "$_before" ] || fail 'repeat apply overwrote baseline'
-  _out="$(_run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep 'result=done exit_code=0' >/dev/null || fail "compile: $_out"
-  [ "$(_compile_count)" = 1 ] || fail 'compile did not run exactly once'
-  _out="$(_run asb_art_compile.sh run-pending)"
-  printf '%s\n' "$_out" | grep 'result=not_pending' >/dev/null || fail 'second boot attempted a retry'
-  [ "$(_compile_count)" = 1 ] || fail 'second run-pending compiled again'
-  _out="$(_run asb_heytap_mcs.sh apply)"
-  printf '%s\n' "$_out" | grep 'result=already_disabled compile=done' >/dev/null || fail 'repeat apply resurrected completed ART'
-  [ "$(_compile_count)" = 1 ] || fail 'repeat apply compiled again'
   _conf stock 0
   _out="$(_run asb_heytap_mcs.sh apply)"
   printf '%s\n' "$_out" | grep 'result=restored previous_enabled=1' >/dev/null || fail "restore: $_out"
   [ "$(_state mcs)" = 1 ] || fail 'MCS baseline was not restored'
   [ ! -e "$ASB_ART_COMPILE_STATE" ] || fail 'done ART state was not cleared on Stock'
   grep -q 'force-stop com.heytap.mcs' "$AM_LOG" || fail 'MCS was not stopped'
-  echo 'PASS HeyTap lifecycle: disable, stable baseline, exactly-once ART and Stock handback'
+  echo 'PASS HeyTap lifecycle: reversible package state, stable baseline, no ART request and exact Stock handback'
 )
 
 t_heytap_mcs_safety() (
@@ -436,17 +427,22 @@ t_package_tweaks_contract() (
     || fail 'exact one-shot compile command missing'
   ! grep -q 'pm compile\|asb_art_compile' "$ROOT/runtime/asb_documentsui_fix.sh" \
     || fail 'DocumentsUI is coupled to ART compilation'
-  grep -q 'asb_art_compile.sh" run-pending' "$ROOT/service.sh" || fail 'boot does not consume pending ART'
+  ! grep -q 'pm compile\|asb_art_compile' "$ROOT/runtime/asb_heytap_mcs.sh" \
+    || fail 'HeyTap is coupled to ART compilation'
+  ! grep -q 'asb_art_compile.sh" run-pending' "$ROOT/service.sh" \
+    || fail 'boot still consumes the obsolete HeyTap ART request'
+  grep -q 'art=not_required' "$ROOT/runtime/asb_heytap_mcs.sh" \
+    || fail 'HeyTap does not report ART as not required'
   ! grep -q 'asb_documentsui_fix.sh" apply\|asb_heytap_mcs.sh" apply' "$ROOT/service.sh" \
     || fail 'package states are re-applied at every boot'
   grep -q 'asb_heytap_mcs.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall does not restore MCS'
   grep -q 'asb_documentsui_fix.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall does not restore DocumentsUI'
   ! grep -q 'pm compile --reset\|pm compile -m speed-profile' "$ROOT/uninstall.sh" \
     || fail 'uninstall performs a mass ART reset/compile'
-  grep -q 'HeyTap MCS / ART (read-only)' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag lacks HeyTap status'
+  grep -q 'HeyTap MCS package state (read-only)' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag lacks HeyTap status'
   grep -q 'DocumentsUI / DSU picker (read-only)' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag lacks DocumentsUI status'
   cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'asbdiag copies differ'
-  echo 'PASS package tweak contracts: no overlay, one boot consumer, no DocumentsUI ART, restore/uninstall'
+  echo 'PASS package tweak contracts: no overlay, no HeyTap/DocumentsUI ART or boot consumer, restore/uninstall'
 )
 
 t_webui_package_tweaks_runtime() (
@@ -463,12 +459,11 @@ JS
     sed -n '/^function packageTweakParse(/,/^}/p; /^function packageTweakBadge(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
-const p = packageTweakParse('present=1\nsetting=off\nstate=pending\nreason=not exposed');
-chk(p.present === '1' && p.state === 'pending' && p.reason === 'not exposed', 'status parser');
-for (const s of ['pending','running','done','failed']) {
-  _heyTweak = {present:'1', state:s};
-  chk(packageTweakBadge('heytap_mcs', 'off').text.length > 0, 'MCS badge ' + s);
-}
+const p = packageTweakParse('present=1\nsetting=off\nenabled_state=2\nart=not_required');
+chk(p.present === '1' && p.enabled_state === '2' && p.art === 'not_required', 'package-state status parser');
+_heyTweak = {present:'1', enabled_state:'2', art:'not_required'};
+chk(packageTweakBadge('heytap_mcs', 'off').text === 'MCS disabled', 'MCS package-state badge');
+chk(!packageTweakBadge('heytap_mcs', 'off').text.includes('ART'), 'MCS badge revives ART');
 _heyTweak = {present:'0', state:'idle'};
 chk(packageTweakBadge('heytap_mcs', 'off').text === 'MCS not installed', 'MCS absent badge');
 chk(packageTweakBadge('heytap_mcs', 'stock').text === 'Disabled', 'MCS Stock badge');
@@ -486,7 +481,7 @@ JS
   [ "$_out" = ok ] || fail "$_out"
   grep -q 'await loadPackageTweakStatus();' "$ROOT/webroot/index.html" || fail 'status refresh missing'
   grep -q 'loadPackageTweakStatus();' "$ROOT/webroot/index.html" || fail 'initial status load missing'
-  echo 'PASS WebUI package tweaks: parser, absent/pending/running/done/failed and DocumentsUI badges'
+  echo 'PASS WebUI package tweaks: package-state parser, HeyTap badge without ART and DocumentsUI badges'
 )
 
 t_uninstall_deferred_restore_runtime() (

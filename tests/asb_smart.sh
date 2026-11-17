@@ -4946,8 +4946,9 @@ t_unlock_lift_runtime() (
 # foreground-app switch arms the same window once per 5 s while no lift runs.
 # fix220: the app-switch arm is seen on the next metrics tick - up to 2 s after the tap, past
 # the animation's first frames. The tap itself (a fresh touch after a calm spell) and the
-# lock press (the power key with the screen on) now arm the same window, same 5 s gap, same
-# gates - so the open/close/unlock/lock animations of ColorOS 17 run on lifted ceilings.
+# lock press (the power key with the screen on) arm the same window. App switches and lock
+# presses keep the 5 s gap; buildfix13 limits routine touch-only re-arms to one per 20 s,
+# with a separate timestamp that cannot suppress the following app switch.
 # fix223: on manual Battery, continuous touch extends an already-armed window; quiet reading,
 # Smart/Balanced/Performance and a vetoed (off/warm/thermal) start gain no new lift path.
 # fix288: on Battery a lift also releases the light-idle GPU step (bat_light_idle_gpu) to the
@@ -4973,6 +4974,9 @@ grep -q 'int want_apply = (changed || force_write || g_unlock_edge ||' "$G" || f
 awk '/asb_smart_media_guard_apply_caps\(&_effective_caps\);/{m=NR} /asb_unlock_lift_apply\(&_effective_caps\);/{if(!a)a=NR; l=NR} /int writes = writer_apply_caps\(&_effective_caps, force_write/{w=NR} END{exit !(m && l > m && l < w)}' "$G" \
   || fail "lift not applied between the media guard and the write"
 grep -q 'int calm = !metrics.misc.camera_active && !g_unlock_lift_now &&' "$G" || fail "calm cadence during a lift"
+grep -q '#define ASB_TOUCH_LIFT_GAP_MS ASB_UNLOCK_TOUCH_WINDOW_MS' "$G" || fail "routine-touch 20 s gap missing"
+grep -q 'now_ms - g_touch_arm_ms >= ASB_TOUCH_LIFT_GAP_MS' "$G" || fail "routine touches still use the launch gap"
+grep -q 'g_unlock_touch_defers++;' "$G" || fail "deferred routine touches are not observable"
 grep -q 'A heartbeat refresh inside the unlock window keeps the lift' "$G" || fail "heartbeat refresh drops the lift"
 grep -q 'unlock_lift=%d\\nunlock_lifts=%lu\\nunlock_lift_skips=%lu\\nunlock_lift_skip_why=%s' "$G" || fail "state file"
 grep -q '^unlock_lift_s=3$' "$ROOT/config/governor.conf" || fail "not shipped at 3 s"
@@ -5061,14 +5065,20 @@ int main(void) {
     CHK(up(1, 1, 16000) == 1 && g_unlock_lifts == 2, "first touch after the wake does not re-arm");
     CHK(up(1, 1, 17000) == 1 && g_unlock_lifts == 2, "a second touch re-armed");
     CHK(up(1, 0, 19000) == 0, "touch lift not over at 3 s");
-    /* fix220: a fresh touch after a calm spell is the tap that opens or closes an app - it
-     * arms the same window, once per 5 s. */
+    /* fix220: a fresh touch after a calm spell is the tap that opens or closes an app.
+     * buildfix13: another routine touch cannot restart the cycle four seconds after it
+     * ended; the next real app switch still has its independent fast path. */
     CHK(up(1, 1, 22000) == 1 && g_unlock_lifts == 3 && !strcmp(g_unlock_arm_why, "touch"),
         "fix220: the tap that opens an app did not lift");
-    CHK(up(1, 1, 23000) == 1 && g_unlock_lifts == 3, "a touch inside 5 s re-armed");
+    CHK(up(1, 1, 23000) == 1 && g_unlock_lifts == 3, "a touch inside the running lift re-armed");
+    CHK(up(1, 0, 25000) == 0, "routine touch lift did not expire");
+    CHK(up(1, 1, 26000) == 0 && g_unlock_lifts == 3 && g_unlock_touch_defers > 0,
+        "routine touch restarted inside the 20 s interaction window");
+    CHK(upl(1, 0, 1, 27000) == 1 && g_unlock_lifts == 4 && !strcmp(g_unlock_arm_why, "app switch"),
+        "a routine-touch defer suppressed the following app switch");
     up(0, 0, 30000); up(1, 0, 40000); up(1, 0, 44000);
-    CHK(g_unlock_lifts == 4, "second wake");
-    CHK(up(1, 1, 61000) == 1 && g_unlock_lifts == 5 && !strcmp(g_unlock_arm_why, "touch"),
+    CHK(g_unlock_lifts == 5, "second wake");
+    CHK(up(1, 1, 61000) == 1 && g_unlock_lifts == 6 && !strcmp(g_unlock_arm_why, "touch"),
         "fix220: a tap past the wake window is still an app open");
     /* Screen off ends a running lift at once. */
     up(0, 0, 70000); CHK(up(1, 0, 80000) == 1, "third wake"); CHK(up(0, 0, 81000) == 0, "screen off kept the lift");
@@ -5259,7 +5269,7 @@ int main(void) {
     /* fix272: a cold start heard through Zygisk. The tap armed a lift at 700000 (until
      * 703000); the new process 600 ms later carries it to 703600 without counting a new
      * lift. A cold start right after that window, inside the 5 s anti-chatter gap that
-     * refuses a touch, arms its own lift. Thermal and Performance still refuse it, and a
+     * refuses a lock press, arms its own lift. Thermal and Performance still refuse it, and a
      * kick is consumed by the pass that saw it. */
     up(0, 0, 690000); P = PROFILE_BATTERY; up(1, 0, 691000); up(1, 0, 695000);
     unsigned long lc0 = g_unlock_lifts;
@@ -5269,7 +5279,7 @@ int main(void) {
         "fix272: a cold start did not carry the running lift over the start");
     CHK(g_unlock_cold_kick == 0, "fix272: the cold-start kick was not consumed");
     CHK(up(1, 0, 703500) == 1 && up(1, 0, 703700) == 0, "fix272: the carried lift did not end on time");
-    CHK(upa(1, 1, 0, 704000) == 0 && g_unlock_lifts == lc0 + 1, "touch inside the 5 s gap re-armed");
+    CHK(uplk(1, 1, 704000) == 0 && g_unlock_lifts == lc0 + 1, "lock press inside the 5 s gap re-armed");
     g_unlock_cold_kick = 1;
     CHK(up(1, 0, 704200) == 1 && g_unlock_lifts == lc0 + 2 && g_unlock_cold_lifts == 1 &&
         !strcmp(g_unlock_arm_why, "cold start"), "fix272: a cold start inside the gap did not arm");
@@ -5303,7 +5313,7 @@ int main(void) {
     CHK(up(1, 0, 750400) == 1 && g_unlock_until_ms == 756400 && g_unlock_cold_long == 1,
         "fix286: a slow app's start was not carried for 6 s");
     CHK(up(1, 0, 756300) == 1 && up(1, 0, 756500) == 0, "fix286: the long window did not end on time");
-    CHK(upa(1, 1, 0, 762000) == 1 && g_unlock_until_ms == 765000, "fix286: the second tap did not arm");
+    CHK(upl(1, 0, 1, 762000) == 1 && g_unlock_until_ms == 765000, "fix286: the second app transition did not arm");
     g_unlock_cold_kick = ASB_COLD_SHORT;
     CHK(up(1, 0, 762300) == 1 && g_unlock_until_ms == 764300 && g_unlock_cold_trims == 1,
         "fix286: a fast app kept its tap's full window");
@@ -5566,6 +5576,19 @@ int main(int argc, char **argv) {
     int bad = 0;
     NODE = argc > 1 ? argv[1] : "/dev/null";
     asb_write_health_t *h = &g_write_health[ASB_WRITE_CPU_MAX0];
+    /* Accounting: an already-set confirmation is an attempt and a precheck read, never a
+     * physical write. A changed request is one write plus one confirmation read. */
+    g_vendor_floor = 0; g_live = 100;
+    if (put(100) != 0 || g_writes != 0 || g_stat_write_attempts != 1 ||
+        g_stat_already_set != 1 || g_stat_writes != 0 ||
+        g_stat_precheck_reads != 1 || g_stat_readbacks != 0) {
+        printf("already-set was counted as physical I/O\n"); bad = 1;
+    }
+    if (put(200) != 0 || g_writes != 1 || g_stat_write_attempts != 2 ||
+        g_stat_already_set != 1 || g_stat_writes != 1 ||
+        g_stat_precheck_reads != 2 || g_stat_readbacks != 1) {
+        printf("changed write accounting is wrong\n"); bad = 1;
+    }
     /* A boost holds the floor at 1785600: three holds of 1555200 -> five-minute back-off. */
     g_vendor_floor = 1785600; g_live = 1785600;
     for (int i = 0; i < 3; i++) put(1555200);
@@ -5595,7 +5618,7 @@ int main(int argc, char **argv) {
 X
 "$CC" -O1 -Wall -Wno-unused-function -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "harness did not compile"; }
 "$T/t" "$T/node" || fail "hold bypass wrong"
-echo "PASS writer hold bypass: a held request waits, a new one is sent, a clean write ends the hold run"
+echo "PASS writer hold bypass/accounting: held-request backoff, changed-request bypass, and attempts/no-op/physical reads counted separately"
 )
 
 t_night_window_chain_runtime() (

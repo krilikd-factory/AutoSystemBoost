@@ -4572,9 +4572,11 @@ fail() { echo "FAIL fix212: $*"; exit 1; }
 grep -qF 'static int asb_unlock_lift_profile_ok(int profile_idx)' "$G" || fail "no profile gate"
 grep -qF 'return profile_idx != PROFILE_PERFORMANCE;' "$G" || fail "the gate is not 'everyone but Performance'"
 grep -qF '#define ASB_LAUNCH_LIFT_GAP_MS 5000L' "$G" || fail "no launch rate limit"
-# fix220 merged the app switch into one arm with the tap and the lock press - the reason
-# string must still name it.
-grep -qF 'g_unlock_arm_why = touch_kick ? "touch" : (lock_kick ? "lock key" : "app switch");' "$G" || fail "no app-switch arm"
+# fix220 merged the app switch with the tap and lock press; buildfix13 deliberately splits
+# routine touches into a 20-second arm while preserving the independent app/lock fast path.
+grep -qF 'g_unlock_arm_why = lock_kick ? "lock key" : "app switch";' "$G" || fail "no app-switch arm"
+grep -qF 'g_unlock_arm_why = "touch";' "$G" || fail "no routine-touch arm"
+grep -qF '#define ASB_TOUCH_LIFT_GAP_MS ASB_UNLOCK_TOUCH_WINDOW_MS' "$G" || fail "no independent routine-touch rate limit"
 grep -qF 'g_unlock_arm_why = "screen on";' "$G" || fail "the wake arm lost its reason"
 grep -qF 'static long g_launch_prev_hash = 0;' "$G" || fail "no foreground-hash baseline in the tick"
 grep -qF 'uint64_t _fh = g_smart_rt.app_hash;' "$G" || fail "the launch kick does not read the foreground hash"
@@ -4837,7 +4839,7 @@ fail() { echo "FAIL fix220: $*" >&2; exit 1; }
 # tests/asb_ui.sh:t_webui_log_report_runtime; here the structural pins.
 sh -n "$D" || fail "digest script has a syntax error"
 grep -qF 'int lock_kick, int launch_kick,' "$G" || fail "the update does not take the lock kick"
-grep -qF 'g_unlock_arm_why = touch_kick ? "touch" : (lock_kick ? "lock key" : "app switch");' "$G" || fail "the arm no longer names its source"
+grep -qF 'g_unlock_arm_why = lock_kick ? "lock key" : "app switch";' "$G" || fail "the arm no longer names its source"
 grep -qF 'g_lock_key_kick = 1;' "$G" || fail "the power key with the screen on raises no kick"
 grep -qF 'if (g_wake_key_touch[i])' "$G" || fail "wake_keys_park parks the power key with the screen on again"
 grep -qF 'jwake\twakes=%s\tpct=%s\tord=%s\tframes=%s\ttop=%s\ttop_pct=%s' "$D" || fail "the digest emits no wake-jank line"

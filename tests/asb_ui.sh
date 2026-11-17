@@ -716,6 +716,19 @@ DIAG_OUT="$(env "${ENV[@]}" sh "$HELPER" diag || true)"
 grep -Fq 'status=saved' <<<"$DIAG_OUT"
 DIAG_PATH="$(printf '%s\n' "$DIAG_OUT" | sed -n 's/^path=//p')"
 [ -f "$DIAG_PATH" ] && grep -Fq 'diagnostic-ok' "$DIAG_PATH" || { echo 'FAIL debug support: diag export' >&2; exit 1; }
+[ "$(find "$TMP/out" -maxdepth 1 -type f -name 'asbdiag_*.txt' | wc -l)" -eq 1 ] || {
+  echo 'FAIL debug support: one diag action did not publish exactly one report' >&2; exit 1;
+}
+need "$HELPER" 'DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/ASB/logs}"'
+! grep -Fq '_outdir="/sdcard"' "$HELPER" || { echo 'FAIL debug support: /sdcard fallback remains' >&2; exit 1; }
+! grep -Fq '_outdir="/sdcard/Download"' "$HELPER" || { echo 'FAIL debug support: Download fallback remains' >&2; exit 1; }
+printf 'not a directory\n' > "$TMP/diag-outdir-file"
+BAD_OUTDIR="$(env -u ASB_DEBUG_SUPPORT_DIAG_OUTDIR ASB_DEBUG_SUPPORT_MODDIR="$DBG" \
+  ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/full_day.out" \
+  ASB_DEBUG_SUPPORT_DIAG_OUTDIR="$TMP/diag-outdir-file" sh "$HELPER" diag 2>&1 || true)"
+grep -Fqx 'error=diag_outdir_failed' <<<"$BAD_OUTDIR" || { echo "FAIL debug support: output-dir failure not surfaced: $BAD_OUTDIR" >&2; exit 1; }
+! grep -Fq 'status=saved' <<<"$BAD_OUTDIR" || { echo 'FAIL debug support: failed export claimed saved' >&2; exit 1; }
+! grep -Fq 'path=/sdcard' <<<"$BAD_OUTDIR" || { echo 'FAIL debug support: failed export fell back to shared storage' >&2; exit 1; }
 
 # WebUI cannot paint while a KSU bridge waits for a synchronous diagnostic export.
 # The async action must acknowledge a delayed worker immediately, remain observable via
@@ -4430,8 +4443,9 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -Fq "if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);" "$H" || fail "a throttled read still leaves the cells empty"
 grep -Fq "  liveMonitorSchedule(liveOpenRefreshDelay());" "$H" || fail "opening Monitor no longer uses the scheduled freshness-aware read"
 grep -Fq "    } else paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
-# fix287: a new WebView paints the last visit's ROM snapshot at once, dimmed until fresh.
-grep -Fq "      paintStockLive(_lvMonCache.rom);" "$H" && grep -Fq "      lvStale(true);" "$H" || fail "a fresh page opens Monitor without the cached card"
+# buildfix12: a new WebView paints the last visit's ROM snapshot at once, without dimming
+# the page while the freshness-aware read is pending.
+! grep -Fq "      lvStale(true);" "$H" || fail "fresh Monitor entry is dimmed by stale cache"
 # fix177: the read waits for the slide, and is a script of builtin reads, not a cat per value.
 python3 - "$H" <<'P' || fail "Monitor open order / ROM read"
 import sys
@@ -4573,7 +4587,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui stock monitor: nine ROM readings on Stock, trip points and alarm zones never read as a temperature, last sample painted on every visit"
+echo "PASS webui stock monitor: immediate undimmed cached sample, freshness-aware read, correct ROM sensors and no trip/alarm zone treated as temperature"
 )
 
 t_rom_telemetry_runtime() (
@@ -7824,7 +7838,10 @@ brightness%  samples  avg_mA
 0-24             384     299
 average brightness while on: 14%
   governor cpu             : 4977 ms/h (15157 ms total)
-  physical writes          : 480/h
+  writer attempts          : 620/h
+  physical write calls     : 480/h
+  already-set confirms     : 140/h (no physical write)
+  writer reads             : 900/h precheck + 480/h confirmation
   timer wakeups            : 1628/h
     by screen state        : screen on 1271/h, screen off 356/h - no alarm clock: none of them wakes a sleeping phone
 link drops (ACL disconnects): 5 - lost link (timeout): 3, ended by the headset: 1, ended by this phone: 1, other/unknown: 0
@@ -8146,7 +8163,9 @@ assert "asbCosmicLoading(body, { kind:'zygisk'" in zy and "zy_stage_companion" i
 load=body('async function zygiskPageLoad(user) {')
 assert load.count('runBatch(')==1 and 'setInterval' not in load
 assert load.index('zygiskPageRender(null)') < load.index('await asbPaintYield()') < load.index('await runBatch(')
-assert "user || !window._asbZygiskLinkData" in load and "zy_status_failed_empty" in load
+assert 'window._asbZygiskLinkData = null;' in load and 'zygiskPageRender(null, \'error\')' in load
+assert 'window._asbZygiskLinkData || null' not in load and 'zy_status_failed\'' not in load
+assert 'id="zyRefresh"' not in h
 keys=('zy_loading_sub','zy_stage_companion','zy_stage_guard','zy_stage_apps','zy_status_failed_empty','dev_kernel_runtime_hrtimer_migration','dev_kernel_runtime_lpm_prediction','dev_kernel_runtime_usb_autosuspend')
 for p in (root/'webroot/i18n').glob('*.json'):
     d=json.loads(p.read_text(encoding='utf-8'))
@@ -8188,22 +8207,24 @@ let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
  resolveBatch({link:{errno:0,stdout:'D\tzygisk_observer\tenabled\t1'}});await p;
  chk(renders.length===2&&renders[1].d&&renders[1].d.count===1&&!els.zyRefresh.disabled&&!els.zySave.disabled,'success did not replace loader');
  events.length=0;p=zygiskPageLoad(true);await Promise.resolve();await Promise.resolve();
- chk(!events.includes('render:loading')&&events[0]==='yield','cached snapshot was covered by a loader: '+events);
+ chk(events[0]==='render:loading'&&events.includes('yield'),'a repeat read kept stale content instead of a fresh loader: '+events);
+ chk(window._asbZygiskLinkData===null&&els.zySave.disabled,'repeat read kept the old snapshot available');
  resolveBatch({link:{errno:1,stdout:''}});await p;
- chk(renders.length===3&&renders[2].state==='error'&&renders[2].d,'cached failure lost its snapshot');
- window._asbZygiskLinkData=null;events.length=0;p=zygiskPageLoad(false);await Promise.resolve();await Promise.resolve();
+ chk(renders.length===4&&renders[3].state==='error'&&!renders[3].d,'read failure resurrected a stale snapshot');
+ chk(window._asbZygiskLinkData===null&&els.zySave.disabled,'failed read left stale Save data');
+ events.length=0;p=zygiskPageLoad(false);await Promise.resolve();await Promise.resolve();
  resolveBatch(null);await p;
- chk(renders.length===5&&renders[4].state==='error'&&!renders[4].d&&els.zySave.disabled,'first-load failure left loader or enabled Save');
+ chk(renders.length===6&&renders[5].state==='error'&&!renders[5].d&&els.zySave.disabled,'first-load failure left loader or enabled Save');
  events.length=0;p=zygiskPageLoad(false);await Promise.resolve();await Promise.resolve();_zygiskOpen=false;
  resolveBatch({link:{errno:0,stdout:'D\tzygisk_observer\tenabled\t1'}});await p;
- chk(renders.length===6,'closed page repainted over another page');
+ chk(renders.length===7,'closed page repainted over another page');
  if(bad)process.exit(1);console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});
 JS
 } > "$T/t.js"
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS webui cosmic loading: shared accessible DOM/SVG scene, dark/light/reduced-motion CSS, paint-first initial reads, one collector, success/error/cached/close lifecycle'
+echo 'PASS webui cosmic loading: shared accessible DOM/SVG scene, fresh-only Zygisk reads, stale data cleared on every open/error, Save gated by current evidence, close lifecycle'
 )
 
 t_webui_fix290_instant_runtime() (
@@ -8274,8 +8295,8 @@ const chk=(c,m)=>{if(!c)throw new Error(m);};
 JS_FIX290
   } > "$T/test.js"
   out="$(node "$T/test.js" 2>&1)" || fail "$out"; [ "$out" = ok ] || fail "$out"
-  grep -Fq 'if (lvMonTilesRestore()) lvStale(true);' "$H" || fail 'Monitor does not paint its live snapshot on entry'
-  grep -Fq 'if (lvMonSmartRestore()) lvStale(true);' "$H" || fail 'Monitor does not paint its Smart snapshot on entry'
+  grep -Fq 'lvMonTilesRestore();' "$H" || fail 'Monitor does not restore its live snapshot on entry'
+  grep -Fq 'lvMonSmartRestore();' "$H" || fail 'Monitor does not restore its Smart snapshot on entry'
   grep -Fq "['liveSmartBanner', 'liveStockRomBanner', 'bnDrainStrip', 'liveMetrics']" "$H" || fail 'restored Smart card is not marked stale'
   grep -Fq 'runBatch(liveBatchParts(visible, prime))' "$H" || fail 'Monitor priming added a separate shell'
   grep -Fq 'await asbPaintYield();' "$H" || fail 'report root read is not behind a painted frame'
@@ -8775,11 +8796,11 @@ echo "PASS webui boot fly: the boot sphere itself flies a curved transform-only 
 t_webui_infirmary_runtime() (
 # dev17: the Infirmary is a screen of its own, opened by the pharmacy button beside Reset. It
 # holds the Battery Fix card plus the two repairs moved out of System Services.
-# dev18: users could not tell whether the recompile ran or whether the fix worked at all. The
-# card is now a three-step checklist (condition, ART recompile with live progress, statistics
-# reset with its verified outcome) under one status chip, and the button follows the state
-# (run / stop / reboot to finish). The pharmacy button is a designed control in every theme.
-# Static wiring first, then the REAL card code over a mini DOM and a scripted shell.
+# buildfix12: Battery Fix is a two-step checklist (charge/full eligibility and a verified
+# battery-statistics reset after reboot). ART compilation, its progress/stop lifecycle and
+# Binder transaction failures are not part of this workflow. The pharmacy button remains a
+# designed control in every theme. Static wiring first, then the REAL card code over a mini
+# DOM and a scripted shell.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -8819,6 +8840,10 @@ for fn in ('function cfgRenderBatteryFixCard(', 'function bfxPaintFrom(', 'async
     assert fn in h, 'missing ' + fn
 assert "cfgShowGroup('infirmary')" in h
 assert '!sectionItems.length && !section.card' in h
+bfx = h[h.index('function cfgRenderBatteryFixCard('):h.index('function cfgRenderInfirmaryHero(')]
+for obsolete in ('bfxStepArt', 'bfxArtNow', 'bfxBarWrap', "dataset.mode = 'stop'", 'compile=busy'):
+    assert obsolete not in bfx, 'obsolete ART Battery Fix path remains: ' + obsolete
+assert "steps.appendChild(bfxStep('bfxStepCond'" in bfx and "steps.appendChild(bfxStep('bfxStepReset'" in bfx
 import json
 from pathlib import Path
 keys = {
@@ -8830,11 +8855,10 @@ keys = {
  'inf_advice_finished':('{applied}','{failed}','{skipped}'),
  'inf_advice_result_applied':(), 'inf_advice_result_failed':(),
  'inf_advice_result_changed':(), 'inf_advice_result_pending':(),
- 'bfx_art_partial':('{ok}','{fail}','{left}'), 'bfx_art_binder':('{err}',)
 }
 for p in sorted((Path(sys.argv[1]).parent/'i18n').glob('*.json')):
  d=json.loads(p.read_text(encoding='utf-8'))
- assert 'bfx_art_bulk' not in d, p.name + ': obsolete aggregate compile phase remains'
+ assert not any(k.startswith('bfx_art_') for k in d), p.name + ': obsolete ART workflow strings remain'
  for k, ph in keys.items():
   assert isinstance(d.get(k),str) and d[k], (p.name,k)
   for token in ph: assert token in d[k], (p.name,k,token)
@@ -8918,98 +8942,65 @@ function adviceReset(recs, saved) {
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const B = 'eligible=1 reason=- level=100 charging=1 ';
 const tail = ' now=2000 last_reset=- removed= missing= fresh=-';
-const idle = 'reset=none compile=idle phase= total= done= ok= fail= cur= started= finished=';
+const idle = 'reset=none compile=not_required';
 const step = function (id) { return { cls: reg[id].className, text: reg[id + 'S'].textContent }; };
 const lastTimer = function () { const l = timers.filter(function (t) { return t.live; }); return l.length ? l[l.length - 1].ms : 0; };
 async function paint(st) { scripted.status = st; await batteryFixPaint(); }
 (async function () {
   const list = mk('div');
-  scripted.status = 'eligible=0 reason=not_charging level=57 charging=0 ' + idle + tail;
+  scripted.status = 'eligible=0 reason=not_charging level=57 charging=0 ' + idle + ' ' + tail;
   cfgRenderBatteryFixCard(list);
   await new Promise(function (r) { setImmediate(r); });
   const card = list.children[0];
   chk(card && card.id === 'bfxCard', 'card not rendered');
   const ol = card.children.filter(function (c) { return c.tag === 'ol'; })[0];
-  chk(ol && ol.children.map(function (c) { return c.id; }).join() === 'bfxStepCond,bfxStepArt,bfxStepReset', 'the three steps are missing or out of order');
+  chk(ol && ol.children.map(function (c) { return c.id; }).join() === 'bfxStepCond,bfxStepReset', 'the two reset-only steps are missing or out of order');
+  chk(!reg.bfxStepArt && !reg.bfxArtNow && !reg.bfxBarWrap && !reg.bfxBar, 'ART progress controls are still rendered');
   chk(reg.bfxRun.disabled && reg.bfxRun.dataset.mode === 'run', 'discharging did not disable the run button');
   chk(step('bfxStepCond').cls === 'bfx-step is-off' && step('bfxStepCond').text === '57% · not on charge', 'condition not shown: ' + step('bfxStepCond').text);
+  chk(step('bfxStepReset').cls === 'bfx-step is-off' && step('bfxStepReset').text === 'Not scheduled', 'idle reset state wrong');
   chk(reg.bfxChip.className === 'bfx-chip is-off' && reg.bfxNote.textContent !== '', 'unavailable state not explained');
-  chk(step('bfxStepArt').text === 'Not run yet' && reg.bfxBarWrap.hidden, 'idle compile state wrong');
-  chk(reg.bfxCancel.hidden && lastTimer() === 8000, 'idle poll should be slow');
+  chk(reg.bfxCancel.hidden && lastTimer() === 8000, 'idle refresh should be slow');
 
-  await paint(B + idle + tail);
+  await paint(B + idle + ' ' + tail);
   chk(!reg.bfxRun.disabled && reg.bfxChip.className === 'bfx-chip is-ready' && step('bfxStepCond').cls === 'bfx-step is-ok', 'full on charge not ready');
   chk(reg.bfxNote.textContent === '', 'a stale reason stayed visible');
 
   const n0 = cmds.length;
   await batteryFixRun();
   chk(cmds.length === n0 && toasts[toasts.length - 1].t === 'perf', 'first tap should only arm a confirm');
-  scripted.run = 'result=armed reset_on=reboot compile=started';
+  scripted.run = 'result=armed reset_on=reboot compile=not_required';
   await batteryFixRun();
-  chk(cmds.some(function (c) { return / run$/.test(c); }) && toasts[toasts.length - 1].t === 'ok', 'second tap did not start the fix');
+  chk(cmds.some(function (c) { return / run$/.test(c); }) && toasts[toasts.length - 1].t === 'ok' && /no ART compilation/.test(toasts[toasts.length - 1].m), 'second tap did not arm the reset-only fix');
 
-  await paint(B + 'reset=pending compile=running phase=compile total=300 done=150 ok=148 fail=2 cur=com.example.app started=1000 finished=-' + ' now=1300 last_reset=- removed= missing= fresh=-');
-  chk(reg.bfxChip.className === 'bfx-chip is-run', 'running chip not shown');
-  const art = step('bfxStepArt');
-  chk(art.cls === 'bfx-step is-run' && art.text === '150 of 300 · failed: 2 · about 5 min left', 'progress text wrong: ' + art.text);
-  chk(reg.bfxArtNow.textContent === 'Now: com.example.app', 'current app not shown');
-  chk(!reg.bfxBarWrap.hidden && reg.bfxBar.style.transform === 'scaleX(0.5000)', 'progress bar wrong: ' + reg.bfxBar.style.transform);
-  chk(reg.bfxRun.dataset.mode === 'stop' && !reg.bfxRun.disabled, 'running state does not offer stop');
-  chk(!reg.bfxCancel.hidden && step('bfxStepReset').cls === 'bfx-step is-wait', 'scheduled reset not shown while compiling');
-  chk(lastTimer() === 2000, 'running poll should be fast');
-  scripted.stop = 'result=stopping';
-  await batteryFixRun();
-  chk(cmds.some(function (c) { return / stop$/.test(c); }) && /current app/.test(toasts[toasts.length - 1].m), 'stop did not reach the script');
-
-  await paint(B + 'reset=pending compile=running phase=finishing total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=-' + tail);
-  chk(step('bfxStepArt').text === 'Final background optimisation…' && reg.bfxBar.style.transform === 'scaleX(1.0000)', 'finishing phase not shown');
-  await paint(B + 'reset=pending compile=partial phase=partial total=560 done=4 ok=1 fail=3 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
-  chk(step('bfxStepArt').cls === 'bfx-step is-wait' && /1 succeeded, 3 failed, 556 not attempted/.test(step('bfxStepArt').text) && /no aggregate success is inferred/.test(step('bfxStepArt').text), 'partial Binder recovery hid failures or fabricated unprocessed apps: ' + step('bfxStepArt').text);
-
-  await paint(B + 'reset=pending compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600' + tail);
-  chk(step('bfxStepArt').cls === 'bfx-step is-ok' && step('bfxStepArt').text === 'Done: 297 succeeded, failed: 3 · 10 min', 'compile result wrong: ' + step('bfxStepArt').text);
-  chk(reg.bfxChip.className === 'bfx-chip is-wait' && reg.bfxRun.dataset.mode === 'reboot' && !reg.bfxCancel.hidden, 'pending state does not ask for a reboot');
-  chk(reg.bfxArtNow.textContent === '' && lastTimer() === 8000, 'stale current app or fast poll after compile');
+  await paint(B + 'reset=pending compile=not_required ' + tail);
+  chk(reg.bfxChip.className === 'bfx-chip is-wait' && reg.bfxRun.dataset.mode === 'reboot' && !reg.bfxRun.disabled, 'pending state does not ask for a reboot');
+  chk(!reg.bfxCancel.hidden && step('bfxStepReset').cls === 'bfx-step is-wait' && step('bfxStepReset').text === 'Scheduled — applied at the next reboot', 'scheduled reset not shown');
+  chk(lastTimer() === 8000, 'pending reset incorrectly enabled ART-era fast polling');
   const rb = cmds.length;
   await batteryFixRun();
-  chk(cmds.slice(rb).some(function (c) { return /reboot/.test(c); }), 'reboot mode did not reboot');
+  chk(cmds.slice(rb).some(function (c) { return /reboot/.test(c); }) && !cmds.some(function (c) { return / stop$/.test(c); }), 'reboot mode did not reboot or invoked obsolete stop');
 
-  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600 now=9000 last_reset=1700 removed=batterystats.bin,batterystats-checkin.bin,batterystats-daily.xml missing=- fresh=1');
+  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=not_required now=9000 last_reset=1700 removed=batterystats.bin,batterystats-checkin.bin,batterystats-daily.xml missing=- fresh=1');
   const rs = step('bfxStepReset');
   chk(rs.cls === 'bfx-step is-ok' && /statistics files removed: 3/.test(rs.text) && /started a new record/.test(rs.text) && !/not present|could not/.test(rs.text), 'verified reset not shown: ' + rs.text);
   chk(reg.bfxChip.className === 'bfx-chip is-ok' && reg.bfxCancel.hidden, 'done chip not shown');
   chk(reg.bfxRun.disabled && reg.bfxRun.dataset.mode === 'run', 'the run button should rest after a finished fix below 100%');
-  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600 now=9000 last_reset=1700 removed=- missing=batterystats.bin fresh=0');
+  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=not_required now=9000 last_reset=1700 removed=- missing=batterystats.bin fresh=0');
   chk(step('bfxStepReset').cls === 'bfx-step is-fail' && /removed: 0/.test(step('bfxStepReset').text) && /could not be removed: 1/.test(step('bfxStepReset').text) && /write the new record/.test(step('bfxStepReset').text), 'an empty reset was shown as success: ' + step('bfxStepReset').text);
-  // dev49: a user saw "1 of 3 files removed" and a date months in the past. Files Android
-  // never created are named as absent, not as a partial failure, and a reset whose
-  // post-fs-data clock was not trusted reads "at the last reboot" instead of a wrong date.
-  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600 now=9000 last_reset=boot removed=batterystats.bin missing=- fresh=- absent=batterystats-checkin.bin,batterystats-daily.xml');
+  // Files Android never created are absent, not failed. An untrusted post-fs-data clock
+  // must not produce a date months in the past.
+  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=not_required now=9000 last_reset=boot removed=batterystats.bin missing=- fresh=- absent=batterystats-checkin.bin,batterystats-daily.xml');
   const ra = step('bfxStepReset');
   chk(ra.cls === 'bfx-step is-ok' && /^Done at the last reboot: statistics files removed: 1 · not present on this Android: 2 · /.test(ra.text) && !/could not/.test(ra.text), 'absent files or unsettled time not shown: ' + ra.text);
-  // dev49: every recompile refused - the worker stops early and the first answer is shown.
-  await paint('eligible=1 reason=- level=100 charging=1 reset=pending compile=refused phase=refused total=560 done=12 ok=0 fail=12 cur=- started=1000 finished=1010' + tail + '\nerr_text=Error: Failed to compile <x> package');
-  chk(step('bfxStepArt').cls === 'bfx-step is-fail' && step('bfxStepArt').text === 'Android refused every recompile (12 of 12 apps), so it was stopped early. Android said: Error: Failed to compile x package', 'refused recompile not explained: ' + step('bfxStepArt').text);
-  await paint('eligible=1 reason=- level=100 charging=1 reset=none compile=refused phase=refused total=560 done=12 ok=0 fail=12 cur=- started=1000 finished=1010' + tail);
-  chk(/Android said: no reason given$/.test(step('bfxStepArt').text), 'a refusal without output has no fallback');
-  await paint(B + 'reset=pending compile=refused phase=refused total=560 done=1 ok=0 fail=1 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
-  chk(/repeatedly rejected both package-scoped compile calls/.test(step('bfxStepArt').text) && /no all-package fallback or ART\/Dalvik cleanup was used/.test(step('bfxStepArt').text) && /unprocessed apps were not counted as compiled/.test(step('bfxStepArt').text), 'Binder refusal does not describe the bounded package-scoped path: ' + step('bfxStepArt').text);
+  // A legacy failing ART/Binder status is not a Battery Fix failure and creates no ART step.
+  await paint(B + 'reset=pending compile=not_required ' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
+  chk(reg.bfxChip.className === 'bfx-chip is-wait' && step('bfxStepReset').cls === 'bfx-step is-wait' && !reg.bfxStepArt, 'legacy Binder/ART output affected the reset-only workflow');
 
-  await paint(B + 'reset=pending compile=scheduled phase=scheduled total=560 done=1 ok=0 fail=0 cur=- started=1000 finished=1002' + tail);
-  chk(step('bfxStepArt').cls === 'bfx-step is-wait' && /background optimisation job was started/.test(step('bfxStepArt').text) && /does not confirm speed-profile/.test(step('bfxStepArt').text), 'background scheduling was presented as verified compilation: ' + step('bfxStepArt').text);
-  await paint(B + 'reset=none compile=interrupted phase=compile total=300 done=40 ok=40 fail=0 cur=x started=1000 finished=-' + tail);
-  chk(step('bfxStepArt').cls === 'bfx-step is-wait' && step('bfxStepArt').text === 'Interrupted at 40 of 300' && reg.bfxArtNow.textContent === '', 'interrupted run not shown');
-  await paint(B + 'reset=none compile=stopped phase=stopped total=300 done=70 ok=70 fail=0 cur=- started=1000 finished=1200' + tail);
-  chk(step('bfxStepArt').text === 'Stopped at 70 of 300', 'stopped run not shown');
-  await paint(B + 'reset=none compile=failed phase=no_packages total=0 done=0 ok=0 fail=0 cur=- started=1000 finished=1000' + tail);
-  chk(step('bfxStepArt').cls === 'bfx-step is-fail' && reg.bfxBarWrap.hidden, 'failed list not shown');
-
-  scripted.run = 'result=armed reset_on=reboot compile=busy';
-  await batteryFixRun(); await batteryFixRun();
-  chk(/already running/.test(toasts[toasts.length - 1].m), 'busy not reported');
+  await paint(B + idle + ' ' + tail);
   scripted.run = 'result=refused reason=not_full level=97';
   await batteryFixRun(); await batteryFixRun();
-  chk(toasts[toasts.length - 1].t === 'error', 'refusal not reported as an error');
+  chk(toasts[toasts.length - 1].t === 'error' && !cmds.some(function (c) { return / stop$/.test(c); }), 'refusal not reported as an error or obsolete stop was called');
 
   scripted.cancel = 'result=cancelled';
   await batteryFixCancel();
@@ -9075,7 +9066,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui infirmary: Battery Fix states plus evidence-backed recommendations with two-tap confirmation, changed-since-preview guard, independent saved-config read-back and repaint-safe per-setting results"
+echo "PASS webui infirmary: reset-only Battery Fix with no ART/progress/stop path, verified reboot reset states and read-back-safe Infinite Log recommendations"
 )
 
 t_webui_home_fit_after_parse_runtime() (
@@ -9176,12 +9167,14 @@ from pathlib import Path
 h = (Path(sys.argv[1])/'webroot/index.html').read_text(encoding='utf-8')
 page = h[h.index('id="zygiskPage"'):h.index('id="zygiskBody"')]
 assert 'id="zySave"' in page and "asbSavePage('zygisk')" in page and 'data-i18n="page_save"' in page, 'the Zygisk page has no Save button'
-assert page.index('id="zySave"') < page.index('id="zyRefresh"'), 'Save is not placed like on the other pages'
+assert 'id="zyRefresh"' not in page and 'id="zyRefresh"' not in h, 'obsolete Zygisk Refresh remains'
 load = h[h.index('async function zygiskPageLoad(user) {'):h.index('function zygiskRawDigest(b) {')]
 assert 'window._asbZygiskRaw = zygiskRawDigest(b);' in load and "_el('zySave')" in load
+assert 'window._asbZygiskLinkData = null;' in load and "zygiskPageRender(null, 'error')" in load, 'read error retains stale evidence'
 assert load.count('runBatch(') == 1, 'saving must not add a read to the page load'
 openp = h[h.index('function openZygiskPage() {'):h.index('function closeZygiskPage() {')]
 assert "_el('zySave')" in openp and 'run(' not in openp
+assert 'zygiskPageLoad(false)' in openp and 'window._asbZygiskLinkData = null;' in openp and "window._asbZygiskRaw = '';" in openp, 'opening does not clear and reread current evidence'
 PY
 {
   cat <<'EOF'
@@ -9291,7 +9284,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui zygisk save: Save button beside Refresh, the page as shown with folds, switch states, chosen mode and the unopened evidence list, plus every status output, in Download, without a new read"
+echo "PASS webui zygisk save: Save retained without Refresh, fresh-only evidence on every opening, stale data cleared on errors, the visible page and every status output saved without a new read"
 )
 
 t_device_info_runtime() (
@@ -10052,7 +10045,7 @@ set_start = h.index('async function cfgSet(key, val, ctl)')
 set_guard = h[set_start:h.index('const _fix = cfgConflictResolve', set_start)]
 assert 'kernelControlAvailability(key)' in set_guard and 'not_exposed' in set_guard and 'return;' in set_guard
 assert '/sys/kernel/asb_wakeup' not in h and 'ASB_WAKEUP_BLOCKLIST_NODE' not in h
-assert "asb_wakeup_blocker.sh') + ' set'" in h
+assert "asb_wakeup_blocker.sh') + ' set --always'" in h
 assert "kernelWakeupChipList" in h and "textContent" in h
 assert 'setInterval' not in panel
 observed_fn = panel[panel.index('function kernelWakeupObservedList'):panel.index('function cfgRenderWakeupBlockerCard')]
@@ -10063,7 +10056,7 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 104, len(new)
+assert len(new) == 131, len(new)
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -10094,21 +10087,25 @@ eval(h.match(/\nconst KERNEL_HIDE_WHEN_ABSENT = [^\n]*/)[0].replace('const ','gl
 eval(h.match(/\nconst KERNEL_HIDE_STATES = \{[\s\S]*?\n\};/)[0].replace('const ','global.'));
 eval(h.match(/\nconst KERNEL_OPTION_VALUES = \{[\s\S]*?\n\};/)[0].replace('const ','global.'));
 global.Topt=o=>o;global.bfxT=(k,f,v)=>f.replace(/\{(\w+)\}/g,(m,x)=>v[x]);
-for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupSelectSources','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupRisk','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelHiddenAbsent','kernelShipped','kernelDefaultFact','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
-global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
-const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_hrtimer_migration|covered_by_timer_migration|auto|0|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
+for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupSelectSources','kernelWakeupValidName','kernelWakeupDrafts','kernelWakeupDraft','kernelWakeupRisk','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelHiddenAbsent','kernelShipped','kernelDefaultFact','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
+global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_bore'];
+const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_hrtimer_migration|covered_by_timer_migration|auto|0|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\nkernel_bore|writable|auto|1|0\narbitrary_path|writable|on|1|none\n');
 if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_hrtimer_migration.state!=='covered_by_timer_migration'||c.kernel_hrtimer_migration.live!=='0'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
-const wb=kernelWakeupParse('wakeup_blocker|status|blocked_events=17|node=writable|policy=ready|saved_count=2|current_count=1\nwakeup_rule|saved|NETLINK\nwakeup_rule|saved|qcom|rx\nwakeup_rule|current|NETLINK\n');
-if(wb.events!=='17'||wb.saved.length!==2||wb.saved[1]!=='qcom|rx'||wb.current[0]!=='NETLINK')throw Error('wakeup status parse '+JSON.stringify(wb));
+const wb=kernelWakeupParse('wakeup_blocker|status|blocked_events=17|node=writable|policy=ready|sleep_policy=ready|saved_count=2|sleep_count=1|current_count=2|screen=off\nwakeup_rule|saved_always|NETLINK\nwakeup_rule|saved_sleep|qcom|rx\nwakeup_rule|current|NETLINK\nwakeup_rule|current|qcom|rx\n');
+if(wb.events!=='17'||wb.savedAlways.length!==1||wb.savedAlways[0]!=='NETLINK'||wb.savedSleep.length!==1||wb.savedSleep[0]!=='qcom|rx'||wb.current.length!==2||wb.screen!=='off'||wb.sleepPolicy!=='ready')throw Error('split wakeup status parse '+JSON.stringify(wb));
+const legacyWb=kernelWakeupParse('wakeup_blocker|status|blocked_events=17|node=writable|policy=ready|saved_count=2|current_count=1\nwakeup_rule|saved|NETLINK\nwakeup_rule|saved|qcom|rx\nwakeup_rule|current|NETLINK\n');
+if(legacyWb.saved.length!==2||legacyWb.saved[1]!=='qcom|rx')throw Error('legacy wakeup status compatibility '+JSON.stringify(legacyWb));
 const observed=kernelWakeupParse('wakeup_blocker|status|blocked_events=18|node=writable|policy=ready|saved_count=0|current_count=0|abi=2|rule_stats=ready\nwakeup_observe|status|state=measuring|elapsed_ms=65000|started=123|sources=1|resets=1\nwakeup_source|a|b|events=4|active=2|time_ms=900|reset=1\nwakeup_rule|blocked|a|b|7\n');
 if(observed.abi!=='2'||observed.observe.elapsed!==65000||observed.sources.length!==1||observed.sources[0].name!=='a|b'||observed.sources[0].events!==4||!observed.sources[0].reset||observed.blocked['a|b']!=='7')throw Error('observation parse '+JSON.stringify(observed));
-const blockedOnly=kernelWakeupSelectSources(observed,['a|b'],{query:'',filter:'blocked',sort:'events'});
-const unblockedOnly=kernelWakeupSelectSources(observed,['a|b'],{query:'',filter:'unblocked',sort:'events'});
-const resetOnly=kernelWakeupSelectSources(observed,[],{query:'',filter:'reset',sort:'events'});
-const noMatch=kernelWakeupSelectSources(observed,[],{query:'zzz',filter:'all',sort:'events'});
+const emptyDrafts={always:[],sleep:[]}, blockedDrafts={always:['a|b'],sleep:[]};
+const blockedOnly=kernelWakeupSelectSources(observed,blockedDrafts,{query:'',filter:'blocked',sort:'events'});
+const unblockedOnly=kernelWakeupSelectSources(observed,blockedDrafts,{query:'',filter:'unblocked',sort:'events'});
+const resetOnly=kernelWakeupSelectSources(observed,emptyDrafts,{query:'',filter:'reset',sort:'events'});
+const noMatch=kernelWakeupSelectSources(observed,emptyDrafts,{query:'zzz',filter:'all',sort:'events'});
 if(blockedOnly.length!==1||unblockedOnly.length!==0||resetOnly.length!==1||noMatch.length!==0)throw Error('dialog search/filter selection failed');
+if(kernelWakeupSelectSources(observed,{always:[],sleep:['a|b']},{query:'',filter:'blocked',sort:'events'}).length!==1)throw Error('screen-off draft is not treated as blocked');
 observed.sources.push({name:'000',events:1,active:9,time:5,reset:false});
-if(kernelWakeupSelectSources(observed,[],{query:'',filter:'all',sort:'name'})[0].name!=='000'||kernelWakeupSelectSources(observed,[],{query:'',filter:'all',sort:'active'})[0].name!=='000')throw Error('dialog sorting failed');
+if(kernelWakeupSelectSources(observed,emptyDrafts,{query:'',filter:'all',sort:'name'})[0].name!=='000'||kernelWakeupSelectSources(observed,emptyDrafts,{query:'',filter:'all',sort:'active'})[0].name!=='000')throw Error('dialog sorting failed');
 for(const n of ['NETLINK','a|b',"a'b",'!','-e'])if(!kernelWakeupValidName(n))throw Error('valid exact name rejected '+n);
 for(const n of ['','bad name','bad/name','bad\\name','é','a\nb'])if(kernelWakeupValidName(n))throw Error('unsafe name accepted '+JSON.stringify(n));
 let MD='/m',_wbDraft=null,_wbBusy=false,_kernelPanel={wakeup:wb,loading:false,controls:c},runs=[],toasts=[],refreshed=0;
@@ -10123,23 +10120,25 @@ if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||
 nrButtons.forEach(b=>{b.disabled=false;b['aria-disabled']='false'});nrPop.hidden=false;nrBadge.textContent='';nrBadge.title='';
 kernelDecorateControlRow(nrRow,'kernel_hrtimer_migration');
 if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||!/Managed by Timer migration/.test(nrBadge.textContent)||nrBadge.title!=='kernel: 0')throw Error('covered HR timer control remains actionable or has the wrong state '+JSON.stringify({buttons:nrButtons,pop:nrPop,badge:nrBadge,availability:kernelControlAvailability('kernel_hrtimer_migration')}));
+global._selectedProfile='smart';nrBadge.textContent='';nrBadge.title='';kernelDecorateControlRow(nrRow,'kernel_bore');
+if(nrBadge.textContent!=='Smart · 1'||nrBadge.title!=='kernel: 1')throw Error('BORE card does not show the current Smart value '+JSON.stringify({badge:nrBadge,availability:kernelControlAvailability('kernel_bore')}));
 (async()=>{
  await cfgSet('kernel_sched_nr_migrate','stock',null);
  await cfgSet('kernel_hrtimer_migration','on',null);
  if(runs.length!==0)throw Error('unsupported/covered mutation reached the config writer before rejection');
- _wbDraft=['NETLINK',"a'b"];await kernelWakeupSave(false);
- if(runs.length!==1||!runs[0].includes(" set 'NETLINK' 'a'\\''b'"))throw Error('unsafe/wrong set command '+runs[0]);
+ _wbDraft={always:['NETLINK',"a'b"],sleep:['sleep_lock']};await kernelWakeupSave(false);
+ if(runs.length!==1||!runs[0].includes(" set --always 'NETLINK' 'a'\\''b' --sleep 'sleep_lock'"))throw Error('unsafe/wrong split set command '+runs[0]);
  if(_wbDraft!==null||_wbBusy||refreshed!==1||toasts[toasts.length-1][1]!=='good')throw Error('successful apply did not reconcile');
- await kernelWakeupSave(true);if(!runs[1].endsWith(' set'))throw Error('clear did not replace policy with an empty set '+runs[1]);
- _wbDraft=['bad name'];const before=runs.length;await kernelWakeupSave(false);if(runs.length!==before)throw Error('invalid draft reached shell');
- _wbDraft=null;_kernelPanel.wakeup=observed;observed.saved=[];await kernelWakeupBlockObserved('new_source');
- if(!runs[runs.length-1].includes(" set 'new_source'"))throw Error('observed block bypassed policy owner '+runs[runs.length-1]);
+ await kernelWakeupSave(true);if(!runs[1].endsWith(' set --always --sleep'))throw Error('clear did not replace both policies with an empty set '+runs[1]);
+ _wbDraft={always:['bad name'],sleep:[]};const before=runs.length;await kernelWakeupSave(false);if(runs.length!==before)throw Error('invalid draft reached shell');
+ _wbDraft=null;_kernelPanel.wakeup=observed;observed.saved=[];observed.savedAlways=[];observed.savedSleep=[];await kernelWakeupBlockObserved('new_source','sleep');
+ if(!runs[runs.length-1].includes(" set --always --sleep 'new_source'"))throw Error('observed screen-off block bypassed policy owner '+runs[runs.length-1]);
  console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS webui kernel panel: symmetric nine-category hub, eleven owned controls under Kernel, no duplicate diagnostics probe, compact wakeup summary plus searchable/filterable/sortable bounded dialog, exact-name set/clear and translated strings in 13 locales'
+echo 'PASS webui kernel panel: nine-category hub, owned kernel controls, compact wakeup summary, bounded source dialog, split Always/screen-off exact-name set/clear and 13 locales'
 )
 
 t_webui_card_i18n_coverage_runtime() (
@@ -10565,13 +10564,14 @@ assert '#151c18' not in dark
 mark=s[s.index('<div class="asb-boot-intro"'):s.index('<div class="status-bar-scrim"')]
 assert mark.count('id="asbBootIntro"')==1 and 'hidden aria-hidden="true"' in mark
 assert 'role="status"' in mark and 'aria-live="polite"' in mark
-assert mark.count('data-boot-stage=')==5 and 'role="progressbar"' in mark
-assert 'id="asbBootIntroCount">0 / 5</div>' in mark and 'data-boot-stage="log"' in mark
+assert mark.count('data-boot-stage=')==0 and 'role="progressbar"' in mark
+assert 'id="asbBootIntroCount">0 / 5</div>' in mark and 'id="asbBootIntroStatus"' in mark
+for forbidden in ('>LIVE<','>CONFIG<','>DEVICE<','>LOG<','asb-boot-stages'):
+    assert forbidden not in mark, forbidden
 assert '<button' not in mark
 for token in ('@keyframes asbBootSpin','@keyframes asbBootPulse','@keyframes asbBootScan',
-              '@keyframes asbBootArrive','@keyframes asbBootHalo','@keyframes asbBootBeacon',
-              '@keyframes asbBootStageLine','@keyframes asbBootTrackShine','@keyframes asbBootReady',
-              '.asb-boot-stage.is-active::before','.asb-boot-stage.is-active::after',
+              '@keyframes asbBootArrive','@keyframes asbBootHalo',
+              '@keyframes asbBootTrackShine','@keyframes asbBootReady',
               '@media (prefers-reduced-motion:reduce)','@media (forced-colors:active)',
               'animation:none !important'):
     assert token in s, token
@@ -10643,7 +10643,7 @@ eval(src+`\n(async()=>{
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix324 intro runtime: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL WebUI fix324 intro runtime: $out" >&2; exit 1; }
-echo "PASS WebUI fix324: black dark Glass, shorter localized once-per-boot preview with active-stage/halo/ready motion, real Live/Config/Device/Infinite Log/full Zygisk cache warm, no fake completion, no replay and bounded fail-safe"
+echo "PASS WebUI fix324: simplified once-per-boot splash with metric preloading and ordinary progress, no visible LIVE/CONFIG/DEVICE/LOG or duplicate ZYGISK stage labels, bounded fail-safe and no replay"
 )
 
 t_webui_fix325_startup_performance() (
@@ -10805,9 +10805,9 @@ echo "PASS WebUI fix325: shared profile/Smart/boot startup, deduplicated static-
 )
 
 t_webui_snapshot_navigation_release11() (
-# Splash snapshots make Device, Infinite Log and Zygisk immediately readable on navigation.
-# They never replace the explicit live Refresh path; a missing snapshot still falls back to
-# one bounded collector. The original Device overview helper must remain distinct.
+# Splash snapshots make Device and Infinite Log immediately readable on navigation. Zygisk is
+# deliberately different: every opening clears the old snapshot and makes one fresh bounded
+# read; its Refresh button is gone and Save remains available only after a successful read.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -10822,12 +10822,13 @@ assert 'dev-stale' not in h, 'global snapshot dimming returned'
 assert 'const ov = deviceInfoOverview(d), snapshot = deviceInfoSnapshot(d);' in h
 for token in ('if (!deviceInfoPresentSnapshot()) asbDeviceInfoLoad();',
               'if (!logReportCachedPaint(logReportCacheGet(), false)) asbLogReportLoad();',
-              'if (!window._asbZygiskLinkData) asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);',
+              'asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);',
               'id="devRefresh" type="button" onclick="asbDeviceInfoLoad()"',
               'id="rpRefresh" type="button" onclick="asbLogReportLoad()"',
-              'id="zyRefresh" type="button" onclick="zygiskPageLoad(true)"'):
+              'id="zySave" type="button" onclick="asbSavePage(\'zygisk\')"'):
  assert token in h,token
-need=('dev_snapshot_status','lr_snapshot_status','zy_status_snapshot','dev_sec_adios','dev_guide_adios',
+assert 'id="zyRefresh"' not in h and 'zygiskPageRender(window._asbZygiskLinkData || null);\n  const save' not in h
+need=('dev_snapshot_status','lr_snapshot_status','zy_status_loading','zy_status_failed_empty','dev_sec_adios','dev_guide_adios',
       'dev_sec_asb_properties','dev_guide_asb_properties')
 for p in (r/'webroot/i18n').glob('*.json'):
  d=json.loads(p.read_text(encoding='utf-8'))
@@ -10883,17 +10884,17 @@ for(const id of ['devicePage','deviceBody','deviceStatus','devSave','devRefresh'
  global.zygiskPageRender=()=>{zyRenders++};global.zygiskPageLoad=async user=>{zyLoads.push(user)};global.asbAfterNavAnim=f=>f();
  eval(grab('function openZygiskPage() {'));
  window._asbZygiskLinkData={ok:true};openZygiskPage();
- chk(zyLoads.length===0&&zyRenders===1,'Zygisk repeated its eight-part read despite the complete splash snapshot');
- chk(/Last snapshot/.test(nodes.zygiskStatus.textContent),'Zygisk snapshot status missing');
- global._zygiskOpen=false;openZygiskPage();chk(zyLoads.length===0,'Zygisk recollected on reopening');
- window._asbZygiskLinkData=null;global._zygiskOpen=false;openZygiskPage();
- chk(zyLoads.length===1&&zyLoads[0]===false,'Zygisk without a snapshot did not use its bounded fallback');
+ chk(zyLoads.length===1&&zyLoads[0]===false&&zyRenders===1,'Zygisk opening did not start its mandatory fresh read');
+ chk(window._asbZygiskLinkData===null&&nodes.zySave.disabled,'Zygisk opening retained stale data or Save');
+ chk(/Reading current state/.test(nodes.zygiskStatus.textContent),'Zygisk fresh-read status missing');
+ window._asbZygiskLinkData={ok:true};global._zygiskOpen=false;openZygiskPage();
+ chk(zyLoads.length===2&&zyRenders===2,'Zygisk reopening reused a snapshot instead of reading again');
  console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS WebUI release11 snapshots: Device/Infinite Log/Zygisk open from splash or bounded cache without duplicate collectors, missing snapshots fall back once, and all Refresh buttons retain explicit live reads'
+echo 'PASS WebUI release11 snapshots: Device/Infinite Log retain bounded snapshot navigation; Zygisk clears old evidence and rereads on every opening with no Refresh button'
 )
 
 t_webui_fix326_viewport_scale_runtime() (
@@ -11202,7 +11203,7 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   global.cfgGroupOf=k=>k;global._cfgVals={iface:'1'};global.cfgIsActive=(it,cur)=>String(cur)==='1';
   global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',kernel:'Scheduler, MGLRU, wakeups',feel:'LTPO, vibration, touch',zygisk:'Master switch and status',ui:'Services, processes, diagnostics'};
   global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
-  global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};global.asbUiFrame={request:()=>{}};
+  global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.cfgLoadFresh=()=>true;global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};global.asbUiFrame={request:()=>{}};
   global.setTimeout=()=>0;
   eval(grab('function cfgGroupHiddenKeys(groupId) {','// Settings whose effect lands in a file').replace(/^let /gm,'var ')+';globalThis.renderHub=cfgRenderHub;');
   const list=new E('div');renderHub(list);const hub=list.children[0];
@@ -11216,7 +11217,9 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
     const foot=tile.children[3];chk(foot.children[0].className.includes('cfg-tile-count')&&foot.children[1].attrs['aria-hidden']==='true','footer/count contract differs at '+i);
   });
   chk(hub.children[0].children[3].children[0].textContent==='1 / 1','active count was lost');
-  chk(hub.children[1].children[3].children[0].textContent==='1','empty count was invented');
+  chk(hub.children[1].children[3].children[0].textContent==='0 / 1','empty count was invented');
+  global.cfgLoadFresh=()=>false;const staleList=new E('div');renderHub(staleList);
+  chk(staleList.children[0].children[0].children[3].children[0].textContent==='… / 1','unresolved counter was presented as current');
   console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
@@ -11537,8 +11540,8 @@ sed -n '/^async function wlManualSet(a) {/,/^}/p' "$H" | grep 'confirm(' >/dev/n
 grep -q "res === 'external_ignore'" "$H" || fail 'external ignore result is not explained'
 grep -q "res === 'uninstalled'" "$H" || fail 'uninstalled entry result is not explained'
 grep -q 'Original AppOps modes restored' "$H" || fail 'restore result is not honest'
-grep -q "service-list ' + shQuote(pkg)" "$H" || fail 'on-demand service list missing'
-grep -q "service-set ' + shQuote(pkg)" "$H" || fail 'explicit component action missing'
+grep -q "component-list ' + shQuote(pkg)" "$H" || fail 'on-demand Activity/Service list missing'
+grep -q "component-set ' + shQuote(pkg)" "$H" || fail 'explicit component action missing'
 grep -q 'App wakelock blocking' "$H" || fail 'package AppOps still uses freeze terminology'
 grep -q 'not a process freezer' "$H" || fail 'component disabling semantics are not explicit'
 echo "PASS WebUI fix276 battery evidence: immediate diagnostics, paint-yielded collection, explicit drain windows and reversible wakelock risk states"
@@ -12126,11 +12129,11 @@ r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
 keys=('lr_detail_capture','lr_detail_cpu_peak','lr_detail_drain','lr_detail_idle','lr_detail_idle_floor',
       'lr_detail_jank','lr_detail_jps','lr_detail_open','lr_detail_skin_peak','lr_detail_verdict',
       'lr_zy_detail_events','lr_zy_detail_hints','lr_zy_detail_ipc','lr_zy_detail_per_wake',
-      'wl_service_confirm','wl_service_confirm_tap','wl_service_copy','wl_service_disable','wl_service_empty',
-      'wl_service_external','wl_service_loading','wl_service_meta','wl_service_not_running','wl_service_restore',
-      'wl_service_result_disabled','wl_service_result_failed','wl_service_result_restored','wl_service_state_disabled',
-      'wl_service_state_lapsed','wl_service_state_running','wl_service_state_unknown','wl_service_title',
-      'wl_service_unavailable','wl_services_open')
+      'wl_service_confirm','wl_service_confirm_tap','wl_component_copy','wl_component_disable','wl_component_empty',
+      'wl_service_external','wl_component_loading','wl_component_meta','wl_service_not_running','wl_component_restore',
+      'wl_component_result_disabled','wl_service_result_failed','wl_component_result_restored','wl_service_state_disabled',
+      'wl_service_state_lapsed','wl_service_state_running','wl_service_state_unknown','wl_component_title',
+      'wl_service_unavailable','wl_services_open','wl_component_activity','wl_component_service','wl_component_systemjob_warning')
 files=sorted((r/'webroot/i18n').glob('*.json')); assert len(files)==13
 for p in files:
     x=json.loads(p.read_text())
@@ -12140,8 +12143,8 @@ for p in files:
     assert x['wl_manual_title'] != 'App wakelock freeze', p
 for name in ('wlServiceParse','wlServiceState','wlServiceRow','wlServiceSet','logReportDetailBind','liveInfoOpenData'):
     assert re.search(r'function '+name+r'\([^)]*\) \{',h), name
-assert "service-set ' + shQuote(pkg)" in h
-assert "service-list ' + shQuote(pkg)" in h
+assert "component-set ' + shQuote(pkg)" in h
+assert "component-list ' + shQuote(pkg)" in h
 PY
 cat > "$T/test.js" <<'JS'
 const fs=require('fs'), h=fs.readFileSync(process.argv[2],'utf8');
@@ -12164,12 +12167,12 @@ global.wlServicePaint=d=>{painted=d}; global.wlServiceLoad=async()=>{loads++};
 global.liveInfoOpenData=d=>{opened=d};
 eval("var _wlService = { tok: 0, busy: false, pkg: '', rows: [], armed: '', armedAt: 0, armTimer: 0 };");
 for(const n of ['wlServiceArmed','wlServiceParse','wlServiceState','wlServiceRow','wlServiceSet','logReportDetailBind'])eval(grab(n));
-const parsed=wlServiceParse('scan=ok\nselected=1\nservice|com.example.app/.SyncService|0|default|1\nservice|com.example.app/.MediaService|1|disabled|0\nservice|com.other/.Wrong|0|enabled|1\nservice|com.example.app/bad name|0|enabled|1\nservice|com.example.app/.OddService|0|not-exposed|0\n','com.example.app');
+const parsed=wlServiceParse('scan=ok\nselected=1\ncomponent|service|com.example.app/.SyncService|0|default|1\ncomponent|service|com.example.app/.MediaService|1|disabled|0\nservice|com.other/.Wrong|0|enabled|1\nservice|com.example.app/bad name|0|enabled|1\nservice|com.example.app/.OddService|0|not-exposed|0\n','com.example.app');
 if(parsed.scan!=='ok'||parsed.selected!==1||parsed.rows.length!==3)throw Error('service parser accepted wrong/malformed rows');
 if(parsed.rows[2].state!=='unknown'||parsed.rows[2].running)throw Error('unknown state was guessed');
 _wlService.pkg='com.example.app'; _wlService.rows=[parsed.rows[0]]; _el('wlServiceModal').hidden=false;
 let row=wlServiceRow(parsed.rows[0]);
-if(row.children[1].textContent!=='Disable service'||row.children[1].disabled)throw Error('initial service action wrong');
+if(row.children[1].textContent!=='Disable component'||row.children[1].disabled)throw Error('initial service action wrong');
 if(!wlServiceState(parsed.rows[1]).startsWith('Disabled')||!wlServiceState(parsed.rows[0]).startsWith('Running'))throw Error('state labels wrong');
 (async()=>{
  await wlServiceSet(parsed.rows[0]);
@@ -12177,10 +12180,10 @@ if(!wlServiceState(parsed.rows[1]).startsWith('Disabled')||!wlServiceState(parse
  row=wlServiceRow(parsed.rows[0]);
  if(row.children[1].textContent!=='Tap again to disable'||!row.children[0].children.some(x=>String(x.textContent).includes(parsed.rows[0].comp)))throw Error('armed row lacks explicit scoped warning');
  await wlServiceSet(parsed.rows[0]);
- if(runs.length!==1||!runs[0].includes(" service-set 'com.example.app' disable 'com.example.app/.SyncService'"))throw Error('disable did not target exact component: '+runs);
+ if(runs.length!==1||!runs[0].includes(" component-set 'com.example.app' disable 'com.example.app/.SyncService' 'service'"))throw Error('disable did not target exact component: '+runs);
  if(_wlService.busy||loads!==1||toasts[0][1]!=='good')throw Error('confirmed disable did not refresh/report');
  const sel=parsed.rows[1]; _wlService.rows=[sel]; await wlServiceSet(sel);
- if(runs.length!==2||!runs[1].includes(" service-set 'com.example.app' restore 'com.example.app/.MediaService'"))throw Error('restore did not target exact component');
+ if(runs.length!==2||!runs[1].includes(" component-set 'com.example.app' restore 'com.example.app/.MediaService'"))throw Error('restore did not target exact component');
  if(runs.some(c=>/appops|force-stop|pkill|kill /.test(c)))throw Error('component action contains package/process freeze');
  const card=new E('div'), detail={title:'<b>Events</b>',value:'37',text:'Facts',lines:['a','b']};
  logReportDetailBind(card,detail);
@@ -12262,7 +12265,7 @@ global.T=(k,d)=>d;global.techIcon=k=>'svg:'+k;global.ASB_GRADE={};global.cfgEnsu
 global.cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
 global.cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));global.cfgRenderNotifCard=()=>{};
 global.kernelPanelEnsure=()=>{};global.kernelDecorateControlRow=()=>{};
-global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
+global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_bore'];
 global.cfgRenderWakeupBlockerCard=list=>list.appendChild(E('section','kernel-card'));
 global.cfgRenderKernelControlsHelp=list=>list.appendChild(E('section','kernel-card'));
 global.cfgRenderCameraToolsCards=list=>list.appendChild(E('section','camtools-card'));
@@ -13405,7 +13408,7 @@ fbm = dict(re.findall(r"\n    ([a-z_]+): '([^']*)'", b[b.index('const fb = {'):b
 assert set(fbm) == {'done','done_no_service','service_down','clear_failed','not_installed','busy','lock_error','unknown'}
 for k, v in fbm.items(): assert en['soter_res_' + k] == v, k
 keys = sorted(k for k in en if k.startswith('soter_'))
-assert len(keys) == 48, len(keys)
+assert len(keys) == 50, len(keys)
 assert {'soter_boot_recent_manual','soter_boot_auto_off'} <= set(keys)
 assert 'soter_confirm' not in en
 for p in sorted((root / 'webroot/i18n').glob('*.json')):
@@ -13445,7 +13448,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
  replies.run='soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running';
  await soterFixRun(); await settle();
  if(cmds.filter(c=>/ run$/.test(c)).length!==1)throw Error('the first tap did not run the repair once');
- if(!/init service is running/.test(_el('soterNote').textContent)||!/App and payment functionality was not tested/.test(_el('soterNote').textContent))throw Error('done note overclaims or omits service state: '+_el('soterNote').textContent);
+ if(!/service restart completed/.test(_el('soterNote').textContent)||!/physical key is unverified/.test(_el('soterNote').textContent))throw Error('done note overclaims physical SOTER state: '+_el('soterNote').textContent);
  for(const [st,re] of [['service_down',/did not start again/],['clear_failed',/refused/],['busy',/already running/]]){
   replies.run='soter|result|state='+st+'|cleared=0|passes=1|services=none';
   _el('soterRun').disabled=false; await soterFixRun(); await settle();
@@ -13454,7 +13457,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
  replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=1700000000|last_result=done|last_trigger=boot|auto=0';
  await soterFixLoad(true);
  if(_el('soterAuto').getAttribute('aria-checked')!=='false'||_el('soterAuto').getAttribute('aria-disabled')!=='false')throw Error('auto off not offered');
- if(!/after reboot · SOTER server data cleared; the init service is running/.test(_el('soterRows').textContent))throw Error('boot trigger or honest service result not shown: '+_el('soterRows').textContent);
+ if(!/after reboot · SOTER data reset and service restart completed/.test(_el('soterRows').textContent)||!/Physical SOTER key/.test(_el('soterRows').textContent)||!/Unverified/.test(_el('soterRows').textContent))throw Error('boot trigger or unverified physical key not shown: '+_el('soterRows').textContent);
  replies.on='soter|auto|state=1';
  replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1';
  _el('soterAuto').onclick({stopPropagation(){}}); await settle(); await settle();
@@ -13580,7 +13583,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
  soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=done|boot_result=done|boot_unlock=35|boot_via=ce_available|boot_time=1700000000|boot_first=service_down|notify_lang=en'));
  const sr=host.textContent;
  if(!/Automatic repair, this boot/.test(sr)||!/unlocked 35 s after boot/.test(sr)||!/second try/.test(sr))throw Error('boot row: '+sr);
- if(!cmds.some(c=>/ texts 'ru' 'SOTER Repair' 'SOTER server data were cleared after the reboot; app functionality was not tested\./.test(c)))throw Error('honest notification texts not stored for the UI language: '+cmds.join(' | '));
+ if(!cmds.some(c=>/ texts 'ru' 'SOTER Repair' '.*physical key is unverified.*AfterSale/.test(c)))throw Error('honest notification texts not stored for the UI language: '+cmds.join(' | '));
  cmds=[];
  soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=none|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=ru'));
  if(!/has not started in this boot/.test(host.textContent)||cmds.length)throw Error('none row / texts re-stored');
@@ -13856,12 +13859,15 @@ fail() { echo "FAIL webui wakeup confirm: $*" >&2; exit 1; }
 python3 - "$ROOT" <<'PY' || fail 'locales'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
-keys = {'kernel_wb_confirm_shared': {'{n}'}, 'kernel_wb_confirm_critical': set(), 'kernel_wb_confirm_plain': {'{name}'},
+keys = {'kernel_wb_confirm_shared': {'{n}'}, 'kernel_wb_confirm_critical': set(), 'kernel_wb_confirm_plain': {'{name}'}, 'kernel_wb_confirm_sleep': {'{name}'},
         'kernel_wb_new_short': set(), 'kernel_wb_shared_short': {'{n}'}, 'kernel_wb_critical_short': set()}
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 for k in keys:
     fb = re.findall(r"T\('" + k + r"', '([^']*)'\)", h)
-    assert fb and all(f == en[k] for f in fb), (k, fb, en.get(k))
+    if k in ('kernel_wb_confirm_plain', 'kernel_wb_confirm_sleep'):
+        assert "'" + k + "'" in h and en[k], k
+    else:
+        assert fb and all(f == en[k] for f in fb), (k, fb, en.get(k))
 files = sorted((root / 'webroot/i18n').glob('*.json')); assert len(files) == 13
 for p in files:
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -13887,9 +13893,9 @@ function mk(tag) {
 }
 const document = { createElement: mk };
 let _wbDraft = null, _wbBusy = false, _wbSourceView = { open:true, query:'', filter:'all', sort:'events' }, _kernelPanel = { wakeup:null }, _wbConfirm = '';
-const blockedCalls = []; function kernelWakeupBlockObserved(n) { blockedCalls.push(n); }
+const blockedCalls = []; let blockedKind = ''; function kernelWakeupBlockObserved(n, k) { blockedCalls.push(n); blockedKind = k; }
 eval(grab('bfxEl') + crit[0] + grab('kernelWakeupParse') + grab('kernelWakeupValidName') + grab('kernelWakeupDraft') + grab('kernelWakeupDuration')
-  + grab('kernelWakeupRisk') + grab('kernelWakeupInfo') + grab('kernelWakeupConfirmText') + grab('kernelWakeupSelectSources') + grab('kernelWakeupSourcesDrawList') + grab('kernelWakeupAdd'));
+  + grab('kernelWakeupRisk') + grab('kernelWakeupInfo') + grab('kernelWakeupConfirmText') + grab('kernelWakeupDrafts') + grab('kernelWakeupSelectSources') + grab('kernelWakeupSourcesDrawList') + grab('kernelWakeupAdd'));
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const wb = kernelWakeupParse('wakeup_blocker|status|blocked_events=0|node=writable|policy=ready|saved_count=0|current_count=0\n'
   + 'wakeup_source|eventpoll|events=40|active=40|time_ms=10|reset=0|shared=2|new=0\n'
@@ -13910,9 +13916,10 @@ chk(tags.some(t => /shared name ×2/.test(t) && /system source/.test(t)), 'event
 chk(tags.some(t => t === 'new source'), 'radio new tag ' + JSON.stringify(tags));
 chk(tags.length === 2, 'legacy source tagged ' + JSON.stringify(tags));
 chk(byClass('kernel-source-tags').filter(n => /is-critical/.test(n.className)).length === 1, 'critical class');
-chk(byClass('kernel-source-purpose').length === 3 && byClass('kernel-source-risk').length === 3, 'a source lacks its purpose/risk explanation');
-chk(/epoll\/eventfd/.test(byClass('kernel-source-purpose')[0].textContent) && /Blocking risk: high/.test(byClass('kernel-source-risk')[0].textContent), 'eventpoll explanation is wrong');
-chk(/exact owner/.test(byClass('kernel-source-purpose')[1].textContent) && /risk: unknown/.test(byClass('kernel-source-risk')[1].textContent), 'unknown source was presented as known or safe');
+chk(byClass('kernel-source-purpose').length === 6 && byClass('kernel-source-risk').length === 3 && byClass('kernel-source-details').length === 3, 'compact source/details disclosure count');
+chk(/epoll\/eventfd/.test(byClass('kernel-source-details')[0].children[1].textContent) && /Blocking risk: high/.test(byClass('kernel-source-risk')[0].textContent), 'eventpoll detailed explanation is wrong');
+chk(/exact owner/.test(byClass('kernel-source-details')[1].children[1].textContent) && /risk: unknown/.test(byClass('kernel-source-risk')[1].textContent), 'unknown source was presented as known or safe');
+chk(kernelWakeupInfo('asb_logkit_13805').key === 'asb_logkit' && /ASB Infinite Log/.test(EN.kernel_wb_short_asb_logkit), 'ASB logkit classified as unknown');
 chk(kernelWakeupInfo('IPA_WS').key === 'mobile' && kernelWakeupInfo('IPA_CLIENT_APPS_WAN_LOW_LAT_CONS').key === 'mobile', 'Qualcomm IPA source not explained');
 chk(byClass('kernel-source-confirm').length === 0, 'confirm shown before Block');
 blockBtn('eventpoll').onclick();
@@ -13934,10 +13941,15 @@ chk(yes.attrs['data-mode'] === undefined, 'plain Yes marked as stop');
 blockBtn('radio').onclick(); chk(byClass('kernel-source-confirm').length === 0, 'a second Block tap does not close the confirmation');
 blockBtn('radio').onclick(); yes = flat(byClass('kernel-source-confirm')[0]).find(n => /bfx-primary/.test(n.className)); yes.onclick();
 chk(blockedCalls.join() === 'radio' && _wbConfirm === '', 'Yes did not block exactly once ' + blockedCalls);
+const sleepBtn = list.children.find(r => r.className === 'kernel-source' && r.children[0].children[0].textContent === 'radio').children[2];
+sleepBtn.onclick(); box = byClass('kernel-source-confirm');
+chk(/only while the screen is off/.test(byClass('kernel-source-confirm-text')[0].textContent), 'screen-off confirmation missing');
+yes = flat(box[0]).find(n => /bfx-primary/.test(n.className)); yes.onclick();
+chk(blockedCalls.join() === 'radio,radio' && blockedKind === 'sleep', 'screen-off action did not preserve its kind');
 for (const n of ['alarmtimer', 'PowerManagerService.Display', 'battery', 'pmic_charger', 'gpio_keys', 'qcom-rtc', 'thermal-engine', 'eventpoll']) chk(kernelWakeupRisk(n, 1).critical, 'not critical: ' + n);
 for (const n of ['NETLINK', 'qcom_rx_wakelock', 'radio', 'IPA_WS', 'wlan']) chk(!kernelWakeupRisk(n, 1).critical, 'critical: ' + n);
 toasts.length = 0; kernelWakeupAdd('PowerManagerService.Display');
-chk(toasts.length === 1 && toasts[0][1] === 'warn' && /system source/.test(toasts[0][0]) && _wbDraft.indexOf('PowerManagerService.Display') >= 0, 'manual critical add ' + JSON.stringify(toasts));
+chk(toasts.length === 1 && toasts[0][1] === 'warn' && /system source/.test(toasts[0][0]) && _wbDraft.always.indexOf('PowerManagerService.Display') >= 0, 'manual critical add ' + JSON.stringify(toasts));
 toasts.length = 0; kernelWakeupAdd('NETLINK'); chk(toasts.length === 0, 'plain manual add warned');
 process.exit(bad ? 1 : 0);
 JS
@@ -14368,7 +14380,10 @@ const chk = (c, m) => { if (!c) throw Error(m); };
   // Extra cards in the hub count.
   chk(cfgGroupExtraCards('camera').join() === 'false,false', 'camera extras before flags');
   _ctFlags = { webcam: '1', launch: '0' }; chk(cfgGroupExtraCards('camera').join() === 'true,false', 'camera extras');
-  _kernelPanel.wakeup = { saved: ['a'] }; chk(cfgGroupExtraCards('kernel').join() === 'true', 'wakeup rules count when saved');
+  _kernelPanel.wakeup = { saved: ['a'] }; chk(cfgGroupExtraCards('kernel').join() === 'true', 'legacy wakeup rules count when saved');
+  _kernelPanel.wakeup = { saved: [], savedAlways: ['a'], savedSleep: [] }; chk(cfgGroupExtraCards('kernel').join() === 'true', 'Always-only wakeup rule is not counted');
+  _kernelPanel.wakeup = { saved: [], savedAlways: [], savedSleep: ['night_lock'] }; chk(cfgGroupExtraCards('kernel').join() === 'true', 'Screen-off-only wakeup rule is not counted');
+  _kernelPanel.wakeup = { saved: [], savedAlways: [], savedSleep: [] }; chk(cfgGroupExtraCards('kernel').join() === 'false', 'empty split wakeup rules are counted as active');
   _nf = { count: 0 }; chk(cfgGroupExtraCards('battery').join() === 'false', 'notification fix off');
   chk(cfgGroupExtraCards('audio').length === 0, 'other groups have no extras');
   // Refresh: sound at once, busy label while reading, a toast with the count at the end.
@@ -15064,8 +15079,8 @@ if(own('perf_ceiling_pct','85')!=='limit'||own('perf_ceiling_pct','100')!==null)
 if(own('heavy_prime_escape','1')!=='dynamic'||own('heavy_prime_escape','0')!==null)throw Error('prime master ownership');
 _cfgVals.heavy_prime_escape='1';if(own('prime_escape_burst_s','20')!=='limit'||own('prime_escape_rest_s','40')!=='limit')throw Error('prime guard ownership');
 _cfgVals.heavy_prime_escape='0';if(own('prime_escape_burst_s','20')!==null||own('prime_escape_rest_s','40')!==null)throw Error('disabled prime guards owned');
-if(own('io_scheduler','auto')!=='profile'||own('kernel_bore','auto')!=='profile')throw Error('Smart profile ownership missing');
-for(const k of ['kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_rt_boost']){
+if(own('io_scheduler','auto')!=='profile')throw Error('Smart I/O profile ownership missing');
+for(const k of ['kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_rt_boost','kernel_bore']){
  if(own(k,'auto')!=='dynamic')throw Error('Smart dynamic kernel ownership missing '+k);
  for(const v of ['stock','off','on','0','2','512'])if(own(k,v)!==null)throw Error('manual kernel value incorrectly Smart-owned '+k+'='+v);
 }
@@ -15076,7 +15091,7 @@ console.log('ok');
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS WebUI Smart/scheduler options: runtime-only discovery, bounded custom names, conditional Smart indicators and manual MGLRU ownership in 13 locales'
+echo 'PASS WebUI Smart/scheduler options: runtime-only discovery, scenario-owned BORE Auto, live Smart badge, conditional indicators and manual MGLRU ownership in 13 locales'
 )
 
 
@@ -15190,18 +15205,29 @@ assert cam.count('ctLoad(true);') == 2, 'manual Camera refresh must remain live'
 assert '.cfg-zygisk-card > .cfg-row + .cfg-row::before' not in s
 assert s.count('.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 0 !important; }') >= 2
 assert 'function cfgRenderZygiskCard(list, items) {' in s and 'ZYGISK_CONTROL_KEYS' in s
-# Monitor: cached complete tiles are painted before two frames start the entrance. No root
-# bridge is called by the tap; a fresh splash/background read is reused for at most 1200 ms.
+# Monitor: cached complete tiles are restored and opened synchronously, without the former
+# two-frame delay or 0.6-opacity stale state. No root bridge is called by the tap; a fresh
+# splash/background read is reused for at most 1200 ms.
 open_live = body('function openLivePage() {')
 assert 'run(' not in open_live and 'runBatch(' not in open_live
-assert 'const openSeq = ++_livePageSeq;' in open_live
-assert 'if (_liveOpen && openSeq === _livePageSeq) p.classList.add(\'open\');' in open_live
-assert open_live.count('requestAnimationFrame(function () {') == 2
-first_frame = open_live.index('requestAnimationFrame(function () {')
-assert open_live.index('lvMonTilesRestore()') < first_frame
-assert open_live.index('lvMonSmartRestore()') < first_frame
+assert "p.classList.add('open');" in open_live
+assert 'requestAnimationFrame' not in open_live
+assert 'lvStale(false);' in open_live and 'lvStale(true)' not in open_live
+assert open_live.index('lvMonTilesRestore()') < open_live.index("p.classList.add('open');")
+assert open_live.index('lvMonSmartRestore()') < open_live.index("p.classList.add('open');")
 assert 'liveMonitorSchedule(liveOpenRefreshDelay());' in open_live
 assert 'const LIVE_OPEN_SETTLE_MS = 320;' in s and 'const LIVE_OPEN_REUSE_MS = 1200;' in s
+hub = body('function cfgRenderHub(list) {')
+assert 'const counted = cfgLoadFresh();' in hub
+assert "cnt.textContent = counted ? (on + ' / ' + total) : ('… / ' + total);" in hub
+assert 'Math.round(on * 100 / total)' in hub and 'Math.round(on * 100 / items.length)' not in hub
+assert "(cfgLoadFresh() ? 1 : 0)" in body('function cfgHubSig() {')
+assert "spec[0] === 'asb_properties'" in s and "createElement('details')" in s
+assert "card.className = 'lgr-sec dev-collapsible';" in s and 'dev-collapsible[open]' in s
+assert '.inf-advice-row { display:grid; grid-template-columns:minmax(0,1fr) auto;' in s
+assert '.inf-advice-row .bfx-note { grid-column:1 / -1;' in s
+assert 'data-boot-stage' not in s and 'asb-boot-stages' not in s
+assert 'id="asbBootIntroStatus"' in s and 'id="asbBootIntroProgress"' in s
 delay = body('function liveOpenRefreshDelay() {')
 assert 'LIVE_OPEN_REUSE_MS - age' in delay and 'Math.max(LIVE_OPEN_SETTLE_MS' in delay
 poll = body('async function pollLive(visible, prefetch) {')
@@ -15269,18 +15295,16 @@ global.asbUiFrame={request:()=>{}};global.asbFitPages=()=>{};
 now=2000;_livePollMeta.lastSuccess=2000;openMonitor();
 chk(page.scrollTop===0&&page.attrs['aria-hidden']==='false'&&_liveOpen&&_livePageSeq===5,'Monitor open state was not prepared synchronously');
 chk(events.indexOf('paint')>events.indexOf('tiles')&&scheduled.length===1&&scheduled[0]===1200,'Monitor snapshot/reuse scheduling regressed');
-chk(frames.length===1&&!classes.has('open'),'Monitor entrance started before its first rendered frame');
-frames.shift()();chk(frames.length===1&&!classes.has('open'),'Monitor entrance collapsed the two-frame paint boundary');
-frames.shift()();chk(classes.has('open'),'Monitor entrance never started');
-classes.delete('open');openMonitor();_liveOpen=false;_livePageSeq++;
-while(frames.length)frames.shift()();
-chk(!classes.has('open'),'stale Monitor frame reopened a closed page');
+chk(frames.length===0&&classes.has('open'),'Monitor kept a delayed entrance');
+chk(events.includes('stale:false')&&!events.includes('stale:true'),'Monitor dimmed its restored snapshot');
+classes.delete('open');openMonitor();
+chk(classes.has('open')&&frames.length===0,'rapid Monitor reopening was delayed');
 global.Date=RealDate;
 console.log('ok');
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "runtime: $out"
 [ "$out" = ok ] || fail "runtime: $out"
-echo 'PASS WebUI release12: paint-first Camera evidence, no Zygisk pseudo hairlines, bounded Monitor prefetch/reuse with two-frame stale-safe entrance, explicit compositor-friendly profile transitions'
+echo 'PASS WebUI release12: immediate undimmed Monitor entry, fresh-only Settings counters, collapsed ASB properties, non-overlapping Infinite Log recommendations, simplified splash and compositor-friendly transitions'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
