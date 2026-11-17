@@ -4,6 +4,92 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix13 - bounded routine-touch lifts, truthful writer metrics and unified support-log storage
+
+Input: two capture epochs, two asbdiag snapshots and a full-day Infinite Log from a user reporting
+heavy drain after an update, plus the owner's request to store exported asbdiag reports beside
+Infinite Log in `ASB/logs`.
+
+- **Evidence, not a single-cause verdict:** verbose logging was enabled only near the end of the
+  current capture and cannot explain the earlier battery drop. The two epochs are not a controlled
+  A/B: screen-on share, brightness, applications, radio activity and duration differ. High screen-off
+  awake share, mobile radio/IPA/rmnet, RTC, Bluetooth and application jobs are corroborated external
+  contributors to investigate. `ru.vk.store` is a repeated candidate, not evidence for an automatic
+  package-wide or `SystemJobService` block. Instantaneous frequency caps, GPU busy share and ASB CPU
+  time alone do not measure battery energy. ASB's own report says its timers do not use alarm clock
+  wakeups or wake a suspended phone.
+- **Routine-touch lift:** repeated ordinary touches can arm at most one new unlock lift per 20 seconds
+  after the previous lift expires. App switches and lock presses retain their independent five-second
+  anti-chatter path; wakes, first touch, cold starts and Battery continuous-touch hold keep their
+  existing fast paths. Profile, thermal and warm-die vetoes remain mandatory. New
+  `unlock_touch_lifts`/`unlock_touch_defers` state counters make accepted and deferred routine-touch
+  requests visible. No persistent polling worker, permanent Performance governor, higher floor,
+  thermal bypass or silent settings reset was added.
+- **Writer accounting:** `governor_write_attempts`, `governor_writes`, `governor_already_set`,
+  `governor_precheck_reads`, `governor_readbacks` and physical write batches now distinguish a request
+  from an actual `sysfs_write_int()` call. An already-set confirmation is no longer reported as a
+  physical write. asbdiag and Infinite Log expose attempts, physical writes, no-op confirmations,
+  precheck/confirmation reads and nodes per physical batch; saved old reports retain their parser
+  fallback. This corrects the old terminology instead of claiming a measured energy saving.
+- **Support-log destination:** direct and asynchronous WebUI asbdiag exports both use the common
+  `/sdcard/ASB/logs` writer. Download and `/sdcard` fallbacks were removed, so one successful export
+  produces one report beside Infinite Log. Failure to create or use the destination returns
+  `error=diag_outdir_failed` without a false `status=saved` or device path; collector failures remain
+  explicit. The source-side host-output override remains available for tests.
+- **Verification:** native fixtures cover routine-touch defer, independent app/lock/cold-start paths,
+  thermal/profile gates and attempts/no-op/physical-I/O accounting. Shell/WebUI fixtures cover one-file
+  export, destination failure, old/new report parsing and the localized report UI. The ARM64 governor
+  is rebuilt with the pinned NDK workflow while unrelated Zygisk/DSP binaries remain unchanged. Full
+  working-tree and clean-source-ZIP regressions are release gates. Host checks are not physical
+  ColorOS WebView or OnePlus 15 validation and do not prove a battery-life improvement or percentage;
+  that needs a subsequent controlled device capture.
+
+## V66 dev66 buildfix12 - split wakeup policies, exact component limits and evidence-only repairs
+
+Input: the owner's fourteen-item wakeup/component/GPU/repair/WebUI revision, including Android Back,
+fresh Zygisk reads, Smart BORE ownership and navigation/layout corrections.
+
+- **Wakeup dialog and policies:** Android Back joins the close button, backdrop and Escape for the
+  exact-name source modal. *Open sources* and *Clear window* are visually separate. Source cards use
+  short everyday explanations with full details on demand; `asb_logkit_<pid>` is identified as ASB's
+  own Infinite Log collector. Always and Screen-off exact-name policies have separate files, lists,
+  counters and confirmations. Screen on/unknown applies Always only; screen off applies the deduplicated
+  union. At most 16 unique printable-ASCII names of 1–63 bytes are accepted. Exact readback, fail-closed
+  rollback, the optional KRILIKD ABI and `not exposed` outcomes remain mandatory. Reconciliation uses
+  the existing five-minute service pass, not a new worker.
+- **Activity/Service controls:** package details discover components on demand and disable one explicit
+  `PACKAGE/CLASS` after a warning. The four-field ledger retains original state and component kind;
+  legacy service records remain compatible. Restore uses exact `default-state`/`enable` semantics with
+  readback. Generic WorkManager `SystemJobService` receives a package-wide jobs warning. No process
+  freezer, arbitrary component writer, broad package disable or polling worker was added.
+- **GPU evidence:** the supplied captures show late YouTube/Instagram frames across multiple ceilings
+  with `smart_media_guard=0`; high busy share at a low clock is not an energy measurement. No universal
+  GPU cap/floor, OnePlus frequency table or cross-device media rule was added. Existing profile,
+  activity, thermal and vendor guards are unchanged.
+- **Infirmary repairs:** Infinite Log recommendation rows no longer overlap. Battery Fix is now only
+  the eligible one-shot reboot battery-statistics reset with removed/absent/failed evidence and cancel;
+  ART/dexopt/dex2oat, package lists, progress and stop state are gone. HeyTap retains reversible
+  package-state control without an ART request. SOTER `done` means clear/service workflow completion,
+  not a physical key PASS: the UI and notification explicitly leave the physical key unverified and
+  name AfterSale → Key Status → SOTER key as the separate check.
+- **Smart BORE:** the registered owner `/proc/sys/kernel/sched_bore` joins Smart Auto scenarios:
+  light/heavy select 1, idle/conserve select 0. Kernel-bound baseline, readback, Safe/recovery gates,
+  exact restore and degraded `not_exposed` remain. Performance Auto keeps its conservative native
+  thermal/activity gates. The card shows the actual kernel-read value as `Smart · 0/1`.
+- **WebUI freshness and layout:** Zygisk clears old evidence and rereads on every opening, retains Save,
+  removes Refresh and never paints stale content after a failed read. Monitor opens immediately without
+  temporary dimming; Settings counters and the bottom bar wait for fresh configuration evidence. A
+  Screen-off-only wakeup rule also counts as an active Kernel tweak; empty split policies count as zero.
+  ASB properties on Device Diagnostics are collapsed by default. Splash keeps only metric-preload text and
+  an ordinary progress bar, without visible LIVE/CONFIG/DEVICE/LOG or duplicate ZYGISK stage labels.
+  All 13 locales are synchronized.
+- **Verification:** targeted shell/Node fixtures cover split screen-state unions, 16-rule bounds,
+  rollback, Activity/Service restore, reset-only Battery Fix, HeyTap handback, SOTER wording/boot
+  sequencing, fresh-only Zygisk, immediate navigation, BORE scenarios/badge and all locales. Full
+  working-tree and clean-source-ZIP regressions are release gates. Host/browser checks are not physical
+  OnePlus 15/ColorOS WebView validation and do not establish a SOTER PASS, GPU energy cause, battery
+  saving, responsiveness gain or measured improvement percentage.
+
 ## V66 dev66 buildfix11 - protected ASB reports, preview TNR ownership and scenario-driven Smart kernel controls
 
 Input: the owner's five-item revision covering Junk Cleanup, camera preview processing, Device Diagnostics
