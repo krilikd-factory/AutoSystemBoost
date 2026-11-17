@@ -1215,6 +1215,9 @@ if [ -r "$_state" ]; then
       NOTE "unlock lift: off (unlock_lift_s=0)"
     else
       NOTE "unlock lift: $([ "$(_rget unlock_lift /dev/.asb/state 2>/dev/null)" = 1 ] && echo 'ACTIVE now' || echo idle) · ${_ull} lift(s) this session (wakes, first touches, app opens/closes, lock presses) · ceilings to $(cfg unlock_lift_pct)% of hardware max for ${_ulsec:-3} s"
+      _utl="$(_rget unlock_touch_lifts /dev/.asb/state 2>/dev/null)"
+      _utd="$(_rget unlock_touch_defers /dev/.asb/state 2>/dev/null)"
+      [ -n "$_utl" ] && NOTE "  routine touches: ${_utl:-0} lift(s), ${_utd:-0} deferred · one new touch lift per 20 s; app switches, cold starts, wakes and lock presses keep their own fast paths"
       [ "${_uls:-0}" -gt 0 ] 2>/dev/null && NOTE "  wakes not lifted: ${_uls} (last: ${_ulwt})"
       _ullv="$(_rget unlock_levels /dev/.asb/state 2>/dev/null)"
       _ullk="$(_rget unlock_level_khz /dev/.asb/state 2>/dev/null)"
@@ -1372,9 +1375,18 @@ if [ -r "$_state" ]; then
   # high vendor count means neither - the cap is simply not ours right now.
   _ov_t="$(_rget governor_transitions "$_state")"
   _ov_w="$(_rget governor_writes "$_state")"
+  _ov_a="$(_rget governor_write_attempts "$_state")"
+  _ov_n="$(_rget governor_already_set "$_state")"
+  _ov_pr="$(_rget governor_precheck_reads "$_state")"
+  _ov_rb="$(_rget governor_readbacks "$_state")"
   case "$_ov_t" in ''|*[!0-9]*) _ov_t=0 ;; esac
   case "$_ov_w" in ''|*[!0-9]*) _ov_w=0 ;; esac
-  P "    by source        : transitions=$_ov_t writes=$_ov_w readbacks=$(_rget governor_readbacks "$_state") vendor_overrides=$(_rget governor_vendor_overrides "$_state")"
+  case "$_ov_a" in ''|*[!0-9]*) _ov_a="$_ov_w" ;; esac
+  case "$_ov_n" in ''|*[!0-9]*) _ov_n=0 ;; esac
+  case "$_ov_pr" in ''|*[!0-9]*) _ov_pr=0 ;; esac
+  case "$_ov_rb" in ''|*[!0-9]*) _ov_rb=0 ;; esac
+  P "    by source        : transitions=$_ov_t writer_attempts=$_ov_a physical_writes=$_ov_w"
+  P "    writer I/O       : already_set=$_ov_n precheck_reads=$_ov_pr confirm_reads=$_ov_rb vendor_overrides=$(_rget governor_vendor_overrides "$_state")"
   _wb="$(_rget write_batches "$_state")"
   case "$_wb" in ''|*[!0-9]*) _wb=0 ;; esac
   if [ "$_wb" -gt 0 ] 2>/dev/null && [ "$_ov_w" -gt 0 ] 2>/dev/null; then
@@ -4196,12 +4208,12 @@ else
   NOTE "com.oplus.athena enabled (ASB does not disable it)"
 fi
 
-# Optional package tweaks: report their exposed package state, ASB baseline ownership and
-# one-shot ART state without applying anything. Missing dump fields remain `unknown`; they are
-# not treated as proof that a package or capability is absent.
+# Optional package tweaks: report their exposed package state and ASB baseline ownership
+# without applying anything. Missing dump fields remain `unknown`; they are not treated as
+# proof that a package or capability is absent.
 if [ -f "$MODDIR/runtime/asb_heytap_mcs.sh" ]; then
   _pt_hey="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_heytap_mcs.sh" status 2>/dev/null | tr '\n' ' ')"
-  NOTE "HeyTap MCS / ART (read-only): ${_pt_hey:-status not exposed}"
+  NOTE "HeyTap MCS package state (read-only): ${_pt_hey:-status not exposed}"
 fi
 if [ -f "$MODDIR/runtime/asb_documentsui_fix.sh" ]; then
   _pt_doc="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_documentsui_fix.sh" status 2>/dev/null | tr '\n' ' ')"
