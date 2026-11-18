@@ -635,6 +635,70 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || f "asbdiag copies differ"
 exit "$fail"
 )
 
+t_page_export_runtime() (
+set -euo pipefail
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+E="$ROOT/runtime/asb_page_export.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL page export: $*" >&2; exit 1; }
+sh -n "$E"
+mkdir -p "$T/logs"
+export ASB_PAGE_EXPORT_OUTDIR="$T/logs"
+STAMP=20261118_144905
+OUT="$T/logs/asb_report_${STAMP}.txt"
+python3 - "$T" <<'PY'
+import base64, pathlib, sys
+root=pathlib.Path(sys.argv[1])
+raw=('Привет, OnePlus 15 — диагностика\nASCII and 汉字\n' * 1800).encode('utf-8')
+(root/'expected').write_bytes(raw)
+b64=base64.b64encode(raw).decode('ascii')
+for n,pos in enumerate(range(0,len(b64),48000)):
+    (root/f'chunk.{n:03d}').write_text(b64[pos:pos+48000],encoding='ascii')
+PY
+[ "$(find "$T" -maxdepth 1 -name 'chunk.*' | wc -l)" -ge 2 ] || fail "fixture did not produce multiple chunks"
+r="$(sh "$E" begin report "$STAMP" '')"
+[ "$r" = status=started ] || fail "begin: $r"
+[ -f "$T/logs/.asb_report_${STAMP}.b64" ] || fail "begin created no bounded temporary file"
+for c in "$T"/chunk.*; do
+  part="$(cat "$c")"
+  r="$(sh "$E" append report "$STAMP" "$part")"
+  [ "$r" = status=appending ] || fail "append: $r"
+done
+r="$(sh "$E" finish report "$STAMP")"
+printf '%s\n' "$r" | grep -Fx 'status=saved' >/dev/null || fail "finish status: $r"
+printf '%s\n' "$r" | grep -Fx "path=$OUT" >/dev/null || fail "finish path: $r"
+cmp -s "$T/expected" "$OUT" || fail "UTF-8/multichunk round trip changed the page"
+find "$T/logs" -maxdepth 1 -type f \( -name '.*.b64' -o -name '.*.decoded.*' \) | grep . && fail "temporary export file survived finish"
+
+STAMP2=20261118_145000
+sh "$E" begin zygisk "$STAMP2" '' >/dev/null
+sh "$E" append zygisk "$STAMP2" 'QUJD' >/dev/null
+[ "$(sh "$E" abort zygisk "$STAMP2")" = status=cancelled ] || fail "abort acknowledgement"
+[ ! -e "$T/logs/asb_zygisk_${STAMP2}.txt" ] || fail "abort published a partial file"
+[ ! -e "$T/logs/.asb_zygisk_${STAMP2}.b64" ] || fail "abort left its temporary file"
+if r="$(sh "$E" append device 20261118_145001 'QUJD' 2>&1)"; then rc=0; else rc=$?; fi
+[ "$rc" -eq 4 ] && [ "$r" = error=export_not_started ] || fail "append without begin: rc=$rc $r"
+if r="$(sh "$E" begin '../../bad' "$STAMP" '' 2>&1)"; then rc=0; else rc=$?; fi
+[ "$rc" -eq 2 ] && [ "$r" = error=bad_kind ] || fail "unsafe kind: rc=$rc $r"
+if r="$(sh "$E" begin report '../../bad' '' 2>&1)"; then rc=0; else rc=$?; fi
+[ "$rc" -eq 2 ] && [ "$r" = error=bad_stamp ] || fail "unsafe stamp: rc=$rc $r"
+[ ! -e "$T/bad" ] && [ ! -e "$T/logs/../../bad" ] || fail "unsafe input created a path"
+STAMP3=20261118_145002
+sh "$E" begin device "$STAMP3" '' >/dev/null
+if r="$(sh "$E" append device "$STAMP3" '***' 2>&1)"; then rc=0; else rc=$?; fi
+[ "$rc" -eq 2 ] && [ "$r" = error=bad_base64 ] || fail "base64 alphabet: rc=$rc $r"
+if r="$(sh "$E" append device "$STAMP3" 'A' 2>&1)"; then rc=0; else rc=$?; fi
+[ "$rc" -eq 0 ] || fail "bounded malformed payload was not passed to atomic decode: $r"
+if r="$(sh "$E" finish device "$STAMP3" 2>&1)"; then rc=0; else rc=$?; fi
+[ "$rc" -eq 5 ] && [ "$r" = error=export_decode_failed ] || fail "malformed base64 finish: rc=$rc $r"
+[ ! -e "$T/logs/asb_device_${STAMP3}.txt" ] && [ ! -e "$T/logs/.asb_device_${STAMP3}.b64" ] || fail "decode failure left output/temp files"
+printf 'not a directory\n' > "$T/notdir"
+if r="$(ASB_PAGE_EXPORT_OUTDIR="$T/notdir" sh "$E" begin report "$STAMP" '' 2>&1)"; then rc=0; else rc=$?; fi
+[ "$rc" -eq 5 ] && [ "$r" = error=export_outdir_failed ] || fail "invalid output directory: rc=$rc $r"
+! grep -Fq '/sdcard/Download' "$E" || fail "Download fallback remains"
+echo 'PASS page export: fixed ASB/logs destination, UTF-8 multichunk round trip, atomic finish, abort/decode cleanup and unsafe-input rejection'
+)
+
 t_debug_support_contract() (
 # Contract: debug WebUI support actions stay debug-gated, bounded and non-overlapping.
 set -euo pipefail
@@ -658,6 +722,14 @@ count_exact() {
 sh -n "$HELPER"
 sh -n "$TIMELINE"
 cmp -s "$DIAG" "$INSTALLED_DIAG" || { echo "FAIL debug support: asbdiag copies diverged" >&2; exit 1; }
+sed -n '/^P()  {/p' "$DIAG" > "$TMP/p.sh"
+[ -s "$TMP/p.sh" ] || { echo 'FAIL debug support: P function missing' >&2; exit 1; }
+OUT1="$TMP/direct-copy" OUT2='' sh -c '. "$1"; P terminal; [ "$?" -eq 0 ]' x "$TMP/p.sh" || { echo 'FAIL debug support: empty optional OUT2 became terminal failure' >&2; exit 1; }
+[ "$(cat "$TMP/direct-copy")" = terminal ] || { echo 'FAIL debug support: direct ASB/logs copy missing' >&2; exit 1; }
+need "$DIAG" 'OUT1="/sdcard/ASB/logs/asb_diag_report.txt"; OUT2=""'
+need "$HELPER" 'ASB_DIAG_NO_SIDE_COPIES=1 "$MODDIR/system/bin/asbdiag"'
+! grep -Eq '/sdcard/asb_diag_report\.txt|/data/local/tmp/asb_diag_report\.txt' "$DIAG" || { echo 'FAIL debug support: legacy direct side-copy path remains' >&2; exit 1; }
+[ "$(tail -n 1 "$DIAG")" = 'exit 0' ] || { echo 'FAIL debug support: completed collection has no explicit success status' >&2; exit 1; }
 need "$DIAG" 'BOOT TIMELINE'
 need "$DIAG" 'boot_timeline.tsv'
 
@@ -747,6 +819,17 @@ done
 grep -Fqx 'status=saved' <<<"$ASYNC_STATUS" || { echo 'FAIL debug support: async diag never reached saved' >&2; exit 1; }
 ASYNC_PATH="$(printf '%s\n' "$ASYNC_STATUS" | sed -n 's/^path=//p')"
 [ -f "$ASYNC_PATH" ] && grep -Fq 'diagnostic-ok' "$ASYNC_PATH" || { echo 'FAIL debug support: async diag saved output missing' >&2; exit 1; }
+REPEAT_DIAG="$(env "${ENV[@]}" sh "$HELPER" diag-start || true)"
+grep -Fqx 'status=started' <<<"$REPEAT_DIAG" || { echo "FAIL debug support: repeat after saved was refused: $REPEAT_DIAG" >&2; exit 1; }
+for _diag_try in $(seq 1 100); do
+  sleep 0.1
+  REPEAT_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status || true)"
+  grep -Fqx 'status=saved' <<<"$REPEAT_STATUS" && break
+done
+grep -Fqx 'status=saved' <<<"$REPEAT_STATUS" || { echo "FAIL debug support: repeat diag did not reach saved: $REPEAT_STATUS" >&2; exit 1; }
+REPEAT_PATH="$(printf '%s
+' "$REPEAT_STATUS" | sed -n 's/^path=//p')"
+[ -f "$REPEAT_PATH" ] && grep -Fq 'diagnostic-ok' "$REPEAT_PATH" || { echo 'FAIL debug support: repeat report missing' >&2; exit 1; }
 
 # A dead diagnostic worker must not leave a permanent `already_running` lock, and a nonzero
 # asbdiag exit must become an explicit failed status rather than a misleading saved toast.
@@ -4905,7 +4988,7 @@ for token in ('justify-content:center;\n  gap:0;\n  padding:5px 7px;',
               'width:34px;\n  height:34px;\n  margin:0 0 2px;',
               'font-size:11.5px;', 'min-height:2.2em;',
               'flex-direction:row;\n  align-items:center;\n  justify-content:center;',
-              'margin:4px 0 0;', 'max-width:56px; height:3px;'):
+              'margin:4px 0 0;', 'max-width:64px; height:5px;'):
     assert token in s, 'the compact tile content geometry is incomplete: ' + token
 assert 'asbFitPages._tier' in s, "the tier is not remembered between passes"
 # fix203: the tier decision reads the page as it asks to be - the fitted heights are zeroed
@@ -7351,30 +7434,38 @@ const alreadySet = parseLogReport('meta\telapsed_min=200\nnight\tdur_min=240\tdr
 chk(!logReportRecommendations(alreadySet).length, 'already matching values were offered as changes');
 let exportCommands = [], exportErrno = 0; const exportToasts = [];
 function toast(msg, kind) { exportToasts.push({msg:msg, kind:kind}); }
-async function run(cmd) { exportCommands.push(cmd); return { errno:exportErrno, stderr:'write failed' }; }
+globalThis.MD = '/md';
+async function run(cmd) {
+  exportCommands.push(cmd);
+  if (exportErrno) return { errno:exportErrno, stdout:'', stderr:'write failed' };
+  const fin = /asb_page_export\.sh' finish 'report' '(\d{8}_\d{6})'/.exec(cmd);
+  return { errno:0, stderr:'', stdout:fin ? 'status=saved\npath=/sdcard/ASB/logs/asb_report_' + fin[1] + '.txt\n' : '' };
+}
 async function verifyJsonExport() {
-  /* fix246: Save keeps the whole rendered page as text plus the raw digest, in Download,
-     in base64 chunks small enough for one shell argument each. */
+  /* Save keeps the whole rendered page plus the raw digest in ASB/logs. The browser sends
+     only bounded base64 chunks to the fixed-destination helper, never an arbitrary path. */
   window._asbLogReportData = compatible;
   window._asbLogReportRaw = trendText + 'RAWMARK\tx=1\n' + 'Z'.repeat(70000);
   logReportRender(compatible);
   await asbSavePage('report');
-  const writes = exportCommands.filter(c => c.indexOf("printf '%s' ") >= 0);
+  const writes = exportCommands.filter(c => c.includes("asb_page_export.sh' append 'report' "));
   chk(writes.length >= 2, 'a large page is written in several chunks: ' + writes.length);
   chk(writes.every(c => c.length < 60000), 'every chunk fits one shell argument');
-  chk(/^mkdir -p '\/sdcard\/Download' && printf/.test(writes[0]) && / > '\/sdcard\/Download\/asb_report_\d{8}_\d{6}\.txt\.b64'$/.test(writes[0]), 'first chunk creates the temp file in Download: ' + writes[0].slice(-80));
-  chk(writes.slice(1).every(c => / >> '\/sdcard\/Download\/asb_report_\d{8}_\d{6}\.txt\.b64'$/.test(c)), 'later chunks append');
+  chk(exportCommands[0].includes("asb_page_export.sh' begin 'report' "), 'export did not begin with a kind/timestamp-only request');
+  chk(writes.every(c => /asb_page_export\.sh' append 'report' '\d{8}_\d{6}' '[A-Za-z0-9+/=]*' 2>\/dev\/null$/.test(c)), 'an append escaped the fixed helper protocol');
   const fin = exportCommands[exportCommands.length - 1];
-  chk(/^base64 -d < '\/sdcard\/Download\/asb_report_\d{8}_\d{6}\.txt\.b64' > '\/sdcard\/Download\/asb_report_\d{8}_\d{6}\.txt' && rm -f /.test(fin), 'the chunks are decoded into the .txt: ' + fin);
-  const b64 = writes.map(c => c.match(/^(?:mkdir -p '[^']*' && )?printf '%s' '([^']*)'/)[1]).join('');
+  chk(/asb_page_export\.sh' finish 'report' '\d{8}_\d{6}' 2>\/dev\/null$/.test(fin), 'the chunks were not finalized by the helper: ' + fin);
+  chk(!exportCommands.some(c => c.includes('/sdcard/Download') || c.includes('.txt.b64')), 'legacy arbitrary-path export remains');
+  const b64 = writes.map(c => c.match(/ append 'report' '\d{8}_\d{6}' '([^']*)'/)[1]).join('');
   const saved = Buffer.from(b64, 'base64').toString('utf8');
   chk(saved.indexOf('AutoSystemBoost - ') === 0, 'the file starts with the page title');
   chk(saved.indexOf('== ' + I18N.ru.lr_sec_summary + ' ==') >= 0, 'section titles are kept');
   chk(saved.indexOf('== ' + I18N.ru.lr_sec_trend + ' ==') >= 0 && saved.indexOf('3.0') >= 0, 'the trend section and its numbers are kept');
   chk(saved.indexOf('RAWMARK\tx=1') >= 0 && saved.indexOf('== ' + I18N.ru.page_save_raw + ' ==') >= 0, 'the raw digest is appended under its heading');
-  chk(exportToasts.some(t => t.kind === 'ok' && t.msg.indexOf('/sdcard/Download/asb_report_') >= 0), 'the toast names the saved path');
+  chk(exportToasts.some(t => t.kind === 'ok' && t.msg.indexOf('/sdcard/ASB/logs/asb_report_') >= 0), 'the toast names the acknowledged ASB/logs path');
   chk(jsonButton.disabled === false, 'the Save button is enabled again');
   exportCommands = []; exportErrno = 1; await asbSavePage('report');
+  chk(exportCommands.length === 2 && exportCommands[0].includes(" begin 'report' ") && exportCommands[1].includes(" abort 'report' "), 'a failed begin was not aborted through the bounded helper');
   chk(exportToasts.some(t => t.kind === 'error') && jsonButton.disabled === false, 'a write failure reports an error and re-enables the button');
   exportCommands = []; exportErrno = 0; window._asbLogReportData = null; await asbSavePage('report');
   chk(exportCommands.length === 0, 'nothing is written before the page has loaded');
@@ -8284,7 +8375,7 @@ const chk=(c,m)=>{if(!c)throw new Error(m);};
   releaseFirst({errno:0,stdout:'good1'});runGate=null;await p;chk(window._asbLogReportRaw==='good1'&&renders===1&&store[LOG_REPORT_CACHE_KEY].includes('good1'),'fresh report not cached');
   let release;runGate=r=>release=r;rawFixture='bad';runs=0;
   p=asbLogReportLoad();await Promise.resolve();await Promise.resolve();await Promise.resolve();
-  chk(reportBody.classList.contains('lv-stale')&&reportStatus.textContent.includes('Snapshot from time'),'cached report not shown immediately');
+  chk(!reportBody.classList.contains('lv-stale')&&reportStatus.textContent.includes('Snapshot from time'),'cached report not shown immediately at full opacity');
   const again=asbLogReportLoad();await again;chk(runs===1,'concurrent report opens started duplicate digest shells');release({errno:0,stdout:'bad'});await p;
   chk(renders===1&&reportBody.children.length===1&&reportStatus.textContent.includes('Could not refresh'),'failed refresh erased the complete report');
   chk(window._asbLogReportRaw==='good1','failed refresh replaced the last good cache');
@@ -8328,8 +8419,9 @@ assert 'setInterval' not in loader and 'setTimeout' not in loader
 assert 'seq !== _deviceLoadSeq' in loader and 'Nothing was changed' in loader
 assert loader.index('window._asbDeviceInfoData = null') < loader.index('await run(')
 assert 'window._asbDeviceInfoData = d;' in loader
-save_fn = h[h.index('const ASB_SAVE_PAGES = {'):h.index('async function asbDeviceInfoLoad()')]
-assert "'/sdcard/Download/'" in save_fn and 'asb_device_' in save_fn and 'asb_report_' in save_fn and 'asb_zygisk_' in save_fn
+save_fn = h[h.index('async function asbSaveTextFile('):h.index('async function asbDeviceInfoLoad()')]
+assert 'runtime/asb_page_export.sh' in save_fn and 'status=saved' in save_fn and '/sdcard/Download/' not in save_fn
+assert 'asb_device_' in save_fn and 'asb_report_' in save_fn and 'asb_zygisk_' in save_fn
 assert 'asb_device_info.sh' not in save_fn and 'setInterval' not in save_fn
 assert 'window._asbDeviceInfoRaw = runText(r);' in loader
 segment = h[h.index('function parseDeviceInfo('):h.index('function openDevicePage()')]
@@ -8624,7 +8716,11 @@ deviceInfoRender(d2);
   window._asbDeviceInfoRaw = 'D\tgpu\tkgsl-3d0\tRAWMARK';
   let exportCalls = 0, commands = [];
   const notices = [];
-  globalThis.run = async function (cmd) { exportCalls++; commands.push(cmd); return { errno: 0, stdout: '', stderr: '' }; };
+  globalThis.run = async function (cmd) {
+    exportCalls++; commands.push(cmd);
+    const fin = /asb_page_export\.sh' finish 'device' '(\d{8}_\d{6})'/.exec(cmd);
+    return { errno: 0, stdout: fin ? 'status=saved\npath=/sdcard/ASB/logs/asb_device_' + fin[1] + '.txt\n' : '', stderr: '' };
+  };
   globalThis.toast = function (text, kind) { notices.push({ text, kind }); };
   globalThis.MD = '/md';
   globalThis.runOk = r => !!r && r.errno === 0;
@@ -8639,7 +8735,8 @@ deviceInfoRender(d2);
   chk(safeButtons[0] === 'Enable safe mode' && safeButtons[1] === 'Clear safe mode', 'Safe mode labels describe the action, not the current state: ' + safeButtons.join(','));
   chk(commands.some(c => c.endsWith('/runtime/asb_zygisk.sh safe-mode on')) && commands.some(c => c.endsWith('/runtime/asb_zygisk.sh safe-mode off')), 'Safe mode action labels send the opposite state command');
   await asbSavePage('device');
-  const b64 = commands.filter(c => c.indexOf("printf '%s' ") >= 0).map(c => c.match(/printf '%s' '([^']*)'/)[1]).join('');
+  const writes = commands.filter(c => c.includes("asb_page_export.sh' append 'device' "));
+  const b64 = writes.map(c => c.match(/ append 'device' '\d{8}_\d{6}' '([^']*)'/)[1]).join('');
   const saved = Buffer.from(b64, 'base64').toString('utf8');
   chk(/^AutoSystemBoost - Device diagnostics\n27 facts\n/.test(saved), 'Device save header: ' + saved.slice(0, 80));
   chk(saved.includes('== At a glance ==') && saved.includes('8 cores · 2 clusters · up to 4.61 GHz'), 'Device save lost the overview');
@@ -8647,8 +8744,9 @@ deviceInfoRender(d2);
   chk(/\n  [^\n]*: 77%  \(!\)/.test(saved), 'Device save lost a warning mark on the worn battery');
   chk(saved.includes('Load average counts tasks'), 'Device save lost the explanatory notes');
   chk(saved.includes('== Raw data (for the developer) ==\nD\tgpu\tkgsl-3d0\tRAWMARK'), 'Device save lost the raw collector output');
-  chk(commands.some(c => /'\/sdcard\/Download\/asb_device_\d{8}_\d{6}\.txt'/.test(c)) && !commands.some(c => c.includes('asb_device_info.sh')), 'Device save ran a new collector or used the wrong path');
-  chk(!jsonButton.disabled && notices.some(n => n.kind === 'ok' && n.text.includes('/sdcard/Download/asb_device_')), 'Device save did not confirm the path or left the button disabled');
+  chk(commands.some(c => /asb_page_export\.sh' begin 'device' '\d{8}_\d{6}'/.test(c)) && commands.some(c => /asb_page_export\.sh' finish 'device' '\d{8}_\d{6}'/.test(c)), 'Device save did not use the fixed helper protocol');
+  chk(!commands.some(c => c.includes('/sdcard/Download') || c.includes('asb_device_info.sh')), 'Device save ran a new collector or used a legacy path');
+  chk(!jsonButton.disabled && notices.some(n => n.kind === 'ok' && n.text.includes('/sdcard/ASB/logs/asb_device_')), 'Device save did not confirm the acknowledged path or left the button disabled');
   window._asbDeviceInfoData = null;
   const before = exportCalls;
   await asbSavePage('device');
@@ -8859,9 +8957,13 @@ keys = {
 for p in sorted((Path(sys.argv[1]).parent/'i18n').glob('*.json')):
  d=json.loads(p.read_text(encoding='utf-8'))
  assert not any(k.startswith('bfx_art_') for k in d), p.name + ': obsolete ART workflow strings remain'
+ hey=json.dumps(d['cfg']['heytap_mcs'],ensure_ascii=False).lower()
+ assert 'art' not in hey and 'compil' not in hey and 'компил' not in hey and 'компіляц' not in hey and '编译' not in hey, p.name + ': removed HeyTap ART description remains'
  for k, ph in keys.items():
   assert isinstance(d.get(k),str) and d[k], (p.name,k)
   for token in ph: assert token in d[k], (p.name,k,token)
+hey_src=h[h.index("  { key:'heytap_mcs'"):h.index("  { key:'zygisk_enabled'",h.index("  { key:'heytap_mcs'"))]
+assert 'pm compile' not in hey_src and 'ART' not in hey_src and 'compilation' not in hey_src
 assert "if (groupId === 'infirmary') cfgRenderInfirmaryHero(list);" in h
 PY
 command -v node >/dev/null 2>&1 || { echo "SKIP webui infirmary runtime: no node"; exit 0; }
@@ -9257,11 +9359,16 @@ window._asbZygiskLinkData = d;
 window._asbZygiskRaw = zygiskRawDigest({ link: { errno: 0, stdout: 'D\tzygisk_observer\tenabled\t1\nRAWZY\n' }, guard: { errno: 1, stdout: '' }, aot: { errno: 0, stdout: 'aot\t1' } });
 (async function () {
   const commands = [], notices = [];
-  globalThis.run = async function (cmd) { commands.push(cmd); return { errno: 0, stdout: '', stderr: '' }; };
+  globalThis.run = async function (cmd) {
+    commands.push(cmd);
+    const fin = /asb_page_export\.sh' finish 'zygisk' '(\d{8}_\d{6})'/.exec(cmd);
+    return { errno: 0, stdout: fin ? 'status=saved\npath=/sdcard/ASB/logs/asb_zygisk_' + fin[1] + '.txt\n' : '', stderr: '' };
+  };
   globalThis.toast = function (text, kind) { notices.push({ text, kind }); };
+  globalThis.MD = '/md';
   await asbSavePage('zygisk');
-  const writes = commands.filter(function (c) { return c.indexOf("printf '%s' ") >= 0; });
-  const saved = Buffer.from(writes.map(function (c) { return c.match(/printf '%s' '([^']*)'/)[1]; }).join(''), 'base64').toString('utf8');
+  const writes = commands.filter(function (c) { return c.includes("asb_page_export.sh' append 'zygisk' "); });
+  const saved = Buffer.from(writes.map(function (c) { return c.match(/ append 'zygisk' '\d{8}_\d{6}' '([^']*)'/)[1]; }).join(''), 'base64').toString('utf8');
   chk(/^AutoSystemBoost - Zygisk\nCurrent snapshot · read-only\nOnePlus 15 · SM8850\n/.test(saved), 'header: ' + saved.slice(0, 120));
   chk(saved.includes('== Mode ==') && saved.includes('  [Auto] / Battery / Performance'), 'the chosen mode is not in the file');
   chk(saved.includes('  Metric 6: 66') && saved.includes('  Metric 1: 11'), 'folded rows were left out');
@@ -9271,9 +9378,9 @@ window._asbZygiskRaw = zygiskRawDigest({ link: { errno: 0, stdout: 'D\tzygisk_ob
   chk(saved.includes('== Raw data (for the developer) ==\n--- asb_zygisk.sh link-status ---\nD\tzygisk_observer\tenabled\t1\nRAWZY'), 'the link-status output is missing');
   chk(saved.includes('--- asb_zygisk_guard.sh status (rc=1) ---') && saved.includes('--- asb_zygisk_aot.sh status ---\naot\t1'), 'a failed or later read is not labelled');
   chk(!saved.includes('asb_lsposed_lite.sh'), 'an output that was never read is listed');
-  chk(commands.some(function (c) { return /'\/sdcard\/Download\/asb_zygisk_\d{8}_\d{6}\.txt'/.test(c); }), 'wrong path');
-  chk(!commands.some(function (c) { return /asb_zygisk\.sh|asb_zygisk_guard|link-status/.test(c); }), 'saving ran a new read');
-  chk(!saveBtn.disabled && notices.some(function (n) { return n.kind === 'ok' && n.text.includes('/sdcard/Download/asb_zygisk_'); }), 'no confirmation or the button stayed disabled');
+  chk(commands.some(function (c) { return /asb_page_export\.sh' begin 'zygisk' '\d{8}_\d{6}'/.test(c); }) && commands.some(function (c) { return /asb_page_export\.sh' finish 'zygisk' '\d{8}_\d{6}'/.test(c); }), 'wrong export protocol');
+  chk(!commands.some(function (c) { return c.includes('/sdcard/Download') || /asb_zygisk\.sh|asb_zygisk_guard|link-status/.test(c); }), 'saving ran a new read or used a legacy path');
+  chk(!saveBtn.disabled && notices.some(function (n) { return n.kind === 'ok' && n.text.includes('/sdcard/ASB/logs/asb_zygisk_'); }), 'no ASB/logs confirmation or the button stayed disabled');
   window._asbZygiskLinkData = null;
   const before = commands.length;
   await asbSavePage('zygisk');
@@ -10056,7 +10163,8 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 131, len(new)
+assert len(new) == 132, len(new)
+assert 'kernel_wb_saved_toast' in new
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -10690,7 +10798,8 @@ assert 'pre && pre.state' in smart and smart.count('runBatch([')==1
 assert 'smart_pending' in smart and "kv._smartPending = 1" in smart
 warm=body('function asbStartupWarmCaches() {')
 assert 'probe.then(warm' in warm and 'if (introShown || document.hidden) return;' in warm
-assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
+assert warm.count('asbStartupLater(function () { return cfgLoad(); }, 0, 0);') == 1
+assert 'openConfigPage() on demand' not in warm
 assert 'asbStartupLater(zygiskHeaderRefresh, 150, 1);' in warm and 'setTimeout(' not in warm
 assert 'setTimeout(zygiskHeaderRefresh, 2500)' not in s
 load=s[s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches')):s.index('function asbNavCurrent')]
@@ -10759,13 +10868,13 @@ const flush=()=>new Promise(r=>setImmediate(r));
   global.document={hidden:false,getElementById:()=>null};global.window={};
   eval(grab('function asbStartupWarmCaches() {')+';globalThis.warm=asbStartupWarmCaches;');
   window._asbBootIntroProbe=Promise.resolve(false);warm();await flush();
-  chk(cfg===0&&zy===1,'ordinary opening ran eager Config work or missed Zygisk');
+  chk(cfg===1&&zy===1,'ordinary opening did not schedule one shared Config transaction and Zygisk');
   window._asbBootIntroProbe=Promise.resolve(true);warm();await flush();
-  chk(cfg===0&&zy===1,'boot intro collectors were duplicated');
+  chk(cfg===1&&zy===1,'boot intro collectors were duplicated');
   document.hidden=true;window._asbBootIntroProbe=Promise.resolve(false);warm();await flush();
-  chk(cfg===0&&zy===1,'hidden page performed speculative root work');
+  chk(cfg===1&&zy===1,'hidden page performed speculative root work');
   document.hidden=false;window._asbBootIntroProbe=null;warm();
-  chk(cfg===0&&zy===2,'missing probe did not retain lightweight ordinary warm-up');
+  chk(cfg===2&&zy===2,'missing probe did not retain bounded ordinary warm-up');
 
   const store={};let fetches=0,releaseFetch;
   global.localStorage={getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=String(v)};
@@ -11039,7 +11148,7 @@ assert 'asbUiFrame.request(asbFitPages);' in scale
 for token in ('html .cfg-tile-ico {','place-items:center;','align-self:center;',
               'html .cfg-tile-name {','overflow-wrap:anywhere;',
               'html .cfg-tile-desc {','min-height:2.2em;','-webkit-line-clamp:2;',
-              'text-align:center;','html .cfg-tile-bar { flex:1 1 auto; width:auto; min-width:18px; max-width:56px; height:3px; }',
+              'text-align:center;','html .cfg-tile-bar { flex:1 1 auto; width:auto; min-width:20px; max-width:64px; height:5px;',
               "tile.setAttribute('aria-label'", "bar.setAttribute('aria-hidden', 'true')"):
     assert token in s, token
 assert 'grid-template-columns: repeat(3, 1fr);' in s
@@ -11219,7 +11328,8 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   chk(hub.children[0].children[3].children[0].textContent==='1 / 1','active count was lost');
   chk(hub.children[1].children[3].children[0].textContent==='0 / 1','empty count was invented');
   global.cfgLoadFresh=()=>false;const staleList=new E('div');renderHub(staleList);
-  chk(staleList.children[0].children[0].children[3].children[0].textContent==='… / 1','unresolved counter was presented as current');
+  const pending=staleList.children[0].children[0].children[3].children[0];
+  chk(pending.textContent==='1 controls'&&pending.className.includes('is-pending'),'unresolved counter invented an active value or lost its pending style');
   console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
@@ -11262,7 +11372,7 @@ assert s.count('asb-value-pending') >= 8
 for token in ('html .cfg-tile {\n  align-items:center;','text-align:center;',
               'html .cfg-tile-ico {\n  display:grid;\n  place-items:center;\n  align-self:center;',
               'html .cfg-tile-name {\n  width:100%;','html .cfg-tile-desc {\n  width:100%;',
-              'html .cfg-tile-count { flex:0 0 auto; font:600 8.5px/1.2 var(--mono); letter-spacing:.02em; text-align:center; }'):
+              'html .cfg-tile-count { flex:0 0 auto; min-width:34px; box-sizing:border-box; padding:3px 5px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:7px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.15 var(--mono); letter-spacing:.01em; text-align:center; }'):
     assert token in s, token
 PY
 command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix329 runtime: no node'; exit 0; }
@@ -12133,7 +12243,8 @@ keys=('lr_detail_capture','lr_detail_cpu_peak','lr_detail_drain','lr_detail_idle
       'wl_service_external','wl_component_loading','wl_component_meta','wl_service_not_running','wl_component_restore',
       'wl_component_result_disabled','wl_service_result_failed','wl_component_result_restored','wl_service_state_disabled',
       'wl_service_state_lapsed','wl_service_state_running','wl_service_state_unknown','wl_component_title',
-      'wl_service_unavailable','wl_services_open','wl_component_activity','wl_component_service','wl_component_systemjob_warning')
+      'wl_service_unavailable','wl_services_open','wl_component_activity','wl_component_service','wl_component_systemjob_warning',
+      'wl_component_search','wl_component_no_matches')
 files=sorted((r/'webroot/i18n').glob('*.json')); assert len(files)==13
 for p in files:
     x=json.loads(p.read_text())
@@ -12167,10 +12278,20 @@ global.wlServicePaint=d=>{painted=d}; global.wlServiceLoad=async()=>{loads++};
 global.liveInfoOpenData=d=>{opened=d};
 eval("var _wlService = { tok: 0, busy: false, pkg: '', rows: [], armed: '', armedAt: 0, armTimer: 0 };");
 for(const n of ['wlServiceArmed','wlServiceParse','wlServiceState','wlServiceRow','wlServiceSet','logReportDetailBind'])eval(grab(n));
+const realServicePaint=eval(grab('wlServicePaint')+';wlServicePaint;'),servicePaintStub=global.wlServicePaint;
+global.bfxEl=(tag,cls,text)=>{const e=new E(tag);e.className=cls;e.textContent=text;return e;};
 const parsed=wlServiceParse('scan=ok\nselected=1\ncomponent|service|com.example.app/.SyncService|0|default|1\ncomponent|service|com.example.app/.MediaService|1|disabled|0\nservice|com.other/.Wrong|0|enabled|1\nservice|com.example.app/bad name|0|enabled|1\nservice|com.example.app/.OddService|0|not-exposed|0\n','com.example.app');
 if(parsed.scan!=='ok'||parsed.selected!==1||parsed.rows.length!==3)throw Error('service parser accepted wrong/malformed rows');
 if(parsed.rows[2].state!=='unknown'||parsed.rows[2].running)throw Error('unknown state was guessed');
-_wlService.pkg='com.example.app'; _wlService.rows=[parsed.rows[0]]; _el('wlServiceModal').hidden=false;
+_wlService.pkg='com.example.app';_wlService.query='';
+realServicePaint({scan:'ok',selected:1,rows:parsed.rows});
+const serviceList=_el('wlServiceList');
+if(serviceList.children.length!==3||!serviceList.children[0].children[0].children[0].textContent.includes('.MediaService')||!serviceList.children[1].children[0].children[0].textContent.includes('.SyncService'))throw Error('selected/running components were not sorted first');
+_wlService.query='com.example.app/.media';serviceList.children=[];realServicePaint({scan:'ok',selected:1,rows:parsed.rows});
+if(serviceList.children.length!==1||!serviceList.children[0].children[0].children[0].textContent.includes('.MediaService'))throw Error('full component search did not filter the list');
+_wlService.query='no-such-class';serviceList.children=[];realServicePaint({scan:'ok',selected:1,rows:parsed.rows});
+if(serviceList.children.length!==1||serviceList.children[0].textContent!=='No component matches this search.')throw Error('empty search result was not explained');
+_wlService.query='';wlServicePaint=servicePaintStub; _wlService.rows=[parsed.rows[0]]; _el('wlServiceModal').hidden=false;
 let row=wlServiceRow(parsed.rows[0]);
 if(row.children[1].textContent!=='Disable component'||row.children[1].disabled)throw Error('initial service action wrong');
 if(!wlServiceState(parsed.rows[1]).startsWith('Disabled')||!wlServiceState(parsed.rows[0]).startsWith('Running'))throw Error('state labels wrong');
@@ -12369,7 +12490,8 @@ assert 'ufo-emoji' not in flight and '🛸' not in flight and 'emojiK' not in fl
 assert 'setInterval(' not in flight
 assert '.ufo-cosmos {' in s and 'pointer-events:none' in s[s.index('.ufo-cosmos {'):s.index('}',s.index('.ufo-cosmos {'))]
 warm=s[s.index('function asbStartupWarmCaches()'):s.index('/* fix328:',s.index('function asbStartupWarmCaches()'))]
-assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
+assert warm.count('asbStartupLater(function () { return cfgLoad(); }, 0, 0);') == 1
+assert 'openConfigPage() on demand' not in warm
 assert 'asbStartupLater(zygiskHeaderRefresh, 150, 1);' in warm
 intro=s[s.index('async function asbBootIntroStart()'):s.index('let _asbHomeRevealed',s.index('async function asbBootIntroStart()'))]
 assert "return cfgLoad();" in intro  # the real once-per-boot preview retains its useful work
@@ -15219,7 +15341,7 @@ assert 'liveMonitorSchedule(liveOpenRefreshDelay());' in open_live
 assert 'const LIVE_OPEN_SETTLE_MS = 320;' in s and 'const LIVE_OPEN_REUSE_MS = 1200;' in s
 hub = body('function cfgRenderHub(list) {')
 assert 'const counted = cfgLoadFresh();' in hub
-assert "cnt.textContent = counted ? (on + ' / ' + total) : ('… / ' + total);" in hub
+assert "cnt.textContent = counted" in hub and "T('cfg_tile_total', '{n} controls')" in hub and "cnt.className = 'cfg-tile-count'" in hub
 assert 'Math.round(on * 100 / total)' in hub and 'Math.round(on * 100 / items.length)' not in hub
 assert "(cfgLoadFresh() ? 1 : 0)" in body('function cfgHubSig() {')
 assert "spec[0] === 'asb_properties'" in s and "createElement('details')" in s
