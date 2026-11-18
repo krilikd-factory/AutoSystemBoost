@@ -3836,6 +3836,8 @@ html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disa
 .kernel-sources-filter { min-height:32px; padding:6px 9px; font-size:10.5px; }
 .kernel-sources-filter.is-active { border-color:var(--accent); color:var(--text); background:var(--surface-active); }
 .kernel-sources-sort { width:100%; min-height:38px; box-sizing:border-box; }
+.kernel-sources-clear { align-self:flex-start; border:0; background:transparent; color:var(--text-secondary); padding:3px 0; font:600 11px/1.3 var(--sans); text-decoration:underline; text-underline-offset:3px; }
+#wlServiceSearch { width:100%; box-sizing:border-box; margin:0 0 8px; }
 .kernel-sources-scroll { min-height:0; max-height:52vh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:7px; padding-right:2px; }
 /* dev55: up to 1024 observed sources; only the rows near the visible part of the list are laid out. */
 .kernel-sources-scroll > .kernel-source { content-visibility:auto; contain-intrinsic-height:auto 126px; }
@@ -6116,8 +6118,11 @@ html .cfg-tile-foot {
   margin:4px 0 0;
   padding:0;
 }
-html .cfg-tile-count { flex:0 0 auto; font:600 8.5px/1.2 var(--mono); letter-spacing:.02em; text-align:center; }
-html .cfg-tile-bar { flex:1 1 auto; width:auto; min-width:18px; max-width:56px; height:3px; }
+html .cfg-tile-count { flex:0 0 auto; min-width:34px; box-sizing:border-box; padding:3px 5px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:7px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.15 var(--mono); letter-spacing:.01em; text-align:center; }
+html .cfg-tile-count.is-pending { color:var(--text-secondary); font-family:var(--sans); font-weight:600; }
+html .cfg-tile-bar { flex:1 1 auto; width:auto; min-width:20px; max-width:64px; height:5px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 12%,transparent); background:color-mix(in srgb,var(--cat,var(--accent)) 7%,var(--border)); }
+html .cfg-tile-bar > i { min-width:0; transition:width .22s ease; }
+html[data-asb-theme="light"] .cfg-tile-count.is-pending { color:var(--text-secondary) !important; }
 html[data-asb-theme="light"] .cfg-tile {
   background:linear-gradient(155deg,color-mix(in srgb,var(--cat) 8%,transparent),transparent 70%),#fff !important;
   border-color:color-mix(in srgb,var(--cat) 24%,var(--border)) !important;
@@ -6831,7 +6836,7 @@ html[data-asb-effects="reduced"] :is(.zygisk-header-dot,.zygisk-header-dot::afte
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="rpVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
-    <div class="status-row">
+    <div class="status-row has-back">
       <div class="dot"></div>
       <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
       <span class="status-val" id="rpCurProfile">balanced</span>
@@ -10348,7 +10353,7 @@ const CFG_ITEMS = [
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'athena_service', type:'seg', desc:'OxygenOS\'s own background-app killer.\n\n🔋 Battery life: Stock\n🔔 Apps stay alive, notifications on time: Off\n✋ Not sure: Stock', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'heytap_mcs', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'HeyTap MCS / OPPO Push',
-    desc:'Off disables com.heytap.mcs without hiding or replacing any system files. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Enabling the card also requests one `pm compile -m speed-profile -a` after the next reboot, once boot is complete. That compilation can temporarily use CPU, storage and battery; it never runs on every boot. Stock restores only the MCS state ASB changed and cancels a compile that has not started. After the reboot it waits for the charger (Charging or Full), so the compilation does not heat or drain a phone in your hand; with no charger within 24 h it stays pending until the next boot.' },
+    desc:'Off disables com.heytap.mcs for user 0 and verifies the resulting package state. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Stock restores only the package state recorded by ASB. No system files are hidden or replaced.' },
   { key:'zygisk_enabled', type:'bool', def:'0', stock:'0', name:'ASB Zygisk',
     desc:'Master switch for attaching ASB to Zygisk in newly started app processes, or leaving them unattached after their next restart. Off preserves the selected mode, automatic app list, feature switches, guard and ART settings; enabling again restores that saved setup without silently choosing a new preset. The full control panel is on the ZYGISK page. Requires a Zygisk-capable root implementation. Safe mode and a broker failure fail open; existing apps are not killed.' },
   { key:'zygisk_hints', type:'bool', def:'0', stock:'0', name:'Zygisk Lifecycle Refresh',
@@ -10840,8 +10845,8 @@ function cfgRenderBatteryFixCard(list) {
   titles.appendChild(chip);
   head.appendChild(titles);
   card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', T('bfx_summary', "Schedules an Android battery-statistics reset after reboot. Available at 100% on charge; it does not add capacity and does not run ART compilation.")));
-  kernelMoreBlock(card, 'bfx', [bfxEl('div', 'bfx-desc', T('bfx_desc', 'At the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. ART compilation is not part of this repair, so an unrelated Binder/dex2oat refusal cannot fail the reset workflow. Available only at 100% on charge.'))]);
+  card.appendChild(bfxEl('div', 'bfx-desc', T('bfx_summary', "Schedules an Android battery-statistics reset after reboot. Available at 100% on charge; it does not add capacity.")));
+  kernelMoreBlock(card, 'bfx', [bfxEl('div', 'bfx-desc', T('bfx_desc', 'At the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.'))]);
   const steps = bfxEl('ol', 'bfx-steps');
   steps.appendChild(bfxStep('bfxStepCond', 'bfx_step_cond', 'Condition: 100% on charge'));
   steps.appendChild(bfxStep('bfxStepReset', 'bfx_step_reset', 'Reset battery statistics'));
@@ -12179,7 +12184,16 @@ function kernelWakeupObserve(command) {
   _wbBusy = true; cfgRender();
   run('sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh') + ' ' + command).then(function (r) {
     const parsed = r && r.errno === 0 ? kernelWakeupParse(r.stdout) : null;
-    if (parsed) _kernelPanel.wakeup = parsed;
+    if (parsed) {
+      /* A status refresh continues the same baseline. Keep already discovered names if a
+       * transient snapshot omits one; only Start/Clear may intentionally empty the window. */
+      if (command === 'status' && _kernelPanel.wakeup && _kernelPanel.wakeup.sources) {
+        const seen = Object.create(null);
+        parsed.sources.forEach(function (s) { seen[s.name] = true; });
+        _kernelPanel.wakeup.sources.forEach(function (s) { if (!seen[s.name]) parsed.sources.push(s); });
+      }
+      _kernelPanel.wakeup = parsed;
+    }
     if (!parsed) { uiSound('error'); toast(T('kernel_wb_observe_error', 'Could not read wakeup-source counters'), 'err'); }
   }).catch(function () { toast(T('kernel_wb_observe_error', 'Could not read wakeup-source counters'), 'err'); }).finally(function () {
     _wbBusy = false; _kernelPanel.loaded = true; cfgRender(); kernelWakeupSourceDialogRender();
@@ -12312,6 +12326,7 @@ function kernelWakeupSourcesDrawList(m) {
     btn.classList.toggle('is-active', active); btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
 }
+function obStateIsMeasuring(wb) { return !!(wb && wb.observe && wb.observe.state === 'measuring'); }
 function kernelWakeupSourceDialogRender() {
   const m = document.getElementById('kernelWakeupSourcesModal');
   if (!m || !_wbSourceView.open) return;
@@ -12340,6 +12355,11 @@ function kernelWakeupSourceDialogRender() {
   });
   sort.onchange = function () { _wbSourceView.sort = sort.value; kernelWakeupSourcesDrawList(m); };
   body.appendChild(sort);
+  if (obStateIsMeasuring(wb)) {
+    const reset = bfxEl('button', 'kernel-sources-clear', T('kernel_wb_reset_window', 'Clear window'));
+    reset.type = 'button'; reset.disabled = _wbBusy; reset.onclick = function () { kernelWakeupObserve('observe_clear'); };
+    body.appendChild(reset);
+  }
   body.appendChild(bfxEl('div', 'kernel-observe-meta', '')).id = 'kernelWakeupSourcesResult';
   body.appendChild(bfxEl('div', 'kernel-sources-scroll'));
   const title = m.querySelector('#kernelWakeupSourcesTitle');
@@ -12356,7 +12376,10 @@ function kernelWakeupSourceDialogOpen() {
     head.appendChild(bfxEl('div', 'cfg-profile-title', '')).id = 'kernelWakeupSourcesTitle';
     const close = bfxEl('button', 'cfg-profile-close', '×'); close.type = 'button'; close.id = 'kernelWakeupSourcesClose';
     close.setAttribute('aria-label', T('kernel_wb_close', 'Close')); close.onclick = kernelWakeupSourceDialogClose;
-    head.appendChild(close); sheet.appendChild(head);
+    const refresh = bfxEl('button', 'cfg-profile-close', '↻'); refresh.type = 'button'; refresh.id = 'kernelWakeupSourcesRefresh';
+    refresh.setAttribute('aria-label', T('kernel_wb_update_sources', 'Update sources'));
+    refresh.onclick = function () { if (!_wbBusy) kernelWakeupObserve('status'); };
+    head.appendChild(refresh); head.appendChild(close); sheet.appendChild(head);
     sheet.appendChild(bfxEl('div', 'kernel-sources-body')).id = 'kernelWakeupSourcesBody';
     m.appendChild(sheet);
     m.onclick = function (ev) { if (ev.target === m) kernelWakeupSourceDialogClose(); };
@@ -12376,14 +12399,11 @@ function kernelWakeupObservedList(card, wb) {
   else if (ob.state === 'not_exposed' || ob.state === 'not_readable') state = T('kernel_wb_observe_error', 'Could not read wakeup-source counters');
   wrap.appendChild(bfxEl('div', 'kernel-observe-meta', state));
   const actions = bfxEl('div', 'bfx-actions');
-  const start = bfxEl('button', 'bfx-btn bfx-secondary', T(ob.state === 'measuring' ? 'kernel_wb_restart' : 'kernel_wb_start', ob.state === 'measuring' ? 'Restart window' : 'Start idle window'));
+  const measuring = ob.state === 'measuring';
+  const start = bfxEl('button', 'bfx-btn bfx-secondary', T(measuring ? 'kernel_wb_update_sources' : 'kernel_wb_start', measuring ? 'Update sources' : 'Start idle window'));
   start.type = 'button'; start.disabled = !wb || _wbBusy || ob.state === 'not_exposed';
-  start.onclick = function () { kernelWakeupObserve('observe_start'); };
-  const update = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_wb_update_sources', 'Update sources'));
-  update.type = 'button'; update.disabled = !wb || _wbBusy || ob.state !== 'measuring'; update.onclick = function () { kernelWakeupObserve('status'); };
-  const reset = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_wb_reset_window', 'Clear window'));
-  reset.type = 'button'; reset.disabled = !wb || _wbBusy || ob.state !== 'measuring'; reset.onclick = function () { kernelWakeupObserve('observe_clear'); };
-  actions.appendChild(start); actions.appendChild(update); actions.appendChild(reset); wrap.appendChild(actions);
+  start.onclick = function () { kernelWakeupObserve(measuring ? 'status' : 'observe_start'); };
+  actions.appendChild(start); wrap.appendChild(actions);
   if (ob.state === 'measuring' && !wb.sources.length) wrap.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_no_sources', 'No source counter has increased yet. Leave the phone idle and update later; zero is not an error.')));
   if (ob.resets) wrap.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_counter_reset', 'Some counters restarted during the window; their values cover only the time since the reset.')));
   const open = bfxEl('button', 'bfx-btn bfx-secondary kernel-sources-open', T('kernel_wb_open_sources', 'Open sources') + ' · ' + wb.sources.length);
@@ -12456,7 +12476,7 @@ function kernelWakeupAdd(raw, kind) {
   if (kernelWakeupRisk(name, 1).critical) toast(T('kernel_wb_confirm_critical', 'This looks like a system source (alarms, power manager, charging, input or thermal). Blocking it can stop alarms, wake-up or charging from working.'), 'warn');
 }
 function kernelWakeupVerdict(v, count) {
-  if (v === 'applied') return T('kernel_wb_applied', 'Kernel readback matches · {n} rules').replace('{n}', count || '0');
+  if (v === 'applied') return T('kernel_wb_applied', 'Kernel readback matches · {n} active now').replace('{n}', count || '0');
   const map = {
     not_exposed:'kernel_state_not_exposed', not_writable:'kernel_state_read_only', not_readable:'kernel_state_not_readable',
     invalid_name:'kernel_wb_invalid', too_many_rules:'kernel_wb_limit',
@@ -12480,9 +12500,14 @@ async function kernelWakeupSave(clearAll) {
   const p = line.split('|'), verdict = p[1] || 'failed';
   if (!(verdict === 'invalid_name' || verdict === 'too_many_rules')) _wbDraft = null;
   _wbBusy = false;
-  if (r && r.errno === 0 && verdict === 'applied') { haptic(); toast(kernelWakeupVerdict(verdict, p[2]), 'good'); }
-  else { uiSound('error'); toast(kernelWakeupVerdict(verdict, p[2]), verdict === 'not_exposed' ? 'warn' : 'err'); }
+  const applied = !!(r && r.errno === 0 && verdict === 'applied');
   await kernelPanelLoad(true);
+  if (applied) {
+    const wb = _kernelPanel.wakeup;
+    const saved = wb ? wb.savedAlways.concat(wb.savedSleep).filter(function (n, i, a) { return a.indexOf(n) === i; }).length : 0;
+    haptic();
+    toast(kernelWakeupVerdict(verdict, p[2]) + ' · ' + T('kernel_wb_saved_toast', '{n} saved').replace('{n}', String(saved)), 'good');
+  } else { uiSound('error'); toast(kernelWakeupVerdict(verdict, p[2]), verdict === 'not_exposed' ? 'warn' : 'err'); }
 }
 function cfgToastText(key, val) {
   var name = Tcfg(key, 'name', '') || key;
@@ -13297,8 +13322,8 @@ function cfgRenderHub(list) {
     const foot = document.createElement('div');
     foot.className = 'cfg-tile-foot';
     const cnt = document.createElement('div');
-    cnt.className = 'cfg-tile-count' + (counted && on ? ' has-on' : '');
-    cnt.textContent = counted ? (on + ' / ' + total) : ('… / ' + total);
+    cnt.className = 'cfg-tile-count' + (counted && on ? ' has-on' : '') + (counted ? '' : ' is-pending');
+    cnt.textContent = counted ? (on + ' / ' + total) : T('cfg_tile_total', '{n} controls').replace('{n}', String(total));
     foot.appendChild(cnt);
     tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + cnt.textContent);
     const bar = document.createElement('div');
@@ -14483,23 +14508,17 @@ async function cfgSet(key, val, ctl) {
       }
       if (key === 'heytap_mcs' || key === 'documentsui_fix') {
         const script = key === 'heytap_mcs' ? 'asb_heytap_mcs.sh' : 'asb_documentsui_fix.sh';
-        let res = '', compile = '';
+        let res = '';
         try {
           const r = await run('sh ' + shQuote(MD + '/runtime/' + script) + ' apply 2>/dev/null');
           const m = /result=([a-z_]+)/.exec((r && r.stdout) || '');
-          const c = /compile=([a-z_]+)/.exec((r && r.stdout) || '');
           res = m ? m[1] : '';
-          compile = c ? c[1] : '';
         } catch (e) {}
         if (key === 'heytap_mcs') {
-          if ((res === 'disabled' || res === 'already_disabled') && compile === 'done')
-            toast(T('t_hey_done', 'HeyTap MCS remains disabled · ART compilation has already finished'), 'good');
-          else if ((res === 'disabled' || res === 'already_disabled') && compile === 'failed')
-            toast(T('t_hey_compile_failed', 'HeyTap MCS remains disabled · ART compilation failed and will not retry automatically'), 'warn');
-          else if (res === 'disabled' || res === 'already_disabled')
-            toast(T('t_hey_off', 'HeyTap MCS disabled · ART compilation will run once after the next reboot, while charging'), 'good');
+          if (res === 'disabled' || res === 'already_disabled')
+            toast(T('t_hey_off', 'HeyTap MCS disabled · package-state read-back confirmed'), 'good');
           else if (res === 'restored' || res === 'untouched')
-            toast(T('t_hey_stock', 'HeyTap MCS state restored · pending ART compilation cancelled'), 'good');
+            toast(T('t_hey_stock', 'HeyTap MCS package state restored'), 'good');
           else if (res === 'absent') toast(T('t_hey_absent', 'HeyTap MCS is not installed on this device'), 'warn');
           else toast(T('t_hey_failed', 'MCS was not changed safely; check its status in asbdiag'), 'bad');
         } else {
@@ -15480,7 +15499,7 @@ async function wlManualSet(a) {
 /* Individual Activity/Service components are different from package WAKE_LOCK AppOps.
  * Discovery is on demand from Android's current activity/service records plus ASB's exact
  * restoration ledger. No process/package freeze and no background polling are involved. */
-const _wlService = { tok: 0, busy: false, pkg: '', rows: [], armed: '', armedAt: 0, armTimer: 0 };
+const _wlService = { tok: 0, busy: false, pkg: '', rows: [], armed: '', armedAt: 0, armTimer: 0, query: '' };
 function wlServiceArmed(comp) { return !!comp && _wlService.armed === comp && Date.now() - _wlService.armedAt < 5000; }
 function wlServiceEnsure() {
   let m = _el('wlServiceModal');
@@ -15492,12 +15511,18 @@ function wlServiceEnsure() {
     + '<button class="cfg-profile-close" id="wlServiceRefresh" type="button" aria-label="Refresh">↻</button>'
     + '<button class="cfg-profile-close" id="wlServiceX" type="button" aria-label="Close">×</button></div></div>'
     + '<div class="cfg-profile-copy wl-manual-copy" id="wlServiceCopy"></div>'
-    + '<div class="wl-manual-meta" id="wlServiceMeta"></div><div class="wl-manual-list" id="wlServiceList"></div>'
+    + '<div class="wl-manual-meta" id="wlServiceMeta"></div>'
+    + '<input class="cfg-profile-name doze-keep-search" id="wlServiceSearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false">'
+    + '<div class="wl-manual-list" id="wlServiceList"></div>'
     + '<button class="cfg-profile-primary" id="wlServiceDone" type="button"></button></div>';
   document.body.appendChild(m);
   m.addEventListener('click', function (e) { if (e.target === m) wlServiceClose(); });
   _el('wlServiceX').onclick = wlServiceClose; _el('wlServiceDone').onclick = wlServiceClose;
   _el('wlServiceRefresh').onclick = function () { if (!_wlService.busy) wlServiceLoad(); };
+  _el('wlServiceSearch').oninput = function () {
+    _wlService.query = this.value.trim().toLowerCase();
+    wlServicePaint({ scan:'ok', selected:_wlService.rows.filter(function (x) { return x.selected; }).length, rows:_wlService.rows });
+  };
   return m;
 }
 function wlServiceParse(out, pkg) {
@@ -15549,19 +15574,25 @@ function wlServiceRow(a) {
 function wlServicePaint(d) {
   _wlService.rows = d.rows || [];
   const list = _el('wlServiceList'); list.textContent = '';
+  const q = _wlService.query || '';
+  const shown = _wlService.rows.filter(function (a) { return !q || a.comp.toLowerCase().indexOf(q) >= 0; });
+  shown.sort(function (a, b) { return (b.selected - a.selected) || (b.running - a.running) || a.comp.localeCompare(b.comp); });
   if (!_wlService.rows.length) {
     const e = document.createElement('div'); e.className = 'cfg-profile-empty';
     e.textContent = d.scan === 'ok' ? T('wl_component_empty', 'No running Activity or Service components are exposed for this app right now. This does not prove that none are declared; open or use the relevant screen, then refresh. Components already disabled through ASB remain listed for Restore.')
       : T('wl_service_unavailable', 'Service records or component state are not exposed right now. Nothing was changed.');
     list.appendChild(e);
-  } else _wlService.rows.forEach(function (a) { list.appendChild(wlServiceRow(a)); });
+  } else if (!shown.length) {
+    list.appendChild(bfxEl('div', 'cfg-profile-empty', T('wl_component_no_matches', 'No component matches this search.')));
+  } else shown.forEach(function (a) { list.appendChild(wlServiceRow(a)); });
   _el('wlServiceMeta').textContent = T('wl_component_meta', '%s component(s) selected · Activity/Service read on demand · no automatic freezing or polling').replace('%s', String(d.selected || 0));
 }
 async function wlServiceLoad() {
   const m = wlServiceEnsure(), tok = ++_wlService.tok, pkg = _wlService.pkg;
   if (!pkg) return;
   _el('wlServiceTitle').textContent = T('wl_component_title', 'Activities and services · %s').replace('%s', _wlManual.labels[pkg] || pkg);
-  _el('wlServiceCopy').textContent = T('wl_component_copy', 'Disable one exact Android Activity or Service component, not the whole app. This is component disabling, not a process freezer. Android exposes current records on demand; presence here does not prove energy cost. Restore returns the recorded default/enabled state.');
+  _el('wlServiceCopy').textContent = T('wl_component_copy', 'Disable one exact Android Activity or Service component, not the whole app. Disable persists until you tap Restore; there is no automatic screen-off component mode. This is not a process freezer. Android exposes current records on demand; presence here does not prove energy cost. Restore returns the recorded default/enabled state.');
+  _el('wlServiceSearch').placeholder = '🔍  ' + T('wl_component_search', 'Search class or component');
   _el('wlServiceDone').textContent = T('doze_keep_done', 'Done');
   _el('wlServiceMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
   const list = _el('wlServiceList'); list.textContent = '';
@@ -15576,7 +15607,8 @@ async function wlServiceLoad() {
 }
 async function wlServiceOpen(pkg) {
   if (!dozePkgOk(pkg)) return;
-  const m = wlServiceEnsure(); _wlService.pkg = pkg; _wlService.rows = []; _wlService.armed = '';
+  const m = wlServiceEnsure(); _wlService.pkg = pkg; _wlService.rows = []; _wlService.armed = ''; _wlService.query = '';
+  _el('wlServiceSearch').value = '';
   m.hidden = false; m.setAttribute('aria-hidden', 'false'); navSyncSoon();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { const x = _el('wlServiceX'); if (x && x.focus) x.focus(); });
   await wlServiceLoad();
@@ -17917,20 +17949,28 @@ function asbPageStamp(dt) {
   const p = function (n) { return (n < 10 ? '0' : '') + n; };
   return String(dt.getFullYear()) + p(dt.getMonth() + 1) + p(dt.getDate()) + '_' + p(dt.getHours()) + p(dt.getMinutes()) + p(dt.getSeconds());
 }
-async function asbSaveTextFile(path, text) {
+async function asbSaveTextFile(kind, stamp, text) {
   const bytes = new TextEncoder().encode(text);
   let bin = '';
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  const b64 = btoa(bin), tmp = path + '.b64', step = 48000;
-  const dir = path.replace(/\/[^\/]*$/, '');
-  for (let i = 0, n = 0; i < b64.length || n === 0; i += step, n++) {
-    const part = b64.slice(i, i + step);
-    const cmd = (n === 0 ? 'mkdir -p ' + shQuote(dir) + ' && ' : '') + "printf '%s' " + shQuote(part) + (n === 0 ? ' > ' : ' >> ') + shQuote(tmp);
-    const r = await run(cmd);
-    if (!r || r.errno !== 0) throw new Error((r && r.stderr) || 'write failed');
+  const b64 = btoa(bin), step = 48000;
+  const helper = 'sh ' + shQuote(MD + '/runtime/asb_page_export.sh') + ' ';
+  const call = async function (action, part) {
+    const r = await run(helper + action + ' ' + shQuote(kind) + ' ' + shQuote(stamp) + (part === undefined ? '' : ' ' + shQuote(part)) + ' 2>/dev/null');
+    if (!r || r.errno !== 0 || /^error=/m.test(String(r.stdout || ''))) throw new Error((r && (r.stderr || r.stdout)) || 'export failed');
+    return r;
+  };
+  try {
+    await call('begin', '');
+    for (let i = 0; i < b64.length; i += step) await call('append', b64.slice(i, i + step));
+    const done = await call('finish');
+    const path = (/^path=(\/sdcard\/ASB\/logs\/[A-Za-z0-9_.-]+)$/m.exec(String(done.stdout || '')) || [])[1];
+    if (!path || !/^status=saved$/m.test(String(done.stdout || ''))) throw new Error('invalid export acknowledgement');
+    return path;
+  } catch (e) {
+    try { await call('abort'); } catch (_) {}
+    throw e;
   }
-  const r = await run('base64 -d < ' + shQuote(tmp) + ' > ' + shQuote(path) + ' && rm -f ' + shQuote(tmp));
-  if (!r || r.errno !== 0) { await run('rm -f ' + shQuote(tmp)); throw new Error((r && r.stderr) || 'decode failed'); }
 }
 /* dev16: the Zygisk page saves the same way. Its folded rows and the evidence list that is
  * built only when opened are expanded into the file, and the raw digest is every status
@@ -17967,8 +18007,7 @@ async function asbSavePage(kind) {
       asbPageTxt(status), line ? asbPageTxt(line) : '', now.toString()].filter(function (x) { return x; });
     let text = head.join('\n') + '\n\n' + asbPageText(body) + '\n';
     if (raw) text += '\n\n== ' + T('page_save_raw', 'Raw data (for the developer)') + ' ==\n' + String(raw).replace(/\s+$/, '') + '\n';
-    const path = '/sdcard/Download/' + k.prefix + asbPageStamp(now) + '.txt';
-    await asbSaveTextFile(path, text);
+    const path = await asbSaveTextFile(kind, asbPageStamp(now), text);
     toast(logReportT('page_saved', 'Saved: {path}', { path: path }), 'ok');
   } catch (e) {
     toast(T('page_save_error', 'Could not save the page.'), 'error');
@@ -20567,7 +20606,7 @@ async function zygiskPageLoad(user) {
     window._asbZygiskRaw = zygiskRawDigest(b);
     zygiskHeaderPublish(d);
     if (_zygiskOpen) zygiskPageRender(d);
-    if (status) status.textContent = T('zy_status_ready', 'Current snapshot · read-only');
+    if (status) status.textContent = T('zy_status_ready', 'Current status');
   } else {
     window._asbZygiskLinkData = null;
     window._asbZygiskRaw = '';
@@ -21089,7 +21128,7 @@ function logReportCachedPaint(cache, refreshing) {
   const reuse = body.children.length > 0 && window._asbLogReportData && window._asbLogReportRaw === cache.raw;
   window._asbLogReportRaw = cache.raw; window._asbLogReportAt = cache.t;
   if (!reuse) logReportRender(d);
-  body.classList.add('lv-stale'); body.dataset.lrShown = '1'; body.dataset.lrAt = String(cache.t);
+  body.classList.remove('lv-stale'); body.dataset.lrShown = '1'; body.dataset.lrAt = String(cache.t);
   status.textContent = refreshing === false
     ? T('lr_snapshot_status', 'Snapshot from %s · tap Refresh to collect again').replace('%s', deviceInfoStamp(cache.t))
     : T('lr_cached_status', 'Snapshot from %s · refreshing…').replace('%s', deviceInfoStamp(cache.t));
@@ -23544,9 +23583,10 @@ window.addEventListener('orientationchange', function () { asbUiFrame.request(as
 function asbStartupWarmCaches() {
   const warm = function (introShown) {
     if (introShown || document.hidden) return;
-    /* Config is read by openConfigPage() on demand. Its ten-part shell and follow-up
-     * evidence reads blocked every ordinary repeat opening without warming the next WebView.
-     * V66: the Zygisk header read waits behind the first Live pass (asbStartupLater). */
+    /* Warm one shared Config transaction immediately after the first frame. An immediate
+     * tap joins this exact promise instead of queuing a second ten-part read behind Live.
+     * There is no timer/worker after the transaction and no repeat eager Config batch. */
+    asbStartupLater(function () { return cfgLoad(); }, 0, 0);
     asbStartupLater(zygiskHeaderRefresh, 150, 1);
   };
   const probe = window._asbBootIntroProbe;
