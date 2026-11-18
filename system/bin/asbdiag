@@ -4394,6 +4394,19 @@ else
   OFF "window blur - disable_blur=$(cfg disable_blur), the ROM's blur is left alone" "disable_blur"
 fi
 NOTE "ui_effects_level = $(cfg ui_effects_level)  ·  anim_level prop = $(gp persist.sys.oplus.anim_level)"
+# buildfix16: all eight bounded display/UI controls get read-only field evidence. Matching
+# Settings values prove persistence only; launcher/SystemUI rendering remains unverified.
+if [ -r "$MODDIR/runtime/asb_display_ui_apply.sh" ]; then
+  NOTE "display/ui diagnostics: configured/expected/live/baseline are reported separately; visual effect is never inferred from Settings readback"
+  _dui_diag="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_display_ui_apply.sh" diagnose 2>/dev/null)"
+  if [ -n "$_dui_diag" ]; then
+    printf '%s\n' "$_dui_diag" | while IFS= read -r _dui_line; do P "    $_dui_line"; done
+  else
+    NOTE "display/ui diagnostics: not runtime-discoverable on this install"
+  fi
+else
+  NOTE "display/ui diagnostics: helper not exposed"
+fi
 NOTE "phantom_procs = $(cfg phantom_procs)  ·  live: $(settings get global settings_enable_monitor_phantom_procs 2>/dev/null)"
 if [ -r /proc/sys/kernel/sched_schedstats ]; then
   NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: $(cat /proc/sys/kernel/sched_schedstats 2>/dev/null)  ·  saved baseline: $(cat /data/adb/asb/kernel_sched_stats.prev 2>/dev/null || echo none)"
