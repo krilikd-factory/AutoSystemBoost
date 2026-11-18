@@ -4,6 +4,23 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix18 - concurrent Infinite Log starts join the verified live winner
+
+Input: a GitHub Actions `debug_support_contract` failure at concurrent round 8 returned
+`error=recorder_exited` from one request while the competing request returned `status=started`
+and a recorder PID. No missing-file error was present. Base: the fully verified buildfix17 source archive.
+
+- **Narrow exited-launcher repair:** when the request's token was replaced, the start path now performs
+  the existing bounded recorder/launcher handoff lookup. A verified live replacement owner produces
+  `status=already_running` and the winner PID; token replacement alone is not accepted as proof of life.
+- **Failure and ownership semantics retained:** an exited same-token recorder still produces
+  `error=recorder_exited`, and a changed token without a live owner remains an error. Only the request's
+  own still-matching lock can be removed. The repaired branch launches no second recorder, deletes no
+  foreign lock and adds no polling worker.
+- **Deterministic regression, not a weaker assertion:** the handoff fixture publishes a live replacement
+  PID and requires the loser to join it without altering the winner token/PID or lock directory. The
+  adjacent same-token recorder failure and foreign-lock tests remain mandatory.
+
 ## V66 dev66 buildfix17 - aligned WebUI motion, retained hub DOM and clearer category icons
 
 Input: make WebUI navigation and data display feel lighter without losing functionality or information,
