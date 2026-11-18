@@ -12898,7 +12898,8 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 HELPER="$ROOT/runtime/asb_debug_support.sh"
 TMP="$(mktemp -d)"
 SLEEPER=""
-trap 'kill $SLEEPER 2>/dev/null || true; rm -rf "$TMP"' EXIT
+WINNER=""
+trap 'kill $SLEEPER $WINNER 2>/dev/null || true; rm -rf "$TMP"' EXIT
 fail() { echo "FAIL debug support lock handoff: $*" >&2; exit 1; }
 awk '/^pid_is_live\(\) \{/,/^}/; /^full_day_pid_matches_recorder\(\) \{/,/^}/; /^full_day_pid_owns_lock\(\) \{/,/^}/' "$HELPER" > "$TMP/fn.sh"
 [ "$(grep -c '() {' "$TMP/fn.sh")" -eq 3 ] || fail "helper functions not found"
@@ -12930,6 +12931,32 @@ OUT="$(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" 
 grep -Fqx 'error=recorder_exited' <<<"$OUT" || fail "fixture recorder did not exit as planned: $OUT"
 [ -d "$TMP/state/full_day_webui.lock" ] || fail "the helper removed a lock that another request had taken over"
 grep -Fqx 'other-request' "$TMP/state/full_day_webui.lock/token" || fail "foreign token lost"
+
+# buildfix18: the same exited-launcher branch has a second, distinct outcome. If the token
+# changed AND the replacement lock already names a live recorder, the capture is running and
+# this request must join it. The old unconditional recorder_exited answer was the CI round=8
+# failure even though the concurrent winner had already published status=started and its PID.
+mkdir -p "$TMP/winner"
+cat > "$TMP/winner/asb_log_full_day.sh" <<'EOF_WINNER'
+#!/bin/sh
+sleep 60
+EOF_WINNER
+chmod 0755 "$TMP/winner/asb_log_full_day.sh"
+sh "$TMP/winner/asb_log_full_day.sh" & WINNER=$!
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_REC'
+#!/bin/sh
+printf 'other-request\n' > "$ASB_DEBUG_SUPPORT_LOCKDIR/token"
+printf '%s\n' "${ASB_DEBUG_SUPPORT_TEST_WINNER_PID:?}" > "$ASB_DEBUG_SUPPORT_LOCKDIR/pid"
+exit 92
+EOF_REC
+chmod 0755 "$DBG/tools/logkit/asb_log_full_day.sh"
+OUT="$(ASB_DEBUG_SUPPORT_TEST_WINNER_PID="$WINNER" ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" sh "$HELPER" full-day || true)"
+grep -Fqx 'status=already_running' <<<"$OUT" || fail "live replacement owner not joined: $OUT"
+grep -Fqx "pid=$WINNER" <<<"$OUT" || fail "replacement winner PID absent: $OUT"
+[ -d "$TMP/state/full_day_webui.lock" ] || fail "joined request removed the replacement lock"
+grep -Fqx 'other-request' "$TMP/state/full_day_webui.lock/token" || fail "joined request replaced the winner token"
+grep -Fqx "$WINNER" "$TMP/state/full_day_webui.lock/pid" || fail "winner PID file changed"
+kill "$WINNER" 2>/dev/null || true; wait "$WINNER" 2>/dev/null || true; WINNER=""
 rm -rf "$TMP/state/full_day_webui.lock"
 cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_REC'
 #!/bin/sh
@@ -12938,7 +12965,7 @@ EOF_REC
 OUT="$(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" sh "$HELPER" full-day || true)"
 grep -Fqx 'error=recorder_exited' <<<"$OUT" || fail "own failed recorder not reported: $OUT"
 [ ! -d "$TMP/state/full_day_webui.lock" ] || fail "the helper kept its own lock after its recorder died"
-echo "PASS debug support lock handoff: a launcher seen mid-exec still owns its lock; a failed start removes only its own lock"
+echo "PASS debug support lock handoff: a launcher seen mid-exec still owns its lock, an exited loser joins a verified live replacement, and a failed start removes only its own lock"
 )
 
 t_tests_pipefail_grep_q_contract() (
