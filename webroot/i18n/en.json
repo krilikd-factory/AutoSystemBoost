@@ -327,10 +327,10 @@
     },
     "heytap_mcs": {
       "name": "HeyTap MCS / OPPO Push",
-      "desc": "Off disables com.heytap.mcs without replacing system files. Apps using HeyTap/OPPO Push can stop receiving notifications or receive them late. Enabling also requests one profile-guided ART compilation after the next reboot; it can temporarily use CPU, storage and battery. Stock restores the MCS state ASB changed and cancels a compilation that has not started. After the reboot it waits for the charger (Charging or Full), so the compilation does not heat or drain a phone in your hand; with no charger within 24 h it stays pending until the next boot.",
+      "desc": "Off disables com.heytap.mcs for user 0 and verifies the resulting package state. Apps using HeyTap/OPPO Push can stop receiving notifications or receive them late; some apps may keep their own connection alive instead. Stock restores only the package state recorded by ASB. No system files are hidden or replaced.",
       "descOpt": {
-        "stock": "Leave MCS under Android/OEM control and cancel a compilation request that has not started.",
-        "off": "Disable HeyTap push transport and request one ART compilation after the next reboot. Check affected app notifications."
+        "stock": "Leave MCS under Android/OEM control or restore only the package state recorded by ASB.",
+        "off": "Disable HeyTap push transport with a package-state read-back. Check affected app notifications."
       }
     },
     "documentsui_fix": {
@@ -1486,7 +1486,7 @@
   "wb_dozewl": "Notifications from trimmed apps may arrive late",
   "wb_dsp": "High gain can distort loud music",
   "wb_gms": "On strict, Google notifications may be delayed while the phone sleeps",
-  "wb_heytap": "Apps using HeyTap/OPPO Push can lose or delay notifications; ART compilation runs once after reboot, while charging",
+  "wb_heytap": "Apps using HeyTap/OPPO Push can lose or delay notifications; only the package state changes and can be restored",
   "wb_documentsui": "ColorOS File Manager is disabled until this fix is turned off",
   "wb_loud": "Maximum volume is higher - a risk to hearing and to the speaker",
   "wb_phantom": "With no limit, background apps live longer and drain the battery",
@@ -1804,10 +1804,10 @@
   "st_lsp_off": "verbose log off",
   "st_lsp_on": "verbose log on",
   "st_lsp_unknown": "set in LSPosed",
-  "t_hey_off": "HeyTap MCS disabled · ART compilation will run once after the next reboot, while charging",
-  "t_hey_done": "HeyTap MCS remains disabled · ART compilation has already finished",
-  "t_hey_compile_failed": "HeyTap MCS remains disabled · ART compilation failed and will not retry automatically",
-  "t_hey_stock": "HeyTap MCS state restored · pending ART compilation cancelled",
+  "t_hey_off": "HeyTap MCS disabled · package-state read-back confirmed",
+  "t_hey_done": "HeyTap MCS remains disabled",
+  "t_hey_compile_failed": "HeyTap MCS remains disabled",
+  "t_hey_stock": "HeyTap MCS package state restored",
   "t_hey_absent": "HeyTap MCS is not installed on this device",
   "t_hey_failed": "MCS was not changed safely; check its status in asbdiag",
   "st_hey_absent": "MCS not installed",
@@ -2903,7 +2903,7 @@
   "zy_title": "Zygisk",
   "zy_loading": "Reading the Zygisk state…",
   "zy_status_loading": "Reading current state…",
-  "zy_status_ready": "Current snapshot · read-only",
+  "zy_status_ready": "Current status",
   "zy_status_cached": "Last snapshot · refreshing…",
   "zy_status_failed": "Could not read the state; the last snapshot is shown",
   "zy_loading_sub": "Opening a read-only channel to the companion, guard and process observer. No app or module is being changed.",
@@ -3445,7 +3445,7 @@
   "cfg_inf_section_repairs": "System Repairs",
   "cfg_inf_section_repairs_hint": "One-tap, reversible repairs for specific OxygenOS/ColorOS problems.",
   "bfx_title": "Battery Fix",
-  "bfx_desc": "At the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. ART compilation is not part of this repair, so an unrelated Binder/dex2oat refusal cannot fail the reset workflow. Available only at 100% on charge.",
+  "bfx_desc": "At the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.",
   "bfx_run": "Run Battery Fix",
   "bfx_cancel": "Cancel scheduled reset",
   "bfx_need": "Available only at 100% on charge",
@@ -3535,7 +3535,7 @@
   "kernel_wb_invalid": "Use one exact printable ASCII name without spaces, slashes or backslashes",
   "kernel_wb_duplicate": "This name is already in the list",
   "kernel_wb_limit": "The combined Always + Screen-off union accepts at most 16 rules",
-  "kernel_wb_applied": "Kernel readback matches · {n} rules",
+  "kernel_wb_applied": "Kernel readback matches · {n} active now",
   "kernel_wb_policy_missing": "Policy file is missing",
   "kernel_wb_policy_error": "Policy could not be saved atomically",
   "cfg_inf_section_cleanup": "Cleanup",
@@ -3882,7 +3882,7 @@
   "cfg_smart_profile": "Auto uses the current Smart Battery/Balanced profile value. Choose an explicit value or leave Smart for manual control.",
   "cfg_smart_owner_limit": "SMART · LIMIT",
   "cfg_smart_limit": "Smart uses this as your fixed limit or guard; it does not choose the value itself.",
-  "bfx_summary": "Recompiles apps, then resets Android battery statistics after reboot. Available at 100% on charge; it does not add capacity.",
+  "bfx_summary": "Schedules an Android battery-statistics reset after reboot. Available at 100% on charge; it does not add capacity.",
   "soter_summary": "Rebuilds SOTER keys for fingerprint payments when supported apps fail their device check. Root and bootloader state are not hidden.",
   "soter_auto_note_short": "After each reboot, runs the repair once storage is unlocked. Fingerprint payment must be enabled again in affected apps.",
   "junk_summary": "Removes crash, diagnostic and installer caches while preserving photos, settings and working files. Frees storage; does not guarantee smoother performance.",
@@ -3961,7 +3961,7 @@
   "wl_component_empty": "No running Activity or Service components are exposed for this app right now. This does not prove that none are declared; open or use the relevant screen, then refresh. Components already disabled through ASB remain listed for Restore.",
   "wl_component_meta": "%s component(s) selected · Activity/Service read on demand · no automatic freezing or polling",
   "wl_component_title": "Activities and services · %s",
-  "wl_component_copy": "Disable one exact Android Activity or Service component, not the whole app. This is component disabling, not a process freezer. Android exposes current records on demand; presence here does not prove energy cost. Restore returns the recorded default/enabled state.",
+  "wl_component_copy": "Disable one exact Android Activity or Service component, not the whole app. Disable persists until you tap Restore; there is no automatic screen-off component mode. This is not a process freezer. Android exposes current records on demand; presence here does not prove energy cost. Restore returns the recorded default/enabled state.",
   "wl_component_loading": "Reading current Activity/Service records and actual component states…",
   "wl_component_result_disabled": "Component disabled; exact read-back confirmed",
   "wl_component_result_restored": "Original component state restored",
@@ -3984,5 +3984,9 @@
   "kernel_wb_short_gpu": "GPU or system rendering",
   "kernel_wb_short_unknown": "Owner not identified; inspect details first",
   "kernel_wb_info_asb_logkit": "ASB Infinite Log collector’s own wakelock. It belongs to this module’s logging, not to an unknown application.",
-  "kernel_wb_risk_asb": "Blocking risk: ASB logging may stop or lose records. This exact name does not target another application."
+  "kernel_wb_risk_asb": "Blocking risk: ASB logging may stop or lose records. This exact name does not target another application.",
+  "cfg_tile_total": "{n} controls",
+  "kernel_wb_saved_toast": "{n} saved",
+  "wl_component_search": "Search class or component",
+  "wl_component_no_matches": "No component matches this search."
 }
