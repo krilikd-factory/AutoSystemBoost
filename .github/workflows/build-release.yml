@@ -45,6 +45,7 @@ jobs:
             runtime/asb_active_efficiency_envelope.sh \
             runtime/asb_boot_timeline.sh \
             runtime/asb_debug_support.sh \
+            runtime/asb_page_export.sh \
             runtime/asb_io_scheduler.sh \
             runtime/asb_kernel_controls.sh \
             runtime/asb_wakeup_blocker.sh \
@@ -101,6 +102,7 @@ jobs:
             runtime/asb_active_efficiency_envelope.sh \
             runtime/asb_boot_timeline.sh \
             runtime/asb_debug_support.sh \
+            runtime/asb_page_export.sh \
             runtime/asb_io_scheduler.sh \
             runtime/asb_kernel_controls.sh \
             runtime/asb_wakeup_blocker.sh \
@@ -176,6 +178,7 @@ jobs:
             runtime/asb_active_efficiency_envelope.sh \
             runtime/asb_boot_timeline.sh \
             runtime/asb_debug_support.sh \
+            runtime/asb_page_export.sh \
             runtime/asb_wifi_fallback.sh \
             runtime/asb_ltpo_apply.sh \
             runtime/asb_ltpo_touch.sh \
@@ -705,6 +708,7 @@ jobs:
             "runtime/asb_quick_restart.sh" \
             "runtime/asb_boot_timeline.sh" \
             "runtime/asb_debug_support.sh" \
+            "runtime/asb_page_export.sh" \
             "runtime/asb_wifi_fallback.sh" \
             "runtime/asb_ltpo_apply.sh" \
             "runtime/asb_ltpo_touch.sh" \
