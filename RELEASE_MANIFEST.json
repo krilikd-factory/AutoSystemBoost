@@ -1,49 +1,27 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-660-dev66-buildfix14-source",
-  "base": "AutoSystemBoost-V66-660-dev66-buildfix13-source.zip",
+  "release": "AutoSystemBoost-V66-660-dev66-buildfix17-source",
+  "base": "AutoSystemBoost-V66-660-dev66-buildfix16-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 272,
   "inventory_vs_base": {
     "changed": [
-      ".github/workflows/build-release.yml",
-      ".github/workflows/build-test.yml",
       "README.advanced.md",
       "README.advanced.ru.md",
       "RELEASE_MANIFEST.json",
       "docs/V66_BUILD_HISTORY.md",
-      "runtime/asb_battery_fix.sh",
-      "runtime/asb_debug_support.sh",
-      "system/bin/asbdiag",
-      "tests/asb_features.sh",
       "tests/asb_system.sh",
       "tests/asb_ui.sh",
-      "tools/asb_diag.sh",
       "tools/asb_tree.sha256",
-      "webroot/i18n/ar.json",
-      "webroot/i18n/de.json",
-      "webroot/i18n/en.json",
-      "webroot/i18n/es.json",
-      "webroot/i18n/fr.json",
-      "webroot/i18n/hy.json",
-      "webroot/i18n/id.json",
-      "webroot/i18n/it.json",
-      "webroot/i18n/pt.json",
-      "webroot/i18n/ru.json",
-      "webroot/i18n/tr.json",
-      "webroot/i18n/uk.json",
-      "webroot/i18n/zh.json",
       "webroot/index.html"
     ],
-    "added": [
-      "runtime/asb_page_export.sh"
-    ],
+    "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 28,
-      "added": 1,
+      "changed": 8,
+      "added": 0,
       "deleted": 0,
       "mode_changes": 0
     }
@@ -202,14 +180,14 @@
     "uninstall.sh"
   ],
   "host_verification": {
-    "source_regression": "ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_source_regression.sh passed on the final pre-manifest working tree: 579 PASS/ok markers, 0 failed tests, 0 I/O errors and 0 Broken pipe; native strict warnings 48/62 with 0 new GCC warning sites. The release-manifest/tree-hash snapshot is verified separately and by the clean-unpack regression gate.",
-    "targeted_runtime": "Targeted fixtures passed for immediate shared Settings warm-up and honest category counters, fixed-path UTF-8/multichunk page exports with atomic/abort/error handling, repeat asbdiag success and preserved collector failure, live Battery Fix eligibility after reset=done, non-destructive wakeup-source refresh, Activity/Service search and exact component disable/restore, undimmed Infinite Log snapshots, and package-state-only HeyTap wording.",
-    "native_build": "No native source or binary was rebuilt or changed in buildfix14. Governor, Zygisk and DSP binaries retain their buildfix13 SHA-256 hashes.",
-    "header_browser_runtime": "Host browser-like runtime fixtures passed for the revised WebUI behavior, including fixed-path Zygisk, Infinite Log and Device Diagnostics exports. No physical ColorOS WebView validation was performed.",
-    "clean_unpack_regression": "Release gate: full canonical source-only regression from a clean unpack of this exact source ZIP, plus per-file SHA-256/size/mode equality, regular-file-only entries, strict tree check, executable modes and asbdiag identity; this ZIP is not delivered unless that gate passes.",
+    "source_regression": "ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_source_regression.sh passed on the final pre-manifest working tree: 448 anchored PASS lines and the final ALL ASB HOST REGRESSIONS PASSED marker, four failed: 0 summaries, 0 FAIL lines, 0 FAILED summaries, 0 I/O errors and 0 Broken pipe; native strict warnings 48/62. The release-manifest/tree-hash snapshot is verified separately and by the clean-unpack regression gate.",
+    "targeted_runtime": "Targeted WebUI fixtures passed for the aligned 180 ms + 40 ms entrance and bounded 220/244 ms visual/deferred-work contract, 240 ms Monitor fresh-read settle with unchanged 1200 ms reuse, 400 ms category guard, unchanged and repeated hub DOM retention, mandatory category/search/stale/missing-DOM repaint, closed-Settings no-op behavior, structural totals, base/c1/c2 icon geometry and compact count pills. Existing root-batch, tap-handler, fitting and Zygisk transactional-mode performance gates also passed.",
+    "native_build": "No native source or binary was rebuilt or changed in buildfix17. Governor, Zygisk and DSP binaries retain their buildfix16 SHA-256 hashes.",
+    "header_browser_runtime": "Interactive Chromium with a bounded mocked root bridge passed at 412x915, 375x667, 360x560 and 320x480: real Home/Monitor/Settings tab clicks, category/back/search, forced Config refresh retaining hub node identity, Zygisk/Device/Report navigation and all seven I/O scheduler options with the Smart badge. Dark/light visual checks plus explicit c1/c2 computed-layout checks retained all nine totals without horizontal overflow or clipped count text; the navigation harness recorded zero console errors and zero local HTTP failures. Browser/host verification is not physical OnePlus 15/ColorOS WebView validation.",
+    "clean_unpack_regression": "Release gate: full canonical source-only regression from a clean unzip of this exact source ZIP, plus per-file SHA-256/size/mode equality, regular-file-only entries, strict tree check, executable modes and asbdiag identity; this ZIP is not delivered unless that gate passes.",
     "skip": "DSP reference staging only: optional reference prebuilt .so files absent; static DSP gates and available host-compiled DSP tests passed."
   },
-  "evidence_scope": "Host/source verification only. No physical OnePlus 15 or ColorOS WebView validation, controlled battery A/B, measured energy saving or improvement percentage is claimed. The supplied capture supports a 0.88 %/h night(longest) observation and bounded external wakelock/mobile-traffic candidates, not a single-cause drain verdict or automatic application blocking. No new persistent polling worker, screen-off Activity/Service mode, package freezer, broad wakeup blocklist, kernel tweak, thermal bypass, higher performance floor, arbitrary path/value writer or sensitive identifier collection was added.",
+  "evidence_scope": "Host/source verification only. No physical OnePlus 15 or ColorOS WebView validation, controlled responsiveness A/B, measured FPS/latency gain, energy saving or improvement percentage is claimed. The 180+40 ms motion, 220/244 ms deferred-work deadline, 240 ms Monitor settle and 400 ms category guard are source/runtime contracts, not measured device gains. Config/Monitor freshness, batched root reads, live category/search repaint and all nine structural totals remain; unchanged hub DOM retention does not cache or invent live control values. No native binary, persistent polling worker, arbitrary path/value writer, thermal bypass, overclock, undervolt, performance floor, broad wakeup blocklist, sensitive identifier collection or persisted-settings reset was added. Existing evidence gates, vendor thermal ownership and Safe mode remain in force.",
   "files": [
     {
       "path": ".github/workflows/build-dsp-aidl.yml",
@@ -249,15 +227,15 @@
     },
     {
       "path": "README.advanced.md",
-      "bytes": 165934,
+      "bytes": 172047,
       "mode": "0644",
-      "sha256": "85a844d6c5652a57314e98b2a19abf5cc881375a13e2089cc8584378b1cebb03"
+      "sha256": "3facd990599eb10dfe55126a40ab9f0c6b7f56a088bba2d762f731d91e7017fd"
     },
     {
       "path": "README.advanced.ru.md",
-      "bytes": 270822,
+      "bytes": 280523,
       "mode": "0644",
-      "sha256": "02479ffb5d0c207e8036022ff0d0157e2839c988edaff42294f573ceba815a75"
+      "sha256": "934f0e8b9bf389450d84eec4fff9e4b3cb24d8359eb373daea8dd5ec37073d4e"
     },
     {
       "path": "README.md",
@@ -465,9 +443,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 207663,
+      "bytes": 218953,
       "mode": "0644",
-      "sha256": "ae202153220496ad336ac0416a2259d3c4643b0c86874bad6be4475749937b03"
+      "sha256": "27b96e25dc3c9a3ca61a07acf6005c1799a51045611d271d138627ee7e814414"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -482,16 +460,16 @@
       "sha256": "7de67d37a6c29ee96ca380a9cf236ad7407e3f01d282b1d9715be6f7683a3577"
     },
     {
-      "path": "docs/reference_models.md",
-      "bytes": 1102,
-      "mode": "0644",
-      "sha256": "c8d79467d5c4f6cc0984efc90e05b738136b62caa60208f01974d6c41715bd89"
-    },
-    {
       "path": "docs/reference_models/asb_allocator_reference_model.py",
       "bytes": 10279,
       "mode": "0644",
       "sha256": "fc1e9cd366e6a51087a63c939373f10835a7864d5a06312a423ac5a53cecb2d3"
+    },
+    {
+      "path": "docs/reference_models.md",
+      "bytes": 1102,
+      "mode": "0644",
+      "sha256": "c8d79467d5c4f6cc0984efc90e05b738136b62caa60208f01974d6c41715bd89"
     },
     {
       "path": "features.conf",
@@ -681,9 +659,9 @@
     },
     {
       "path": "runtime/asb_display_ui_apply.sh",
-      "bytes": 8191,
+      "bytes": 12596,
       "mode": "0755",
-      "sha256": "4d3b67ad3ad4db6c37939bc206021dc1f910a58f6f588f34aac72a30da324fbd"
+      "sha256": "6336f770a6e7cba6ea0526d753a7acc407539b69709ddbc5a32d1ade8ea2f91b"
     },
     {
       "path": "runtime/asb_documentsui_fix.sh",
@@ -759,9 +737,9 @@
     },
     {
       "path": "runtime/asb_io_scheduler.sh",
-      "bytes": 9586,
+      "bytes": 13289,
       "mode": "0755",
-      "sha256": "d2338e2cb6f713d8a28beb48b48335a56eaac95d415811cb1099919f814ab517"
+      "sha256": "71e989550722325a05f1becaff8ebb5536c6b78f06309c1d2696e669bff597bf"
     },
     {
       "path": "runtime/asb_junk_cleanup.sh",
@@ -1161,9 +1139,9 @@
     },
     {
       "path": "runtime/smart_dynamic_tune.sh",
-      "bytes": 16485,
+      "bytes": 17311,
       "mode": "0755",
-      "sha256": "234a0047a926d58a592150c2bbc92b4354dc715d939918be6fe3488d6510cfff"
+      "sha256": "51706f9ef65aa55b6eab0a9f633512a4de6e703785de4c1373dc1a1283a5af4b"
     },
     {
       "path": "service.sh",
@@ -1352,12 +1330,6 @@
       "sha256": "0e34527e208232920fc9e246e92c37e99b814b1fe89b745a39ff66c6abf332cd"
     },
     {
-      "path": "system.prop",
-      "bytes": 376,
-      "mode": "0644",
-      "sha256": "c216da0374ed7b3e493710283e37057789f8a4ee2aea30206b25ea1bbd941365"
-    },
-    {
       "path": "system/bin/asb",
       "bytes": 69,
       "mode": "0755",
@@ -1365,15 +1337,21 @@
     },
     {
       "path": "system/bin/asbdiag",
-      "bytes": 332097,
+      "bytes": 332853,
       "mode": "0755",
-      "sha256": "00cee31a282876464064ac1ca1e2ca78875506b55b65ae0a5e1377f2422967ac"
+      "sha256": "aeec966736137952ca602ce17a5dd36c4c150f953a9f5fc84e74cc2bcebb4b6e"
     },
     {
       "path": "system/bin/asbtrial",
       "bytes": 253,
       "mode": "0755",
       "sha256": "a5aa29d815bc595909d63ab662581027f4349ebc2392328c064a1317c46d4419"
+    },
+    {
+      "path": "system.prop",
+      "bytes": 376,
+      "mode": "0644",
+      "sha256": "c216da0374ed7b3e493710283e37057789f8a4ee2aea30206b25ea1bbd941365"
     },
     {
       "path": "tests/asb_features.sh",
@@ -1395,15 +1373,15 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 648918,
+      "bytes": 666060,
       "mode": "0755",
-      "sha256": "776f1d23842f52c51a326eaf7982e88aff91d3892f8c1a17fdccae8aad8be28e"
+      "sha256": "3d253b665bb38cfe6b2deda05c6e1df76ab8a9ed73b2371a315d81e607ea6ae4"
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1171715,
+      "bytes": 1177257,
       "mode": "0755",
-      "sha256": "9e4fc5d46e876ba9a7fd4544586ac9302318addc6483465391e8ab006af11ac6"
+      "sha256": "3b653d35083f1fe2e7fdbbea4785d58baab7ff72d190fabd9a9038daf59411d9"
     },
     {
       "path": "tests/asb_zygisk.sh",
@@ -1467,9 +1445,9 @@
     },
     {
       "path": "tools/asb_diag.sh",
-      "bytes": 332097,
+      "bytes": 332853,
       "mode": "0755",
-      "sha256": "00cee31a282876464064ac1ca1e2ca78875506b55b65ae0a5e1377f2422967ac"
+      "sha256": "aeec966736137952ca602ce17a5dd36c4c150f953a9f5fc84e74cc2bcebb4b6e"
     },
     {
       "path": "tools/asb_discover.sh",
@@ -1619,7 +1597,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24137,
       "mode": "0644",
-      "sha256": "1eb34fd03cd54e86431faecd57f5822d87dc34e1dce07eedbbdb7a4735e9aece"
+      "sha256": "ab4f34fb45c09758cc7263ddc277d2e80ca1b4c3b330443e752d7d1edd749a02"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1749,87 +1727,87 @@
     },
     {
       "path": "webroot/i18n/ar.json",
-      "bytes": 407993,
+      "bytes": 409427,
       "mode": "0644",
-      "sha256": "6cb8bc2c1f11541efed8fcd07ee628e1f41655f283db9b49b0ceacded1262600"
+      "sha256": "1bcf4f5fd79be53ef0abaa01f033ba6cc291d5387eeca45946eafa549e35993f"
     },
     {
       "path": "webroot/i18n/de.json",
-      "bytes": 327865,
+      "bytes": 328908,
       "mode": "0644",
-      "sha256": "a3bf6a9733287ea86e060c9b5b997a7319f7453eb35e44d166ae2ada793100e7"
+      "sha256": "4f41ee3ed7f241ff85f7fac414baa66e42131e7ddcebb9508eec7b400eb72cce"
     },
     {
       "path": "webroot/i18n/en.json",
-      "bytes": 296299,
+      "bytes": 296715,
       "mode": "0644",
-      "sha256": "db15ff12a945d8d4a67d417a7c63ebe6064c457838d872d3f52fab711de44a25"
+      "sha256": "dea2f07eac394bc890bb26dea2de6571f3b23ad584f78153ba5e6dd991e2592a"
     },
     {
       "path": "webroot/i18n/es.json",
-      "bytes": 329297,
+      "bytes": 330324,
       "mode": "0644",
-      "sha256": "f4d6662deed131b0a606d9032aafa54e3bf5fccefa209e374d2d4c0cac34ac71"
+      "sha256": "af072c2e269199b9f923cdfdc07aa050219c8342ae01f38dc0a62917d81387a4"
     },
     {
       "path": "webroot/i18n/fr.json",
-      "bytes": 343265,
+      "bytes": 344324,
       "mode": "0644",
-      "sha256": "5c688b39ddb4b8c3c79930d9e058179a1cf71b6fa295f822cff3c7a89a87a974"
+      "sha256": "18874f658b08d0496befe0f2456c8aa1c0ca0072adcf9d0b01d15061d29f41be"
     },
     {
       "path": "webroot/i18n/hy.json",
-      "bytes": 496808,
+      "bytes": 498789,
       "mode": "0644",
-      "sha256": "7304e5649cd9c878a9483375af21de95484f6e867212d6f073d2b7efb7bf03b6"
+      "sha256": "b4788406e4462f4d557350a158104b3ef307a566e19afb330a4d5a56c0b38c69"
     },
     {
       "path": "webroot/i18n/id.json",
-      "bytes": 315411,
+      "bytes": 316421,
       "mode": "0644",
-      "sha256": "b2818cfffe959d83fab10cab92b8dcd131ea06402601418a5f9f3e8d959aa39c"
+      "sha256": "dcd9fd9dd21f95b1dd581cd6a5b9cad12052abe568142a1fb43628f3abd871ea"
     },
     {
       "path": "webroot/i18n/it.json",
-      "bytes": 325190,
+      "bytes": 326215,
       "mode": "0644",
-      "sha256": "127a863400553282541c3db2f38775cbc017c69ee96f8c247329edcdd628977a"
+      "sha256": "903b5ad0217014ce489676f3e572da0a4479f9db6aeef5e57f5e873d23ff76df"
     },
     {
       "path": "webroot/i18n/pt.json",
-      "bytes": 324974,
+      "bytes": 325972,
       "mode": "0644",
-      "sha256": "c221e16dd3b03bf10c51eccf244a5b2ddc298a513902e8770a4e25b958c19c26"
+      "sha256": "71b925f5d36a6f3f8a5065d177d40c656eab1e528d20adfe2d1994678ccc6bde"
     },
     {
       "path": "webroot/i18n/ru.json",
-      "bytes": 485325,
+      "bytes": 486344,
       "mode": "0644",
-      "sha256": "9c614305045f8501ed7b82bda191734f68560bba0e25bdd84f484d067bcf3aac"
+      "sha256": "549770ee0334eb5803043f38ca0569542b03db24d388e4dca9e87c54ebe29c80"
     },
     {
       "path": "webroot/i18n/tr.json",
-      "bytes": 326277,
+      "bytes": 327239,
       "mode": "0644",
-      "sha256": "58e168abfffdecad0f6d9edaf3a7f96b9ecc83b26fd2897f89bd0c8616b9d6b5"
+      "sha256": "5b0e238959eef720369536de3f499f77d685b83332d31fd0ca98f7a249d5e452"
     },
     {
       "path": "webroot/i18n/uk.json",
-      "bytes": 469616,
+      "bytes": 471362,
       "mode": "0644",
-      "sha256": "124e4c5294f37e096b98b8d3029f0a649521e5e36af1b0e74bf703d9023ebb09"
+      "sha256": "a0a6c7771dc4af0a940b820534bd4dcdedcc6d2cb03b72bb7de828ebe98bd74a"
     },
     {
       "path": "webroot/i18n/zh.json",
-      "bytes": 289827,
+      "bytes": 290599,
       "mode": "0644",
-      "sha256": "373bdedb01c3d36bab996a475675c29597f290fa74e671d4b2e32a99f6d4f790"
+      "sha256": "ffcec99fe038002f05a74299baace44f3d529292cf38339f3f272f391768191b"
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1654053,
+      "bytes": 1654019,
       "mode": "0644",
-      "sha256": "2ca862fd8fb1491aedb96736ac5359c0818acc5ee3cd856191096973650b2655"
+      "sha256": "382d3ec371d53ecdfc3f1448e66532358e04432c71d2bfec0cb6db45fded6a44"
     },
     {
       "path": "zygisk/arm64-v8a.so",
