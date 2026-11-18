@@ -531,7 +531,7 @@ write_diag() {
     echo 'error=asbdiag_missing'
     return 4
   fi
-  "$MODDIR/system/bin/asbdiag" > "$_tmp" 2>&1
+  ASB_DIAG_NO_SIDE_COPIES=1 "$MODDIR/system/bin/asbdiag" > "$_tmp" 2>&1
   _rc=$?
   mv -f "$_tmp" "$_out" 2>/dev/null || { rm -f "$_tmp" 2>/dev/null || true; echo 'error=diag_write_failed'; return 5; }
   echo "path=$_out"
