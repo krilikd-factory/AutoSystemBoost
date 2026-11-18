@@ -62,11 +62,14 @@ html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f2f4f
   /*
    * Unified page-transition motion.
    */
-  --page-anim-dur: 0.32s;
+  --page-anim-dur: 0.22s;
   --page-anim-ease: cubic-bezier(0.45, 0, 0.25, 1);
   --page-fade-out: 0.16s;
-  --page-fade-in: 0.26s;
-  --page-fade-delay: 0.06s;
+  /* 180 ms of movement + a 40 ms settle delay = the same 220 ms deadline used by
+   * asbNavAnimMark(). Previously CSS kept moving for 320 ms while deferred root reads and
+   * layout measurement started at 244 ms, so the end of the entrance could still stutter. */
+  --page-fade-in: 0.18s;
+  --page-fade-delay: 0.04s;
   --page-fade-ease: cubic-bezier(0.2, 0.7, 0.25, 1);
 
   /* Floating-capsule material (fix192): one definition for the bottom bar and the header
@@ -356,17 +359,19 @@ body::before, body::after {
 /* Entrance motion for freshly rendered lists. The class goes on only for hub/category
  * renders - never for search, which rebuilds on every keystroke and would flicker. */
 @keyframes asbRowIn {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: none; }
 }
-.cfg-stagger > * { animation: asbRowIn .32s cubic-bezier(.2,.7,.25,1) both; }
-.cfg-stagger > *:nth-child(2)  { animation-delay: .04s; }
-.cfg-stagger > *:nth-child(3)  { animation-delay: .08s; }
-.cfg-stagger > *:nth-child(4)  { animation-delay: .12s; }
-.cfg-stagger > *:nth-child(5)  { animation-delay: .16s; }
-.cfg-stagger > *:nth-child(6)  { animation-delay: .20s; }
-.cfg-stagger > *:nth-child(7)  { animation-delay: .24s; }
-.cfg-stagger > *:nth-child(n+8){ animation-delay: .27s; }
+/* The page already owns the main entrance. This shorter inner sequence gives category rows
+ * a readable order without holding asynchronous evidence behind the old 650 ms guard. */
+.cfg-stagger > * { animation: asbRowIn .22s cubic-bezier(.2,.7,.25,1) both; }
+.cfg-stagger > *:nth-child(2)  { animation-delay: .02s; }
+.cfg-stagger > *:nth-child(3)  { animation-delay: .04s; }
+.cfg-stagger > *:nth-child(4)  { animation-delay: .06s; }
+.cfg-stagger > *:nth-child(5)  { animation-delay: .08s; }
+.cfg-stagger > *:nth-child(6)  { animation-delay: .10s; }
+.cfg-stagger > *:nth-child(7)  { animation-delay: .11s; }
+.cfg-stagger > *:nth-child(n+8){ animation-delay: .12s; }
 /* The profile list is static markup - painted once at load - so it can always stagger. */
 .profiles > * { animation: asbRowIn .38s cubic-bezier(.2,.7,.25,1) both; }
 .profiles > *:nth-child(2) { animation-delay: .05s; }
@@ -5068,10 +5073,6 @@ html[data-asb-theme="light"] .pmeta-chip { background: rgba(21,35,32,.04); borde
 .cfg-tile-desc { font-size: 10px; line-height: 1.25; color: var(--text-tertiary); max-width: 100%;
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .cfg-tile-foot { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.cfg-tile-bar { width: 62%; height: 3px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
-.cfg-tile-bar > i { display: block; height: 100%; border-radius: 2px; background: var(--tech-icon, var(--accent));
-  box-shadow: 0 0 6px color-mix(in srgb, var(--tech-icon, var(--accent)) 60%, transparent); }
-html[data-asb-theme="light"] .cfg-tile-bar { background: rgba(21,35,32,.08); }
 
 /* Light Liquid Glass (fix226): every light-theme readability rule above remains in force.
  * These later, more specific rules replace only its opaque materials. The accent stays the
@@ -6083,12 +6084,12 @@ html .cfg-tile-ico {
   place-items:center;
   align-self:center;
   flex:0 0 auto;
-  width:34px;
-  height:34px;
-  margin:0 0 2px;
-  border-radius:12px;
+  width:40px;
+  height:40px;
+  margin:0 0 3px;
+  border-radius:14px;
 }
-html .cfg-tile-ico .tech-icon { width:21px; height:21px; margin:0; }
+html .cfg-tile-ico .tech-icon { width:25px; height:25px; margin:0; }
 html .cfg-tile-name {
   width:100%;
   min-height:1.1em;
@@ -6118,11 +6119,7 @@ html .cfg-tile-foot {
   margin:4px 0 0;
   padding:0;
 }
-html .cfg-tile-count { flex:0 0 auto; min-width:34px; box-sizing:border-box; padding:3px 5px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:7px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.15 var(--mono); letter-spacing:.01em; text-align:center; }
-html .cfg-tile-count.is-pending { color:var(--text-secondary); font-family:var(--sans); font-weight:600; }
-html .cfg-tile-bar { flex:1 1 auto; width:auto; min-width:20px; max-width:64px; height:5px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 12%,transparent); background:color-mix(in srgb,var(--cat,var(--accent)) 7%,var(--border)); }
-html .cfg-tile-bar > i { min-width:0; transition:width .22s ease; }
-html[data-asb-theme="light"] .cfg-tile-count.is-pending { color:var(--text-secondary) !important; }
+html .cfg-tile-count { flex:0 0 auto; min-width:30px; box-sizing:border-box; padding:2px 4px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:6px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.1 var(--mono); letter-spacing:0; text-align:center; }
 html[data-asb-theme="light"] .cfg-tile {
   background:linear-gradient(155deg,color-mix(in srgb,var(--cat) 8%,transparent),transparent 70%),#fff !important;
   border-color:color-mix(in srgb,var(--cat) 24%,var(--border)) !important;
@@ -6130,12 +6127,13 @@ html[data-asb-theme="light"] .cfg-tile {
 }
 html[data-asb-theme="light"] .cfg-tile-desc { color:var(--text-secondary) !important; }
 html.asb-fit-c1 .cfg-tile { padding:11px 10px 10px; }
-html.asb-fit-c1 .cfg-tile-ico { width:38px; height:38px; margin-bottom:9px; }
+html.asb-fit-c1 .cfg-tile-ico { width:38px; height:38px; margin-bottom:3px; }
+html.asb-fit-c1 .cfg-tile-ico .tech-icon { width:24px; height:24px; }
 html.asb-fit-c1 .cfg-tile-desc { font-size:10px; }
 html.asb-fit-c1 .cfg-tile-foot { padding-top:8px; }
 html.asb-fit-c2 .cfg-tile { padding:9px; }
-html.asb-fit-c2 .cfg-tile-ico { width:34px; height:34px; margin-bottom:7px; border-radius:12px; }
-html.asb-fit-c2 .cfg-tile-ico .tech-icon { width:21px; height:21px; }
+html.asb-fit-c2 .cfg-tile-ico { width:36px; height:36px; margin-bottom:3px; border-radius:12px; }
+html.asb-fit-c2 .cfg-tile-ico .tech-icon { width:22px; height:22px; }
 html.asb-fit-c2 .cfg-tile-name { font-size:13px; }
 html.asb-fit-c2 .cfg-tile-desc { min-height:2.5em; margin-top:4px; font-size:9.5px; line-height:1.25; }
 html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
@@ -8535,7 +8533,7 @@ function openLivePage() {
   liveMonitorSchedule(liveOpenRefreshDelay());
   asbUiFrame.request(asbFitPages);
 }
-const LIVE_OPEN_SETTLE_MS = 320;
+const LIVE_OPEN_SETTLE_MS = 240;
 const LIVE_OPEN_REUSE_MS = 1200;
 function liveOpenRefreshDelay() {
   const last = _livePollMeta.lastSuccess;
@@ -10308,7 +10306,7 @@ const CFG_ITEMS = [
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['off','safe','aggressive'], name:'Background Trim Level',
     desc:'How strongly ASB holds back apps you are not using: rarely used apps go to stricter Android standby buckets. Calls, messages, alarms and the keyboard stay protected.\n\n🔋 Battery life: Aggressive\n🔔 Notifications on time: Off or Safe\n✋ Not sure: Safe' },
   { key:'io_scheduler', type:'enum', def:'stock', opts:['stock','auto'], icon:'kernel', group:'kernel', cat:'tune',
-    name:'I/O scheduler', desc:'Chooses only schedulers exposed by each block device. Auto prefers mq-deadline in Balanced/Smart/Battery and kyber in Performance, using only discovered fallbacks. Stock restores the exact per-device baseline. An unavailable explicit choice fails without substitution.\n\n🔋 Balanced default: Auto\n⚡ Performance policy: kyber when exposed\n✋ Not sure: Stock' },
+    name:'I/O scheduler', desc:'Chooses only schedulers exposed by each block device. In the active Smart profile, Auto follows the existing bounded Smart scenario: ADIOS for gaming/heavy, Kyber for ordinary screen-on work, and mq-deadline for idle/screen-off, using discovered fallbacks. Outside Smart, Auto retains the profile policy. BFQ is never selected automatically; it remains an explicit experimental choice. Stock restores the exact per-device baseline. An unavailable explicit choice fails without substitution.\n\n🔋 Smart idle/screen-off: mq-deadline first\n⚡ Smart gaming/heavy: ADIOS first\n✋ Not sure: Auto in Smart; Stock to leave kernel ownership\n\nScheduler selection alone does not prove better FPS, latency or battery life; compare on-device captures.' },
   { key:'mglru_mode', type:'seg', def:'smart', stock:'stock',
     opts:['stock','off','on','smart'], name:'MGLRU Mode', cat:'battery',
     desc:'How the kernel picks which memory to free when RAM runs low. MGLRU is the newer method: it is designed to keep the apps you use in memory more reliably and to need less CPU work for reclaiming.\n\n🔋 Battery life: Smart\n⚡ Performance: On\n✋ Not sure: Smart (the default)' },
@@ -10415,6 +10413,19 @@ function cfgLoad(force) {
   _cfgLoadRun = cfgLoadNow().then(function (v) { _cfgLoadRun = null; return v; }, function (e) { _cfgLoadRun = null; throw e; });
   return _cfgLoadRun;
 }
+function cfgPaintAfterLoad() {
+  if (!_cfgOpen) return;
+  const list = _el('cfgList');
+  /* The hub contains only localized structural category evidence, never Config values.
+   * If that signature is unchanged, preserve its actual DOM nodes instead of rebuilding nine
+   * tiles after a background read. Categories and search still repaint because they show values. */
+  if (!_cfgGroup && !_cfgSearch && list && list.firstChild && _cfgHubSig && _cfgHubSig === cfgHubSig()) {
+    asbTabbarVisibility();
+    cfgSyncChrome();
+    return;
+  }
+  cfgRender();
+}
 async function cfgLoadNow() {
   const parts = cfgLoadParts();
   const b = await runBatch(parts);
@@ -10463,7 +10474,7 @@ async function cfgLoadNow() {
    * in the past, so this adds no delay anywhere else. */
   const _wait = _cfgAnimUntil - performance.now();
   if (_wait > 0) await new Promise(function (r) { setTimeout(r, _wait + 16); });
-  if (_cfgOpen) cfgRender();
+  cfgPaintAfterLoad();
   return true;
 }
 
@@ -13031,10 +13042,10 @@ function cfgSmartOwner(it, cur) {
   if (it.key === 'heavy_prime_escape' && v === '1') return 'dynamic';
   if ((it.key === 'prime_escape_burst_s' || it.key === 'prime_escape_rest_s') &&
       String(_cfgVals.heavy_prime_escape || '0') === '1') return 'limit';
-  const dynamicAuto = ['kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction',
+  const dynamicAuto = ['io_scheduler','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction',
     'kernel_sched_nr_migrate','kernel_sched_stats','kernel_rt_boost','kernel_bore'];
   if (v === 'auto' && dynamicAuto.indexOf(it.key) >= 0) return 'dynamic';
-  const profileAuto = ['io_scheduler','kernel_timer_migration','kernel_hrtimer_migration',
+  const profileAuto = ['kernel_timer_migration','kernel_hrtimer_migration',
     'kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_mglru_min_ttl',
     'kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend',
     'kernel_rt_boost','net_congestion','net_congestion_wifi','net_congestion_mobile',
@@ -13245,12 +13256,11 @@ function cfgIsActive(it, cur) {
   return String(cur) !== String(base);
 }
 
-// The hub: one tile per group, with how many settings are inside and how many of those
-// are currently active. The count matters - it is the difference between "I have not set
-// anything up in here" and "something in here is on and I forgot about it".
+// The hub: one tile per group with its complete structural control total.
+// Totals never wait for Config or change into an active/total meter after loading.
 /* dev60: the tile counts what the category screen shows. Controls the running kernel hides
  * (no separate switch) are left out; cards that are not CFG_ITEMS but live in the category
- * (Camera Tools, the wakeup rules, the notification fix) count, on when they are in use. */
+ * (Camera Tools, the wakeup rules, the notification fix) are included in the total. */
 function cfgGroupHiddenKeys(groupId) {
   return groupId === 'kernel' && typeof _kernelPanel !== 'undefined' && typeof kernelHiddenAbsent === 'function' ? kernelHiddenAbsent() : [];
 }
@@ -13290,14 +13300,7 @@ function cfgRenderHub(list) {
     const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === g.id && hiddenKeys.indexOf(it.key) < 0);
     const extras = cfgGroupExtraCards(g.id);
     if (!items.length && !extras.length) return;
-    let on = 0;
-    items.forEach(it => {
-      const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
-      if (cfgIsActive(it, cur)) on++;
-    });
-    extras.forEach(b => { if (b) on++; });
     const total = items.length + extras.length;
-    const counted = cfgLoadFresh();
     const tile = document.createElement('button');
     const tileCat = g.id === 'ui' ? 'ux' : g.id;
     tile.className = 'cfg-tile cat-' + tileCat;
@@ -13313,7 +13316,7 @@ function cfgRenderHub(list) {
     nm.textContent = grpName(g);
     tile.appendChild(nm);
 
-    /* What is inside, and how much of it is on (fix168). */
+    /* Structural scope only: the same centred total before and after Config loads. */
     const ds = document.createElement('div');
     ds.className = 'cfg-tile-desc';
     ds.textContent = T('grp_' + g.id + '_desc', CFG_GROUP_DESC[g.id] || '');
@@ -13322,17 +13325,10 @@ function cfgRenderHub(list) {
     const foot = document.createElement('div');
     foot.className = 'cfg-tile-foot';
     const cnt = document.createElement('div');
-    cnt.className = 'cfg-tile-count' + (counted && on ? ' has-on' : '') + (counted ? '' : ' is-pending');
-    cnt.textContent = counted ? (on + ' / ' + total) : T('cfg_tile_total', '{n} controls').replace('{n}', String(total));
+    cnt.className = 'cfg-tile-count';
+    cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', String(total));
     foot.appendChild(cnt);
     tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + cnt.textContent);
-    const bar = document.createElement('div');
-    bar.className = 'cfg-tile-bar';
-    bar.setAttribute('aria-hidden', 'true');
-    const fill = document.createElement('i');
-    fill.style.width = (counted && total > 0 ? Math.round(on * 100 / total) : 0) + '%';
-    bar.appendChild(fill);
-    foot.appendChild(bar);
     tile.appendChild(foot);
 
     hub.appendChild(tile);
@@ -14229,8 +14225,8 @@ function cfgRender() {
   const _screen = _cfgGroup || 'hub';
   if (_screen !== _cfgShownScreen) {
     list.classList.add('cfg-stagger');
-    // .32 s per row, the last delayed .27 s (the .cfg-stagger rules) - and a little slack.
-    _cfgEnterUntil = performance.now() + 650;
+    // .22 s per row, the last delayed .12 s (the .cfg-stagger rules) - and a little slack.
+    _cfgEnterUntil = performance.now() + 400;
   }
   _cfgShownScreen = _screen;
   if (!_cfgGroup) { cfgRenderHub(list); _cfgHubSig = cfgHubSig(); return; }
@@ -14244,7 +14240,7 @@ var _cfgShownScreen = null;
  * before the slide can start. Any other paint of the list clears it. */
 var _cfgHubSig = '';
 function cfgHubSig() {
-  return ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + (cfgLoadFresh() ? 1 : 0) + '|' + JSON.stringify(_cfgVals) + '|' + cfgHubExtraSig();
+  return ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + CFG_GROUPS.map(function(g) { return cfgGroupHiddenKeys(g.id).join(','); }).join('|') + '|' + cfgHubExtraSig();
 }
 // When the running entrance ends, and the one repaint waiting for it (fix145).
 var _cfgEnterUntil = 0, _cfgRepaintTimer = 0;
@@ -14926,7 +14922,7 @@ async function cfgSet(key, val, ctl) {
       const dp = dl.split('|');
       const ds = dp[1] || '';
       if (dr && dr.errno === 0 && ds === 'applied') {
-        toast(cfgToastText(key, val) + T('t_cfg_live', ' · applied'), 'good');
+        toast(cfgToastText(key, val) + T('t_cfg_settings_written_visual_unverified', ' · Settings saved; visible effect not verified'), 'good');
       } else if (dr && dr.errno === 0 && ds === 'restored') {
         toast(cfgToastText(key, val) + T('t_cfg_restored', ' · original value restored'), 'good');
       } else if (dr && dr.errno === 0 && ds === 'stock_unowned') {
@@ -23304,7 +23300,7 @@ function asbApplyUiScale() {
  * now coalesce into one pass, and while a page transition is running that pass waits until
  * the layer has settled (the slide is a transform, so the measurement does not change). */
 var _asbNavAnimUntil = 0;
-function asbNavAnimMark() { _asbNavAnimUntil = performance.now() + _pageAnimMs() + 40; }
+function asbNavAnimMark() { _asbNavAnimUntil = performance.now() + _pageAnimMs() + 24; }
 function asbAfterNavAnim(fn, extra) {
   const wait = Math.max(0, (_asbNavAnimUntil || 0) - performance.now()) + (extra || 0);
   setTimeout(fn, wait);
@@ -23803,7 +23799,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /* Page-transition length in ms, read from the same CSS variable the slide uses, so the
- * two can never drift apart. Falls back to the shipped 320 ms. */
+ * two can never drift apart. Falls back to the shipped 220 ms. */
 function _pageAnimMs() {
   if (_pageAnimMs._v > 0) return _pageAnimMs._v;
   try {
@@ -23811,7 +23807,7 @@ function _pageAnimMs() {
     const n = parseFloat(v);
     if (!isNaN(n)) return (_pageAnimMs._v = v.endsWith('ms') ? n : n * 1000);
   } catch (e) {}
-  return 320;
+  return 220;
 }
 /* Read once (a computed-style query is a style flush); a resize may switch the media rules. */
 window.addEventListener('resize', function () { _pageAnimMs._v = 0; });
@@ -23855,7 +23851,7 @@ function openConfigPage() {
   p.scrollTop = 0;
   _cfgOpen = true;
   asbNavAnimMark();
-  _cfgAnimUntil = performance.now() + _pageAnimMs() + 50;   // + the two frames before the slide starts
+  _cfgAnimUntil = performance.now() + _pageAnimMs() + 32;   // + the two frames before the slide starts
   /* Body classes stay synchronous, exactly as before. Navigation removes live-active just
    * before calling this when coming from Monitor; re-adding it in a later frame would leave
    * the body without it for one frame and flash the main page underneath. Only the page's
@@ -23877,7 +23873,7 @@ function openConfigPage() {
    * until the shell returned. The hub above is drawn from the last load; a refresh, one
    * batched shell, runs after the slide and only when that load is older than 30 s. The
    * device class travels in the same batch until it is known. */
-  asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 30);
+  asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 16);
   asbUiFrame.request(asbFitPages);
 }
 
@@ -25928,9 +25924,10 @@ function asbHomeReveal() {
   asbFirstFrameMark();
   const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   if (!reduced && typeof home.animate === 'function') {
-    /* Monitor uses opacity + .985 → 1 scale over 260 ms after a 60 ms delay. Home uses the
-     * same visual contract through WAAPI: measure the final, unscaled layout first, then
-     * start the compositor animation before this task can paint. No late fit changes cards. */
+    /* Monitor and every other overlay use 180 ms of opacity + .985 → 1 scale motion after
+     * a 40 ms delay. Home uses the same 220 ms visual contract through WAAPI: measure the
+     * final, unscaled layout first, then start the compositor animation before this task can
+     * paint. No late fit changes cards, and deferred work cannot start before the end. */
     asbNavAnimMark();
     home.style.transition = 'none';
     root.classList.remove('asb-home-pending');
@@ -25940,7 +25937,7 @@ function asbHomeReveal() {
     const entrance = home.animate([
       { opacity:0, transform:'scale(.985)' },
       { opacity:1, transform:'scale(1)' }
-    ], { duration:260, delay:60, easing:'cubic-bezier(.2,.7,.25,1)', fill:'both' });
+    ], { duration:180, delay:40, easing:'cubic-bezier(.2,.7,.25,1)', fill:'both' });
     entrance.onfinish = function () { entrance.cancel(); };
   } else {
     root.classList.remove('asb-home-pending');
