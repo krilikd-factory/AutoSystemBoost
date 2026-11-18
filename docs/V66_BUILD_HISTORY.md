@@ -4,6 +4,135 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix17 - aligned WebUI motion, retained hub DOM and clearer category icons
+
+Input: make WebUI navigation and data display feel lighter without losing functionality or information,
+and enlarge the nine Settings category icons while keeping their structural count pills harmonious.
+Base: the fully verified buildfix16 source archive.
+
+- **One visual/deferred-work deadline:** page entrances now use 180 ms of opacity/transform motion plus
+  a 40 ms delay, matching the existing 220 ms navigation deadline and its bounded 24 ms fit/read margin.
+  Home WAAPI uses the same 180+40 ms timing. The old CSS entrance could move for 320 ms while deferred
+  root/layout work became eligible at 244 ms; that overlap is removed rather than merely accelerating
+  every animation. Reduced-motion behavior, paint-before-motion and coalesced fitting remain.
+- **Fresh data is still mandatory:** an expired or missing Monitor snapshot still causes a fresh read,
+  now after a 240 ms open settle instead of 320 ms. `LIVE_OPEN_REUSE_MS` remains 1200 ms. Batched reads,
+  Config freshness gates, V64/LTPO/MMFEED/LSPosed/package/nightcharge evidence and readback semantics
+  were not weakened, and tap handlers still make no direct root call.
+- **Bounded inner motion:** category rows retain their ordered entrance with 220 ms rows, a maximum
+  120 ms delay and an 8 px vertical offset. The asynchronous repaint guard is 400 ms instead of 650 ms;
+  search has no stagger and a same-screen repaint does not restart the entrance.
+- **No unchanged-hub rebuild:** `cfgPaintAfterLoad()` preserves the actual nine-tile hub DOM after a
+  Config read only when Config is open, no category/search is active, the hub exists and its structural
+  signature is unchanged. Category/search screens still repaint because they show live values. Missing
+  or stale hub DOM also repaints. Structural totals never depend on `_cfgVals`, `cfgLoadFresh()` or
+  activation state, and no activity bar or fake cached live value was introduced.
+- **Category visual balance:** base icon containers/glyphs grow to 40/25 px, with 38/24 px and 36/22 px
+  steps in `asb-fit-c1`/`asb-fit-c2`. Count pills retain the full localized `{n} controls` text and
+  centred alignment while using 30 px minimum width, 2 px 4 px padding and a 6 px radius. All nine
+  totals, descriptions and controls remain unchanged.
+- **Verification:** new and updated host fixtures cover timing alignment, Monitor freshness/reuse,
+  unchanged and repeated hub retention, forced category/search/stale/missing/closed-state repaint
+  behavior, all icon fit tiers and compact count pills. The full working-tree canonical regression
+  passed with 448 anchored PASS lines, zero FAIL/FAILED, I/O errors or Broken pipe. Interactive Chromium
+  with a bounded mocked root bridge passed at 412x915, 375x667, 360x560 and 320x480, including real tab
+  clicks, category/back/search, forced Config refresh with hub node identity retention, Zygisk/Device/
+  Report navigation and the complete seven-option I/O dropdown. Dark/light screenshots and explicit
+  c1/c2 computed-layout checks found no horizontal overflow or clipped totals; console and local HTTP
+  errors were zero in the navigation harness. These are host/source contracts, not a measured device
+  responsiveness percentage or physical OnePlus 15/ColorOS WebView validation. No native binary,
+  polling worker, settings reset or performance/energy claim was added.
+
+## V66 dev66 buildfix16 - per-queue I/O fallback, transactional rollback and Interface field evidence
+
+Input: reports that not every device exposes ADIOS, Kyber, mq-deadline and BFQ together, plus reports
+that Recents corner radius, Recents memory and possibly other new Interface controls can save without
+a visible effect. Base: the fully verified buildfix15 source archive. This release preserves the
+Interface controls and adds read-only evidence before any support/removal decision.
+
+- **Independent queue exposure:** Smart and non-Smart Auto retain the buildfix15 scenario orders, but
+  every block queue is planned only from its own runtime `/sys/block/*/queue/scheduler` list. A queue
+  without the preferred scheduler can select its next discovered fallback while another queue selects
+  a different one; the live summary can therefore be `mixed`. `none`-only and ADIOS-only kernels get
+  bounded results, custom-only Auto remains `not_exposed`, and BFQ remains manual-only. No scheduler
+  is advertised or selected without runtime exposure, and no static device table was added.
+- **Transactional apply:** all queues are preflighted and their active schedulers are snapshotted
+  before the first write. A write or readback failure on any queue restores every changed queue to its
+  pre-attempt value and confirms the restoration. Failure to confirm restoration is reported as
+  `rollback_failed`; a failed Smart apply does not save a new Smart plan. Persistent per-device Stock
+  baselines survive rollback and still restore their exact original values. Registered nodes,
+  kernel-id invalidation, write-only-on-difference and readback remain mandatory.
+- **Read-only Interface diagnostics:** `runtime/asb_display_ui_apply.sh diagnose [key]` covers all
+  eight Interface/Display controls: Recents memory, Recents corner radius, smooth corners, navigation
+  handle auto-hide, pointer speed, gesture mistouch, game MEMC and DC dimming. Each key reports
+  configured, expected, live and baseline evidence separately. Recents radius includes both
+  `global/oost_recent_task_radius` and `global/oost_recent_task_radius_dp`; Recents memory includes
+  `secure/display_memory_information_recent_task`. The report also includes bounded resolved Home
+  component/version evidence, never serial numbers, account, IMEI or network identifiers.
+- **Truthful verdicts:** a matching Settings readback is `write_verified_visual_unverified`, not proof
+  that a launcher or SystemUI renderer consumed it. A changed/non-retained value is
+  `readback_mismatch_visual_unverified`; unavailable transport is `settings_unavailable`; unavailable
+  Home evidence remains `unknown`. Stock baselines distinguish owned, observed and mismatch states.
+  Values and transport errors are bounded/sanitized, `visual=verified` is never emitted, and diagnosis
+  starts no worker. Host fixtures hash Settings files and baselines before/after diagnosis to verify
+  that it changes nothing.
+- **Collection and UI wording:** the same evidence is included in `tools/asb_diag.sh` and the identical
+  `system/bin/asbdiag`; a standalone diagnose command and `su -c asbdiag` are documented. Successful
+  WebUI applies now say that Settings were saved while the visible effect remains unverified, in the
+  English source fallback and all 13 locales. Runtime Settings errors and readback mismatches remain
+  failures rather than success toasts.
+- **Verification scope:** new host fixtures cover heterogeneous queue sets, mixed live state, exact
+  mixed-baseline Stock restore, none-only/ADIOS-only/custom-only exposure, second-queue write failure,
+  first-queue rollback, preserved baselines and rejected rollback confirmation. Interface fixtures
+  cover all key/target rows, Home evidence, Stock/ROM-overwrite/unavailable states, unknown-key
+  rejection, read-only hashes, asbdiag integration and locale parity. Full working-tree and
+  clean-source-ZIP regressions plus manifest/mode/hash verification remain release gates. Browser or
+  host verification is not physical OnePlus 15/ColorOS WebView validation and does not establish that
+  any Interface control has a visible effect on a particular ROM.
+
+## V66 dev66 buildfix15 - scenario-driven Smart I/O, permanent category totals and faster page transitions
+
+Input: the owner's OnePlus 15 custom-kernel scheduler exposure (`adios`, `kyber`, `mq-deadline`,
+`bfq`), the request for active-Smart scenario ownership and manual-only BFQ, plus a WebUI revision
+covering all nine category cards and still-faster initial navigation. Base: the fully verified
+buildfix14 source archive.
+
+- **Smart I/O policy:** active Smart + `io_scheduler=auto` now follows the existing bounded Smart
+  `HINT`/`SCREEN` signature through `runtime/asb_io_scheduler.sh smart HINT SCREEN`. Gaming/heavy
+  prefers ADIOS, ordinary screen-on work prefers Kyber, and idle/screen-off prefers mq-deadline.
+  Screen-off takes precedence over a gaming/heavy hint. Each queue is preflighted independently,
+  and only runtime-discovered fallbacks are eligible: `adios kyber mq-deadline none` for heavy,
+  `kyber mq-deadline adios none` for ordinary work, and `mq-deadline kyber none adios` for
+  idle/screen-off. No new worker, polling loop or arbitrary path/value writer was added.
+- **Plan and ownership:** a successful Smart Auto apply saves `/data/adb/asb/io_scheduler/smart.plan`;
+  generic reinforcement reuses that validated scenario rather than reverting to a static default.
+  The dynamic branch is restricted to active Smart, Auto and non-manual mode. Explicit schedulers,
+  per-device original baselines, kernel-id invalidation, write-only-on-difference, readback and exact
+  Stock restoration remain. Stock also removes the Smart plan.
+- **BFQ is experimental and manual-only:** it is removed from every automatic order, including
+  non-Smart profiles. Explicit BFQ still works when every queue exposes it; Auto with only BFQ
+  returns `not_exposed` and leaves the queues untouched. The previous always-ADIOS impression came
+  from ADIOS leading the static orders. A live `Доступно · adios` row does not establish a drain
+  cause, and no battery/FPS/latency/throughput improvement percentage is claimed.
+- **Nine permanent totals:** every category footer now contains only one centred `{n} controls`
+  label. The structural total is identical before and after Config loading; there is no pending or
+  active/total phase and no bar node. Hidden kernel controls and the existing Camera/wakeup/
+  notification extra cards still determine structural scope. `cfgHubSig()` no longer depends on
+  Config values or freshness, avoiding unrelated hub repaints.
+- **Faster bounded navigation:** the common page slide is 220 ms instead of 320 ms. The existing
+  paint/fit lifecycle is preserved with a 24 ms navigation extra, 32 ms Settings entrance guard and
+  16 ms deferred Config refresh. Tap handlers still avoid direct root-bridge calls; there is no
+  busy wait or persistent worker. These are source/runtime timing contracts, not a claimed device
+  responsiveness percentage.
+- **Descriptions and verification:** the Smart scenario, manual-only BFQ, Stock semantics and absence
+  of guaranteed gains are documented in the English source fallback and all 13 locales. New host
+  fixtures cover all scenario mappings, screen-off precedence, discovered fallbacks, sequential plan
+  reuse, BFQ-only fail-closed Auto, manual BFQ, invalid arguments, exact mixed-baseline restore and
+  ownership guards. WebUI fixtures check nine unchanged totals with Config access poisoned, absence
+  of bars, dynamic Smart I/O badge and the new bounded navigation timings. Full working-tree and
+  clean-source-ZIP regressions plus manifest/mode/hash verification remain release gates. Host or
+  Chromium checks are not physical OnePlus 15/ColorOS WebView validation.
+
 ## V66 dev66 buildfix14 - immediate Settings navigation, unified page exports and truthful repair states
 
 Input: the owner's ten-item WebUI/backend revision and a new 977-minute Infinite Log, two asbdiag
