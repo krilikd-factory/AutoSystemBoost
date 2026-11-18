@@ -16,9 +16,9 @@
 # the OS is using right now — across every area ASB touches: module status, mounts, audio,
 # bluetooth, GPS, Wi-Fi, network/TCP, camera, performance, display, props and the WebUI config.
 #
-# The full report is printed AND saved to: /sdcard/asb_diag_report.txt (storage root)
-# /data/local/tmp/asb_diag_report.txt (fallback) The real filesystem root (/) is read-only, so
-# "корень телефона" in practice means /sdcard — that's where the file lands.
+# The full report is printed and, for a direct terminal run, saved beside Infinite Log in
+# /sdcard/ASB/logs/asb_diag_report.txt. WebUI sets ASB_DIAG_NO_SIDE_COPIES=1 because its
+# bounded wrapper already writes the timestamped report; no Download or /sdcard-root copy.
 
 # Read settings the way the module does.
 # Without this the report showed "Failure calling service settings" for every value on a
@@ -29,12 +29,15 @@
 
 WRITE_TEST=0
 [ "${1:-}" = "--write-test" ] && WRITE_TEST=1
-OUT1="/sdcard/asb_diag_report.txt"
-OUT2="/data/local/tmp/asb_diag_report.txt"
-true > "$OUT1" 2>/dev/null || OUT1=""
-true > "$OUT2" 2>/dev/null || OUT2=""
+if [ "${ASB_DIAG_NO_SIDE_COPIES:-0}" = 1 ]; then
+  OUT1=""; OUT2=""
+else
+  OUT1="/sdcard/ASB/logs/asb_diag_report.txt"; OUT2=""
+  mkdir -p "${OUT1%/*}" 2>/dev/null || OUT1=""
+  [ -n "$OUT1" ] && { true > "$OUT1" 2>/dev/null || OUT1=""; }
+fi
 
-P()  { printf '%s\n' "$1"; [ -n "$OUT1" ] && printf '%s\n' "$1" >> "$OUT1"; [ -n "$OUT2" ] && printf '%s\n' "$1" >> "$OUT2"; }
+P()  { printf '%s\n' "$1"; [ -n "$OUT1" ] && printf '%s\n' "$1" >> "$OUT1"; [ -n "$OUT2" ] && printf '%s\n' "$1" >> "$OUT2"; return 0; }
 HR() { P "----------------------------------------------------------------"; }
 SEC(){ P ""; P "================================================================"; P " $1"; P "================================================================"; }
 
@@ -5211,3 +5214,9 @@ P "  Report saved to:"
 [ -n "$OUT1" ] && P "    $OUT1"
 [ -n "$OUT2" ] && P "    $OUT2"
 P "################################################################"
+
+# A diagnostic verdict belongs to the report (PASS/FAIL above), not to the process exit.
+# Historically P() inherited a failed optional-side-copy test as the script's final status:
+# the wrapper then showed a red error although the timestamped report existed. Collection
+# reaching this line is complete; unexpected launcher/collector failures still propagate.
+exit 0
