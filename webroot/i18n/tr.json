@@ -874,15 +874,15 @@
     },
     "io_scheduler": {
       "name": "G/Ç zamanlayıcı",
-      "desc": "Her blok aygıtı için yalnızca sunulan zamanlayıcıları seçer. Auto profili izler, Stock özgün değerleri geri yükler. Kullanılamayan açık seçim başka bir seçenekle değiştirilmez.\n\nADIOS sunuluyorsa Auto önce onu seçer; yoksa önceki profil sırası geçerlidir.",
+      "desc": "Yalnızca her blok aygıtının sunduğu zamanlayıcıları seçer. Etkin Smart profilinde Auto, mevcut sınırlı Smart senaryosunu izler: oyun/ağır yük için ADIOS, ekran açıkken normal kullanım için Kyber, boşta/ekran kapalıyken mq-deadline; yalnızca algılanan yedekler kullanılır. Smart dışında profil politikası korunur. BFQ asla otomatik seçilmez; açık bir deneysel seçim olarak kalır. Stock her aygıtın başlangıç değerini geri yükler. Kullanılamayan açık seçim, değiştirilmeden başarısız olur.\n\n🔋 Smart boşta/ekran kapalı: önce mq-deadline\n⚡ Smart oyun/ağır yük: önce ADIOS\n✋ Emin değilseniz: Smart’ta Auto; çekirdek yönetimine dönmek için Stock\n\nZamanlayıcı seçimi tek başına daha iyi FPS, gecikme veya pil ömrü kanıtı değildir; cihazdaki kayıtları karşılaştırın.",
       "descOpt": {
-        "stock": "Her aygıtın özgün zamanlayıcısını geri yükle.",
-        "auto": "Yalnızca çalışma zamanında bulunan seçenekler arasından profile göre seç.",
-        "mq-deadline": "Karma depolama yükleri için dengeli seçenek.",
-        "kyber": "Gecikme odaklı; varsa Performance tarafından tercih edilir.",
-        "bfq": "Etkileşimli karma yükler için adalet odaklı.",
-        "none": "G/Ç yeniden sıralaması yok; her zaman daha hızlı değildir.",
-        "adios": "Uyarlanabilir deadline I/O zamanlayıcısı; yalnızca çalışma zamanında keşfedilirse seçilir, UFS, hız veya pil kazancı varsayılmaz."
+        "stock": "Her blok aygıtının özgün zamanlayıcısını ayrı ayrı geri yükler.",
+        "auto": "Smart’ta algılanan yedeklerle geçerli senaryoyu izler; BFQ hariçtir. Diğer profiller statik Auto politikasını korur.",
+        "mq-deadline": "Smart’ın boşta ve ekran kapalıyken tercih ettiği tutucu seçim; pil kazancı varsayılmaz.",
+        "kyber": "Ekran açık normal kullanımda Smart tarafından tercih edilir; oyun/ağır yük için gecikme odaklı yedek.",
+        "bfq": "Yalnızca elle seçilen deneysel seçenek. Auto BFQ’yu asla seçmez; kararlılık ve ek yük çekirdek ile iş yüküne bağlıdır.",
+        "none": "G/Ç yeniden sıralaması yok; hızlı sanal veya NVMe kuyruklarına uyabilir ancak her zaman daha hızlı değildir.",
+        "adios": "Sunulduğunda oyun ve ağır yükte Smart tarafından tercih edilir. UFS gecikmesi, FPS, aktarım hızı veya pil kazancı varsayılmaz."
       }
     },
     "CAMERA_PREVIEW_TNR": {
@@ -4095,5 +4095,6 @@
   "cfg_tile_total": "{n} kontrol",
   "kernel_wb_saved_toast": "{n} kaydedildi",
   "wl_component_search": "Sınıf veya bileşen ara",
-  "wl_component_no_matches": "Hiçbir bileşen bu aramayla eşleşmiyor."
+  "wl_component_no_matches": "Hiçbir bileşen bu aramayla eşleşmiyor.",
+  "t_cfg_settings_written_visual_unverified": " · ayar kaydedildi; görsel etki doğrulanmadı"
 }

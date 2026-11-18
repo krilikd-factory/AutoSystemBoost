@@ -1055,15 +1055,15 @@
     },
     "io_scheduler": {
       "name": "I/O scheduler",
-      "desc": "Chooses only schedulers exposed by each block device. Auto prefers mq-deadline in Balanced/Smart/Battery and kyber in Performance, using only discovered fallbacks. Stock restores the exact per-device baseline. An unavailable explicit choice fails without substitution.\n\n🔋 Balanced default: Auto\n⚡ Performance policy: kyber when exposed\n✋ Not sure: Stock\n\nADIOS, when exposed, is the first Auto choice; the remaining profile order applies otherwise.",
+      "desc": "Chooses only schedulers exposed by each block device. In the active Smart profile, Auto follows the existing bounded Smart scenario: ADIOS for gaming/heavy, Kyber for ordinary screen-on work, and mq-deadline for idle/screen-off, using discovered fallbacks. Outside Smart, Auto retains the profile policy. BFQ is never selected automatically; it remains an explicit experimental choice. Stock restores the exact per-device baseline. An unavailable explicit choice fails without substitution.\n\n🔋 Smart idle/screen-off: mq-deadline first\n⚡ Smart gaming/heavy: ADIOS first\n✋ Not sure: Auto in Smart; Stock to leave kernel ownership\n\nScheduler selection alone does not prove better FPS, latency or battery life; compare on-device captures.",
       "descOpt": {
         "stock": "Restore the original scheduler independently for every block device.",
-        "auto": "Use the profile policy, choosing only from schedulers discovered at runtime.",
-        "mq-deadline": "A practical default for mixed phone storage I/O; balances latency and throughput without promising a battery gain.",
-        "kyber": "Latency-oriented scheduler; preferred by the Performance policy when the kernel exposes it.",
-        "bfq": "Fairness-oriented scheduler for interactive mixed workloads; actual benefit depends on storage and workload.",
+        "auto": "In Smart, follow the live scenario with discovered fallbacks; BFQ is excluded. Other profiles keep their static Auto policy.",
+        "mq-deadline": "A conservative choice preferred by Smart for idle and screen-off; no battery gain is assumed.",
+        "kyber": "Preferred by Smart for ordinary screen-on work when exposed; a latency-oriented fallback for gaming/heavy.",
+        "bfq": "Experimental manual-only choice. Auto never selects BFQ; stability and overhead depend on the kernel and workload.",
         "none": "No I/O reordering scheduler; can suit fast virtual or NVMe queues, but is not universally faster.",
-        "adios": "Adaptive deadline I/O scheduler. Auto selects it only after runtime discovery; no UFS latency, throughput or battery gain is assumed."
+        "adios": "Preferred by Smart for gaming and heavy work when exposed. No UFS latency, FPS, throughput or battery gain is assumed."
       }
     },
     "CAMERA_PREVIEW_TNR": {
@@ -3988,5 +3988,6 @@
   "cfg_tile_total": "{n} controls",
   "kernel_wb_saved_toast": "{n} saved",
   "wl_component_search": "Search class or component",
-  "wl_component_no_matches": "No component matches this search."
+  "wl_component_no_matches": "No component matches this search.",
+  "t_cfg_settings_written_visual_unverified": " · Settings saved; visible effect not verified"
 }

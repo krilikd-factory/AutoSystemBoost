@@ -985,15 +985,15 @@
     },
     "io_scheduler": {
       "name": "Ordonnanceur I/O",
-      "desc": "Choisit uniquement les ordonnanceurs exposés pour chaque périphérique bloc. Auto suit le profil, Stock restaure les valeurs initiales. Un choix explicite indisponible n’est pas remplacé.\n\nSi ADIOS est exposé, Auto le choisit en premier ; sinon l’ordre de profil précédent est conservé.",
+      "desc": "Choisit uniquement les ordonnanceurs exposés par chaque périphérique bloc. Avec le profil Smart actif, Auto suit le scénario Smart borné existant : ADIOS pour les jeux/charges lourdes, Kyber pour l’usage courant écran allumé et mq-deadline au repos/écran éteint, avec les solutions de repli détectées. Hors Smart, la politique du profil est conservée. BFQ n’est jamais choisi automatiquement ; il reste un choix expérimental explicite. Stock restaure la valeur initiale de chaque périphérique. Un choix explicite indisponible échoue sans substitution.\n\n🔋 Smart au repos/écran éteint : mq-deadline d’abord\n⚡ Smart jeux/charge lourde : ADIOS d’abord\n✋ En cas de doute : Auto dans Smart ; Stock pour laisser le noyau gérer\n\nLe choix de l’ordonnanceur ne prouve pas à lui seul un gain de FPS, de latence ou d’autonomie ; comparez les captures sur l’appareil.",
       "descOpt": {
-        "stock": "Restaurer l’ordonnanceur initial de chaque périphérique.",
-        "auto": "Choisir selon le profil uniquement parmi les options détectées.",
-        "mq-deadline": "Choix équilibré pour les charges de stockage mixtes.",
-        "kyber": "Orienté latence; privilégié par Performance s’il est disponible.",
-        "bfq": "Orienté équité pour les charges interactives mixtes.",
-        "none": "Aucun réordonnancement I/O; pas universellement plus rapide.",
-        "adios": "Ordonnanceur I/O à échéances adaptatives, choisi seulement après détection, sans gain UFS, de débit ou de batterie supposé."
+        "stock": "Restaure séparément l’ordonnanceur initial de chaque périphérique bloc.",
+        "auto": "Dans Smart, suit le scénario actuel avec les replis détectés ; BFQ est exclu. Les autres profils conservent leur politique Auto statique.",
+        "mq-deadline": "Choix conservateur privilégié par Smart au repos et écran éteint ; aucun gain de batterie n’est présumé.",
+        "kyber": "Privilégié par Smart pour l’usage courant écran allumé ; repli axé sur la latence pour jeux/charges lourdes.",
+        "bfq": "Choix expérimental manuel uniquement. Auto ne choisit jamais BFQ ; stabilité et surcoût dépendent du noyau et de la charge.",
+        "none": "Aucun réordonnancement d’E/S ; peut convenir aux files virtuelles ou NVMe rapides, sans être universellement plus rapide.",
+        "adios": "Privilégié par Smart pour les jeux et charges lourdes lorsqu’il est exposé. Aucun gain de latence UFS, FPS, débit ou batterie n’est présumé."
       }
     },
     "CAMERA_PREVIEW_TNR": {
@@ -4095,5 +4095,6 @@
   "cfg_tile_total": "{n} réglages",
   "kernel_wb_saved_toast": "{n} enregistrées",
   "wl_component_search": "Rechercher une classe ou un composant",
-  "wl_component_no_matches": "Aucun composant ne correspond à cette recherche."
+  "wl_component_no_matches": "Aucun composant ne correspond à cette recherche.",
+  "t_cfg_settings_written_visual_unverified": " · paramètre enregistré ; effet visuel non vérifié"
 }

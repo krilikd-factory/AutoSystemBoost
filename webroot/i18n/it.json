@@ -904,15 +904,15 @@
     },
     "io_scheduler": {
       "name": "Scheduler I/O",
-      "desc": "Sceglie solo scheduler esposti per ciascun dispositivo a blocchi. Auto segue il profilo, Stock ripristina i valori originali. Una scelta esplicita non disponibile non viene sostituita.\n\nSe ADIOS è disponibile, Auto lo prova per primo; altrimenti vale il precedente ordine del profilo.",
+      "desc": "Seleziona solo gli scheduler esposti da ciascun dispositivo a blocchi. Nel profilo Smart attivo, Auto segue lo scenario Smart limitato esistente: ADIOS per giochi/carichi pesanti, Kyber per l’uso normale a schermo acceso e mq-deadline per inattività/schermo spento, usando alternative rilevate. Fuori da Smart resta la politica del profilo. BFQ non viene mai scelto automaticamente; resta una scelta sperimentale esplicita. Stock ripristina il valore iniziale di ogni dispositivo. Una scelta esplicita non disponibile fallisce senza sostituzioni.\n\n🔋 Smart inattivo/schermo spento: prima mq-deadline\n⚡ Smart giochi/carico pesante: prima ADIOS\n✋ In caso di dubbio: Auto in Smart; Stock per lasciare la gestione al kernel\n\nLa scelta dello scheduler non dimostra da sola miglioramenti di FPS, latenza o autonomia; confronta le acquisizioni sul dispositivo.",
       "descOpt": {
-        "stock": "Ripristina lo scheduler originale di ogni dispositivo.",
-        "auto": "Sceglie secondo il profilo solo tra le opzioni rilevate.",
-        "mq-deadline": "Scelta equilibrata per carichi di archiviazione misti.",
-        "kyber": "Orientato alla latenza; preferito da Performance se disponibile.",
-        "bfq": "Orientato all’equità per carichi interattivi misti.",
-        "none": "Nessun riordino I/O; non è sempre più veloce.",
-        "adios": "Scheduler I/O a deadline adattive, selezionato solo dopo rilevamento, senza presumere guadagni UFS, velocità o batteria."
+        "stock": "Ripristina separatamente lo scheduler originale di ogni dispositivo a blocchi.",
+        "auto": "In Smart segue lo scenario corrente con alternative rilevate; BFQ è escluso. Gli altri profili mantengono la politica Auto statica.",
+        "mq-deadline": "Scelta conservativa preferita da Smart in inattività e a schermo spento; nessun risparmio di batteria presunto.",
+        "kyber": "Preferito da Smart per l’uso normale a schermo acceso; alternativa orientata alla latenza per giochi/carichi pesanti.",
+        "bfq": "Scelta sperimentale solo manuale. Auto non sceglie mai BFQ; stabilità e overhead dipendono da kernel e carico.",
+        "none": "Nessun riordino I/O; può adattarsi a code virtuali o NVMe veloci, ma non è universalmente più rapido.",
+        "adios": "Preferito da Smart per giochi e carichi pesanti se esposto. Nessun miglioramento di latenza UFS, FPS, throughput o batteria presunto."
       }
     },
     "CAMERA_PREVIEW_TNR": {
@@ -4095,5 +4095,6 @@
   "cfg_tile_total": "{n} controlli",
   "kernel_wb_saved_toast": "{n} salvate",
   "wl_component_search": "Cerca classe o componente",
-  "wl_component_no_matches": "Nessun componente corrisponde a questa ricerca."
+  "wl_component_no_matches": "Nessun componente corrisponde a questa ricerca.",
+  "t_cfg_settings_written_visual_unverified": " · impostazione salvata; effetto visivo non verificato"
 }

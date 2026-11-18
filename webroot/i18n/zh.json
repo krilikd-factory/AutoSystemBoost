@@ -904,15 +904,15 @@
     },
     "io_scheduler": {
       "name": "I/O 调度器",
-      "desc": "只选择每个块设备实际提供的调度器。Auto 按配置文件选择，Stock 恢复各设备原始值。不可用的明确选项不会被静默替换。\n\n如果内核提供 ADIOS，Auto 会优先选择它；否则沿用原来的配置顺序。",
+      "desc": "仅选择每个块设备实际提供的调度器。在启用的 Smart 配置中，Auto 遵循现有的有界 Smart 场景：游戏/重负载优先 ADIOS，亮屏日常使用优先 Kyber，空闲/熄屏优先 mq-deadline，并仅使用探测到的回退项。Smart 之外保留原配置策略。BFQ 永不自动选择，只作为明确的手动实验选项。Stock 分别恢复每台设备的原始值。不可用的人工选项会失败，不会替换。\n\n🔋 Smart 空闲/熄屏：优先 mq-deadline\n⚡ Smart 游戏/重负载：优先 ADIOS\n✋ 不确定：Smart 中使用 Auto；Stock 交还内核管理\n\n仅凭调度器选择不能证明 FPS、延迟或续航改善；请比较设备上的记录。",
       "descOpt": {
-        "stock": "恢复每个块设备原来的调度器。",
-        "auto": "按配置文件，仅从运行时发现的选项中选择。",
-        "mq-deadline": "适合混合存储负载的均衡选项。",
-        "kyber": "侧重延迟；Performance 在可用时优先选择。",
-        "bfq": "侧重交互式混合负载的公平性。",
-        "none": "不重排 I/O；并非总是更快。",
-        "adios": "自适应期限 I/O 调度器；仅在运行时检测到后选择，不假定 UFS 延迟、吞吐量或电池收益。"
+        "stock": "分别恢复每个块设备的原始调度器。",
+        "auto": "在 Smart 中遵循当前场景并使用探测到的回退项；排除 BFQ。其他配置保留静态 Auto 策略。",
+        "mq-deadline": "Smart 在空闲和熄屏时优先的保守选项；不假定节省电量。",
+        "kyber": "Smart 在亮屏日常使用时优先；游戏/重负载时作为偏延迟的回退项。",
+        "bfq": "仅限手动的实验选项。Auto 永不选择 BFQ；稳定性和开销取决于内核与负载。",
+        "none": "不重排 I/O；可能适合快速虚拟或 NVMe 队列，但并非总是更快。",
+        "adios": "可用时由 Smart 在游戏和重负载中优先。不假定 UFS 延迟、FPS、吞吐量或电池收益。"
       }
     },
     "CAMERA_PREVIEW_TNR": {
@@ -4095,5 +4095,6 @@
   "cfg_tile_total": "{n} 项控制",
   "kernel_wb_saved_toast": "已保存 {n} 条",
   "wl_component_search": "搜索类或组件",
-  "wl_component_no_matches": "没有符合此搜索的组件。"
+  "wl_component_no_matches": "没有符合此搜索的组件。",
+  "t_cfg_settings_written_visual_unverified": " · 设置已保存；视觉效果尚未验证"
 }

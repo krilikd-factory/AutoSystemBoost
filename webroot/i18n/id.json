@@ -874,15 +874,15 @@
     },
     "io_scheduler": {
       "name": "Penjadwal I/O",
-      "desc": "Hanya memilih penjadwal yang tersedia untuk setiap perangkat blok. Auto mengikuti profil, Stock memulihkan nilai awal. Pilihan eksplisit yang tidak tersedia tidak diganti.\n\nJika tersedia, ADIOS menjadi pilihan Auto pertama; jika tidak, urutan profil sebelumnya tetap berlaku.",
+      "desc": "Hanya memilih penjadwal yang disediakan setiap perangkat blok. Pada profil Smart aktif, Auto mengikuti skenario Smart terbatas yang sudah ada: ADIOS untuk game/beban berat, Kyber untuk penggunaan biasa saat layar menyala, dan mq-deadline untuk idle/layar mati, dengan fallback yang terdeteksi. Di luar Smart, kebijakan profil tetap berlaku. BFQ tidak pernah dipilih otomatis; tetap menjadi pilihan eksperimental eksplisit. Stock memulihkan nilai awal setiap perangkat. Pilihan eksplisit yang tidak tersedia gagal tanpa penggantian.\n\n🔋 Smart idle/layar mati: mq-deadline lebih dulu\n⚡ Smart game/beban berat: ADIOS lebih dulu\n✋ Tidak yakin: Auto di Smart; Stock agar kernel kembali mengelola\n\nPilihan penjadwal saja tidak membuktikan peningkatan FPS, latensi, atau baterai; bandingkan hasil perekaman di perangkat.",
       "descOpt": {
-        "stock": "Pulihkan penjadwal awal setiap perangkat.",
-        "auto": "Pilih sesuai profil hanya dari opsi yang ditemukan saat runtime.",
-        "mq-deadline": "Pilihan seimbang untuk beban penyimpanan campuran.",
-        "kyber": "Berorientasi latensi; dipilih Performance bila tersedia.",
-        "bfq": "Berorientasi keadilan untuk beban interaktif campuran.",
-        "none": "Tanpa pengurutan ulang I/O; tidak selalu lebih cepat.",
-        "adios": "Scheduler I/O deadline adaptif; dipilih hanya setelah terdeteksi, tanpa asumsi peningkatan UFS, kecepatan, atau baterai."
+        "stock": "Memulihkan penjadwal awal setiap perangkat blok secara terpisah.",
+        "auto": "Di Smart mengikuti skenario saat ini dengan fallback terdeteksi; BFQ dikecualikan. Profil lain mempertahankan kebijakan Auto statis.",
+        "mq-deadline": "Pilihan konservatif yang diprioritaskan Smart saat idle dan layar mati; penghematan baterai tidak diasumsikan.",
+        "kyber": "Diprioritaskan Smart untuk penggunaan biasa dengan layar menyala; fallback berorientasi latensi untuk game/beban berat.",
+        "bfq": "Pilihan eksperimental khusus manual. Auto tidak pernah memilih BFQ; stabilitas dan overhead bergantung pada kernel dan beban.",
+        "none": "Tanpa penyusunan ulang I/O; dapat cocok untuk antrean virtual atau NVMe cepat, tetapi tidak selalu lebih cepat.",
+        "adios": "Diprioritaskan Smart untuk game dan beban berat jika tersedia. Peningkatan latensi UFS, FPS, throughput, atau baterai tidak diasumsikan."
       }
     },
     "CAMERA_PREVIEW_TNR": {
@@ -4095,5 +4095,6 @@
   "cfg_tile_total": "{n} kontrol",
   "kernel_wb_saved_toast": "{n} tersimpan",
   "wl_component_search": "Cari kelas atau komponen",
-  "wl_component_no_matches": "Tidak ada komponen yang cocok dengan pencarian ini."
+  "wl_component_no_matches": "Tidak ada komponen yang cocok dengan pencarian ini.",
+  "t_cfg_settings_written_visual_unverified": " · setelan tersimpan; efek visual belum diverifikasi"
 }
