@@ -781,8 +781,25 @@ start_full_day() {
       return 0
     fi
     if ! pid_is_live "$_pid"; then
-      # The sole launched process exited before ownership claim. No recorder can begin later,
-      # so cleanup is safe and a future tap can retry.
+      # A competing request may already have replaced our token and published a live winner.
+      # In that case our child correctly refused the old token and exited, but the capture as
+      # a whole did NOT fail: this request lost the race and must join the current owner. The
+      # old unconditional error=recorder_exited contradicted the winner's status=started even
+      # though exactly one recorder was alive. Ownership remains mandatory - a changed token
+      # without a verified live replacement still follows the honest failure path below.
+      if [ "$(cat "$TOKENFILE" 2>/dev/null || true)" != "$_token" ]; then
+        _winner="$(lock_wait_live_pid 2>/dev/null || true)"
+        if [ -n "$_winner" ]; then
+          echo 'status=already_running'
+          echo "pid=$_winner"
+          _winner_out="$(full_day_output_path 2>/dev/null || true)"
+          [ -n "$_winner_out" ] && echo "output=$_winner_out"
+          echo "log=$RUNLOG"
+          return 0
+        fi
+      fi
+      # Our own sole launched process exited before ownership claim. No recorder for this
+      # token can begin later, so only OUR lock may be removed and a future tap can retry.
       [ "$(cat "$TOKENFILE" 2>/dev/null || true)" = "$_token" ] && rm -rf "$LOCKDIR" 2>/dev/null || true
       echo 'error=recorder_exited'
       tail -n 4 "$RUNLOG" 2>/dev/null || true
