@@ -180,6 +180,79 @@ EOF_BEFORE
   return 0
 }
 
+# Read-only field evidence. Values outside the bounded numeric/name vocabulary are not
+# copied into a machine-readable report. An unset Settings key is an observation, not proof
+# that the ROM lacks a renderer or that the key is unsupported.
+_diag_value() {
+  [ -n "$1" ] || { printf '<unset>\n'; return; }
+  case "$1" in *[!A-Za-z0-9_.-]*) printf 'unknown\n'; return ;; esac
+  [ "${#1}" -le 48 ] || { printf 'unknown\n'; return; }
+  printf '%s\n' "$1"
+}
+_diag_home() {
+  _diag_home_component=unknown _diag_home_version=unknown
+  _dh_raw="$(cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null | tail -n 1)"
+  case "$_dh_raw" in
+    ''|*/*/*) _dh_raw="" ;;
+    */*) : ;;
+    *) _dh_raw="" ;;
+  esac
+  case "$_dh_raw" in ''|*[!A-Za-z0-9._/$%-]*) _dh_raw="" ;; esac
+  [ "${#_dh_raw}" -le 180 ] || _dh_raw=""
+  [ -n "$_dh_raw" ] || return 0
+  _diag_home_component="$_dh_raw"
+  _dh_pkg="${_dh_raw%%/*}"
+  _dh_ver="$(dumpsys package "$_dh_pkg" 2>/dev/null | sed -n 's/^[[:space:]]*versionName=//p' | head -n 1)"
+  case "$_dh_ver" in ''|*[!A-Za-z0-9_.-]*) return 0 ;; esac
+  [ "${#_dh_ver}" -le 48 ] || return 0
+  _diag_home_version="$_dh_ver"
+}
+_diagnose_key() {
+  _dk_key="$1" _dk_transport="$2"
+  _dk_val="$(_cfg "$_dk_key")"; [ -n "$_dk_val" ] || _dk_val=stock
+  _dk_valid=1; _valid "$_dk_key" "$_dk_val" || _dk_valid=0
+  _dk_match=1 _dk_owned=0 _dk_unowned=0 _dk_rows=""
+  _dk_targets=""
+  [ "$_dk_valid" = 1 ] && [ "$_dk_val" != stock ] && _dk_targets="$(_targets "$_dk_key" "$_dk_val")"
+  while IFS='|' read -r _dk_ns _dk_name; do
+    [ -n "$_dk_ns" ] && [ -n "$_dk_name" ] || continue
+    _dk_base_state=unowned _dk_base="" _dk_expected=-
+    if _baseline_has "$_dk_ns" "$_dk_name"; then
+      _dk_base_state=owned _dk_owned=1 _dk_base="$(_baseline_value "$_dk_ns" "$_dk_name")"
+    else
+      _dk_unowned=1
+    fi
+    _dk_live_raw=unknown
+    if [ "$_dk_transport" = available ]; then _dk_live_raw="$(asb_set_get "$_dk_ns" "$_dk_name" 2>/dev/null)"; fi
+    if [ "$_dk_valid" = 1 ] && [ "$_dk_val" != stock ]; then
+      _dk_expected="$(printf '%s\n' "$_dk_targets" | awk -F'|' -v ns="$_dk_ns" -v key="$_dk_name" '$1==ns && $2==key {print $3; exit}')"
+      [ "$_dk_live_raw" = "$_dk_expected" ] || _dk_match=0
+    elif [ "$_dk_val" = stock ] && [ "$_dk_base_state" = owned ]; then
+      [ "$_dk_live_raw" = "$_dk_base" ] || _dk_match=0
+    fi
+    _dk_base_print="$_dk_base"
+    [ "$_dk_base_state" = owned ] && [ -z "$_dk_base_print" ] && _dk_base_print='<empty>'
+    _dk_rows="${_dk_rows}display_ui_target|key=${_dk_key}|namespace=${_dk_ns}|name=${_dk_name}|expected=${_dk_expected}|live=$(_diag_value "$_dk_live_raw")|baseline=$(_diag_value "$_dk_base_print")|baseline_state=${_dk_base_state}
+"
+  done <<EOF_DIAG_TARGETS
+$(_target_names "$_dk_key")
+EOF_DIAG_TARGETS
+  _dk_baseline=unowned
+  [ "$_dk_owned" = 1 ] && _dk_baseline=owned
+  [ "$_dk_owned" = 1 ] && [ "$_dk_unowned" = 1 ] && _dk_baseline=partial
+  if [ "$_dk_transport" != available ]; then _dk_verdict=settings_unavailable
+  elif [ "$_dk_valid" = 0 ]; then _dk_verdict=invalid_config
+  elif [ "$_dk_val" = stock ]; then
+    if [ "$_dk_owned" = 0 ]; then _dk_verdict=stock_unowned_observed
+    elif [ "$_dk_match" = 1 ]; then _dk_verdict=stock_baseline_matches
+    else _dk_verdict=stock_readback_mismatch; fi
+  elif [ "$_dk_match" = 1 ]; then _dk_verdict=write_verified_visual_unverified
+  else _dk_verdict=readback_mismatch_visual_unverified; fi
+  printf 'display_ui_key|key=%s|configured=%s|verdict=%s|baseline=%s|visual=unverified\n' \
+    "$_dk_key" "$_dk_val" "$_dk_verdict" "$_dk_baseline"
+  printf '%s' "$_dk_rows"
+}
+
 _command="${1:-apply}"
 case "$_command" in
   apply)
@@ -205,5 +278,19 @@ case "$_command" in
       done
     done
     ;;
-  *) printf 'usage: asb_display_ui_apply.sh apply [key] | boot | status\n' >&2; exit 2 ;;
+  diagnose)
+    [ "$#" -le 2 ] || { printf 'usage: asb_display_ui_apply.sh diagnose [key]\n' >&2; exit 2; }
+    if [ "$#" = 2 ]; then _known_key "$2" || { printf 'error=unknown_key\n' >&2; exit 2; }; fi
+    _diag_transport=unavailable
+    asb_set_ok >/dev/null 2>&1 && _diag_transport=available
+    _diag_home
+    printf 'display_ui_diagnostics|schema=1|settings_transport=%s|home=%s|home_version=%s\n' \
+      "$_diag_transport" "$_diag_home_component" "$_diag_home_version"
+    for _k in $ASB_DISPLAY_UI_KEYS; do
+      [ "$#" != 2 ] || [ "$_k" = "$2" ] || continue
+      _diagnose_key "$_k" "$_diag_transport"
+    done
+    printf 'display_ui_visual|unverified|settings_readback_is_not_launcher_or_systemui_rendering_evidence\n'
+    ;;
+  *) printf 'usage: asb_display_ui_apply.sh apply [key] | boot | status | diagnose [key]\n' >&2; exit 2 ;;
 esac

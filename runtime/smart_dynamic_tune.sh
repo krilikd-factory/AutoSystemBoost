@@ -66,6 +66,19 @@ if [ "$MODE" != manual ] && [ "$(_cfg mglru_mode)" = smart ]; then
   fi
 fi
 
+# I/O scheduler: only Smart + Auto is scenario-owned. Gaming/heavy prefer ADIOS,
+# ordinary screen-on work prefers Kyber, and idle/screen-off prefers mq-deadline.
+# The registered helper performs discovery, per-device baselines and readback. Explicit
+# manual schedulers, including experimental BFQ, never enter this branch.
+if [ "$MODE" != manual ] && [ "$(_cfg io_scheduler)" = auto ]; then
+  _ios_mod="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+  _ios_profile="$(cat "$_ios_mod/current_profile" 2>/dev/null | tr -d ' \t\r\n')"
+  if [ "$_ios_profile" = smart ] && [ -r "$_ios_mod/runtime/asb_io_scheduler.sh" ]; then
+    MODDIR="$_ios_mod" ASB_CONF="${ASB_CONF:-$_ios_mod/config/governor.conf}" ASB_PROFILE=smart \
+      sh "$_ios_mod/runtime/asb_io_scheduler.sh" smart "$HINT" "$SCREEN" >/dev/null 2>&1 || true
+  fi
+fi
+
 if [ "$MODE" != manual ] && [ -r "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_kernel_controls.sh" ]; then
   MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}" ASB_CONF="${ASB_CONF:-${MODDIR:-/data/adb/modules/AutoSystemBoost}/config/governor.conf}" \
     sh "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_kernel_controls.sh" smart "$HINT" "$THERM" "$SCREEN" >/dev/null 2>&1

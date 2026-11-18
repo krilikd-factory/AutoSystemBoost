@@ -139,50 +139,127 @@ _ios_status() {
   printf '%s\n' "$_ioss_union" | tr ' ' '\n' | sed '/^$/d' | sort -u | awk 'BEGIN{first=1} {if(!first)printf " "; printf "%s",$0; first=0} END{if(!first)printf "\n"}' \
     | sed 's/^/io_scheduler_options|/'
 }
+_ios_smart_plan() {
+  _iossp_hint=2; _iossp_screen=1
+  if [ -f "$STATE/smart.plan" ]; then
+    _iossp_old_ifs="$IFS"; IFS=' '; set -f
+    set -- $(cat "$STATE/smart.plan" 2>/dev/null)
+    IFS="$_iossp_old_ifs"; set +f
+    if [ "$#" = 2 ]; then
+      case "$1" in 0|1|2|3|4) case "$2" in 0|1) _iossp_hint="$1"; _iossp_screen="$2" ;; esac ;; esac
+    fi
+  fi
+  printf '%s %s\n' "$_iossp_hint" "$_iossp_screen"
+}
+_ios_smart_plan_write() {
+  _iossw_tmp="$STATE/smart.plan.tmp.$$"
+  (umask 077; printf '%s %s\n' "$1" "$2" > "$_iossw_tmp" 2>/dev/null) || { rm -f "$_iossw_tmp" 2>/dev/null; return 1; }
+  mv -f "$_iossw_tmp" "$STATE/smart.plan" 2>/dev/null || { rm -f "$_iossw_tmp" 2>/dev/null; return 1; }
+}
 _ios_choose() {
-  _iosch_node="$1"; _iosch_mode="$2"; _iosch_profile="$3"
+  _iosch_node="$1"; _iosch_mode="$2"; _iosch_profile="$3"; _iosch_hint="${4:-2}"; _iosch_screen="${5:-1}"
   if [ "$_iosch_mode" != auto ]; then
     _ios_has "$_iosch_node" "$_iosch_mode" || return 1
     printf '%s\n' "$_iosch_mode"; return 0
   fi
-  # ADIOS is opt-in by kernel exposure, never assumed from a config or version string.
-  # Keep upstream ADIOS defaults: ASB owns only the bounded scheduler selector.
-  case "$_iosch_profile" in performance) _iosch_order='adios kyber mq-deadline none bfq' ;;
-    *) _iosch_order='adios mq-deadline none kyber bfq' ;; esac
+  # Every scheduler is selected only from the queue's runtime exposure. BFQ is deliberately
+  # absent from every automatic order: it remains available only as an explicit user choice.
+  if [ "$_iosch_profile" = smart ]; then
+    if [ "$_iosch_screen" = 0 ] || [ "$_iosch_hint" = 0 ]; then
+      _iosch_order='mq-deadline kyber none adios'
+    else
+      case "$_iosch_hint" in
+        3|4) _iosch_order='adios kyber mq-deadline none' ;;
+        *) _iosch_order='kyber mq-deadline adios none' ;;
+      esac
+    fi
+  else
+    case "$_iosch_profile" in performance) _iosch_order='adios kyber mq-deadline none' ;;
+      *) _iosch_order='adios mq-deadline none kyber' ;; esac
+  fi
   for _iosch_name in $_iosch_order; do
     if _ios_has "$_iosch_node" "$_iosch_name"; then printf '%s\n' "$_iosch_name"; return 0; fi
   done
   # Auto stays fail-closed if none of the documented policy choices is exposed.
   return 1
 }
+
+# Roll back only queues whose live value differs from the bounded pre-attempt snapshot.
+# Device and scheduler names cannot contain '|'. Persistent first-ASB baselines are kept:
+# a later explicit Stock must still restore the value from before the first successful write.
+_ios_attempt_rollback() {
+  _iosar_fail=0
+  while IFS='|' read -r _iosar_dev _iosar_before; do
+    [ -n "$_iosar_dev" ] && [ -n "$_iosar_before" ] || continue
+    _iosar_node="$(_ios_node "$_iosar_dev")" || { _iosar_fail=1; continue; }
+    _iosar_now="$(_ios_active "$_iosar_node" 2>/dev/null)"
+    [ "$_iosar_now" = "$_iosar_before" ] && continue
+    printf '%s\n' "$_iosar_before" > "$_iosar_node" 2>/dev/null || { _iosar_fail=1; continue; }
+    [ "$(_ios_active "$_iosar_node" 2>/dev/null)" = "$_iosar_before" ] || _iosar_fail=1
+  done <<EOF_IO_ATTEMPT
+$1
+EOF_IO_ATTEMPT
+  [ "$_iosar_fail" = 0 ]
+}
+_ios_apply_failed() {
+  _iosaf_reason="$1"
+  _ios_attempt_rollback "$2" || _iosaf_reason=rollback_failed
+  _ios_emit "$_iosaf_reason"
+  return 1
+}
 _ios_apply() {
+  _iosap_hint="${1:-}"; _iosap_screen="${2:-}"
   _iosap_mode="$(_ios_mode)"
   [ "$_iosap_mode" != stock ] || { _ios_restore; return $?; }
   _iosap_devices="$(_ios_devices)"
   [ -n "$_iosap_devices" ] || { _ios_emit not_exposed; return 1; }
   _iosap_profile="${ASB_PROFILE:-$(cat "$MODDIR/current_profile" 2>/dev/null | tr -d ' \t\r\n')}"
   [ -n "$_iosap_profile" ] || _iosap_profile=balanced
+  if [ "$_iosap_mode" = auto ] && [ "$_iosap_profile" = smart ] && [ -z "$_iosap_hint" ]; then
+    _iosap_plan="$(_ios_smart_plan)"
+    _iosap_hint="${_iosap_plan% *}"; _iosap_screen="${_iosap_plan#* }"
+  fi
   # Preflight every queue before changing any one of them. An explicit scheduler is
   # never substituted silently and a partially writable set does not report success.
   for _iosap_dev in $_iosap_devices; do
     _iosap_node="$(_ios_node "$_iosap_dev")"
     [ -r "$_iosap_node" ] || { _ios_emit not_readable; return 1; }
     [ -w "$_iosap_node" ] || { _ios_emit not_writable; return 1; }
-    _ios_choose "$_iosap_node" "$_iosap_mode" "$_iosap_profile" >/dev/null || { _ios_emit not_exposed; return 1; }
+    _ios_choose "$_iosap_node" "$_iosap_mode" "$_iosap_profile" "$_iosap_hint" "$_iosap_screen" >/dev/null || { _ios_emit not_exposed; return 1; }
   done
   for _iosap_dev in $_iosap_devices; do
     _ios_capture "$_iosap_dev" || { _ios_emit baseline_failed; return 1; }
   done
+  # Capture the pre-attempt state of every queue before the first write. Preflight handles
+  # unsupported/read-only sets; this snapshot handles a later device-specific write/readback
+  # failure without leaving the earlier queues on a partially applied scenario.
+  _iosap_attempt=""
   for _iosap_dev in $_iosap_devices; do
     _iosap_node="$(_ios_node "$_iosap_dev")"
-    _iosap_want="$(_ios_choose "$_iosap_node" "$_iosap_mode" "$_iosap_profile")" || { _ios_emit not_exposed; return 1; }
+    _iosap_before="$(_ios_active "$_iosap_node" 2>/dev/null)"
+    _ios_name_ok "$_iosap_before" || { _ios_emit not_readable; return 1; }
+    _iosap_attempt="${_iosap_attempt}${_iosap_dev}|${_iosap_before}
+"
+  done
+  for _iosap_dev in $_iosap_devices; do
+    _iosap_node="$(_ios_node "$_iosap_dev")"
+    _iosap_want="$(_ios_choose "$_iosap_node" "$_iosap_mode" "$_iosap_profile" "$_iosap_hint" "$_iosap_screen")" || {
+      _ios_apply_failed not_exposed "$_iosap_attempt"; return 1;
+    }
     _iosap_before="$(_ios_active "$_iosap_node" 2>/dev/null)"
     if [ "$_iosap_before" != "$_iosap_want" ]; then
-      printf '%s\n' "$_iosap_want" > "$_iosap_node" 2>/dev/null || { _ios_emit write_failed; return 1; }
+      printf '%s\n' "$_iosap_want" > "$_iosap_node" 2>/dev/null || {
+        _ios_apply_failed write_failed "$_iosap_attempt"; return 1;
+      }
     fi
     _iosap_now="$(_ios_active "$_iosap_node" 2>/dev/null)"
-    [ "$_iosap_now" = "$_iosap_want" ] || { _ios_emit readback_mismatch; return 1; }
+    [ "$_iosap_now" = "$_iosap_want" ] || {
+      _ios_apply_failed readback_mismatch "$_iosap_attempt"; return 1;
+    }
   done
+  if [ "$_iosap_mode" = auto ] && [ "$_iosap_profile" = smart ]; then
+    _ios_smart_plan_write "${_iosap_hint:-2}" "${_iosap_screen:-1}" || :
+  fi
   _ios_emit applied
 }
 _ios_restore() {
@@ -206,6 +283,7 @@ _ios_restore() {
     rm -f "$_iosr_prev" "$_iosr_prev.kid" 2>/dev/null || { _ios_emit state_cleanup_failed; return 1; }
     _iosr_done=1
   done
+  rm -f "$STATE/smart.plan" 2>/dev/null || { _ios_emit state_cleanup_failed; return 1; }
   if [ "$_iosr_done" = 1 ]; then _ios_emit restored; else _ios_emit stock_unowned; fi
 }
 
@@ -213,5 +291,10 @@ case "${1:-status}" in
   status) _ios_status ;;
   apply) _ios_apply ;;
   restore) _ios_restore ;;
-  *) printf 'usage: asb_io_scheduler.sh status|apply|restore\n' >&2; exit 2 ;;
+  smart)
+    [ "$#" = 3 ] || { printf 'usage: asb_io_scheduler.sh smart HINT SCREEN\n' >&2; exit 2; }
+    case "$2" in 0|1|2|3|4) : ;; *) printf 'error=bad_hint\n' >&2; exit 2 ;; esac
+    case "$3" in 0|1) : ;; *) printf 'error=bad_screen\n' >&2; exit 2 ;; esac
+    ASB_PROFILE=smart _ios_apply "$2" "$3" ;;
+  *) printf 'usage: asb_io_scheduler.sh status|apply|restore|smart HINT SCREEN\n' >&2; exit 2 ;;
 esac
