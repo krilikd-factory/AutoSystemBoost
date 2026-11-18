@@ -3903,7 +3903,7 @@ echo "PASS: fix153 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix154: $*"; exit 1; }
 H="$ROOT/webroot/index.html"
-grep -q '^  --page-fade-in: 0.26s;$' "$H" || fail "no fade timing"
+grep -q '^  --page-fade-in: 0.18s;$' "$H" || fail "no fade timing"
 grep -q 'translateX(-50%) translateX(120%)' "$H" && fail "pages still slide in from the right"
 grep -q '^  audio_remove_volume_limit:APPLY_REBOOT,$' "$H" || fail "the limiter card still claims to apply at once"
 grep -q "resetprop -n audio.safemedia.bypass true'" "$H" || fail "the limiter switch does not set the bypass"
@@ -9947,6 +9947,116 @@ PY
 echo 'PASS display/ui settings dev64: eight bounded mappings, exact first-apply restore, rejected-write and paired-radius rollback, stock boot ownership, atomic config validation, installer/CI/WebUI wiring and explicit non-factory baseline semantics in 13 locales'
 )
 
+t_display_ui_diagnostics_buildfix16() (
+set -euo pipefail
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_display_diag.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL display/ui diagnostics buildfix16: $*" >&2; exit 1; }
+M="$T/mod"; S="$T/settings"
+mkdir -p "$M/runtime" "$M/config" "$S" "$T/bin"
+cp "$ROOT/runtime/asb_display_ui_apply.sh" "$ROOT/runtime/asb_settings.sh" "$ROOT/runtime/asb_baseline.sh" "$M/runtime/"
+cat > "$M/config/governor.conf" <<'CFG'
+ui_recents_memory=on
+ui_recents_corner_radius=20
+ui_smooth_corners=off
+ui_nav_handle_autohide=off
+feel_pointer_speed=-7
+feel_gesture_mistouch=off
+feel_game_memc=on
+feel_dc_dimming=off
+CFG
+cat > "$T/bin/settings" <<'MOCK'
+#!/bin/sh
+case "$1" in
+  get)
+    if [ ! -f "$S/$2.$3" ] && [ "$2/$3" = system/screen_off_timeout ]; then printf 'Failure calling service settings\n'; exit 0; fi
+    [ -f "$S/$2.$3" ] && cat "$S/$2.$3" || printf 'null\n' ;;
+  put) printf '%s\n' "$4" > "$S/$2.$3" ;;
+  delete) rm -f "$S/$2.$3" ;;
+  *) exit 1 ;;
+esac
+MOCK
+cat > "$T/bin/content" <<'MOCK'
+#!/bin/sh
+exit 1
+MOCK
+cat > "$T/bin/cmd" <<'MOCK'
+#!/bin/sh
+[ "${1:-} ${2:-}" = 'package resolve-activity' ] || exit 1
+printf 'priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\ncom.example.launcher/.RecentsActivity\n'
+MOCK
+cat > "$T/bin/dumpsys" <<'MOCK'
+#!/bin/sh
+[ "${1:-}" = package ] || exit 1
+printf '    versionCode=123 minSdk=34 targetSdk=35\n    versionName=4.5.6\n'
+MOCK
+chmod +x "$T/bin/settings" "$T/bin/content" "$T/bin/cmd" "$T/bin/dumpsys"
+export S PATH="$T/bin:$PATH" MODDIR="$M" ASB_BASELINE="$T/baseline.txt"
+setval() { printf '%s\n' "$3" > "$S/$1.$2"; }
+setcfg() { sed -i "s|^$1=.*|$1=$2|" "$M/config/governor.conf"; }
+run_ui() { sh "$M/runtime/asb_display_ui_apply.sh" "$@"; }
+setval system screen_off_timeout 30000
+setval secure display_memory_information_recent_task 0
+setval global oost_recent_task_radius 0
+setval global oost_recent_task_radius_dp -1
+setval global smooth_corner_enabled 1
+setval global oost_navigation_handle_auto_hide 1
+setval system pointer_speed 0
+setval secure gesture_mistouch_prevention_enable 1
+setval secure display_memc_game_enable 0
+setval secure display_dc_settings_switch 1
+run_ui apply >/dev/null || fail 'diagnostic fixture apply failed'
+snapshot() { find "$S" -type f -print0 | sort -z | xargs -0 sha256sum; sha256sum "$ASB_BASELINE"; }
+before="$(snapshot)"
+out="$(run_ui diagnose)" || fail 'diagnose returned an error'
+after="$(snapshot)"
+[ "$before" = "$after" ] || fail 'read-only diagnose changed Settings or baselines'
+grep -Fq 'display_ui_diagnostics|schema=1|settings_transport=available|home=com.example.launcher/.RecentsActivity|home_version=4.5.6' <<<"$out" || fail 'Home/transport evidence missing'
+[ "$(printf '%s\n' "$out" | grep -c '^display_ui_key|')" = 8 ] || fail 'not all eight controls were diagnosed'
+[ "$(printf '%s\n' "$out" | grep -c '^display_ui_target|')" = 9 ] || fail 'paired radius targets were not both diagnosed'
+[ "$(printf '%s\n' "$out" | grep -c 'verdict=write_verified_visual_unverified')" = 8 ] || fail 'matching readback did not retain the visual-unknown boundary'
+grep -Fq 'display_ui_target|key=ui_recents_corner_radius|namespace=global|name=oost_recent_task_radius_dp|expected=20|live=20|baseline=-1|baseline_state=owned' <<<"$out" || fail 'radius expected/live/baseline row'
+grep -Fq 'display_ui_visual|unverified|settings_readback_is_not_launcher_or_systemui_rendering_evidence' <<<"$out" || fail 'visual evidence boundary missing'
+! grep -Fq 'visual=verified' <<<"$out" || fail 'diagnostics invented visual verification'
+# Stock with an owned baseline is compared to that exact baseline, not a factory guess.
+setcfg ui_recents_memory stock
+run_ui apply ui_recents_memory >/dev/null || fail 'Stock fixture restore failed'
+out="$(run_ui diagnose ui_recents_memory)"
+grep -Fq 'verdict=stock_baseline_matches' <<<"$out" || fail "Stock baseline verdict: $out"
+# A later ROM overwrite is a readback mismatch even though the original ASB write succeeded.
+setcfg ui_recents_corner_radius 20
+setval global oost_recent_task_radius_dp 999
+out="$(run_ui diagnose ui_recents_corner_radius)"
+grep -Fq 'verdict=readback_mismatch_visual_unverified' <<<"$out" || fail "ROM overwrite verdict: $out"
+grep -Fq 'name=oost_recent_task_radius_dp|expected=20|live=999|baseline=-1' <<<"$out" || fail 'ROM overwrite values missing'
+# Transport failure stays distinct from a missing renderer and never leaks raw error text.
+rm -f "$S/system.screen_off_timeout"
+out="$(run_ui diagnose ui_recents_memory)"
+grep -Fq 'settings_transport=unavailable' <<<"$out" || fail 'unavailable transport header'
+grep -Fq 'verdict=settings_unavailable' <<<"$out" || fail 'unavailable transport verdict'
+grep -Fq 'live=unknown' <<<"$out" || fail 'unavailable live value was not unknown'
+! grep -Fq 'Failure calling service' <<<"$out" || fail 'raw transport error leaked as a value'
+setval system screen_off_timeout 30000
+mv "$T/bin/cmd" "$T/bin/cmd.off"
+out="$(run_ui diagnose ui_recents_memory)"
+grep -Fq 'home=unknown|home_version=unknown' <<<"$out" || fail 'unavailable Home was not unknown'
+if run_ui diagnose not_a_key >"$T/out" 2>&1; then fail 'unknown diagnostic key accepted'; fi
+grep -Fq 'error=unknown_key' "$T/out" || fail 'unknown diagnostic key verdict'
+need() { grep -Fq "$2" "$1" || fail "$3"; }
+need "$ROOT/tools/asb_diag.sh" '_dui_diag' 'asbdiag lacks the new evidence section'
+need "$ROOT/tools/asb_diag.sh" 'visual effect is never inferred from Settings readback' 'asbdiag visual boundary missing'
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'asbdiag copies differ'
+python3 - "$ROOT/webroot" <<'PY' || fail 'WebUI/localization contract'
+import json,pathlib,sys
+w=pathlib.Path(sys.argv[1]); h=(w/'index.html').read_text()
+assert "T('t_cfg_settings_written_visual_unverified', ' · Settings saved; visible effect not verified')" in h
+for p in sorted((w/'i18n').glob('*.json')):
+ d=json.loads(p.read_text()); assert d.get('t_cfg_settings_written_visual_unverified'),p.name
+PY
+echo 'PASS display/ui diagnostics buildfix16: read-only eight-control evidence, exact expected/live/baselines, Home/version, transport and ROM-overwrite separation, visual unverified, asbdiag/WebUI and 13 locales'
+)
+
 t_benchmark_learning_isolation_dev63() (
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -10194,7 +10304,7 @@ EOF
 chmod 0755 "$T/bin/cat"
 printf 'io_scheduler=mq-deadline\n' > "$T/conf"
 if CAT_COUNT="$T/cat-count" PATH="$T/bin:$PATH" run_io apply > "$T/out" 2>&1; then fail 'readback mismatch reported success'; fi
-grep -Fq 'io_scheduler|readback_mismatch|' "$T/out" || fail "readback mismatch verdict: $(cat "$T/out")"
+grep -Fq 'io_scheduler|rollback_failed|' "$T/out" || fail "readback mismatch with failed rollback verdict: $(cat "$T/out")"
 rm -rf "$T/bin"
 
 new_fixture
@@ -10216,6 +10326,207 @@ echo 'PASS I/O scheduler runtime: multi-device discovery, custom names, auto pol
 )
 
 
+t_io_scheduler_smart_scenarios() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+IOS="$ROOT/runtime/asb_io_scheduler.sh"
+T="$(mktemp -d)"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL Smart I/O scheduler scenarios: $*" >&2; exit 1; }
+mkdir -p "$T/mod"
+new_fixture() {
+  rm -rf "$T/block" "$T/state"
+  mkdir -p "$T/block/sda/queue" "$T/block/mmcblk0/queue" "$T/state"
+  printf '0\n' > "$T/block/sda/queue/rotational"
+  printf '0\n' > "$T/block/mmcblk0/queue/rotational"
+  printf 'none [mq-deadline] kyber adios bfq\n' > "$T/block/sda/queue/scheduler"
+  printf 'none mq-deadline [kyber] adios bfq\n' > "$T/block/mmcblk0/queue/scheduler"
+  printf 'smart\n' > "$T/mod/current_profile"
+  printf 'io_scheduler=auto\n' > "$T/conf"
+}
+run_io() {
+  env MODDIR="$T/mod" ASB_CONF="$T/conf" ASB_IO_BLOCK_ROOT="$T/block" \
+    ASB_IO_SCHEDULER_STATE="$T/state" ${ASB_PROFILE:+ASB_PROFILE="$ASB_PROFILE"} sh "$IOS" "$@"
+}
+active() {
+  if grep -Fq '[' "$1"; then sed -n 's/.*\[\([^][]*\)\].*/\1/p' "$1"; else cat "$1"; fi
+}
+expect_both() {
+  [ "$(active "$T/block/sda/queue/scheduler")" = "$1" ] || fail "sda expected $1, got $(active "$T/block/sda/queue/scheduler")"
+  [ "$(active "$T/block/mmcblk0/queue/scheduler")" = "$1" ] || fail "mmcblk0 expected $1, got $(active "$T/block/mmcblk0/queue/scheduler")"
+}
+expose_both() {
+  case "$1" in
+    adios) line='none mq-deadline kyber [adios] bfq' ;;
+    kyber) line='none mq-deadline [kyber] adios bfq' ;;
+    mq-deadline) line='none [mq-deadline] kyber adios bfq' ;;
+    *) fail "cannot expose unexpected active scheduler $1" ;;
+  esac
+  printf '%s\n' "$line" > "$T/block/sda/queue/scheduler"
+  printf '%s\n' "$line" > "$T/block/mmcblk0/queue/scheduler"
+}
+expect_smart() {
+  out="$(run_io smart "$1" "$2")" || fail "smart $1 $2 failed: $out"
+  printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|' || fail "smart $1 $2 verdict: $out"
+  expect_both "$3"
+  [ "$(cat "$T/state/smart.plan")" = "$1 $2" ] || fail "smart plan was not saved for $1 $2"
+  # A real sysfs queue keeps its available list after a write. Recreate that readback
+  # contract so consecutive scenario changes do not collapse to a one-value fixture.
+  expose_both "$3"
+}
+
+new_fixture
+expect_smart 4 1 adios
+expect_smart 3 1 adios
+expect_smart 2 1 kyber
+expect_smart 1 1 kyber
+expect_smart 0 1 mq-deadline
+expect_smart 4 0 mq-deadline
+expect_smart 0 0 mq-deadline
+expect_smart 4 1 adios
+out="$(run_io apply)" || fail "generic Smart apply after gaming plan failed: $out"
+expect_both adios
+[ "$(cat "$T/state/smart.plan")" = '4 1' ] || fail 'generic apply discarded gaming plan'
+expose_both adios
+expect_smart 2 1 kyber
+out="$(run_io apply)" || fail "generic Smart apply after daily plan failed: $out"
+expect_both kyber
+[ "$(cat "$T/state/smart.plan")" = '2 1' ] || fail 'generic apply discarded daily plan'
+
+new_fixture
+printf 'none [mq-deadline] kyber bfq\n' > "$T/block/sda/queue/scheduler"
+printf 'none [mq-deadline] kyber bfq\n' > "$T/block/mmcblk0/queue/scheduler"
+expect_smart 4 1 kyber
+printf 'none [mq-deadline] bfq\n' > "$T/block/sda/queue/scheduler"
+printf 'none [mq-deadline] bfq\n' > "$T/block/mmcblk0/queue/scheduler"
+expect_smart 2 1 mq-deadline
+
+new_fixture
+printf '[bfq]\n' > "$T/block/sda/queue/scheduler"
+printf '[bfq]\n' > "$T/block/mmcblk0/queue/scheduler"
+for profile in smart balanced performance battery; do
+  if ASB_PROFILE="$profile" run_io apply > "$T/out" 2>&1; then fail "$profile Auto selected BFQ"; fi
+  grep -Fq 'io_scheduler|not_exposed|auto|' "$T/out" || fail "$profile BFQ-only verdict"
+  [ "$(cat "$T/block/sda/queue/scheduler")" = '[bfq]' ] || fail "$profile Auto changed BFQ-only sda"
+  [ "$(cat "$T/block/mmcblk0/queue/scheduler")" = '[bfq]' ] || fail "$profile Auto changed BFQ-only mmcblk0"
+done
+if run_io smart 4 1 > "$T/out" 2>&1; then fail 'scenario Auto selected BFQ'; fi
+grep -Fq 'io_scheduler|not_exposed|auto|' "$T/out" || fail 'scenario BFQ-only verdict'
+[ ! -e "$T/state/sda.prev" ] && [ ! -e "$T/state/mmcblk0.prev" ] || fail 'failed BFQ-only preflight captured baselines'
+
+new_fixture
+printf 'io_scheduler=bfq\n' > "$T/conf"
+out="$(run_io smart 4 1)" || fail "explicit Smart BFQ failed: $out"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|bfq|' || fail "explicit BFQ verdict: $out"
+expect_both bfq
+[ ! -e "$T/state/smart.plan" ] || fail 'manual BFQ created an automatic scenario plan'
+printf 'io_scheduler=stock\n' > "$T/conf"
+run_io restore >/dev/null || fail 'manual BFQ Stock restore failed'
+[ "$(cat "$T/block/sda/queue/scheduler")" = mq-deadline ] || fail 'manual BFQ did not restore sda baseline'
+[ "$(cat "$T/block/mmcblk0/queue/scheduler")" = kyber ] || fail 'manual BFQ did not restore mmcblk0 baseline'
+
+new_fixture
+expect_smart 4 1 adios
+expect_smart 0 1 mq-deadline
+printf 'io_scheduler=stock\n' > "$T/conf"
+out="$(run_io restore)" || fail "Smart Auto Stock restore failed: $out"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|restored|stock|' || fail "Smart Stock verdict: $out"
+[ "$(cat "$T/block/sda/queue/scheduler")" = mq-deadline ] || fail 'Smart Stock did not restore sda baseline'
+[ "$(cat "$T/block/mmcblk0/queue/scheduler")" = kyber ] || fail 'Smart Stock did not restore mmcblk0 baseline'
+[ ! -e "$T/state/smart.plan" ] || fail 'Stock retained Smart scenario plan'
+
+new_fixture
+expect_smart 4 1 adios
+if run_io smart 5 1 > "$T/out" 2>&1; then fail 'invalid hint succeeded'; fi
+grep -Fq 'error=bad_hint' "$T/out" || fail 'invalid hint verdict'
+if run_io smart 4 2 > "$T/out" 2>&1; then fail 'invalid screen succeeded'; fi
+grep -Fq 'error=bad_screen' "$T/out" || fail 'invalid screen verdict'
+if run_io smart 4 > "$T/out" 2>&1; then fail 'missing screen succeeded'; fi
+grep -Fq 'usage: asb_io_scheduler.sh smart HINT SCREEN' "$T/out" || fail 'missing screen usage'
+if run_io smart 4 1 extra > "$T/out" 2>&1; then fail 'extra smart argument succeeded'; fi
+expect_both adios
+[ "$(cat "$T/state/smart.plan")" = '4 1' ] || fail 'invalid command changed Smart plan'
+
+new_fixture
+printf 'balanced\n' > "$T/mod/current_profile"
+out="$(run_io apply)" || fail "non-Smart static Auto failed: $out"
+expect_both adios
+[ ! -e "$T/state/smart.plan" ] || fail 'non-Smart static Auto created scenario plan'
+echo 'PASS Smart I/O scheduler scenarios: gaming/heavy ADIOS, daily Kyber, idle/screen-off mq-deadline, discovered fallbacks, plan reuse, manual-only BFQ, exact Stock restore and bounded arguments'
+)
+
+
+t_io_scheduler_multidevice_buildfix16() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+IOS="$ROOT/runtime/asb_io_scheduler.sh"
+T="$(mktemp -d)"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL I/O scheduler multidevice buildfix16: $*" >&2; exit 1; }
+mkdir -p "$T/mod"
+printf 'smart\n' > "$T/mod/current_profile"
+printf 'io_scheduler=auto\n' > "$T/conf"
+new_tree() {
+  rm -rf "$T/block" "$T/state" "$T/bin"
+  mkdir -p "$T/block/sda/queue" "$T/block/mmcblk0/queue" "$T/state"
+  printf '0\n' > "$T/block/sda/queue/rotational"
+  printf '0\n' > "$T/block/mmcblk0/queue/rotational"
+}
+run_io() {
+  env MODDIR="$T/mod" ASB_CONF="$T/conf" ASB_IO_BLOCK_ROOT="$T/block" \
+    ASB_IO_SCHEDULER_STATE="$T/state" sh "$IOS" "$@"
+}
+active() {
+  if grep -Fq '[' "$1"; then sed -n 's/.*\[\([^][]*\)\].*/\1/p' "$1"; else cat "$1"; fi
+}
+# Different queues can legitimately expose different sets. Auto must choose per queue,
+# report mixed live state, and restore different originals rather than require one global name.
+new_tree
+printf 'none [mq-deadline] adios\n' > "$T/block/sda/queue/scheduler"
+printf '[none] mq-deadline\n' > "$T/block/mmcblk0/queue/scheduler"
+out="$(run_io smart 4 1)" || fail "partial-exposure Auto failed: $out"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|mixed|' || fail "partial-exposure verdict: $out"
+[ "$(active "$T/block/sda/queue/scheduler")" = adios ] || fail 'sda did not use exposed ADIOS'
+[ "$(active "$T/block/mmcblk0/queue/scheduler")" = mq-deadline ] || fail 'second queue did not fall back independently'
+printf 'io_scheduler=stock\n' > "$T/conf"
+out="$(run_io restore)" || fail "partial-exposure Stock failed: $out"
+[ "$(active "$T/block/sda/queue/scheduler")" = mq-deadline ] || fail 'sda original not restored'
+[ "$(active "$T/block/mmcblk0/queue/scheduler")" = none ] || fail 'mmc original not restored'
+[ ! -e "$T/state/smart.plan" ] || fail 'Stock retained partial-exposure Smart plan'
+# Minimal kernels exposing only none or only ADIOS still have a bounded automatic result.
+for only in none adios; do
+  new_tree
+  printf '[%s]\n' "$only" > "$T/block/sda/queue/scheduler"
+  printf '[%s]\n' "$only" > "$T/block/mmcblk0/queue/scheduler"
+  printf 'io_scheduler=auto\n' > "$T/conf"
+  out="$(run_io smart 0 1)" || fail "$only-only Auto failed: $out"
+  printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|' || fail "$only-only verdict"
+  [ "$(active "$T/block/sda/queue/scheduler")" = "$only" ] || fail "$only-only sda changed unexpectedly"
+  [ "$(active "$T/block/mmcblk0/queue/scheduler")" = "$only" ] || fail "$only-only mmc changed unexpectedly"
+done
+# A failure on the second queue rolls the first queue back to its pre-attempt value.
+new_tree
+printf 'none [mq-deadline] kyber\n' > "$T/block/sda/queue/scheduler"
+rm -f "$T/block/mmcblk0/queue/scheduler"; ln -s /dev/full "$T/block/mmcblk0/queue/scheduler"
+mkdir -p "$T/bin"
+cat > "$T/bin/cat" <<'MOCK'
+#!/bin/sh
+case "${1:-}" in
+  */mmcblk0/queue/scheduler) printf 'none [mq-deadline] kyber\n' ;;
+  *) exec /bin/cat "$@" ;;
+esac
+MOCK
+chmod +x "$T/bin/cat"
+printf 'io_scheduler=auto\n' > "$T/conf"
+if PATH="$T/bin:$PATH" run_io smart 2 1 > "$T/out" 2>&1; then fail 'second-queue write failure returned success'; fi
+grep -Fq 'io_scheduler|write_failed|' "$T/out" || fail "second-queue failure verdict: $(cat "$T/out")"
+[ "$(active "$T/block/sda/queue/scheduler")" = mq-deadline ] || fail 'first queue retained a partial Smart apply'
+[ ! -e "$T/state/smart.plan" ] || fail 'failed partial apply saved a Smart plan'
+[ "$(cat "$T/state/sda.prev")" = mq-deadline ] || fail 'rollback damaged the persistent sda Stock baseline'
+[ "$(cat "$T/state/mmcblk0.prev")" = mq-deadline ] || fail 'rollback damaged the persistent mmc Stock baseline'
+echo 'PASS I/O scheduler multidevice buildfix16: per-queue partial exposure, mixed live state, minimal none/ADIOS kernels, exact per-device Stock and second-write transactional rollback with preserved baselines'
+)
+
 t_smart_manual_mglru_ownership() (
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -10235,8 +10546,11 @@ assert 'mglru_mode' not in smart.group(1).split(),'dynamic Smart value would be 
 assert 'mglru_mode' in manual.group(1).split(),'manual on/off/stock is silently dropped in Smart'
 assert 'io_scheduler' in smart.group(1).split() and 'io_scheduler' in manual.group(1).split(),'scheduler no longer applied'
 assert 'if [ "$MODE" != manual ] && [ "$(_cfg mglru_mode)" = smart ]; then' in d,'dynamic writer is not limited to mglru_mode=smart'
+assert 'if [ "$MODE" != manual ] && [ "$(_cfg io_scheduler)" = auto ]; then' in d,'Smart I/O owner is not limited to Auto and non-manual mode'
+assert 'if [ "$_ios_profile" = smart ] && [ -r "$_ios_mod/runtime/asb_io_scheduler.sh" ]; then' in d,'Smart I/O owner is not limited to the active Smart profile'
+assert 'sh "$_ios_mod/runtime/asb_io_scheduler.sh" smart "$HINT" "$SCREEN"' in d,'Smart I/O owner does not pass the bounded scenario'
 PY
-echo 'PASS Smart manual MGLRU ownership: only smart:smart suppresses ordinary MGLRU apply; on/off/stock remain live and the dynamic writer accepts only explicit smart'
+echo 'PASS Smart manual ownership: MGLRU remains explicit; scenario I/O runs only for active Smart + Auto + non-manual and receives HINT/SCREEN through the registered helper'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

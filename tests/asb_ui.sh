@@ -4969,7 +4969,9 @@ assert 'background:linear-gradient(135deg,#2cd6ad,#67e4c8)' not in prim, "the po
 assert 'rgba(44,214,173,.16)' in prim and 'border:1px solid rgba(44,214,173,.34)' in prim, "sheet button lost its tonal dark style"
 assert '.cfg-profile-primary:active' in s, "sheet button has no pressed state"
 assert 'html[data-asb-theme="light"] .cfg-profile-primary,\nhtml[data-asb-theme="light"] .cfg-profile-apply' in s, "light tonal primary rule is missing"
-assert "'cfg-tile-desc'" in s and "'cfg-tile-bar'" in s, "category tiles lack their description and fill bar"
+assert "'cfg-tile-desc'" in s and "'cfg-tile-count'" in s, "category tiles lack their description and structural total"
+hub_body = s[s.index('function cfgRenderHub(list) {'):s.index('\n}\n', s.index('function cfgRenderHub(list) {'))]
+assert "'cfg-tile-bar'" not in hub_body and 'cfgLoadFresh' not in hub_body and 'cfgIsActive' not in hub_body, "category totals still depend on Config state or render a bar"
 assert "sub.className = 'smart-banner-pill' + (we ? ' we' : '');" in s, "weekday/weekend is still glued to the slot name"
 assert "html[data-asb-font=\"device\"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }" in s, "no device-font switch"
 assert "'px @ '" not in s and "document.documentElement.dataset.asbUi = w + 'px@' + scale;" in s, "the scale reading is still glued to the device line"
@@ -4985,10 +4987,10 @@ assert "classList.toggle('asb-fit-c1'" in s and "classList.toggle('asb-fit-c2'" 
 assert '[68, 58, 48][tier]' in s and '[100, 88, 76][tier]' in s, "the card/tile floors do not step down with the tier"
 assert 'Math.min(124, Math.floor(h))' in s, "the compact 3 x 3 hub lost its tile-height ceiling"
 for token in ('justify-content:center;\n  gap:0;\n  padding:5px 7px;',
-              'width:34px;\n  height:34px;\n  margin:0 0 2px;',
+              'width:40px;\n  height:40px;\n  margin:0 0 3px;',
               'font-size:11.5px;', 'min-height:2.2em;',
               'flex-direction:row;\n  align-items:center;\n  justify-content:center;',
-              'margin:4px 0 0;', 'max-width:64px; height:5px;'):
+              'margin:4px 0 0;'):
     assert token in s, 'the compact tile content geometry is incomplete: ' + token
 assert 'asbFitPages._tier' in s, "the tier is not remembered between passes"
 # fix203: the tier decision reads the page as it asks to be - the fitted heights are zeroed
@@ -11148,8 +11150,8 @@ assert 'asbUiFrame.request(asbFitPages);' in scale
 for token in ('html .cfg-tile-ico {','place-items:center;','align-self:center;',
               'html .cfg-tile-name {','overflow-wrap:anywhere;',
               'html .cfg-tile-desc {','min-height:2.2em;','-webkit-line-clamp:2;',
-              'text-align:center;','html .cfg-tile-bar { flex:1 1 auto; width:auto; min-width:20px; max-width:64px; height:5px;',
-              "tile.setAttribute('aria-label'", "bar.setAttribute('aria-hidden', 'true')"):
+              'text-align:center;','html .cfg-tile-foot {','justify-content:center;',
+              "tile.setAttribute('aria-label'", "cnt.className = 'cfg-tile-count'"):
     assert token in s, token
 assert 'grid-template-columns: repeat(3, 1fr);' in s
 expected={'ar': ['DSP والصوت وبلوتوث',
@@ -11309,10 +11311,10 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   const created=[];global.document={createElement:t=>{const e=new E(t);created.push(e);return e}};
   global.CFG_GROUPS=['iface','feel','net','camera','audio','battery','kernel','zygisk','ui'].map(id=>({id,icon:id,name:id}));
   global.CFG_ITEMS=CFG_GROUPS.map(g=>({key:g.id,def:'0'}));
-  global.cfgGroupOf=k=>k;global._cfgVals={iface:'1'};global.cfgIsActive=(it,cur)=>String(cur)==='1';
+  global.cfgGroupOf=k=>k;global._cfgVals={iface:'1'};global.cfgIsActive=()=>{throw Error('structural totals must not count active values')};
   global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',kernel:'Scheduler, MGLRU, wakeups',feel:'LTPO, vibration, touch',zygisk:'Master switch and status',ui:'Services, processes, diagnostics'};
   global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
-  global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.cfgLoadFresh=()=>true;global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};global.asbUiFrame={request:()=>{}};
+  global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.cfgLoadFresh=()=>{throw Error('hub totals must not wait for Config freshness')};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};global.asbUiFrame={request:()=>{}};
   global.setTimeout=()=>0;
   eval(grab('function cfgGroupHiddenKeys(groupId) {','// Settings whose effect lands in a file').replace(/^let /gm,'var ')+';globalThis.renderHub=cfgRenderHub;');
   const list=new E('div');renderHub(list);const hub=list.children[0];
@@ -11323,19 +11325,22 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
     chk(tile.className==='cfg-tile cat-'+wantedCat,'category hue alias differs at '+CFG_GROUPS[i].id+': '+tile.className);
     chk(tile.children[0].innerHTML.includes('data-kind="'+CFG_GROUPS[i].id+'"'),'icon is missing at '+i);
     chk(tile.attrs['aria-label'].includes(tile.children[2].textContent),'accessible label lacks the scope at '+i);
-    const foot=tile.children[3];chk(foot.children[0].className.includes('cfg-tile-count')&&foot.children[1].attrs['aria-hidden']==='true','footer/count contract differs at '+i);
+    const foot=tile.children[3];chk(foot.children.length===1&&foot.children[0].className==='cfg-tile-count','footer must contain only one centred total at '+i);
+    const expected=1+(CFG_GROUPS[i].id==='camera'?2:['kernel','battery'].includes(CFG_GROUPS[i].id)?1:0);
+    chk(foot.children[0].textContent===expected+' controls','structural total differs at '+i+': '+foot.children[0].textContent);
+    chk(!foot.children[0].className.includes('is-pending')&&!foot.children[0].className.includes('has-on'),'total still has an activation/pending state at '+i);
   });
-  chk(hub.children[0].children[3].children[0].textContent==='1 / 1','active count was lost');
-  chk(hub.children[1].children[3].children[0].textContent==='0 / 1','empty count was invented');
-  global.cfgLoadFresh=()=>false;const staleList=new E('div');renderHub(staleList);
-  const pending=staleList.children[0].children[0].children[3].children[0];
-  chk(pending.textContent==='1 controls'&&pending.className.includes('is-pending'),'unresolved counter invented an active value or lost its pending style');
+  const totals=hub.children.map(tile=>tile.children[3].children[0].textContent);
+  _cfgVals.iface='0';const staleList=new E('div');renderHub(staleList);
+  const afterHub=staleList.children[0];
+  chk(afterHub.children.every((tile,i)=>tile.children[3].children.length===1&&tile.children[3].children[0].textContent===totals[i]),'Config state changed structural totals');
+  chk(JSON.stringify(staleList).indexOf('cfg-tile-bar')<0,'category hub created a bar node');
   console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix328 runtime: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL WebUI fix328 runtime: $out" >&2; exit 1; }
-echo "PASS WebUI fix328: neutral first Home frame, synchronous bounded header cache without redundant fetch, verified cold fetch/replacement, pre-load warm-up and one aligned accessible nine-category structure in 13 locales"
+echo "PASS WebUI fix328: neutral first Home frame, bounded header cache, pre-load warm-up and nine centred structural totals that never wait for Config, count active values or create bars"
 )
 
 t_webui_fix329_home_monitor_entrance() (
@@ -11352,14 +11357,14 @@ s=open(sys.argv[1],encoding='utf-8').read()
 head=s[:s.index('<style>\n:root {')]
 assert "document.documentElement.classList.add('asb-home-pending');" in head
 assert 'html.asb-home-pending .page:not(.live-page) { opacity:0; pointer-events:none; }' in s
-assert '--page-fade-in: 0.26s;' in s and '--page-fade-delay: 0.06s;' in s
+assert '--page-fade-in: 0.18s;' in s and '--page-fade-delay: 0.04s;' in s
 home=s[s.index('(async () => {',s.index('function openTelegram')):s.index('function fmtTempC')]
 assert home.index('loadDeviceInfo();') < home.index('await asbStartupSnapshot();')
 assert home.index('await asbStartupSnapshot();') < home.index('await I18N_READY;')
 reveal=s[s.index('let _asbHomeRevealed = false;'):s.index('// ── localized boot:')]
 for token in ('function asbHomeReveal() {','asbNavAnimMark();','asbFitPagesNow();',
               "root.classList.remove('asb-home-pending');","transform:'scale(.985)'",
-              "transform:'scale(1)'",'duration:260','delay:60',
+              "transform:'scale(1)'",'duration:180','delay:40',
               "easing:'cubic-bezier(.2,.7,.25,1)'",'window.addEventListener(\'load\', asbHomeReveal',
               'setTimeout(asbHomeReveal, 1600);'):
     assert token in reveal, token
@@ -11372,7 +11377,7 @@ assert s.count('asb-value-pending') >= 8
 for token in ('html .cfg-tile {\n  align-items:center;','text-align:center;',
               'html .cfg-tile-ico {\n  display:grid;\n  place-items:center;\n  align-self:center;',
               'html .cfg-tile-name {\n  width:100%;','html .cfg-tile-desc {\n  width:100%;',
-              'html .cfg-tile-count { flex:0 0 auto; min-width:34px; box-sizing:border-box; padding:3px 5px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:7px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.15 var(--mono); letter-spacing:.01em; text-align:center; }'):
+              'html .cfg-tile-count { flex:0 0 auto; min-width:30px; box-sizing:border-box; padding:2px 4px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:6px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.1 var(--mono); letter-spacing:0; text-align:center; }'):
     assert token in s, token
 PY
 command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix329 runtime: no node'; exit 0; }
@@ -11389,7 +11394,7 @@ chk(!pending.has('asb-value-pending')&&pending.has('asb-value-arrived')&&attrs['
 const events=[];
 const rootClasses=new Set(['asb-home-pending']);
 const root={classList:{remove:c=>rootClasses.delete(c)}};
-const home={style:{transition:''},offsetWidth:412,animate:(frames,options)=>{events.push('animate');chk(options.duration===260&&options.delay===60,'Monitor timing was not reused');chk(frames[0].transform==='scale(.985)'&&frames[1].transform==='scale(1)','fade/scale keyframes differ');return {cancel:()=>events.push('cancel'),set onfinish(fn){this.done=fn}}}};
+const home={style:{transition:''},offsetWidth:412,animate:(frames,options)=>{events.push('animate');chk(options.duration===180&&options.delay===40,'Monitor timing was not reused');chk(frames[0].transform==='scale(.985)'&&frames[1].transform==='scale(1)','fade/scale keyframes differ');return {cancel:()=>events.push('cancel'),set onfinish(fn){this.done=fn}}}};
 global.document={documentElement:root,querySelector:s=>s==='.page:not(.live-page)'?home:null};
 global.window={matchMedia:()=>({matches:false}),addEventListener:()=>{}};
 global.setTimeout=()=>{};global.requestAnimationFrame=fn=>{events.push('raf');fn()};global.asbUiFrame={request:fn=>requestAnimationFrame(fn)};
@@ -11714,7 +11719,7 @@ let now = 0; const performance = { now: () => now };
 let frames = [], timers = [], fits = 0;
 function requestAnimationFrame(f) { frames.push(f); }
 function setTimeout(f, ms) { timers.push({ f, at: now + ms }); }
-function _pageAnimMs() { return 320; }
+function _pageAnimMs() { return 220; }
 function asbFitPagesNow() { fits++; }
 const asbUiFrame = { request(f) { if (!frames.includes(f)) frames.push(f); } };
 JS
@@ -11731,7 +11736,7 @@ chk(frames.length === 0 && timers.length === 1, 'a fit during a page slide was n
 tick(200); chk(fits === 1 && frames.length === 0, 'the fit ran inside the slide');
 tick(200); flush(); chk(fits === 2, 'the deferred fit never ran after the slide');
 let ran = 0; asbNavAnimMark(); asbAfterNavAnim(() => ran++, 30);
-tick(300); chk(ran === 0, 'after-slide work ran early'); tick(100); chk(ran === 1, 'after-slide work never ran');
+tick(200); chk(ran === 0, 'after-slide work ran early'); tick(100); chk(ran === 1, 'after-slide work never ran');
 if (bad) process.exit(1); console.log('ok');
 JS
 } > "$T/fit.js"
@@ -11751,7 +11756,7 @@ monitor_schedule = body('function liveMonitorSchedule(delay) {')
 assert 'setTimeout(function () {' in monitor_schedule and 'pollLive(true)' in monitor_schedule, 'Monitor scheduler lost its deferred read'
 cfg = body('function openConfigPage() {')
 assert 'run(' not in cfg and 'zygiskHeaderRefresh' not in cfg and 'loadDeviceClass' not in cfg, 'opening Settings starts a root shell on the tap'
-assert 'asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 30);' in cfg, 'Settings no longer refreshes after its slide'
+assert 'asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 16);' in cfg, 'Settings no longer refreshes after its shortened slide'
 assert '_cfgHubSig === cfgHubSig()' in cfg, 'an unchanged hub is rebuilt before every slide'
 load = body('async function cfgLoadNow() {')
 assert load.count('runBatch(') == 1 and ' run(' not in load, 'Settings reads are not one batch'
@@ -14910,7 +14915,8 @@ for key in keys:
     assert key + ':APPLY_LIVE' in h, key + ' is not live'
 branch = h[h.index('} else if (DISPLAY_UI_KEYS.indexOf(key) >= 0) {'):h.index('} else if (BLUR_KEYS.indexOf(key) >= 0) {')]
 for token in ('asb_display_ui_apply.sh', 'dr.errno === 0', "ds === 'applied'", "ds === 'restored'",
-              "ds === 'stock_unowned'", "ds === 'restore_failed'", "t_cfg_write_rejected"):
+              "ds === 'stock_unowned'", "ds === 'restore_failed'", "t_cfg_write_rejected",
+              "t_cfg_settings_written_visual_unverified"):
     assert token in branch, token
 assert 'dr.errno === 0 && ds ===' in branch, 'stored config alone can still produce a success toast'
 for key in keys:
@@ -14920,7 +14926,8 @@ for p in sorted((root/'webroot/i18n').glob('*.json')):
     for key in keys:
         c = d['cfg'][key]
         assert c['name'].strip() and c['desc'].strip(), (p.name,key)
-    for key in ('t_cfg_restored','t_cfg_stock_unowned','t_cfg_restore_failed','t_cfg_write_rejected'):
+    for key in ('t_cfg_restored','t_cfg_stock_unowned','t_cfg_restore_failed','t_cfg_write_rejected',
+                't_cfg_settings_written_visual_unverified'):
         assert d[key].strip(), (p.name,key)
     assert set(d['optFor']['ui_recents_corner_radius']) == {'stock','0','8','12','16','20','24','28','32'}
 print('PASS WebUI display/ui dev64: eight cards, unique mappings, live read-back verdicts, exact-restore states and 13 locales')
@@ -15201,7 +15208,7 @@ if(own('perf_ceiling_pct','85')!=='limit'||own('perf_ceiling_pct','100')!==null)
 if(own('heavy_prime_escape','1')!=='dynamic'||own('heavy_prime_escape','0')!==null)throw Error('prime master ownership');
 _cfgVals.heavy_prime_escape='1';if(own('prime_escape_burst_s','20')!=='limit'||own('prime_escape_rest_s','40')!=='limit')throw Error('prime guard ownership');
 _cfgVals.heavy_prime_escape='0';if(own('prime_escape_burst_s','20')!==null||own('prime_escape_rest_s','40')!==null)throw Error('disabled prime guards owned');
-if(own('io_scheduler','auto')!=='profile')throw Error('Smart I/O profile ownership missing');
+if(own('io_scheduler','auto')!=='dynamic')throw Error('Smart I/O scenario ownership missing');
 for(const k of ['kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_rt_boost','kernel_bore']){
  if(own(k,'auto')!=='dynamic')throw Error('Smart dynamic kernel ownership missing '+k);
  for(const v of ['stock','off','on','0','2','512'])if(own(k,v)!==null)throw Error('manual kernel value incorrectly Smart-owned '+k+'='+v);
@@ -15338,12 +15345,17 @@ assert 'lvStale(false);' in open_live and 'lvStale(true)' not in open_live
 assert open_live.index('lvMonTilesRestore()') < open_live.index("p.classList.add('open');")
 assert open_live.index('lvMonSmartRestore()') < open_live.index("p.classList.add('open');")
 assert 'liveMonitorSchedule(liveOpenRefreshDelay());' in open_live
-assert 'const LIVE_OPEN_SETTLE_MS = 320;' in s and 'const LIVE_OPEN_REUSE_MS = 1200;' in s
+assert 'const LIVE_OPEN_SETTLE_MS = 240;' in s and 'const LIVE_OPEN_REUSE_MS = 1200;' in s
 hub = body('function cfgRenderHub(list) {')
-assert 'const counted = cfgLoadFresh();' in hub
-assert "cnt.textContent = counted" in hub and "T('cfg_tile_total', '{n} controls')" in hub and "cnt.className = 'cfg-tile-count'" in hub
-assert 'Math.round(on * 100 / total)' in hub and 'Math.round(on * 100 / items.length)' not in hub
-assert "(cfgLoadFresh() ? 1 : 0)" in body('function cfgHubSig() {')
+assert 'const total = items.length + extras.length;' in hub
+assert "cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', String(total));" in hub and "cnt.className = 'cfg-tile-count'" in hub
+assert 'cfgLoadFresh' not in hub and 'cfgIsActive' not in hub and 'cfg-tile-bar' not in hub and 'foot.children.length' not in hub
+hub_sig = body('function cfgHubSig() {')
+assert 'cfgLoadFresh' not in hub_sig and '_cfgVals' not in hub_sig and 'cfgHubExtraSig()' in hub_sig
+assert '--page-anim-dur: 0.22s;' in s
+assert 'function asbNavAnimMark() { _asbNavAnimUntil = performance.now() + _pageAnimMs() + 24; }' in s
+assert '_cfgAnimUntil = performance.now() + _pageAnimMs() + 32;' in s
+assert 'asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 16);' in s
 assert "spec[0] === 'asb_properties'" in s and "createElement('details')" in s
 assert "card.className = 'lgr-sec dev-collapsible';" in s and 'dev-collapsible[open]' in s
 assert '.inf-advice-row { display:grid; grid-template-columns:minmax(0,1fr) auto;' in s
@@ -15399,8 +15411,8 @@ const a=h.indexOf('function openLivePage() {'),b=h.indexOf('function closeLivePa
 eval(h.slice(a,b)+';globalThis.openMonitor=openLivePage;globalThis.refreshDelay=liveOpenRefreshDelay;');
 chk(refreshDelay()===1200,'fresh Monitor snapshot was not reused for the bounded window');
 now+=500;chk(refreshDelay()===700,'remaining Monitor reuse window was calculated incorrectly');
-now+=700;chk(refreshDelay()===320,'expired Monitor snapshot delayed the mandatory fresh read');
-_livePollMeta.lastSuccess=0;chk(refreshDelay()===320,'missing fresh read delayed the first Monitor poll');
+now+=700;chk(refreshDelay()===240,'expired Monitor snapshot delayed the mandatory fresh read');
+_livePollMeta.lastSuccess=0;chk(refreshDelay()===240,'missing fresh read delayed the first Monitor poll');
 
 const classes=new Set();
 const page={scrollTop:9,attrs:{},classList:{add:c=>{classes.add(c);events.push('class:'+c)},remove:c=>classes.delete(c),contains:c=>classes.has(c)},setAttribute:(k,v)=>page.attrs[k]=String(v)};
@@ -15426,7 +15438,84 @@ console.log('ok');
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "runtime: $out"
 [ "$out" = ok ] || fail "runtime: $out"
-echo 'PASS WebUI release12: immediate undimmed Monitor entry, fresh-only Settings counters, collapsed ASB properties, non-overlapping Infinite Log recommendations, simplified splash and compositor-friendly transitions'
+echo 'PASS WebUI release12: immediate undimmed Monitor entry, permanent centred Settings totals without Config dependence or bars, 220 ms navigation with bounded deferred work, simplified splash and compositor-friendly transitions'
+)
+
+t_webui_perceived_perf_buildfix17() (
+# buildfix17: visible motion and deferred work share one deadline; unchanged structural hubs
+# retain their DOM, while categories/search still repaint all live values. Larger category
+# icons and a quieter count pill must survive every existing compact-fit tier.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI perceived performance buildfix17: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source timing/render/layout contract'
+import re,sys
+s=open(sys.argv[1],encoding='utf-8').read()
+def body(sig):
+ i=s.index(sig); return s[i:s.index('\n}\n',i)+2]
+assert '--page-anim-dur: 0.22s;' in s
+assert '--page-fade-in: 0.18s;' in s and '--page-fade-delay: 0.04s;' in s
+assert 'duration:180, delay:40' in s
+assert 'const LIVE_OPEN_SETTLE_MS = 240;' in s
+assert 'const LIVE_OPEN_REUSE_MS = 1200;' in s
+assert '_cfgEnterUntil = performance.now() + 400;' in s
+for token in ('animation: asbRowIn .22s', 'animation-delay: .12s;', 'transform: translateY(8px)'):
+ assert token in s,token
+paint=body('function cfgPaintAfterLoad() {')
+assert 'if (!_cfgOpen) return;' in paint
+assert '!_cfgGroup && !_cfgSearch && list && list.firstChild && _cfgHubSig && _cfgHubSig === cfgHubSig()' in paint
+assert paint.index('asbTabbarVisibility();') < paint.index('\n    return;') < paint.index('cfgRender();')
+load=body('async function cfgLoadNow() {')
+assert 'cfgPaintAfterLoad();' in load and 'runBatch(parts)' in load
+hub=body('function cfgRenderHub(list) {')
+assert 'cfgLoadFresh' not in hub and 'cfgIsActive' not in hub and '_cfgVals' not in hub
+assert "cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', String(total));" in hub
+# Final cascade values, including both compact-fit fallbacks.
+for token in ('width:40px;\n  height:40px;\n  margin:0 0 3px;\n  border-radius:14px;',
+              'html .cfg-tile-ico .tech-icon { width:25px; height:25px; margin:0; }',
+              'min-width:30px; box-sizing:border-box; padding:2px 4px;',
+              'font:650 9px/1.1 var(--mono); letter-spacing:0;',
+              'html.asb-fit-c1 .cfg-tile-ico .tech-icon { width:24px; height:24px; }',
+              'html.asb-fit-c2 .cfg-tile-ico { width:36px; height:36px; margin-bottom:3px; border-radius:12px; }',
+              'html.asb-fit-c2 .cfg-tile-ico .tech-icon { width:22px; height:22px; }'):
+ assert token in s,token
+assert 180+40 == 220 and 220+120 < 400
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI perceived performance buildfix17 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const i=h.indexOf('function cfgPaintAfterLoad() {'),j=h.indexOf('\n}\n',i);
+if(i<0||j<0)throw Error('cfgPaintAfterLoad missing');
+let renders=0,chrome=0,tabs=0;
+let _cfgOpen=true,_cfgGroup=null,_cfgSearch='',_cfgHubSig='same';
+const list={firstChild:{}};
+function _el(id){return id==='cfgList'?list:null}
+function cfgHubSig(){return 'same'}
+function cfgRender(){renders++}
+function cfgSyncChrome(){chrome++}
+function asbTabbarVisibility(){tabs++}
+eval(h.slice(i,j+2));
+cfgPaintAfterLoad();
+if(renders!==0||chrome!==1||tabs!==1)throw Error('unchanged hub rebuilt or chrome not synchronized');
+cfgPaintAfterLoad();
+if(renders!==0||chrome!==2||tabs!==2)throw Error('second unchanged load rebuilt the hub');
+_cfgGroup='kernel';cfgPaintAfterLoad();
+if(renders!==1)throw Error('category values did not repaint');
+_cfgGroup=null;_cfgSearch='sched';cfgPaintAfterLoad();
+if(renders!==2)throw Error('search values did not repaint');
+_cfgSearch='';_cfgHubSig='stale';cfgPaintAfterLoad();
+if(renders!==3)throw Error('stale structural hub was retained');
+_cfgHubSig='same';_cfgOpen=false;cfgPaintAfterLoad();
+if(renders!==3||chrome!==2)throw Error('closed Settings painted');
+_cfgOpen=true;list.firstChild=null;cfgPaintAfterLoad();
+if(renders!==4)throw Error('missing hub DOM was not rebuilt');
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "runtime: $out"
+[ "$out" = ok ] || fail "runtime: $out"
+echo 'PASS WebUI perceived performance buildfix17: aligned 220 ms motion/deferred work, 400 ms bounded category entrance, unchanged hub DOM retention, live category/search repaint and larger icons with compact count pills in all fit tiers'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
