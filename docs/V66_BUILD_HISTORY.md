@@ -4,6 +4,58 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix14 - immediate Settings navigation, unified page exports and truthful repair states
+
+Input: the owner's ten-item WebUI/backend revision and a new 977-minute Infinite Log, two asbdiag
+snapshots and wakelock evidence. Base: the fully verified buildfix13 source archive.
+
+- **Settings opening:** one existing bounded `asbStartupLater()` transaction starts the shared
+  `cfgLoad()` immediately after the first frame. An immediate category tap joins that same
+  `_cfgLoadRun` instead of queueing another ten-part read behind Live. All nine category bars remain
+  available; pending tiles say how many controls they contain without inventing `0 / N`, then replace
+  it with real active/total counts. Count pills and 5 px category bars improve legibility. No polling
+  worker, repeated eager batch or fake readiness was added.
+- **Zygisk and Infinite Log:** the controllable Zygisk page no longer calls its heading a read-only
+  snapshot. Cached Infinite Log content stays at full opacity before/during Refresh, with timestamp
+  and status communicating freshness; its existing Back chip now uses the same `has-back` layout as
+  Zygisk. Saving either page does not trigger a fresh collector read.
+- **Fixed page exports:** Zygisk, Infinite Log and Device Diagnostics now save through the bounded
+  `runtime/asb_page_export.sh` begin/append/finish/abort protocol into `/sdcard/ASB/logs`. The browser
+  supplies only kind, timestamp and base64 chunks, never an arbitrary path. Unicode/multichunk content,
+  atomic rename, unsafe-input rejection and interrupted/decode cleanup are covered. Download is not a
+  fallback. Direct asbdiag uses `ASB/logs/asb_diag_report.txt`; WebUI suppresses side copies and keeps
+  one timestamped report. `P()` has explicit success status, completed collection exits zero, and a
+  real collector execution failure remains an error. Repeating `diag-start` after `saved` is tested.
+- **Activity/Service:** the existing exact `PACKAGE/CLASS` disable/restore owner remains unchanged.
+  The modal adds full-component search, selected-first/running-first ordering and explicit wording
+  that Disable persists until Restore. Discovery uses current Activity/Service records, package state
+  and `/data/adb/asb/wakelock_services`; no process freezer, automatic screen-off component scheduler
+  or package-wide SystemJobService rule was added.
+- **Exact wakeups:** the main card has one context-sensitive Start/Update action; Clear moved into
+  the source modal beside a compact refresh action. Search/filter state and already discovered names
+  survive a non-destructive `status` refresh; only intentional observe start/clear reset the window.
+  Saved Always/Screen-off rule count is now reported separately from currently active count, so a
+  saved screen-off rule no longer appears as zero saved rules while the screen is on.
+- **Repairs:** HeyTap descriptions and result handling now match its actual reversible package-state
+  backend in the source fallback and all 13 locales; no ART path was reintroduced. Battery Fix remains
+  reset-only and always publishes live level/charging evidence, including `reset=done`, so a real
+  100% on charger remains eligible after an earlier reset.
+- **Night evidence:** `night(longest)` is 410.0 minutes, 6%, 0.88%/h and 8.8% awake; `sleep` is a
+  different 391.2-minute row at 7%, 1.07%/h and 9.9% awake. Android's screen-off CPU window and the
+  recorder's idle row are different again. Application/kernel wakelock candidates overlap observation
+  windows and cannot be assigned shares of the nightly six percent without timestamp cross-checks.
+  Recorder awake periods bias sampled current. Relevant settings are unchanged between the two new
+  asbdiag snapshots; unnormalised session totals do not prove a regression. No new ASB-side drain cause,
+  logging/timer verdict or percentage improvement is claimed, and no broad app/kernel restriction was
+  added.
+- **Verification coverage:** updated WebUI fixtures retain full export-content/chunk/error assertions
+  under the new helper protocol, bounded warm-up dedupe, honest pending counts and nine categories.
+  Host fixtures cover Battery Fix none/pending/done and refusal states, page-export safety/Unicode/
+  multichunk/cleanup, diagnostic terminal status/failure/repeat, and component search/order. Full
+  working-tree and clean-source-ZIP canonical regressions plus manifest/mode/hash checks remain release
+  gates. Host/browser checks are not physical OnePlus 15 ColorOS WebView validation and do not prove
+  improved battery life.
+
 ## V66 dev66 buildfix13 - bounded routine-touch lifts, truthful writer metrics and unified support-log storage
 
 Input: two capture epochs, two asbdiag snapshots and a full-day Infinite Log from a user reporting
