@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-660-dev66-buildfix17-source",
-  "base": "AutoSystemBoost-V66-660-dev66-buildfix16-source.zip",
+  "release": "AutoSystemBoost-V66-660-dev66-buildfix18-source",
+  "base": "AutoSystemBoost-V66-660-dev66-buildfix17-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 272,
@@ -11,16 +11,15 @@
       "README.advanced.ru.md",
       "RELEASE_MANIFEST.json",
       "docs/V66_BUILD_HISTORY.md",
-      "tests/asb_system.sh",
+      "runtime/asb_debug_support.sh",
       "tests/asb_ui.sh",
-      "tools/asb_tree.sha256",
-      "webroot/index.html"
+      "tools/asb_tree.sha256"
     ],
     "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 8,
+      "changed": 7,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -181,13 +180,13 @@
   ],
   "host_verification": {
     "source_regression": "ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_source_regression.sh passed on the final pre-manifest working tree: 448 anchored PASS lines and the final ALL ASB HOST REGRESSIONS PASSED marker, four failed: 0 summaries, 0 FAIL lines, 0 FAILED summaries, 0 I/O errors and 0 Broken pipe; native strict warnings 48/62. The release-manifest/tree-hash snapshot is verified separately and by the clean-unpack regression gate.",
-    "targeted_runtime": "Targeted WebUI fixtures passed for the aligned 180 ms + 40 ms entrance and bounded 220/244 ms visual/deferred-work contract, 240 ms Monitor fresh-read settle with unchanged 1200 ms reuse, 400 ms category guard, unchanged and repeated hub DOM retention, mandatory category/search/stale/missing-DOM repaint, closed-Settings no-op behavior, structural totals, base/c1/c2 icon geometry and compact count pills. Existing root-batch, tap-handler, fitting and Zygisk transactional-mode performance gates also passed.",
-    "native_build": "No native source or binary was rebuilt or changed in buildfix17. Governor, Zygisk and DSP binaries retain their buildfix16 SHA-256 hashes.",
-    "header_browser_runtime": "Interactive Chromium with a bounded mocked root bridge passed at 412x915, 375x667, 360x560 and 320x480: real Home/Monitor/Settings tab clicks, category/back/search, forced Config refresh retaining hub node identity, Zygisk/Device/Report navigation and all seven I/O scheduler options with the Smart badge. Dark/light visual checks plus explicit c1/c2 computed-layout checks retained all nine totals without horizontal overflow or clipped count text; the navigation harness recorded zero console errors and zero local HTTP failures. Browser/host verification is not physical OnePlus 15/ColorOS WebView validation.",
+    "targeted_runtime": "The deterministic exited-launcher/live-replacement fixture failed on buildfix17 with error=recorder_exited and passes on buildfix18. It requires status=already_running with the exact live winner PID and verifies that the replacement token, PID and lock remain untouched. Adjacent same-token recorder failure, foreign-token/no-live-owner and stale-lock recovery fixtures remain mandatory and passed.",
+    "native_build": "No native source or binary was rebuilt or changed in buildfix18. Governor, Zygisk and DSP binaries retain their buildfix17 SHA-256 hashes.",
     "clean_unpack_regression": "Release gate: full canonical source-only regression from a clean unzip of this exact source ZIP, plus per-file SHA-256/size/mode equality, regular-file-only entries, strict tree check, executable modes and asbdiag identity; this ZIP is not delivered unless that gate passes.",
-    "skip": "DSP reference staging only: optional reference prebuilt .so files absent; static DSP gates and available host-compiled DSP tests passed."
+    "skip": "DSP reference staging only: optional reference prebuilt .so files absent; static DSP gates and available host-compiled DSP tests passed.",
+    "targeted_stress": "Fifty deterministic live-replacement handoff runs passed. Forty parallel debug-support runs, 480 concurrent race rounds total, passed with the single-recorder contract intact; stress supplements rather than replaces the deterministic regression fixture."
   },
-  "evidence_scope": "Host/source verification only. No physical OnePlus 15 or ColorOS WebView validation, controlled responsiveness A/B, measured FPS/latency gain, energy saving or improvement percentage is claimed. The 180+40 ms motion, 220/244 ms deferred-work deadline, 240 ms Monitor settle and 400 ms category guard are source/runtime contracts, not measured device gains. Config/Monitor freshness, batched root reads, live category/search repaint and all nine structural totals remain; unchanged hub DOM retention does not cache or invent live control values. No native binary, persistent polling worker, arbitrary path/value writer, thermal bypass, overclock, undervolt, performance floor, broad wakeup blocklist, sensitive identifier collection or persisted-settings reset was added. Existing evidence gates, vendor thermal ownership and Safe mode remain in force.",
+  "evidence_scope": "Host/source verification only. No physical OnePlus 15 or ColorOS validation, controlled power/performance A/B, measured energy saving or improvement percentage is claimed. The concurrent Infinite Log fix changes only the exited-launcher result when a different token and a verified live replacement owner are both present; it does not convert an unverified token change or same-token recorder failure into success. No second recorder, foreign-lock deletion, persistent polling worker, native binary change, arbitrary path/value writer, thermal bypass, overclock, undervolt, performance floor, broad wakeup blocklist, sensitive identifier collection or persisted-settings reset was added. Existing evidence gates, vendor thermal ownership and Safe mode remain in force.",
   "files": [
     {
       "path": ".github/workflows/build-dsp-aidl.yml",
@@ -227,15 +226,15 @@
     },
     {
       "path": "README.advanced.md",
-      "bytes": 172047,
+      "bytes": 172683,
       "mode": "0644",
-      "sha256": "3facd990599eb10dfe55126a40ab9f0c6b7f56a088bba2d762f731d91e7017fd"
+      "sha256": "dea6eeb6a3fd785262028d8ff85702cc4f2fa48bb053b9a97c21388b082d510c"
     },
     {
       "path": "README.advanced.ru.md",
-      "bytes": 280523,
+      "bytes": 281622,
       "mode": "0644",
-      "sha256": "934f0e8b9bf389450d84eec4fff9e4b3cb24d8359eb373daea8dd5ec37073d4e"
+      "sha256": "76ea0cdc1c8dae05be1361801c0aa2b2285191c9706ccf4e59a5adc6bccc4b30"
     },
     {
       "path": "README.md",
@@ -443,9 +442,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 218953,
+      "bytes": 220271,
       "mode": "0644",
-      "sha256": "27b96e25dc3c9a3ca61a07acf6005c1799a51045611d271d138627ee7e814414"
+      "sha256": "3fe7c00e14309d6e5bf8532007f78551a6e7a735750b8710a2fe10e47cdc6fc6"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -635,9 +634,9 @@
     },
     {
       "path": "runtime/asb_debug_support.sh",
-      "bytes": 40310,
+      "bytes": 41336,
       "mode": "0755",
-      "sha256": "7060fd0210c192f90550fb40c7247ae3995d03a567ee56e0a538f68e4474360d"
+      "sha256": "57886583efd08501546b35f7d971c5d7755d8eb56ad853522828c486d22b01b3"
     },
     {
       "path": "runtime/asb_device_bounds.sh",
@@ -1379,9 +1378,9 @@
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1177257,
+      "bytes": 1178945,
       "mode": "0755",
-      "sha256": "3b653d35083f1fe2e7fdbbea4785d58baab7ff72d190fabd9a9038daf59411d9"
+      "sha256": "e808a51d4bb7dc0e31e0772d6e542a976bf0f14c858b71c98b7a81a4d9d87494"
     },
     {
       "path": "tests/asb_zygisk.sh",
@@ -1597,7 +1596,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24137,
       "mode": "0644",
-      "sha256": "ab4f34fb45c09758cc7263ddc277d2e80ca1b4c3b330443e752d7d1edd749a02"
+      "sha256": "b1f2ca97f38df3863c0c6654cabec64b96261bf06744eb455fbe85a401ac9e45"
     },
     {
       "path": "tools/asb_tree_check.sh",
