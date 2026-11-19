@@ -2228,6 +2228,11 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
   color: var(--text-tertiary); }
 .lgr-hero-val { font: 700 19px/1.15 var(--sans); color: var(--text); font-variant-numeric: tabular-nums; }
 .lgr-hero-sub { font-size: 11px; color: var(--text-secondary); }
+.lgr-package-value { display:flex; flex-direction:column; align-items:flex-end; gap:2px; min-width:0; max-width:66%; }
+.lgr-package-action { appearance:none; border:0; border-bottom:1px dashed color-mix(in srgb,var(--accent) 55%,transparent); background:transparent; color:var(--accent); padding:2px 0; margin:0; font:600 12px/1.4 var(--mono); text-align:end; overflow-wrap:anywhere; cursor:pointer; }
+.lgr-package-action::after { content:" ›"; }
+.lgr-package-action:active { opacity:.72; }
+.lgr-package-meta { color:var(--text-secondary); font-size:11px; line-height:1.4; text-align:end; overflow-wrap:anywhere; }
 .lgr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
   font-size: 13px; padding: 2.5px 0; }
 .lgr-k { color: var(--text-secondary); flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
@@ -3790,13 +3795,19 @@ html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disa
   padding:7px 9px; border-radius:10px; background:var(--surface); }
 .kernel-evidence-name { min-width:0; color:var(--text); font-size:12px; overflow-wrap:anywhere; }
 .kernel-evidence-value { flex:0 0 auto; max-width:55%; color:var(--text-secondary); font:600 11px/1.35 var(--sans); text-align:right; overflow-wrap:anywhere; }
-.kernel-editor { margin-top:12px; }
-.kernel-input-row { display:flex; gap:8px; }
-.kernel-input { min-width:0; flex:1 1 auto; min-height:42px; box-sizing:border-box; padding:10px 12px;
+.kernel-editor { margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:13px; background:var(--surface); }
+.kernel-input-row { display:grid; grid-template-columns:minmax(0,1fr); gap:9px; }
+.kernel-input { width:100%; min-width:0; min-height:42px; box-sizing:border-box; padding:10px 12px;
   border:1px solid var(--border-active); border-radius:12px; outline:none; color:var(--text); background:var(--surface);
   font:500 12px/1.3 var(--mono); }
 .kernel-input:focus { border-color:rgba(0,240,180,.52); box-shadow:0 0 0 2px rgba(0,240,180,.08); }
-.kernel-add { flex:0 0 auto; min-width:76px; }
+.kernel-add-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.kernel-add { width:100%; min-width:0; min-height:44px; padding:9px 8px; white-space:normal; line-height:1.25; }
+.kernel-rule-section { margin-top:12px; padding-top:11px; border-top:1px solid var(--border); }
+.kernel-rule-section .kernel-chips { margin-top:8px; }
+.kernel-policy-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:13px; }
+.kernel-policy-actions > .bfx-primary { grid-column:1 / -1; width:100%; }
+.kernel-policy-actions > .bfx-btn { width:100%; min-width:0; min-height:42px; padding:9px 8px; white-space:normal; line-height:1.25; }
 .kernel-chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
 .kernel-chip { display:inline-flex; align-items:center; gap:6px; max-width:100%; min-height:32px; padding:4px 5px 4px 10px;
   box-sizing:border-box; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
@@ -3818,10 +3829,10 @@ html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disa
 .kernel-source-details > summary { cursor:pointer; color:var(--accent); }
 .kernel-sources-open { margin-top:12px; align-self:flex-start; }
 .kernel-observe { display:flex; flex-direction:column; align-items:stretch; }
-.kernel-observe .bfx-actions { margin-top:10px; }
-.kernel-sleep-title { margin-top:14px; }
-.kernel-input-row { flex-wrap:wrap; }
-.kernel-input-row .kernel-input { flex-basis:100%; }
+.kernel-observe-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:10px; }
+.kernel-observe-actions > .bfx-btn { width:100%; min-width:0; min-height:42px; padding:9px 8px; white-space:normal; line-height:1.25; }
+.kernel-observe-actions .kernel-sources-open { margin-top:0; }
+.kernel-sleep-title { margin-top:0; }
 .kernel-source-block + .kernel-source-block { margin-left:2px; }
 .kernel-source-risk { margin-top:3px; color:var(--text-tertiary); font-size:10.5px; line-height:1.4; }
 .kernel-source-risk.is-high,.kernel-source-risk.is-critical { color:var(--m-warm); }
@@ -3856,7 +3867,7 @@ html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disa
 html[data-asb-theme="light"] .kernel-state.good { color:#06704f; }
 html[data-asb-theme="light"] .kernel-state.warn { color:#8a5a00; }
 html[data-asb-theme="light"] .kernel-state.bad { color:#b3261e; }
-@media (max-width:350px) { .kernel-input-row { flex-wrap:wrap; } .kernel-add { width:100%; } .kernel-evidence-value { max-width:50%; } }
+@media (max-width:350px) { .kernel-evidence-value { max-width:50%; } }
 @media (forced-colors:active) { .kernel-state,.kernel-chip,.kernel-input { border-color:ButtonText; } }
 #cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Named-profile manager: an in-page sheet avoids the opaque KernelSU browser prompt and lets
@@ -5061,6 +5072,7 @@ body.ufo-flying .logo-glyph { opacity: 0; }
   font-variant-numeric: tabular-nums; background: rgba(255,255,255,.045);
   border: 1px solid rgba(255,255,255,.07); }
 .pmeta-chip .tech-icon { width: 11px; height: 11px; color: var(--c); filter: none; }
+.pmeta-scope { font-size: 9px; line-height: 1; opacity: .68; font-weight: 600; }
 .pbtn.on .pmeta-chip { color: var(--text); border-color: color-mix(in srgb, var(--c) 34%, transparent);
   background: color-mix(in srgb, var(--c) 9%, transparent); }
 html[data-asb-theme="light"] .pdesc { color: var(--text-secondary); }
@@ -11963,7 +11975,7 @@ async function kernelPanelLoad(force) {
 }
 function kernelStateText(state) {
   const fallback = {
-    available:'Available', not_exposed:'Not exposed by this kernel', not_readable:'Not readable',
+    available:'Active', not_exposed:'Not exposed by this kernel', not_readable:'Not readable',
     read_only:'Read-only', unknown:'Unknown — no read-only evidence', disabled:'Disabled in kernel configuration',
     covered_by_timer_migration:'Managed by Timer migration',
     configured:'Configured; runtime state unknown', module_unloaded:'Configured; module not loaded', loading:'Checking…'
@@ -12068,10 +12080,11 @@ function kernelDecorateControlRow(row, key) {
   }
   const hide = KERNEL_HIDE_WHEN_ABSENT.indexOf(key) >= 0 && kernelHiddenAbsent().indexOf(key) >= 0 && !!row.classList;
   if (hide) row.classList.add('kernel-absent-hidden');
+  const noteHost = row.querySelector && row.querySelector('.cfg-collapse-inner') || row;
   const why = !hide && a.state === 'not_exposed' ? kernelUnavailableWhy(key) : '';
-  if (why && row.appendChild && !(row.querySelector && row.querySelector('.kernel-why'))) row.appendChild(bfxEl('div', 'kernel-why', why));
+  if (why && noteHost.appendChild && !(noteHost.querySelector && noteHost.querySelector('.kernel-why'))) noteHost.appendChild(bfxEl('div', 'kernel-why', why));
   const fact = !hide && a.state === 'available' ? kernelDefaultFact(key) : '';
-  if (fact && row.appendChild && !(row.querySelector && row.querySelector('.kernel-fact'))) row.appendChild(bfxEl('div', 'kernel-why kernel-fact', fact));
+  if (fact && noteHost.appendChild && !(noteHost.querySelector && noteHost.querySelector('.kernel-fact'))) noteHost.appendChild(bfxEl('div', 'kernel-why kernel-fact', fact));
   if (['not_exposed','not_readable','read_only','disabled','covered_by_timer_migration'].indexOf(a.state) >= 0) {
     row.classList.add('kernel-unavailable');
     row.querySelectorAll('.cfg-seg button,.cfg-sel-btn,.cfg-sel-pop button').forEach(function (b) {
@@ -12409,18 +12422,18 @@ function kernelWakeupObservedList(card, wb) {
   if (ob.state === 'measuring') state = T('kernel_wb_observe_running', 'Window: {elapsed} · changed sources: {n}').replace('{elapsed}', kernelWakeupDuration(ob.elapsed)).replace('{n}', wb.sources.length);
   else if (ob.state === 'not_exposed' || ob.state === 'not_readable') state = T('kernel_wb_observe_error', 'Could not read wakeup-source counters');
   wrap.appendChild(bfxEl('div', 'kernel-observe-meta', state));
-  const actions = bfxEl('div', 'bfx-actions');
+  const actions = bfxEl('div', 'kernel-observe-actions');
   const measuring = ob.state === 'measuring';
   const start = bfxEl('button', 'bfx-btn bfx-secondary', T(measuring ? 'kernel_wb_update_sources' : 'kernel_wb_start', measuring ? 'Update sources' : 'Start idle window'));
   start.type = 'button'; start.disabled = !wb || _wbBusy || ob.state === 'not_exposed';
   start.onclick = function () { kernelWakeupObserve(measuring ? 'status' : 'observe_start'); };
-  actions.appendChild(start); wrap.appendChild(actions);
+  actions.appendChild(start);
   if (ob.state === 'measuring' && !wb.sources.length) wrap.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_no_sources', 'No source counter has increased yet. Leave the phone idle and update later; zero is not an error.')));
   if (ob.resets) wrap.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_counter_reset', 'Some counters restarted during the window; their values cover only the time since the reset.')));
   const open = bfxEl('button', 'bfx-btn bfx-secondary kernel-sources-open', T('kernel_wb_open_sources', 'Open sources') + ' · ' + wb.sources.length);
   open.type = 'button'; open.id = 'kernelWakeupOpenSources'; open.disabled = _wbBusy || !wb.sources.length;
   open.setAttribute('aria-haspopup','dialog'); open.onclick = kernelWakeupSourceDialogOpen;
-  wrap.appendChild(open); card.appendChild(wrap);
+  actions.appendChild(open); wrap.appendChild(actions); card.appendChild(wrap);
 }
 function cfgRenderWakeupBlockerCard(list) {
   const wb = _kernelPanel.wakeup;
@@ -12440,16 +12453,19 @@ function cfgRenderWakeupBlockerCard(list) {
   input.autocomplete = 'off'; input.spellcheck = false; input.disabled = !wb || _wbBusy;
   input.placeholder = T('kernel_wb_placeholder', 'Exact kernel wakeup-source name');
   input.setAttribute('aria-label', input.placeholder);
-  const add = bfxEl('button', 'bfx-btn bfx-secondary kernel-add', T('kernel_wb_add_always', 'Add Always')); add.type = 'button'; add.disabled = !wb || _wbBusy;
+  const addActions = bfxEl('div', 'kernel-add-actions');
+  const add = bfxEl('button', 'bfx-btn bfx-secondary kernel-add', T('kernel_wb_add_always', 'Add Always')); add.type = 'button'; add.id = 'kernelWakeupAddAlways'; add.disabled = !wb || _wbBusy;
   add.onclick = function () { kernelWakeupAdd(input.value, 'always'); };
-  const addSleep = bfxEl('button', 'bfx-btn bfx-secondary kernel-add', T('kernel_wb_add_sleep', 'Add Screen off')); addSleep.type = 'button'; addSleep.disabled = !wb || _wbBusy;
+  const addSleep = bfxEl('button', 'bfx-btn bfx-secondary kernel-add', T('kernel_wb_add_sleep', 'Add Screen off')); addSleep.type = 'button'; addSleep.id = 'kernelWakeupAddSleep'; addSleep.disabled = !wb || _wbBusy;
   addSleep.onclick = function () { kernelWakeupAdd(input.value, 'sleep'); };
   input.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); kernelWakeupAdd(input.value, 'always'); } };
-  inputRow.appendChild(input); inputRow.appendChild(add); inputRow.appendChild(addSleep); editor.appendChild(inputRow); card.appendChild(editor);
-  card.appendChild(bfxEl('div', 'kernel-observe-title', T('kernel_wb_always_title', 'Always blocked')));
-  kernelWakeupChipList(card, kernelWakeupDraft('always'), true, 'always');
-  card.appendChild(bfxEl('div', 'kernel-observe-title kernel-sleep-title', T('kernel_wb_sleep_title', 'Blocked only while the screen is off')));
-  kernelWakeupChipList(card, kernelWakeupDraft('sleep'), true, 'sleep');
+  inputRow.appendChild(input); addActions.appendChild(add); addActions.appendChild(addSleep); inputRow.appendChild(addActions); editor.appendChild(inputRow); card.appendChild(editor);
+  const alwaysSection = bfxEl('div', 'kernel-rule-section'); alwaysSection.id = 'kernelWakeupAlwaysRules';
+  alwaysSection.appendChild(bfxEl('div', 'kernel-observe-title', T('kernel_wb_always_title', 'Always blocked')));
+  kernelWakeupChipList(alwaysSection, kernelWakeupDraft('always'), true, 'always'); card.appendChild(alwaysSection);
+  const sleepSection = bfxEl('div', 'kernel-rule-section'); sleepSection.id = 'kernelWakeupSleepRules';
+  sleepSection.appendChild(bfxEl('div', 'kernel-observe-title kernel-sleep-title', T('kernel_wb_sleep_title', 'Blocked only while the screen is off')));
+  kernelWakeupChipList(sleepSection, kernelWakeupDraft('sleep'), true, 'sleep'); card.appendChild(sleepSection);
   const expected = wb ? (wb.screen === 'off' ? wb.savedAlways.concat(wb.savedSleep) : wb.savedAlways).filter(function (n, i, a) { return a.indexOf(n) === i; }) : [];
   const same = wb && JSON.stringify(expected) === JSON.stringify(wb.current);
   const meta = bfxEl('div', 'kernel-meta');
@@ -12468,8 +12484,8 @@ function cfgRenderWakeupBlockerCard(list) {
   const currentText = wb && wb.current.length ? wb.current.map(function (n) { return n + (Object.prototype.hasOwnProperty.call(wb.blocked,n) ? ' · ' + wb.blocked[n] : ''); }).join('\n') : T('kernel_wb_none', 'None or not readable');
   readback.appendChild(bfxEl('div', 'kernel-readback-list', currentText));
   details.appendChild(readback);
-  const actions = bfxEl('div', 'bfx-actions');
-  const apply = bfxEl('button', 'bfx-btn bfx-primary', T('kernel_wb_apply', 'Save and apply')); apply.type = 'button'; apply.disabled = !wb || _wbBusy;
+  const actions = bfxEl('div', 'kernel-policy-actions');
+  const apply = bfxEl('button', 'bfx-btn bfx-primary', T('kernel_wb_apply', 'Save and apply')); apply.type = 'button'; apply.id = 'kernelWakeupApply'; apply.disabled = !wb || _wbBusy;
   apply.onclick = function () { kernelWakeupSave(false); };
   const clear = bfxEl('button', 'bfx-btn bfx-secondary kernel-clear', T('kernel_wb_clear', 'Clear saved and live rules')); clear.type = 'button'; clear.disabled = !wb || _wbBusy;
   clear.onclick = function () { kernelWakeupSave(true); };
@@ -13093,7 +13109,7 @@ function cfgStatus(it, cur) {
     if (cur !== '1') return { cls:'neutral', text:T('st_off', 'Disabled') };
     if (_ltpoVideoStatus.indexOf('lowered:') === 0)
       return { cls:'good', text:T('st_ltpo_vid_low', 'now') + ' ' + _ltpoVideoStatus.split(':')[1] + ' Hz' };
-    if (_ltpoVideoStatus === 'watching') return { cls:'good', text:T('st_on', 'Enabled') };
+    if (_ltpoVideoStatus === 'watching') return { cls:'neutral', text:T('st_ltpo_vid_watch', 'watching · not lowered now') };
     if (_ltpoVideoStatus === 'not_running') return { cls:'warn', text:T('st_not_running', 'not running') };
     return { cls:'warn', text:T('st_pending', 'pending') };
   }
@@ -15528,10 +15544,12 @@ function wlServiceParse(out, pkg) {
     if (ln.indexOf('selected=') === 0) { d.selected = Math.max(0, parseInt(ln.slice(9), 10) || 0); return; }
     const f = ln.split('|'), legacy = f[0] === 'service';
     const comp = legacy ? (f[1] || '') : (f[2] || '');
-    if ((!legacy && f[0] !== 'component') || f.length !== (legacy ? 5 : 6) || comp.indexOf(pkg + '/') !== 0) return;
+    if ((!legacy && f[0] !== 'component') || (legacy ? f.length !== 5 : (f.length !== 6 && f.length !== 8)) || comp.indexOf(pkg + '/') !== 0) return;
     if (!/^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+$/.test(comp)) return;
     const kind = legacy ? 'service' : f[1];
-    d.rows.push({ kind:/^(activity|service|component)$/.test(kind) ? kind : 'component', comp:comp, selected:f[legacy ? 2 : 3] === '1', state:/^(default|enabled|disabled)$/.test(f[legacy ? 3 : 4]) ? f[legacy ? 3 : 4] : 'unknown', running:f[legacy ? 4 : 5] === '1' });
+    const origin = !legacy && f.length === 8 ? f[6] : (f[legacy ? 4 : 5] === '1' ? 'running' : 'saved');
+    const actionable = legacy || f.length === 6 ? (f[legacy ? 4 : 5] === '1' || f[legacy ? 2 : 3] === '1') : f[7] === '1';
+    d.rows.push({ kind:/^(activity|service|component)$/.test(kind) ? kind : 'component', comp:comp, selected:f[legacy ? 2 : 3] === '1', state:/^(default|enabled|disabled)$/.test(f[legacy ? 3 : 4]) ? f[legacy ? 3 : 4] : 'unknown', running:f[legacy ? 4 : 5] === '1', origin:origin, actionable:actionable });
   });
   return d;
 }
@@ -15539,6 +15557,8 @@ function wlServiceState(a) {
   if (a.selected && a.state === 'disabled') return T('wl_service_state_disabled', 'Disabled · read-back confirmed');
   if (a.selected) return T('wl_service_state_lapsed', 'Selected, but not disabled now · use Restore to finish restoring it');
   if (a.running) return T('wl_service_state_running', 'Running now · the app package remains enabled');
+  if (a.origin === 'job_history') return T('wl_component_state_job', 'Observed in Android job history · the job/Worker name is not a separate Service');
+  if (a.origin === 'declared') return T('wl_component_state_declared', 'Declared in the package · not running now · read only');
   return T('wl_service_state_unknown', 'Current component state is not exposed');
 }
 function wlServiceRow(a) {
@@ -15551,7 +15571,7 @@ function wlServiceRow(a) {
   const b = document.createElement('button'); b.type = 'button';
   b.className = 'wl-manual-action' + (a.selected ? ' is-restore' : '');
   const armed = !a.selected && wlServiceArmed(a.comp);
-  b.textContent = a.selected ? T('wl_component_restore', 'Restore component') : armed ? T('wl_service_confirm_tap', 'Tap again to disable') : T('wl_component_disable', 'Disable component');
+  b.textContent = a.selected ? T('wl_component_restore', 'Restore component') : !a.actionable ? T('wl_component_read_only', 'Read only') : armed ? T('wl_service_confirm_tap', 'Tap again to disable') : T('wl_component_disable', 'Disable component');
   if (armed) {
     b.classList.add('is-armed');
     const warn = document.createElement('div'); warn.className = 'wl-manual-sub wl-manual-risk';
@@ -15560,11 +15580,11 @@ function wlServiceRow(a) {
     tx.appendChild(warn);
     if (/\/androidx\.work\.impl\.background\.systemjob\.SystemJobService$/.test(a.comp)) {
       const broad = document.createElement('div'); broad.className = 'wl-manual-sub wl-manual-risk';
-      broad.textContent = T('wl_component_systemjob_warning', 'SystemJobService is shared by WorkManager jobs in this package. Disabling it does not select only MediaCountUploadWorker or any other single worker; other jobs can stop too.');
+      broad.textContent = T('wl_component_systemjob_warning', 'SystemJobService is shared by WorkManager jobs in this package. Disabling it does not select only OneTimePushReceiveWorker or any other single Worker; other jobs can stop too.');
       tx.appendChild(broad);
     }
   }
-  b.disabled = _wlService.busy; b.onclick = function () { wlServiceSet(a); }; row.appendChild(b);
+  b.disabled = _wlService.busy || (!a.selected && !a.actionable); b.onclick = function () { wlServiceSet(a); }; row.appendChild(b);
   return row;
 }
 function wlServicePaint(d) {
@@ -15575,25 +15595,25 @@ function wlServicePaint(d) {
   shown.sort(function (a, b) { return (b.selected - a.selected) || (b.running - a.running) || a.comp.localeCompare(b.comp); });
   if (!_wlService.rows.length) {
     const e = document.createElement('div'); e.className = 'cfg-profile-empty';
-    e.textContent = d.scan === 'ok' ? T('wl_component_empty', 'No running Activity or Service components are exposed for this app right now. This does not prove that none are declared; open or use the relevant screen, then refresh. Components already disabled through ASB remain listed for Restore.')
+    e.textContent = d.scan === 'ok' ? T('wl_component_empty', 'No Activity/Service evidence is exposed for this app right now. This does not prove that none are declared; open or use the relevant screen, then refresh. Components already disabled through ASB remain listed for Restore.')
       : T('wl_service_unavailable', 'Service records or component state are not exposed right now. Nothing was changed.');
     list.appendChild(e);
   } else if (!shown.length) {
     list.appendChild(bfxEl('div', 'cfg-profile-empty', T('wl_component_no_matches', 'No component matches this search.')));
   } else shown.forEach(function (a) { list.appendChild(wlServiceRow(a)); });
-  _el('wlServiceMeta').textContent = T('wl_component_meta', '%s component(s) selected · Activity/Service read on demand · no automatic freezing or polling').replace('%s', String(d.selected || 0));
+  _el('wlServiceMeta').textContent = T('wl_component_meta', '%s component(s) selected · current + declared + job history · no automatic freezing or polling').replace('%s', String(d.selected || 0));
 }
 async function wlServiceLoad() {
   const m = wlServiceEnsure(), tok = ++_wlService.tok, pkg = _wlService.pkg;
   if (!pkg) return;
   _el('wlServiceTitle').textContent = T('wl_component_title', 'Activities and services · %s').replace('%s', _wlManual.labels[pkg] || pkg);
-  _el('wlServiceCopy').textContent = T('wl_component_copy', 'Disable one exact Android Activity or Service component, not the whole app. Disable persists until you tap Restore; there is no automatic screen-off component mode. This is not a process freezer. Android exposes current records on demand; presence here does not prove energy cost. Restore returns the recorded default/enabled state.');
+  _el('wlServiceCopy').textContent = T('wl_component_copy', 'Disable one exact Android Activity or Service component, not the whole app. Disable persists until you tap Restore; there is no automatic screen-off component mode. This is not a process freezer. The list combines current records, declared package components and exact Android job history. Declared-only components are read only; a Worker name is not a separate Service. Presence here does not prove energy cost. Restore returns the recorded default/enabled state.');
   _el('wlServiceSearch').placeholder = '🔍  ' + T('wl_component_search', 'Search class or component');
   _el('wlServiceDone').textContent = T('doze_keep_done', 'Done');
   _el('wlServiceMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
   const list = _el('wlServiceList'); list.textContent = '';
   const loading = document.createElement('div'); loading.className = 'wl-manual-loading';
-  loading.textContent = T('wl_component_loading', 'Reading current Activity/Service records and actual component states…'); list.appendChild(loading);
+  loading.textContent = T('wl_component_loading', 'Reading current, declared and job-history Activity/Service evidence…'); list.appendChild(loading);
   await asbPaintYield();
   if (tok !== _wlService.tok || m.hidden || pkg !== _wlService.pkg) return;
   let r = null;
@@ -17088,6 +17108,9 @@ function parseLogReport(txt) {
     } else if (tag === 'japp') {
       /* fix200: per-app frame counts - the real per-app table the sheet shows. */
       if (kv.pkg) d.japps.push({ pkg: kv.pkg, frames: +kv.frames || 0, pct: +kv.pct || 0 });
+    } else if (tag === 'jactive') {
+      if ((+kv.frames || 0) > 0) d.sections.jactive = { intv: +kv.intv || 0, frames: +kv.frames || 0,
+        pct: +kv.pct || 0, jps: +kv.jps || 0 };
     } else if (tag === 'jphase') {
       /* fix220: smoothness by moment of the day (post_wake, active, audio) - where the
          day's stutter actually sits. */
@@ -17184,6 +17207,18 @@ function logReportHolderName(w) {
  * (Tcfg), in the UI language. Worst things first; at most six cards so the list stays
  * readable. The settings are the CURRENT ones: a saved log from last week still advises
  * against the switches as they are set today. */
+function logReportHeatEvidence(s) {
+  const heat = s.heat || null, thermal = s.thermal || null, throttle = s.throttle || null;
+  const wm = heat ? +heat.warm_min || 0 : 0, sm = heat ? +heat.skin_min || 0 : 0;
+  const peak = thermal ? +thermal.cpu || 0 : 0, clamps = throttle ? +throttle.clamps || 0 : 0;
+  const episodes = heat ? +heat.warm_episodes || 0 : 0, longest = heat ? +heat.warm_run_min || 0 : 0;
+  /* Accumulated minutes are not sustained load. A 45 °C peak or many short warm spells is
+     context, not a dangerous-heat verdict. Red requires one measured continuous warm run. */
+  const sustained = longest >= 30;
+  const state = sustained ? 'problem' : (wm >= 10 || sm >= 30 || peak >= 45 || clamps > 0) ? 'normal' : 'good';
+  return { heat:heat, thermal:thermal, throttle:throttle, wm:wm, sm:sm, peak:peak, clamps:clamps,
+    episodes:episodes, longest:longest, sustained:sustained, state:state };
+}
 function logReportTips(d, all) {
   const tips = [];
   const s = d.sections || {};
@@ -17367,12 +17402,12 @@ function logReportTips(d, all) {
      "is my phone running warm?" question instead of leaving it open. */
   const heat = s.heat || null;
   if (heat) {
-    const wm = +heat.warm_min || 0;
-    const cpuPeak = +(s.thermal && s.thermal.cpu) || 0;
-    const clamps = +(s.throttle && s.throttle.clamps) || 0;
+    const he = logReportHeatEvidence(s), wm = he.wm;
+    const cpuPeak = he.peak;
+    const clamps = he.clamps;
     const ph = T('lr_ph_' + String(heat.peak_phase || ''), String(heat.peak_phase || ''));
-    if (wm >= 30) {
-      const hv = { min: logReportDur(wm), phase: ph };
+    if (he.sustained) {
+      const hv = { min: logReportDur(wm), longest: logReportDur(he.longest), phase: ph };
       if (cfg.sustained_temp_mode === 'stock') {
         hv.set = Tcfg('sustained_temp_mode', 'name', 'Throttling Point');
         tips.push({ ic: 'warn', key: 'lr_tip_heat_warm_set', vars: hv,
@@ -17385,6 +17420,8 @@ function logReportTips(d, all) {
             op: { key: 'sustained_temp_enter', value: '65' } });
         }
       }
+    } else if (wm >= 10 && he.episodes > 0) {
+      tips.push({ ic: 'info', key: 'lr_tip_heat_scattered', vars: { min: logReportDur(wm), n: String(he.episodes), longest: logReportDur(he.longest) } });
     } else if (cpuPeak > 0 && wm === 0 && clamps === 0) {
       tips.push({ ic: 'ok', key: 'lr_tip_heat_calm', vars: { cpu: String(cpuPeak) } });
     }
@@ -17409,8 +17446,6 @@ function logReportTips(d, all) {
     const sl = s.smartlive || null;
     const smartActive = sl ? (sl.state === 'active' || sl.state === 'adapting') : String((s.meta || {}).profile || '') === 'smart';
     tips.push({ ic: smartActive ? 'ok' : 'info', key: smartActive ? 'lr_tip_smart_help' : 'lr_tip_smart_help_manual', vars: { n: String(smart.helped) } });
-  } else if (smart && (+smart.nothelped || 0) > 0) {
-    tips.push({ ic: 'ok', key: 'lr_tip_smart_nohelp', vars: { n: String(smart.nothelped) } });
   }
   if (cost && (+cost.cpu_msh || 0) > 0) {
     /* The unit travels with the number: "{ms} of CPU per hour" reads "1851 ms of ...".
@@ -17666,14 +17701,14 @@ function logReportAnalyze(d) {
   if (!drainDone) verdict('drain', 'unknown', '—', 'lr_sum_need_time', {}, 'insufficient_duration');
 
   if (thermal || heat) {
-    const wm = heat ? +heat.warm_min || 0 : 0, sm = heat ? +heat.skin_min || 0 : 0;
-    const peak = thermal ? +thermal.cpu || 0 : 0, clamps = throttle ? +throttle.clamps || 0 : 0;
+    const he = logReportHeatEvidence(s), wm = he.wm, sm = he.sm;
+    const peak = he.peak, clamps = he.clamps;
     /* The tile follows the same CPU rule as the heat card in "Causes": a warm surface (often
        the charger) is shown in the detail and keeps the tile from "good", but it no longer
        turns the tile red under a value that the detail line does not name. */
-    const state = wm >= 30 ? 'problem' : (wm >= 10 || sm >= 30 || peak >= 45 || clamps > 0) ? 'normal' : 'good';
+    const state = he.state;
     verdict('thermal', state, logReportDur(wm), sm > 0 ? 'lr_sum_thermal_detail_skin' : 'lr_sum_thermal_detail',
-      { warm: logReportDur(wm), skin: logReportDur(sm), clamps: String(clamps) }, 'hot_duration_and_throttle');
+      { warm: logReportDur(wm), skin: logReportDur(sm), clamps: String(clamps), longest: logReportDur(he.longest) }, 'hot_duration_and_throttle');
   } else verdict('thermal', 'unknown', '—', 'lr_sum_no_sensor', {}, 'no_thermal_samples');
 
   if (jank && (+jank.frames || 0) >= 20000) {
@@ -17714,7 +17749,7 @@ function logReportAnalyze(d) {
   function chain(weight, kind, key, vars) { chains.push({ weight: weight, kind: kind, key: key, vars: vars || {} }); }
   if (crash && (+crash.asb || 0) > 0) chain(100, 'fact', 'lr_chain_asb_crash', { n: String(crash.asb) });
   const idleBad = idle && (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20;
-  if (heat && ((+heat.warm_min || 0) >= 30 || (+heat.skin_min || 0) >= 30))
+  if (heat && (logReportHeatEvidence(s).sustained || (+heat.skin_min || 0) >= 30))
     chain(90, 'fact', 'lr_chain_heat', { min: logReportDur(Math.max(+heat.warm_min || 0, +heat.skin_min || 0)),
       clamps: String(throttle ? +throttle.clamps || 0 : 0), owner: String(throttle && throttle.owner || 'unknown'),
       phase: T('lr_ph_' + String(heat.peak_phase || ''), String(heat.peak_phase || '')) });
@@ -18029,6 +18064,33 @@ function logReportRow(k, v, warn) {
   r.appendChild(a);
   r.appendChild(b);
   return r;
+}
+function logReportPackageRow(k, pkg, value, warn, display) {
+  if (!dozePkgOk(pkg)) return logReportRow(k, display || pkg, warn);
+  const r = document.createElement('div'); r.className = 'lgr-row lgr-package-row';
+  const a = document.createElement('span'); a.className = 'lgr-k'; a.textContent = k;
+  const box = document.createElement('span'); box.className = 'lgr-v lgr-package-value';
+  const b = document.createElement('button'); b.type = 'button';
+  b.className = 'lgr-package-action' + (warn ? ' lgr-warn' : '');
+  b.setAttribute('data-package', pkg); b.setAttribute('data-report-action', 'components');
+  b.textContent = display || pkg;
+  b.title = logReportT('lr_open_components', 'Open Activity/Service controls for {pkg}', { pkg:pkg });
+  b.setAttribute('aria-label', b.title);
+  b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); void wlServiceOpen(pkg); };
+  box.appendChild(b);
+  if (value) {
+    const v = document.createElement('span'); v.className = 'lgr-package-meta' + (warn ? ' lgr-warn' : '');
+    v.textContent = String(value).replace(/%\//g, '%/\u2060'); box.appendChild(v);
+  }
+  r.appendChild(a); r.appendChild(box); return r;
+}
+function logReportScreenOffStarts(raw) {
+  const out = [];
+  String(raw || '').split(',').forEach(function (part) {
+    const m = /^\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\s+(\d{1,9})\/(\d{1,9})\s*$/.exec(part);
+    if (m && dozePkgOk(m[1])) out.push({ pkg:m[1], off:m[2], total:m[3] });
+  });
+  return out;
 }
 function logReportSec(title, icon) {
   const s = document.createElement('div');
@@ -21245,8 +21307,8 @@ function logReportAnalysisT(key, vars) {
     lr_sum_drain_mixed: 'Whole discharge over {h}, screen on {on}% of the time: about {est} from a full charge at this pace.',
     lr_sum_drain_mixed_segments: 'Average drain across {segments} off-charger windows over {h}, screen on {on}% of the capture: about {est} from a full charge at this pace.',
     lr_sum_need_time: 'Needs a longer matching discharge window.',
-    lr_sum_thermal_detail: 'CPU above 45 °C: {warm}; throttling periods: {clamps}.',
-    lr_sum_thermal_detail_skin: 'CPU above 45 °C: {warm}; skin above 40 °C: {skin}; throttling periods: {clamps}.',
+    lr_sum_thermal_detail: 'CPU above 45 °C: {warm}; longest continuous spell: {longest}; throttling periods: {clamps}.',
+    lr_sum_thermal_detail_skin: 'CPU above 45 °C: {warm}; longest continuous spell: {longest}; skin above 40 °C: {skin}; throttling periods: {clamps}.',
     lr_sum_no_sensor: 'No usable thermal samples in this capture.',
     lr_sum_smooth_detail: '{frames} frames; wake windows: {wake}.',
     lr_sum_need_frames: 'Fewer than 20,000 frames: no stable verdict.',
@@ -21313,7 +21375,8 @@ function logReportTipText(tip) {
     lr_tip_jank_wake_wh: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day.',
     lr_tip_audio: 'Speaker playback cost ~{pct}%/h. For long sessions, headphones or a gentler DSP preset are kinder to the battery.',
     lr_tip_prof_save: 'Your own measurements: {cheap} cost {x}%/h at the screen against {y}%/h on {busy} - for reading and music it is noticeably cheaper.',
-    lr_tip_heat_warm: 'The phone spent {min} hot in total; the hottest named phase was {phase}. Reduce sustained load or use a gentler profile.',
+    lr_tip_heat_warm: 'One continuous warm spell lasted {longest} ({min} above 45 °C in total); hottest named phase: {phase}. Reduce the workload measured in that phase or use a gentler profile.',
+    lr_tip_heat_scattered: 'The CPU accumulated {min} above 45 °C across {n} warm spells; the longest was only {longest}. This does not support a sustained-load diagnosis.',
     lr_tip_heat_warm_set: 'The phone spent {min} hot, mostly in {phase} - check "{set}" in Settings if you want ASB thermal protection.',
     lr_tip_heat_manual_set: 'The phone spent {min} hot while "{set}" was {from}°C. A 65°C ASB threshold starts limiting sustained load earlier; the vendor thermal limits remain active.',
     lr_tip_heat_calm: 'No sustained heat or throttling detected; peak CPU temperature was {cpu}°C.',
@@ -21402,8 +21465,9 @@ function logReportBrief(d, analysis) {
     if (logReportSysuiSteady(sdraw) && sdraw.netspeed === '1') add('lr_brief_sysui_net', {});
   }
   if (heat || thermal) {
-    const wm = heat ? +heat.warm_min || 0 : 0, pk = thermal ? +thermal.cpu || 0 : 0;
-    if (wm >= 10) add('lr_brief_heat', { min: logReportDur(wm), cpu: String(pk) }, wm >= 30);
+    const he = logReportHeatEvidence(s), wm = he.wm, pk = he.peak;
+    if (wm >= 10) add(he.episodes > 0 ? 'lr_brief_heat_runs' : 'lr_brief_heat',
+      { min: logReportDur(wm), cpu: String(pk), n: String(he.episodes), longest: logReportDur(he.longest) }, he.sustained);
     else if (pk > 0) add('lr_brief_heat_ok', { cpu: String(pk) });
   }
   if (!lines.length) return null;
@@ -21429,6 +21493,7 @@ function logReportBrief(d, analysis) {
     lr_brief_smooth_bad: 'Stutter is noticeable: {pct}% of frames were late.',
     lr_brief_sysui_net: 'The status bar redraws all the time because the network-speed meter is on - it costs frames in every app.',
     lr_brief_heat: 'The CPU spent {min} above 45 °C (peak {cpu}°).',
+    lr_brief_heat_runs: 'The CPU spent {min} above 45 °C across {n} warm spells (longest {longest}; peak {cpu}°).',
     lr_brief_heat_ok: 'No overheating: the CPU peaked at {cpu}°.',
     lr_brief_next: 'Priority actions lists the first changes to make; Causes and what to do explains the reasoning.'
   };
@@ -21515,7 +21580,8 @@ function logReportDxT(key, vars) {
     lr_dx_also_bhold: "Battery scroll hold, measured per app: kept where it cut the stutter (apps: {k}), released where it did not help (apps: {r}), under test: {t}.",
     lr_dx_also_vendor: "The firmware held the prime cores below ASB's ceiling in {n} of {of} checks (PowerHAL or kernel thermal) - ASB does not override it.",
     lr_dx_heat_long: "The CPU spent {min} above 45 °C in total; the hottest named phase was {phase}, with peak {cpu}°.",
-    lr_dx_fix_heat: "Reduce sustained load (games, long video calls while charging) or use a gentler profile; a case or charging while playing adds heat.",
+    lr_dx_heat_sustained: 'One continuous CPU warm spell lasted {longest}; {min} above 45 °C in total. Hottest named phase: {phase}; peak {cpu}°.',
+    lr_dx_fix_heat: 'Inspect the workload during the longest continuous warm spell and reduce that measured load, or use a gentler profile. This capture does not identify a specific activity such as games, calls or charging.',
     lr_dx_fix_heat_set: "Check \"{set}\" in ASB settings - with Stock, ASB thermal protection is off.",
     lr_dx_heat_some: "The CPU spent {min} above 45 °C in total (peak {cpu}°). The total alone does not show whether the load was sustained.",
     lr_dx_heat_some_runs: "The CPU spent {min} above 45 °C across {n} warm spells (longest {longest}; peak {cpu}°). No single spell reached 30 minutes.",
@@ -21650,7 +21716,7 @@ function logReportDiagnose(d) {
     const dataHeavy = radioOn >= 200 && radioOn / onHours >= 150;
     let sit;
     if (st !== 'problem') sit = item('screen', st, 'lr_dx_screen_ok', { pct: String(r), est: logReportFullCharge(r) });
-    else if (gamingMin >= 30 || wm >= 20)
+    else if (gamingMin >= 30 || logReportHeatEvidence(s).longest >= 20)
       sit = item('screen', st, 'lr_dx_screen_heavy', { pct: String(r), min: logReportDur(Math.max(gamingMin, wm)) }, 'load', 'lr_dx_fix_screen_heavy');
     else if (prof === 'performance')
       sit = item('screen', st, 'lr_dx_screen_perf', { pct: String(r), prof: T('prof_performance', 'Performance') }, 'user', 'lr_dx_fix_screen_perf');
@@ -21775,20 +21841,18 @@ function logReportDiagnose(d) {
   }
 
   if (heat || thermal) {
-    const wm = heat ? +heat.warm_min || 0 : 0, pk = thermal ? +thermal.cpu || 0 : 0;
-    const clamps = throttle ? +throttle.clamps || 0 : 0;
+    const he = logReportHeatEvidence(s), wm = he.wm, pk = he.peak;
+    const clamps = he.clamps;
     const ph = heat ? T('lr_ph_' + String(heat.peak_phase || ''), String(heat.peak_phase || '')) : '';
     let it;
-    if (wm >= 30) {
-      const hv = { min: logReportDur(wm), phase: ph, cpu: String(pk) };
+    if (he.sustained) {
+      const hv = { min: logReportDur(wm), longest: logReportDur(he.longest), phase: ph, cpu: String(pk) };
       it = cfg.sustained_temp_mode === 'stock'
-        ? item('heat', 'problem', 'lr_dx_heat_long', hv, 'user', 'lr_dx_fix_heat_set', { set: Tcfg('sustained_temp_mode', 'name', 'Throttling Point') })
-        : item('heat', 'problem', 'lr_dx_heat_long', hv, 'load', 'lr_dx_fix_heat');
+        ? item('heat', 'problem', 'lr_dx_heat_sustained', hv, 'user', 'lr_dx_fix_heat_set', { set: Tcfg('sustained_temp_mode', 'name', 'Throttling Point') })
+        : item('heat', 'problem', 'lr_dx_heat_sustained', hv, 'load', 'lr_dx_fix_heat');
     } else if (wm >= 10) {
-      const episodes = heat ? +heat.warm_episodes || 0 : 0;
-      const longest = heat ? +heat.warm_run_min || 0 : 0;
-      const hv = { min: logReportDur(wm), cpu: String(pk), n: String(episodes), longest: logReportDur(longest) };
-      it = item('heat', 'normal', episodes > 0 ? 'lr_dx_heat_some_runs' : 'lr_dx_heat_some', hv, 'load');
+      const hv = { min: logReportDur(wm), cpu: String(pk), n: String(he.episodes), longest: logReportDur(he.longest) };
+      it = item('heat', 'normal', he.episodes > 0 ? 'lr_dx_heat_some_runs' : 'lr_dx_heat_some', hv, 'load');
     }
     else if (pk > 0) it = item('heat', 'good', 'lr_dx_heat_ok', { cpu: String(pk) });
     if (it) {
@@ -22180,8 +22244,13 @@ function logReportZygisk(d) {
   sec.appendChild(logReportRow(T('lr_zy_abi', 'Installed observer ABI'), String(z.abis || 'unknown')));
   if (spawnDelta !== null)
     sec.appendChild(logReportRow(T('lr_zy_spawns', 'Observed process starts in capture'), String(spawnDelta)));
-  if (!unknown(z.ledger_top_screen_off) && z.ledger_top_screen_off !== 'none')
-    sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)'), String(z.ledger_top_screen_off)));
+  if (!unknown(z.ledger_top_screen_off) && z.ledger_top_screen_off !== 'none') {
+    const starts = logReportScreenOffStarts(z.ledger_top_screen_off);
+    if (starts.length) {
+      sec.appendChild(logReportNote(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)')));
+      starts.forEach(function (a) { sec.appendChild(logReportPackageRow(a.pkg, a.pkg, a.off + '/' + a.total)); });
+    } else sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)'), String(z.ledger_top_screen_off)));
+  }
   if (!unknown(z.ledger_restart_loops))
     sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_restart_loops', 'Restart loops with the screen off (peak starts per 5 min)'), String(z.ledger_restart_loops), z.ledger_restart_loops !== 'none'));
   const launchRows = ['launch_long', 'launch_short', 'launch_class_fallback', 'launch_vetoed', 'launch_screen_off', 'launch_unavailable', 'launch_throttled'].filter(function (k) { return numericDelta(k) !== null; });
@@ -22475,7 +22544,7 @@ function logReportRender(d) {
        them together ends the "0.7 here, 1.3 there" confusion. */
     if (scr) {
       if ((+scr.on_min || 0) > 0)
-        s.appendChild(logReportRow(T('lr_drain_on', 'Screen-on drain'), String(scr.on_pctph) + T('lr_per_hour', '%/h'),
+        s.appendChild(logReportRow(T('lr_drain_on_capture', 'Screen-on drain · this capture'), String(scr.on_pctph) + T('lr_per_hour', '%/h') + ' · ' + logReportDur(scr.on_min),
           logReportScreenOnDrainState(scr.on_pctph, analysis.scenario) === 'problem'));
       /* fix211: a red figure needs a window that can hold it. One battery-percent step
          over 12 idle minutes reads as 5 %/h - noise, not a finding. Under half an hour
@@ -22506,7 +22575,7 @@ function logReportRender(d) {
       const _rpProf = String((d.sections.meta || {}).profile || '');
       const _rpAvg = (typeof _lvMeter !== 'undefined' && _lvMeter.p && _lvMeter.p[_rpProf]) || null;
       if (_rpAvg && _rpAvg.on > 0 && typeof lvPct === 'function')
-        s.appendChild(logReportRow(T('lr_drain_profile_avg', 'Profile average (Monitor, profile card)'), lvPct(_rpAvg.on, 10, 1), false));
+        s.appendChild(logReportRow(T('lr_drain_profile_avg', 'Profile average (Monitor, profile card) · history'), lvPct(_rpAvg.on, 10, 1) + ' · ' + logReportDur(_rpAvg.onMin), false));
       s.appendChild(logReportNote(T('lr_scr_note2', 'The Monitor tile and the profile cards show the long-term average of the profile; these rows cover only this recording. Different windows, so the figures can differ - both are right.')));
     }
     /* fix220: on the OP15 the current sensor integrates to ~0.34 of the battery's own count
@@ -22601,11 +22670,12 @@ function logReportRender(d) {
         : T('lr_nd_spike_none', 'No sensor-spike holds in this snapshot');
       s.appendChild(logReportRow(T('lr_nd_spike', 'Thermal-spike protection'), detail));
     }
-    const holder = d.wlive.length ? logReportHolderName(d.wlive[0]) : (d.wl.length ? d.wl[0].pkg : '');
+    const holderRow = d.wlive.length && dozePkgOk(d.wlive[0].pkg) ? d.wlive[0] : (d.wl.length && dozePkgOk(d.wl[0].pkg) ? d.wl[0] : null);
+    const holder = holderRow ? (holderRow.tag ? logReportHolderName(holderRow) : holderRow.pkg) : '';
     /* fix222: the holder list is capture-wide - naming it "at night" over a 40-minute
        daytime stretch blamed SystemUI's AOD for a night that never happened. */
     if (holder && !shortNight)
-      s.appendChild(logReportRow(T('lr_nd_holder', 'Main holder at night'), holder, true));
+      s.appendChild(logReportPackageRow(T('lr_nd_holder', 'Main holder at night'), holderRow.pkg, '', true, holder));
     /* fix213 (audit 8.8): the microwake learner's long-term answer to "does my phone
        sleep at night?" - how rarely it stirs and for how long. A calm fact, not an
        alarm, so it sits among the rows, not in the advice. */
@@ -22665,6 +22735,7 @@ function logReportRender(d) {
      cost (or gained, on the charger). This is the ledger itself, aggregated. */
   if (d.phases.length) {
     const s = logReportSec(T('lr_sec_phases', '📊 Phase breakdown')); s.id = 'lgr-phases';
+    const totalDrop = d.phases.reduce(function (n, p) { return n + Math.max(0, +p.drop || 0); }, 0);
     const rows = d.phases.map(function (p) {
       let cell;
       /* fix242: the gauge steps in whole percent - a rate from one step over a few minutes
@@ -22678,13 +22749,14 @@ function logReportRender(d) {
            ("−28% · 11.4%/" / "ч"). The word joiner forbids it; the cell may still
            wrap at the "·" before the number. */
         .replace(/\//g, '/\u2060');
+      const share = totalDrop > 0 && p.drop > 0 ? Math.round(100 * p.drop / totalDrop) + '%' : '—';
       return [T('lr_ph_' + p.name, p.name), logReportDur(p.min),
               { txt: cell, warn: !lowRes && logReportScreenOnDrainState(p.pctph,
-                p.name === 'gaming' ? 'screen_on_heavy' : p.name === 'audio_spk_scr' ? 'audio_speaker' : 'screen_on_light') === 'problem' }];
+                p.name === 'gaming' ? 'screen_on_heavy' : p.name === 'audio_spk_scr' ? 'audio_speaker' : 'screen_on_light') === 'problem' }, share];
     });
     s.appendChild(logReportTable(
-      [T('lr_th_phase', 'Phase'), T('lr_th_time', 'Time'), T('lr_th_drop', 'Drain')], rows, [1, 2]));
-    s.appendChild(logReportNote(T('lr_ph_note', 'Every stretch of the day, longest first; a plus is charge gained on the charger.')));
+      [T('lr_th_phase', 'Phase'), T('lr_th_time', 'Time'), T('lr_th_drop', 'Drain'), T('lr_th_capture_share', 'Share')], rows, [1, 2, 3]));
+    s.appendChild(logReportNote(T('lr_ph_note', 'Every stretch of the day, longest first; a plus is charge gained on the charger. Share is the phase\'s part of all positive battery-percent steps in this capture, not a causal energy allocation.')));
     body.appendChild(s);
   }
   /* fix200: smoothness, with the per-app frame table - the real numbers, not vibes. */
@@ -22734,6 +22806,15 @@ function logReportRender(d) {
     /* fix220: the wake intervals - unlock, lock, app open/close - called out on their own
        row; they are the moments a hitch is actually felt, and a day can read fine while
        they stutter (the ColorOS 17 Battery capture: 8.0% at the wakes, SystemUI 13.6%). */
+    const jactive = d.sections.jactive || null;
+    if (jactive) {
+      s.appendChild(logReportRow(T('lr_jactive', 'Active drawing (20+ FPS)'),
+        logReportT('lr_jactive_fmt', '{pct}% janky · {jps}/s · {frames} frames', {
+          pct: String(jactive.pct), jps: String(jactive.jps), frames: String(jactive.frames) }),
+        (+jactive.pct || 0) >= 6));
+      s.appendChild(logReportNote(T('lr_jactive_note',
+        'Only ordinary intervals drawing at least 20 FPS. Wake-spanning and near-still intervals are excluded, so a high deadline-miss share on a few waiting frames is not mistaken for scrolling or video stutter.')));
+    }
     if (jwake && (+jwake.wakes || 0) > 0) {
       s.appendChild(logReportRow(T('lr_jwake', 'Unlocks & app opens'),
         logReportT('lr_jwake_fmt', '{n} wakes · {pct}% janky (the day: {ord}%)', {
@@ -22810,10 +22891,14 @@ function logReportRender(d) {
     }
     /* fix206: proof the LTPO video drop actually engages - "lowered N times, M min at
        the lower rate". */
-    if (ltpo && (+ltpo.n || 0) > 0) {
+    if (ltpo) {
+      const zeroCapture = ltpo.basis === 'capture' && (+ltpo.n || 0) === 0;
       s.appendChild(logReportRow(ltpo.basis === 'capture' ? T('lr_ltpo', 'LTPO video drop') : T('lr_ltpo_life', 'LTPO video drop (lifetime)'),
-        logReportT('lr_ltpo_fmt', '{n} times · {min} at the lower rate', {
-          n: String(ltpo.n), min: logReportDur(ltpo.min) })));
+        zeroCapture ? T('lr_ltpo_none', 'No confirmed lower-rate window in this capture') :
+          logReportT('lr_ltpo_fmt', '{n} times · {min} at the lower rate', {
+            n: String(ltpo.n), min: logReportDur(ltpo.min) })));
+      if (zeroCapture) s.appendChild(logReportNote(T('lr_ltpo_none_note',
+        'The watcher being enabled does not prove that a compatible video window occurred or that battery was saved. Its decision reason is not exposed by this capture.')));
     }
     body.appendChild(s);
   }
@@ -22877,7 +22962,7 @@ function logReportRender(d) {
     const s = logReportSec(T('lr_sec_wake', '⏰ What kept the phone awake')); s.id = 'lgr-wake';
     if (d.wl.length) {
       d.wl.forEach(function (w) {
-        s.appendChild(logReportRow(w.pkg, logReportDurSec(w.sec)));
+        s.appendChild(logReportPackageRow(w.pkg, w.pkg, logReportDurSec(w.sec)));
         /* fix246: the same app caught by the power-manager samples says WHAT it held. */
         const lv = d.wlive.filter(function (x) { return x.pkg === w.pkg && x.kind && x.kind !== 'lock'; })[0];
         if (lv)
@@ -22899,8 +22984,10 @@ function logReportRender(d) {
       if (w.pkg) seen[w.pkg] = 1;
       const what = logReportHolderWhat(w);
       const label = w.pkg ? (w.pkg + ' · ' + what) : what;
-      s.appendChild(logReportRow(label, logReportT('lr_wlive_fmt', 'held in {pct}% of checks · longest {dur}', {
-        pct: String(w.pct), dur: logReportDur(w.min) }), w.pct >= 30 && (+w.min || 0) >= 1));
+      const liveValue = logReportT('lr_wlive_fmt', 'held in {pct}% of checks · longest {dur}', {
+        pct: String(w.pct), dur: logReportDur(w.min) });
+      s.appendChild(w.pkg ? logReportPackageRow(w.pkg, w.pkg, what + ' · ' + liveValue, w.pct >= 30 && (+w.min || 0) >= 1)
+        : logReportRow(label, liveValue, w.pct >= 30 && (+w.min || 0) >= 1));
       liveShown++;
     });
     /* fix210: the causes by occurrence. Held-time counters stay flat while charging and
@@ -23001,7 +23088,7 @@ function logReportRender(d) {
     if (thermal) {
       const g = document.createElement('div');
       g.className = 'lgr-heros';
-      g.appendChild(logReportHero('🎯', 'CPU', String(thermal.cpu) + '°', T('lr_peak', 'peak'), (+thermal.cpu || 0) >= 45, {
+      g.appendChild(logReportHero('🎯', 'CPU', String(thermal.cpu) + '°', T('lr_peak', 'peak'), logReportHeatEvidence(s).sustained, {
         title: 'CPU', value: String(thermal.cpu) + '°', nowLabel: T('lr_peak', 'peak'),
         text: T('lr_detail_cpu_peak', 'The highest sampled CPU thermal reading in this capture, not the average temperature and not proof of sustained throttling. The duration above 45 °C and the named hottest phase below show how long and where heat actually persisted.'),
         lines: heat ? [T('lr_heat_warm_fmt', 'CPU above 45 °C') + ': ' + logReportDur(+heat.warm_min || 0),
@@ -23024,7 +23111,7 @@ function logReportRender(d) {
           T('lr_ph_' + String(heat.peak_phase), String(heat.peak_phase)) +
             ((+heat.peak_c || 0) > 0 ? ' · ' + String(+heat.peak_c) + '°' : ''), false));
       s.appendChild(logReportRow(T('lr_heat_warm_fmt', 'CPU above 45 °C'),
-        logReportDur(+heat.warm_min || 0), (+heat.warm_min || 0) >= 30));
+        logReportDur(+heat.warm_min || 0), logReportHeatEvidence(s).sustained));
       s.appendChild(logReportRow(T('lr_heat_skin_fmt', 'Skin above 40 °C'),
         logReportDur(+heat.skin_min || 0), (+heat.skin_min || 0) >= 30));
     }
@@ -23045,7 +23132,7 @@ function logReportRender(d) {
          day: 6 short periods, 0 minutes above 45 °C) - red is kept for clamps that came
          with sustained heat. */
       const hotMin = heat ? Math.max(+heat.warm_min || 0, +heat.skin_min || 0) : 0;
-      s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: own }), hotMin >= 10));
+      s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: own }), logReportHeatEvidence(s).sustained));
       if (heat && hotMin < 10)
         s.appendChild(logReportNote(T('lr_clamp_brief_note', 'No sustained heat came with them: brief clamps are the protection doing its job.')));
     } else {
@@ -23504,6 +23591,9 @@ function homeMeterPaint() {
       chip.className = 'pmeta-chip';
       chip.innerHTML = techIcon(c[0]);
       chip.appendChild(document.createTextNode(c[1]));
+      const scope = document.createElement('span'); scope.className = 'pmeta-scope';
+      scope.textContent = T(c[0] === 'sun' ? 'lv_history_short' : 'lv_window_short', c[0] === 'sun' ? 'history' : 'window');
+      chip.appendChild(scope);
       if (c[2]) chip.title = c[2];
       box.appendChild(chip);
     });
@@ -25599,7 +25689,7 @@ async function pollLive(visible, prefetch) {
               asbMetricPaint('bnDrain', _chg ? 'metric-charge' : 'metric-info');
               _lvDrain.winS = _lvDrain.on === 'meter' ? _fpk.min * 60 : parseInt(kv.smart_drain_window_s || '0', 10);
               const _onLab = _el('bnDrainOnLabel');
-              if (_onLab) _onLab.textContent = T('lv_scr_on', 'Screen on');
+              if (_onLab) _onLab.textContent = T(_act > 0 ? 'lv_scr_on_current' : 'lv_scr_on', _act > 0 ? 'Screen on · current' : 'Screen on');
             }
             /* Smart's own screen-off figure (fix189), by the rule every card uses - not the
              * phone-wide one, which only feeds the time to empty (marked "~" there). */
