@@ -67,7 +67,8 @@ if [ "$MODE" != manual ] && [ "$(_cfg mglru_mode)" = smart ]; then
 fi
 
 # I/O scheduler: only Smart + Auto is scenario-owned. Gaming/heavy prefer ADIOS,
-# ordinary screen-on work prefers Kyber, and idle/screen-off prefers mq-deadline.
+# ordinary screen-on work prefers Kyber, idle prefers mq-deadline, and screen-off
+# tries the minimal none queue first with only runtime-discovered fallbacks.
 # The registered helper performs discovery, per-device baselines and readback. Explicit
 # manual schedulers, including experimental BFQ, never enter this branch.
 if [ "$MODE" != manual ] && [ "$(_cfg io_scheduler)" = auto ]; then

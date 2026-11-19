@@ -165,8 +165,12 @@ _ios_choose() {
   # Every scheduler is selected only from the queue's runtime exposure. BFQ is deliberately
   # absent from every automatic order: it remains available only as an explicit user choice.
   if [ "$_iosch_profile" = smart ]; then
-    if [ "$_iosch_screen" = 0 ] || [ "$_iosch_hint" = 0 ]; then
-      _iosch_order='mq-deadline kyber none adios'
+    if [ "$_iosch_screen" = 0 ]; then
+      # With no interactive reader, try the minimal FIFO path first. This is a
+      # workload policy, not a claim of measured power savings on every UFS queue.
+      _iosch_order='none mq-deadline kyber adios'
+    elif [ "$_iosch_hint" = 0 ]; then
+      _iosch_order='mq-deadline none kyber adios'
     else
       case "$_iosch_hint" in
         3|4) _iosch_order='adios kyber mq-deadline none' ;;
@@ -174,8 +178,11 @@ _ios_choose() {
       esac
     fi
   else
-    case "$_iosch_profile" in performance) _iosch_order='adios kyber mq-deadline none' ;;
-      *) _iosch_order='adios mq-deadline none kyber' ;; esac
+    case "$_iosch_profile" in
+      performance) _iosch_order='adios kyber mq-deadline none' ;;
+      battery) _iosch_order='none mq-deadline kyber adios' ;;
+      *) _iosch_order='mq-deadline kyber adios none' ;;
+    esac
   fi
   for _iosch_name in $_iosch_order; do
     if _ios_has "$_iosch_node" "$_iosch_name"; then printf '%s\n' "$_iosch_name"; return 0; fi
