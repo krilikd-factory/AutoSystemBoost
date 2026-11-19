@@ -10181,6 +10181,7 @@ fail() { echo "FAIL I/O scheduler runtime: $*" >&2; exit 1; }
 mkdir -p "$T/mod"
 printf 'balanced\n' > "$T/mod/current_profile"
 new_fixture() {
+  unset ASB_PROFILE
   rm -rf "$T/block" "$T/state"
   mkdir -p "$T/block/sda/queue" "$T/block/mmcblk0/queue" "$T/state"
   printf '0\n' > "$T/block/sda/queue/rotational"
@@ -10219,7 +10220,7 @@ printf 'none [mq-deadline] adios kyber bfq\n' > "$T/block/sda/queue/scheduler"
 printf 'none mq-deadline [kyber] adios bfq\n' > "$T/block/mmcblk0/queue/scheduler"
 printf 'io_scheduler=auto\n' > "$T/conf"
 out="$(run_io apply)"
-printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|adios|mixed' || fail "ADIOS auto/readback: $out"
+printf '%s\n' "$out" | grep -Fq 'io_scheduler|applied|auto|mq-deadline|mixed' || fail "Balanced mq-deadline auto/readback: $out"
 printf 'io_scheduler=stock\n' > "$T/conf"
 out="$(run_io restore)"
 [ "$(cat "$T/block/sda/queue/scheduler")" = mq-deadline ] && [ "$(cat "$T/block/mmcblk0/queue/scheduler")" = kyber ] || fail 'ADIOS stock did not restore per-device baselines'
@@ -10337,6 +10338,7 @@ trap 'rm -rf "$T"' EXIT HUP INT TERM
 fail() { echo "FAIL Smart I/O scheduler scenarios: $*" >&2; exit 1; }
 mkdir -p "$T/mod"
 new_fixture() {
+  unset ASB_PROFILE
   rm -rf "$T/block" "$T/state"
   mkdir -p "$T/block/sda/queue" "$T/block/mmcblk0/queue" "$T/state"
   printf '0\n' > "$T/block/sda/queue/rotational"
@@ -10362,6 +10364,7 @@ expose_both() {
     adios) line='none mq-deadline kyber [adios] bfq' ;;
     kyber) line='none mq-deadline [kyber] adios bfq' ;;
     mq-deadline) line='none [mq-deadline] kyber adios bfq' ;;
+    none) line='[none] mq-deadline kyber adios bfq' ;;
     *) fail "cannot expose unexpected active scheduler $1" ;;
   esac
   printf '%s\n' "$line" > "$T/block/sda/queue/scheduler"
@@ -10383,8 +10386,8 @@ expect_smart 3 1 adios
 expect_smart 2 1 kyber
 expect_smart 1 1 kyber
 expect_smart 0 1 mq-deadline
-expect_smart 4 0 mq-deadline
-expect_smart 0 0 mq-deadline
+expect_smart 4 0 none
+expect_smart 0 0 none
 expect_smart 4 1 adios
 out="$(run_io apply)" || fail "generic Smart apply after gaming plan failed: $out"
 expect_both adios
@@ -10452,9 +10455,21 @@ expect_both adios
 new_fixture
 printf 'balanced\n' > "$T/mod/current_profile"
 out="$(run_io apply)" || fail "non-Smart static Auto failed: $out"
-expect_both adios
+expect_both mq-deadline
 [ ! -e "$T/state/smart.plan" ] || fail 'non-Smart static Auto created scenario plan'
-echo 'PASS Smart I/O scheduler scenarios: gaming/heavy ADIOS, daily Kyber, idle/screen-off mq-deadline, discovered fallbacks, plan reuse, manual-only BFQ, exact Stock restore and bounded arguments'
+new_fixture
+printf 'battery\n' > "$T/mod/current_profile"
+out="$(run_io apply)" || fail "Battery static Auto failed: $out"
+expect_both none
+[ ! -e "$T/state/smart.plan" ] || fail 'Battery static Auto created scenario plan'
+new_fixture
+printf 'mq-deadline [kyber] adios bfq\n' > "$T/block/sda/queue/scheduler"
+printf 'mq-deadline [kyber] adios bfq\n' > "$T/block/mmcblk0/queue/scheduler"
+expect_smart 4 0 mq-deadline
+printf '[adios] bfq\n' > "$T/block/sda/queue/scheduler"
+printf '[adios] bfq\n' > "$T/block/mmcblk0/queue/scheduler"
+expect_smart 4 0 adios
+echo 'PASS Smart I/O scheduler scenarios: gaming/heavy ADIOS, daily Kyber, idle mq-deadline, screen-off none with discovered fallbacks, Battery none, Balanced mq-deadline, manual-only BFQ and exact Stock restore'
 )
 
 
