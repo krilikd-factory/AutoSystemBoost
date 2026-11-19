@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-660-dev66-buildfix21-source",
-  "base": "AutoSystemBoost-V66-660-dev66-buildfix20-source.zip",
+  "release": "AutoSystemBoost-V66-660-dev66-buildfix23-source",
+  "base": "AutoSystemBoost-V66-660-dev66-buildfix22-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 272,
@@ -11,34 +11,15 @@
       "README.advanced.ru.md",
       "RELEASE_MANIFEST.json",
       "docs/V66_BUILD_HISTORY.md",
-      "runtime/asb_battery_fix.sh",
-      "runtime/asb_drain_meter.sh",
-      "runtime/asb_wakelock_watch.sh",
-      "service.sh",
-      "tests/asb_features.sh",
-      "tests/asb_smart.sh",
       "tests/asb_ui.sh",
       "tools/asb_tree.sha256",
-      "webroot/i18n/ar.json",
-      "webroot/i18n/de.json",
-      "webroot/i18n/en.json",
-      "webroot/i18n/es.json",
-      "webroot/i18n/fr.json",
-      "webroot/i18n/hy.json",
-      "webroot/i18n/id.json",
-      "webroot/i18n/it.json",
-      "webroot/i18n/pt.json",
-      "webroot/i18n/ru.json",
-      "webroot/i18n/tr.json",
-      "webroot/i18n/uk.json",
-      "webroot/i18n/zh.json",
       "webroot/index.html"
     ],
     "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 26,
+      "changed": 7,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -198,14 +179,14 @@
     "uninstall.sh"
   ],
   "host_verification": {
-    "source_regression": "ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_source_regression.sh passed on the final pre-manifest working tree: 451 anchored PASS lines and ALL ASB HOST REGRESSIONS PASSED; 0 actual FAIL/FAILED lines, I/O errors or Broken pipe. Release-manifest/tree-hash snapshot is verified separately and by the clean-unpack regression gate.",
-    "targeted_runtime": "Focused buildfix21 fixtures cover installed system packages and modern Activity/Service Resolver Table declarations, exact original-state disable/read-back/Restore, third-party-only package-wide WAKE_LOCK controls, late-boot exact-name wakeup restoration with Safe mode, SOC long-gap evidence rejection, per-profile latest screen-on/night ownership, zero-step upper bounds and the complete Battery Fix ART progress/stop/interrupted/partial/refused/recovery flow.",
-    "browser_layout": "Chromium host rendering passed 14 checks at each of 360 and 440 CSS px: component rows and visible close action, no component/config/Zygisk horizontal overflow, unified Kernel badges, retained ART step, actually hidden/openable native Zygisk notes and Junk Cleanup disclosure. External KernelSU insets.css and favicon load failures were environment-only. This is not physical ColorOS WebView validation.",
-    "native_build": "No native source or binary was rebuilt or changed in buildfix21. Governor, Zygisk and DSP binaries retain their buildfix20 SHA-256 hashes.",
+    "source_regression": "ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_source_regression.sh passed on the final pre-manifest working tree: 451 anchored PASS lines and ALL ASB HOST REGRESSIONS PASSED; no actual FAIL/FAILED suite, I/O error or Broken pipe. Release-manifest/tree-hash snapshot is verified separately and by the clean-unpack regression gate.",
+    "targeted_runtime": "Focused buildfix23 fixtures cover categorical DOM graphics, accessible distributions, Glass material resets, bucketable selectors, and latest-night ownership: a newer profile-owned 0.20 %/h night replaces a stale shared 2.83 %/h record on Home and Monitor, while an indefinitely old saved night is rejected by calendar freshness. Existing buildfix22 battery/disclosure/refresh fixtures remain in the passing full regression.",
+    "browser_layout": "Chromium host rendering passed six checks at each of 360 and 440 CSS px (12 total), using the real liveInfoOpen path in Glass for FSM, limit source, modem mode, slot and slot heat. Computed transparent backgrounds, no nested shadow/backdrop/lateral border/radius, categorical bar or numeric sparkline, bounded geometry and zero console errors were checked. All ten screenshots were visually reviewed. This is not physical ColorOS WebView validation.",
+    "native_build": "No native source or binary was rebuilt or changed in buildfix23. Governor, Zygisk and DSP binaries retain their buildfix22 SHA-256 hashes.",
     "clean_unpack_regression": "Release gate: full canonical source-only regression from a clean unzip of this exact source ZIP, plus per-file SHA-256/size/mode equality, regular-file-only entries, strict tree check, executable modes and asbdiag identity; this ZIP is not delivered unless that gate passes.",
     "skip": "DSP reference staging only: optional reference prebuilt .so files absent; static DSP gates and available host-compiled DSP tests passed."
   },
-  "evidence_scope": "Host/source verification only. No physical OnePlus 15 or ColorOS validation, controlled power/performance A/B, measured energy saving or improvement percentage is claimed. SOC-derived drain windows describe recorded battery-percent evidence, not causal per-component energy attribution or guaranteed future drain. Component discovery can remain incomplete when Android exposes no current/declared/job evidence. ART completion, bg-dexopt scheduling and battery-statistics reset do not prove faster apps or added capacity. No persistent polling worker, native binary change, arbitrary path/value writer, thermal bypass, overclock, undervolt, permanent performance governor, broad wakeup blocklist, direct dex2oat, ART/Dalvik wipe, sensitive identifier collection, root/Zygisk concealment or silent persisted-settings reset was added. Existing evidence gates, vendor thermal ownership and Safe mode remain in force.",
+  "evidence_scope": "Host/source verification only. No physical OnePlus 15 or ColorOS validation, controlled power/performance A/B, measured energy saving or improvement percentage is claimed. The 0.20 versus 2.83 %/h case is a synthetic ownership regression, not a new device measurement; the field value must be confirmed after installation. Night freshness uses the WebView local clock and available meter timestamps; a missing or unreadable newer measurement remains unknown rather than proving support or drain. SOC-derived drain windows describe recorded battery-percent evidence, not causal per-component energy attribution or guaranteed future drain. No persistent polling worker, native binary change, arbitrary path/value writer, thermal bypass, overclock, undervolt, permanent performance governor, broad wakeup blocklist, direct dex2oat, ART/Dalvik wipe, sensitive identifier collection, root/Zygisk concealment or silent persisted-settings reset was added. Existing evidence gates, vendor thermal ownership and Safe mode remain in force.",
   "files": [
     {
       "path": ".github/workflows/build-dsp-aidl.yml",
@@ -245,15 +226,15 @@
     },
     {
       "path": "README.advanced.md",
-      "bytes": 175334,
+      "bytes": 177288,
       "mode": "0644",
-      "sha256": "accadad191af8333624e81cb5c8deb4fd87fe8a00637d6c57ceef8e47422ef5a"
+      "sha256": "f561985565ec87cfab42249db204a3ccd2c73e23e1bd1a326445a09cbbe60be5"
     },
     {
       "path": "README.advanced.ru.md",
-      "bytes": 286333,
+      "bytes": 289681,
       "mode": "0644",
-      "sha256": "ce52c569bb98ae67c510c1426047151564459ccd6d4a57d669666486f56bdb2f"
+      "sha256": "ca03151ed9706ba26efd65c783b9f16a847206955bdfd64dcba8676ff0db9447"
     },
     {
       "path": "README.md",
@@ -461,9 +442,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 228299,
+      "bytes": 233709,
       "mode": "0644",
-      "sha256": "ae0e2188f605ef167486c2d4b88b58d649c27ae39d3a81125f8f4f203e60310f"
+      "sha256": "b9b4da9d8767b35cbe0bb8ce867b83f9c407fb88ee21c835590590531009c147"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -478,16 +459,16 @@
       "sha256": "7de67d37a6c29ee96ca380a9cf236ad7407e3f01d282b1d9715be6f7683a3577"
     },
     {
-      "path": "docs/reference_models.md",
-      "bytes": 1102,
-      "mode": "0644",
-      "sha256": "c8d79467d5c4f6cc0984efc90e05b738136b62caa60208f01974d6c41715bd89"
-    },
-    {
       "path": "docs/reference_models/asb_allocator_reference_model.py",
       "bytes": 10279,
       "mode": "0644",
       "sha256": "fc1e9cd366e6a51087a63c939373f10835a7864d5a06312a423ac5a53cecb2d3"
+    },
+    {
+      "path": "docs/reference_models.md",
+      "bytes": 1102,
+      "mode": "0644",
+      "sha256": "c8d79467d5c4f6cc0984efc90e05b738136b62caa60208f01974d6c41715bd89"
     },
     {
       "path": "features.conf",
@@ -1348,12 +1329,6 @@
       "sha256": "0e34527e208232920fc9e246e92c37e99b814b1fe89b745a39ff66c6abf332cd"
     },
     {
-      "path": "system.prop",
-      "bytes": 376,
-      "mode": "0644",
-      "sha256": "c216da0374ed7b3e493710283e37057789f8a4ee2aea30206b25ea1bbd941365"
-    },
-    {
       "path": "system/bin/asb",
       "bytes": 69,
       "mode": "0755",
@@ -1370,6 +1345,12 @@
       "bytes": 253,
       "mode": "0755",
       "sha256": "a5aa29d815bc595909d63ab662581027f4349ebc2392328c064a1317c46d4419"
+    },
+    {
+      "path": "system.prop",
+      "bytes": 376,
+      "mode": "0644",
+      "sha256": "c216da0374ed7b3e493710283e37057789f8a4ee2aea30206b25ea1bbd941365"
     },
     {
       "path": "tests/asb_features.sh",
@@ -1391,15 +1372,15 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 666229,
+      "bytes": 666250,
       "mode": "0755",
-      "sha256": "7d48855f5510a8629c20546436a5c354c2b8742cdad34cc188a38297260931b2"
+      "sha256": "b17036b917ebe867064c4303c9d3349c24565566b8a39c9d14b28044c28ed58c"
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1197390,
+      "bytes": 1202479,
       "mode": "0755",
-      "sha256": "f3a2641e757b987035e70b7c562cf3a3551d968337584ebfc90f94ff16e8903c"
+      "sha256": "2ea1efdaf6b1c29f9ab5ea9d240e8d636b49a2b76fe23c245f09bd2aee67e15f"
     },
     {
       "path": "tests/asb_zygisk.sh",
@@ -1615,7 +1596,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24137,
       "mode": "0644",
-      "sha256": "055352d8232f6ba438c3d1e8ccc1b4dce1a23de9981557d581260e7d7ab4242f"
+      "sha256": "4c711f548ab3af62a3a998f03fc8d68b8906371d10fced7f6ff048af467022fa"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1823,9 +1804,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1670477,
+      "bytes": 1679236,
       "mode": "0644",
-      "sha256": "511d26f4802603f36fe464a0b32d8706b4e580850b6b9500f90f3a1b9ac0e75c"
+      "sha256": "a58b2ed4cb30f5d01a5eb83a6985b632fc35d5c26ee23f376c962cde8c2d9e00"
     },
     {
       "path": "zygisk/arm64-v8a.so",
