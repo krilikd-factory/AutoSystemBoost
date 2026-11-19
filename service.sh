@@ -4435,5 +4435,10 @@ asb_timeline_mark boot_wait_begin
     sleep 1; _bw=$((_bw + 1))
   done
   asb_timeline_mark boot_completed_seen
+  # Some kernels expose asb_wakeup only late in boot. Reuse this existing one-shot waiter
+  # to restore the saved Always/Screen-off lists after Android is up; no polling worker.
+  if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_wakeup_blocker.sh" ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakeup_blocker.sh" apply auto >/dev/null 2>&1 || true
+  fi
 ) &
 exit 0
