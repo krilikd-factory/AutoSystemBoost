@@ -4340,7 +4340,7 @@ grep -q 'asb_lsposed' "$ROOT/post-fs-data.sh" 2>/dev/null && fail "the LSPosed s
 grep -q 'asb_lsposed.sh" restore' "$ROOT/uninstall.sh" || fail "uninstall leaves LSPosed changed"
 grep -q 'asb_lsposed.sh' "$ROOT/docs/log_schemas.md" || fail "asb_lsposed.sh status undocumented"
 grep -q '0f. LSPOSED LOGGING' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report LSPosed"
-grep -q 'const off = homeOffFigure(prof);' "$H" || fail "home card does not use the shared screen-off rule"
+grep -q 'const on = lvOnFigure(prof), off = homeOffFigure(prof);' "$H" || fail "home card does not use the shared battery rules"
 grep -q '"nav_home": "Профили"' "$ROOT/webroot/i18n/ru.json" || fail "the first tab is not Profiles"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix187 contract"
