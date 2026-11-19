@@ -1639,30 +1639,52 @@ def const(n):
 body="""function T(k,d){return d} function techIcon(){return ''}
 const els={}; function _el(id){return els[id]||null}
 ['bnDrain','bnDrainOff','bnDrainOnLabel','bnDrainOffLabel','liveEtaOn','liveEtaOff'].forEach(id=>els[id]={textContent:'',title:''});
+function node(){return {textContent:'',className:'',innerHTML:'',title:'',hidden:false,children:[],appendChild(c){this.children.push(c);this.textContent+=c.textContent||''}}}
+const boxes=['smart','battery'].map(profile=>Object.assign(node(),{getAttribute(){return profile}}));
+const document={querySelectorAll(s){return s==='.pmeta[data-meter]'?boxes:[]},createElement(){return node()},createTextNode(t){return {textContent:t}}};
+const asbUiFrame={request(){}};function asbFitPages(){}
 function asbMetricPaint(){} function liveDrainIsOpen(){return false} function liveDrainPaint(){}
 let _selectedProfile='smart';
 """
 src='\n'.join([body,const('_lvMeter'),const('_lvGovOff'),const('_lvDrain'),const('_lvEta'),
  fn('lvBootParse'),fn('lvBootOnFigure'),fn('lvNightParse'),fn('lvMeterParse'),fn('lvDurDHM'),fn('lvPct'),fn('lvOffFigure'),
- fn('lvNightFigure'),fn('lvProfileOnFigure'),fn('lvOnFigure'),fn('lvPrimaryOffFigure'),fn('lvMeterHasOn'),fn('lvMeterPaint'),fn('lvEtaFmt'),fn('lvEtaPaint'),r"""
+ fn('lvNightFresh'),fn('lvNightFigure'),fn('lvProfileNightFigure'),fn('lvProfileOnFigure'),fn('lvOnFigure'),fn('lvPrimaryOffFigure'),fn('lvMeterHasOn'),fn('lvMeterPaint'),fn('lvEtaFmt'),fn('lvEtaPaint'),fn('homeOffFigure'),fn('homeMeterPaint'),r"""
 let bad=0;function chk(c,m){if(!c){bad=1;console.log('FAIL '+m)}}
 const parsed=lvMeterParse('smart 3600 500 14400 200 1 50 14400 1 500 3600 10 50 14400 10\ncurrent smart\n');
 chk(parsed.p.smart.onLast===500&&parsed.p.smart.onLastS===3600&&parsed.p.smart.nightLastS===14400,'15-field parser');
-_lvMeter.p=parsed.p;_lvMeter.cur='smart';_lvMeter.boot=lvBootParse('abc 7200 10000 1000 0 0 0');_lvMeter.night=lvNightParse('25 14400 123');
-_lvMeter.p.battery={on:100,onMin:60,off:80,offN:2,offS:20000,offLast:0,offLastS:0,offLastAt:0,onLast:120,onLastS:3600,onLastAt:20,nightLast:40,nightLastS:18000,nightLastAt:30};
+_lvMeter.p=parsed.p;_lvMeter.cur='battery';_lvMeter.boot=lvBootParse('abc 7200 10000 1000 0 0 0');
+const nightNow=Math.floor(Date.now()/1000);_lvMeter.night=lvNightParse('25 14400 '+(nightNow-3600));
+_lvMeter.p.battery={on:100,onMin:60,off:80,offN:2,offS:20000,offLast:0,offLastS:0,offLastAt:0,onLast:120,onLastS:3600,onLastAt:20,nightLast:40,nightLastS:18000,nightLastAt:nightNow-1800};
+homeMeterPaint();
+chk(boxes[0].textContent==='5.0%/h0.25%/h','active Home uses boot and last night despite stale meter current: '+boxes[0].textContent);
+chk(boxes[1].textContent==='12.0%/h0.40%/h','inactive Home uses only its own latest session and night: '+boxes[1].textContent);
+chk(boxes.every(b=>!b.children.some(c=>c.className==='pmeta-scope')),'Home cards do not create visible scope labels');
 _lvEta.cap=60;lvMeterPaint('smart');
-chk(els.bnDrain.textContent==='5.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on · since boot','active since-boot: '+els.bnDrain.textContent);
-chk(els.bnDrainOff.textContent==='0.25%/h'&&els.bnDrainOffLabel.textContent==='Screen off · last night','active last night');
+chk(els.bnDrain.textContent==='5.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on','selected active uses boot despite stale meter current: '+els.bnDrain.textContent);
+chk(els.bnDrainOff.textContent==='0.25%/h'&&els.bnDrainOffLabel.textContent==='Screen off','active last night');
+/* Field regression: a stale shared 2.83 %/h record must not hide the active profile's
+ * newer 0.20 %/h night. An older-than-latest-morning record is not "last night" at all. */
+_lvMeter.night=lvNightParse('283 21600 '+(nightNow-3600));
+_lvMeter.p.smart.nightLast=20;_lvMeter.p.smart.nightLastS=18000;_lvMeter.p.smart.nightLastAt=nightNow-1800;
+lvMeterPaint('smart');
+chk(els.bnDrainOff.textContent==='0.20%/h','newer profile night replaces stale shared 2.83: '+els.bnDrainOff.textContent);
+homeMeterPaint();
+chk(boxes[0].textContent==='5.0%/h0.20%/h','Home also chooses the newer 0.20 profile night: '+boxes[0].textContent);
+chk(lvNightFresh(nightNow-1800,nightNow*1000)&&!lvNightFresh(1,nightNow*1000),'calendar freshness rejects an old saved night');
+_lvMeter.night=lvNightParse('25 14400 '+(nightNow-3600));_lvMeter.p.smart.nightLastAt=10;
 lvMeterPaint('battery');
-chk(els.bnDrain.textContent==='12.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on · latest','inactive own latest: '+els.bnDrain.textContent);
-chk(els.bnDrainOff.textContent==='0.40%/h'&&els.bnDrainOffLabel.textContent==='Screen off · last night','inactive own night');
+chk(els.bnDrain.textContent==='12.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on','inactive own latest: '+els.bnDrain.textContent);
+chk(els.bnDrainOff.textContent==='0.40%/h'&&els.bnDrainOffLabel.textContent==='Screen off','inactive own night');
+chk(els.liveEtaOn.textContent==='12h 00m','ETA stays bound to the selected active profile while an inactive comparison is painted: '+els.liveEtaOn.textContent);
 _selectedProfile='battery';lvMeterPaint('battery');
-chk(els.liveEtaOn.textContent==='5h 00m','ETA uses the printed inactive latest rate: '+els.liveEtaOn.textContent);
-_selectedProfile='battery';_lvMeter.p.battery.nightLastS=0;lvMeterPaint('battery');
-chk(els.bnDrainOff.textContent==='0.80%/h'&&els.bnDrainOffLabel.textContent==='Screen off · history','inactive aggregate fallback is labelled');
+chk(els.bnDrain.textContent==='5.0%/h'&&els.liveEtaOn.textContent==='12h 00m','newly selected profile switches to active boot data');
+_selectedProfile='smart';_lvMeter.p.battery.nightLastS=0;lvMeterPaint('battery');
+chk(els.bnDrainOff.textContent==='0.80%/h'&&els.bnDrainOffLabel.textContent==='Screen off','inactive aggregate fallback is labelled');
 chk(els.bnDrainOff.textContent!=='0.25%/h','inactive borrowed active global night');
-_lvMeter.boot=lvBootParse('abc 3600 10000 0 0 0 0');lvMeterPaint('smart');
-chk(els.bnDrain.textContent==='<10.0%/h','zero-step since-boot must be an upper bound: '+els.bnDrain.textContent);
+_lvMeter.cur='';_lvMeter.boot=lvBootParse('abc 3600 10000 0 0 0 0');lvMeterPaint('smart');
+chk(els.bnDrain.textContent==='<10.0%/h','zero-step since-boot must be an upper bound even with empty meter current: '+els.bnDrain.textContent);
+homeMeterPaint();
+chk(boxes[0].textContent==='<10.0%/h0.25%/h','active Home keeps boot ownership with empty meter current: '+boxes[0].textContent);
 _lvMeter.p.battery.onLast=0;lvMeterPaint('battery');
 chk(els.bnDrain.textContent==='<10.0%/h','zero-step profile latest must be an upper bound: '+els.bnDrain.textContent);
 if(bad)process.exit(1);console.log('ok');
@@ -2205,7 +2227,7 @@ const _lvMeter = { at: 0, cur: '', p: {} };
 function liveDrainIsOpen() { return false; }
 function liveDrainPaint() {}
 EOF
-  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure lvBootOnFigure lvNightFigure lvProfileOnFigure lvOnFigure lvPrimaryOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure lvBootOnFigure lvNightFresh lvNightFigure lvProfileNightFigure lvProfileOnFigure lvOnFigure lvPrimaryOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   sed -n "/^const _lvEta = /p; /^const _lvDrain = /p; /^const _lvGovOff = /p; /^const METRIC_STEPS = /p" "$H"
   sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   cat <<'EOF'
@@ -2631,7 +2653,7 @@ echo "PASS webui v66 startup queue: background reads wait for the first frame, r
 )
 
 t_webui_zygisk_compact_contract() (
-# buildfix21: long explanations use native details; controls and complete evidence stay.
+# buildfix22: one native disclosure per section; controls and complete evidence stay.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -2641,8 +2663,9 @@ s=open(sys.argv[1],encoding='utf-8').read()
 r=s[s.index('function zygiskPageRender(d, state) {'):s.index('const _zyFoldOpen = new Set();')]
 assert r.count('zyCompact(body);') == 2
 c=s[s.index('function zyCompact(body) {'):];c=c[:c.index('\n}\n')+3]
-for t in ("String(n.textContent || '').length <= ZY_NOTE_CLAMP", "document.createElement('details')", "fold.className = 'zy-note-fold'",
-          "T('zy_explanation', 'Explanation')", "fold.appendChild(n)", "fold.addEventListener('toggle'",
+for t in ("String(n.textContent || '').length > ZY_NOTE_CLAMP", "document.createElement('details')", "fold.className = 'zy-note-fold asb-disclosure'",
+          "T('zy_explanation', 'Explanation')", "content.appendChild(n)", "fold.addEventListener('toggle'",
+          "body.querySelectorAll('.lgr-sec')", "n.closest('.lgr-sec') === sec", "sec.appendChild(fold)",
           "if (run.length > 4) {", "const rest = run.slice(3);", "_zyFoldOpen.has(key)",
           "T('zy_more', 'Show %s more')", "T('zy_less', 'Show less')", "fold.hidden = !o;"):
  assert t in c,t
@@ -2651,7 +2674,7 @@ assert 'zy-clamp' not in c
 g=s[s.index('function zygiskGuardActionRow('):s.index('function zygiskGuardCard()')]
 assert 'k.appendChild(b);' in g and 'zy-btn-inline' in g
 PY
-echo "PASS webui zygisk compact: native details for complete long notes, bounded row folding and retained controls"
+echo "PASS webui zygisk compact: one native details control per section for complete long notes, bounded row folding and retained controls"
 )
 
 t_webui_quiet_ui_runtime() (
@@ -4115,7 +4138,7 @@ H="$ROOT/webroot/index.html"
 fail() { echo "FAIL webui home offdrain: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "SKIP webui home offdrain: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-grep -q 'const off = homeOffFigure(prof);' "$H" || fail "the home card does not use the shared rule"
+grep -q 'const on = lvOnFigure(prof), off = homeOffFigure(prof);' "$H" || fail "the home card does not use the shared rules"
 grep -q "const _of = lvPrimaryOffFigure(_selectedProfile);" "$H" || fail "the time to empty does not use the shared rule"
 grep -q "const of = lvOffFigure(k);" "$H" || fail "the sheet's rows do not use the shared rule"
 grep -q "cat /data/adb/asb/offdrain_profiles" "$H" || fail "the per-profile figures are not read where the meter is"
@@ -4128,6 +4151,10 @@ grep -q "cat /data/adb/asb/offdrain_profiles" "$H" || fail "the per-profile figu
   sed -n '/^function lvGovOffParse(/,/^}/p' "$H"
   sed -n '/^function lvDurDHM(/,/^}/p' "$H"
   sed -n '/^function lvOffFigure(/,/^}/p' "$H"
+  sed -n '/^function lvNightFresh(/,/^}/p' "$H"
+  sed -n '/^function lvNightFigure(/,/^}/p' "$H"
+  sed -n '/^function lvProfileNightFigure(/,/^}/p' "$H"
+  sed -n '/^function lvPrimaryOffFigure(/,/^}/p' "$H"
   sed -n '/^function homeOffFigure(/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
@@ -5774,7 +5801,7 @@ const pageTxt = asbPageText(reportBody);
 chk(!pageTxt.includes(I18N.ru.dev_nav_title) && !pageTxt.includes('↳ ' + I18N.ru.lr_sec_drain) &&
   !pageTxt.includes('↳ ' + I18N.ru.lr_sec_smooth) && !pageTxt.includes('↳ ' + I18N.ru.lr_sec_thermal), 'navigation labels do not pollute the exported report');
 chk(pageTxt.indexOf('== ' + I18N.ru.lr_sec_brief + ' ==') >= 0 && /\n  • .*com\.whatsapp/.test(pageTxt) && pageTxt.indexOf('(!)') > 0, 'the saved text keeps the brief bullets and warnings');
-chk(/\n  [^\n:]+: whatsapp 37/.test(pageTxt), 'the saved text keeps one generic label and one package action: '+pageTxt.split('\n').filter(x=>x.includes('whatsapp')||x.includes('Application')).join('|'));
+chk(/\n  whatsapp 37/.test(pageTxt) && !/\n  Application:/.test(pageTxt) && !/\n  : whatsapp/.test(pageTxt), 'the saved text drops the repeated generic label but keeps the package action: '+pageTxt.split('\n').filter(x=>x.includes('whatsapp')||x.includes('Application')).join('|'));
 /* fix247: the causes, area by area, with whose side each one is on and when the developer
    needs the log. The owner's morning: an app (the sync loop), a phone setting (the
    network-speed meter), the firmware holding the prime cores - and ASB's ceilings cleared. */
@@ -8832,9 +8859,9 @@ kernelDecorateControlRow(nrRow,'kernel_sched_nr_migrate');
 if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||!nrClasses.includes('kernel-unavailable')||!/Not exposed/.test(nrBadge.textContent)||/unknown/.test(nrBadge.textContent)||/unknown/.test(nrBadge.title))throw Error('not_exposed control remains actionable or exposes an unknown-value suffix '+JSON.stringify({buttons:nrButtons,pop:nrPop,classes:nrClasses,badge:nrBadge,availability:kernelControlAvailability('kernel_sched_nr_migrate'),controls:_kernelPanel.controls,keys:ASB_KERNEL_STATUS_KEYS}));
 nrButtons.forEach(b=>{b.disabled=false;b['aria-disabled']='false'});nrPop.hidden=false;nrBadge.textContent='';nrBadge.title='';
 kernelDecorateControlRow(nrRow,'kernel_hrtimer_migration');
-if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||!/Managed by Timer migration/.test(nrBadge.textContent)||nrBadge.title!=='kernel: 0')throw Error('covered HR timer control remains actionable or has the wrong state '+JSON.stringify({buttons:nrButtons,pop:nrPop,badge:nrBadge,availability:kernelControlAvailability('kernel_hrtimer_migration')}));
+if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||nrBadge.textContent!=='0'||nrBadge.title!=='kernel: 0')throw Error('covered HR timer control remains actionable or does not show its live value '+JSON.stringify({buttons:nrButtons,pop:nrPop,badge:nrBadge,availability:kernelControlAvailability('kernel_hrtimer_migration')}));
 global._selectedProfile='smart';nrBadge.textContent='';nrBadge.title='';kernelDecorateControlRow(nrRow,'kernel_bore');
-if(nrBadge.textContent!=='Smart · 1'||nrBadge.title!=='kernel: 1')throw Error('BORE card does not show the current Smart value '+JSON.stringify({badge:nrBadge,availability:kernelControlAvailability('kernel_bore')}));
+if(nrBadge.textContent!=='1'||nrBadge.title!=='kernel: 1')throw Error('BORE card does not show only the current Smart value '+JSON.stringify({badge:nrBadge,availability:kernelControlAvailability('kernel_bore')}));
 (async()=>{
  await cfgSet('kernel_sched_nr_migrate','stock',null);
  await cfgSet('kernel_hrtimer_migration','on',null);
@@ -10204,17 +10231,17 @@ open_src = '\n'.join([
 paint_src = '\n'.join([
     "function T(k,d){return d} function _el(id){return els[id]||null}",
     "const els={}; ['bnDrain','bnDrainOff','bnDrainOnLabel','bnDrainOffLabel'].forEach(x=>els[x]={textContent:'',title:''});",
-    const('_lvMeter'), const('_lvGovOff'), "const _lvDrain={};",
-    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvBootOnFigure'), fn('lvNightFigure'), fn('lvProfileOnFigure'), fn('lvOnFigure'), fn('lvPrimaryOffFigure'),
+    const('_lvMeter'), const('_lvGovOff'), "const _lvDrain={}; let _selectedProfile='smart';",
+    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvBootOnFigure'), fn('lvNightFresh'), fn('lvNightFigure'), fn('lvProfileNightFigure'), fn('lvProfileOnFigure'), fn('lvOnFigure'), fn('lvPrimaryOffFigure'),
     "function asbMetricPaint(){} function lvEtaPaint(){} function liveDrainIsOpen(){return false}",
     fn('lvMeterPaint'),
     "_lvMeter.cur='smart';_lvMeter.p={battery:{on:330,onMin:88,off:126,offN:3,offS:30000,offLast:138,offLastS:18000,offLastAt:1,onLast:330,onLastS:5280,onLastAt:1}};",
     "lvMeterPaint('battery');",
     "if(els.bnDrain.textContent!=='33.0%/h'||els.bnDrainOff.textContent!=='1.38%/h') throw Error('wrong drain values '+JSON.stringify(els));",
-    "if(els.bnDrainOnLabel.textContent!=='Screen on · latest'||els.bnDrainOffLabel.textContent!=='Screen off · latest') throw Error('window labels missing');",
+    "if(els.bnDrainOnLabel.textContent!=='Screen on'||els.bnDrainOffLabel.textContent!=='Screen off') throw Error('short labels missing');",
     "if(!/Latest recorded screen-on drain/.test(els.bnDrain.title)||!/88 min/.test(els.bnDrain.title)) throw Error('profile tooltip missing');",
     "_lvMeter.p.battery.offLastS=0; lvMeterPaint('battery');",
-    "if(els.bnDrainOff.textContent!=='1.26%/h'||els.bnDrainOffLabel.textContent!=='Screen off · history') throw Error('aggregate fallback mislabeled');",
+    "if(els.bnDrainOff.textContent!=='1.26%/h'||els.bnDrainOffLabel.textContent!=='Screen off') throw Error('aggregate fallback mislabeled');",
     "console.log('ok');"
 ])
 (out/'paint.js').write_text(paint_src)
@@ -11626,7 +11653,9 @@ assert b.count("run('sh ' + shQuote(JUNK_CLEANUP_SCRIPT) + ' run')") == 1
 assert 'setInterval(' not in b and 'setTimeout(' not in b
 assert b.count('innerHTML =') == 1 and "em.innerHTML = techIcon('cleaner')" in b
 assert 'now - _junkArmed > 5000' in b and "state === 'lock_error'" in b
-assert "bfxEl('details', 'junk-disclosure')" in b and 'disclosure.open' not in b
+assert "bfxEl('details', 'junk-disclosure asb-disclosure')" in b and 'disclosure.open' not in b
+assert b.index('card.appendChild(actions);') < b.index('card.appendChild(disclosure);'), 'categories must follow primary actions'
+assert '.asb-disclosure > summary' in h and '.junk-disclosure .junk-cats' in h
 assert "junkButtons(false); return true;" in b
 for css in ('.junk-total', '.junk-cats', '.junk-cat.is-warn', '.junk-card .bfx-btn'):
     assert css in h, css
@@ -12201,7 +12230,8 @@ const settle=()=>new Promise(r=>setImmediate(r));
  replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none';
  cfgRenderSoterFixCard(list); await settle();
  const run_=_el('soterRun'); if(run_.disabled)throw Error('installed SOTER cannot be repaired');
- if(!/vendor\.soter · running/.test(_el('soterRows').textContent)||!/not run yet/.test(_el('soterRows').textContent))throw Error('rows: '+_el('soterRows').textContent);
+ if(!/vendor\.soter · running/.test(_el('soterRows').textContent)||!/not run yet/.test(_el('soterSecondaryRows').textContent))throw Error('rows: '+_el('soterRows').textContent+' / '+_el('soterSecondaryRows').textContent);
+ if(/Last repair|Automatic repair, this boot/.test(_el('soterRows').textContent))throw Error('secondary SOTER diagnostics were not collapsed');
  if(_el('soterChip').className!=='bfx-chip is-ready')throw Error('chip');
  const sw=_el('soterAuto'); if(!sw||sw.getAttribute('aria-disabled')!=='true')throw Error('auto switch must wait for a readable status');
  replies.run='soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running';
@@ -12216,7 +12246,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
  replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=1700000000|last_result=done|last_trigger=boot|auto=0';
  await soterFixLoad(true);
  if(_el('soterAuto').getAttribute('aria-checked')!=='false'||_el('soterAuto').getAttribute('aria-disabled')!=='false')throw Error('auto off not offered');
- if(!/after reboot · SOTER data reset and service restart completed/.test(_el('soterRows').textContent)||!/Physical SOTER key/.test(_el('soterRows').textContent)||!/Unverified/.test(_el('soterRows').textContent))throw Error('boot trigger or unverified physical key not shown: '+_el('soterRows').textContent);
+ if(!/after reboot · SOTER data reset and service restart completed/.test(_el('soterSecondaryRows').textContent)||!/Physical SOTER key/.test(_el('soterRows').textContent)||!/Unverified/.test(_el('soterRows').textContent))throw Error('boot trigger or unverified physical key not shown: '+_el('soterRows').textContent+' / '+_el('soterSecondaryRows').textContent);
  replies.on='soter|auto|state=1';
  replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1';
  _el('soterAuto').onclick({stopPropagation(){}}); await settle(); await settle();
@@ -13579,7 +13609,8 @@ for name in ('asbFitPages','lvFitValues','asbNavIndicator'):
     assert 'requestAnimationFrame('+name+')' not in h, name
 assert 'runBatchCmd(missing)' in h and "cache: 'hit'" in h and "cache: 'miss'" in h
 assert '_liveTimer = setInterval' not in h and '_liveBgTimer = setInterval' not in h
-assert "_livePollMeta.nextDelay < 5000 ? 5000" in h and ': 12000);' in h and 'livePollTrack(snapshot, visible, prime, success)' in h
+assert "_livePollMeta.nextDelay < 10000 ? 10000" in h and ': 20000);' in h and 'livePollTrack(snapshot, visible, prime, success)' in h
+assert h.index('if (_lb.meter) lvMeterApply(_lb.meter.stdout || \'\', false);') < h.index('if (livePollTrack(snapshot, visible, prime, success))'), 'fresh meter must precede unchanged early return'
 assert 'pollSeq !== _livePageSeq || !_liveOpen || document.hidden' not in h
 assert h.count('pollSeq !== _livePageSeq || (!prefetch && !_liveOpen) || document.hidden') == 2
 assert 'data-asb-effects="reduced"' in h and "asbEffectsSet('reduced', 'ui-jank')" in h
@@ -13634,11 +13665,12 @@ const flush=()=>new Promise(r=>setImmediate(r));
   document.hidden=false;
   const decl=slice('let _livePollRun = null,','/* Declared up here with the other page flags');
   eval('var _liveTimer=null,_liveBgTimer=null,_liveOpen=true;'+decl+';globalThis.track=livePollTrack;globalThis.meta=_livePollMeta;globalThis.monitorSchedule=liveMonitorSchedule;globalThis.backgroundSchedule=liveBackgroundSchedule;');
-  chk(track('a',true,false,true)===false&&meta.nextDelay===3000,'first snapshot was suppressed');
-  chk(track('a',true,false,true)===true&&meta.nextDelay===5000,'first unchanged backoff missing');
-  chk(track('a',true,false,true)===true&&meta.nextDelay===8000,'second unchanged backoff missing');
-  chk(track('b',true,false,true)===false&&meta.nextDelay===3000,'changed snapshot did not reset backoff');
-  meta.nextDelay=8000;monitorSchedule();chk(timers.some(t=>t.live&&t.ms===8000),'adaptive delay was not scheduled');
+  chk(track('a',true,false,true)===false&&meta.nextDelay===5000,'first snapshot was suppressed');
+  chk(track('a',true,false,true)===true&&meta.nextDelay===10000,'first unchanged backoff missing');
+  chk(track('a',true,false,true)===true&&meta.nextDelay===15000,'second unchanged backoff missing');
+  chk(track('a',true,false,true)===true&&meta.nextDelay===20000,'maximum unchanged backoff missing');
+  chk(track('b',true,false,true)===false&&meta.nextDelay===5000,'changed snapshot did not reset backoff');
+  meta.nextDelay=15000;monitorSchedule();chk(timers.some(t=>t.live&&t.ms===15000),'adaptive delay was not scheduled');
   document.hidden=true;monitorSchedule();backgroundSchedule();
   chk(!timers.some(t=>t.live),'hidden WebView kept a Monitor/Home timer');
 
@@ -13672,7 +13704,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS WebUI performance lifecycle dev63: unified frames, reduced effects, explicit TTL diagnostics, 3/5/8-second backoff, hidden timers stopped, stale page paint dropped with one fresh follow-up'
+echo 'PASS WebUI performance lifecycle dev63: unified frames, reduced effects, explicit TTL diagnostics, 5/10/15/20-second backoff, hidden timers stopped, fresh meter before unchanged return, stale page paint dropped with one fresh follow-up'
 )
 
 t_webui_dev66_navigation_trend_material() (
@@ -13708,6 +13740,11 @@ assert "if (key === 'trend' || key === 'strend') lviTrendRender" in h
 assert "devicePressureScale(d, key === 'apphint' ? 'system' : '')" in h
 assert "function devicePressureScale(d, context)" in h
 assert "T('lvp_system_band', 'System: {band}')" in h
+assert 'html:root .cfg-profile-sheet.live-info-sheet .live-info-now' in h
+assert 'border:0 !important; border-bottom:1px solid var(--border) !important;' in h
+for region in ('live-info-hist', 'live-info-src', 'live-info-pressure'):
+    assert 'html:root .cfg-profile-sheet.live-info-sheet .' + region in h
+assert "bar.className = 'lvh-cat-bar'" in h and "legend.className = 'lvh-cat-legend'" in h
 assert '--glass-surface-strong:rgba(10,15,13,.90);' in h
 assert '--glass-surface-strong:rgba(250,252,251,.90);' in h
 for p in sorted((r/'webroot/i18n').glob('*.json')):
@@ -13726,6 +13763,7 @@ const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 const slice=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i);if(i<0||j<0)throw Error('markers '+a);return h.slice(i,j)};
 const chk=(c,m)=>{if(!c)throw Error(m)};
 function mk(tag){return {tag,children:[],className:'',style:{},hidden:false,_t:'',attrs:{},
+ get childNodes(){return this.children},
  setAttribute(k,v){this.attrs[k]=String(v);if(k==='class')this.className=String(v)},appendChild(c){this.children.push(c);return c},
  set textContent(v){this._t=String(v);this.children=[]},get textContent(){return this._t+this.children.map(c=>c.textContent).join(' ')},
  querySelector(sel){return this.children.find(c=>('.'+c.className)===sel)||null}};}
@@ -13768,6 +13806,21 @@ const find=(e,cls)=>e.className===cls?e:(e.children||[]).map(c=>find(c,cls)).fin
  chk(find(b,'lvt-chart').attrs.role==='img','chart has no accessible name');
  const empty=mk('div');lviTrendData=()=>[{t:1000,n:35}];lviTrendRender(empty,'trend','green');
  chk(!find(empty,'lvt-chart')&&empty.textContent.includes('after two temperature readings'),'one point drew a chart');
+}
+/* Real categorical history: a lightweight proportional colour strip and complete legend. */
+{
+ const document={createElement:mk};
+ const T=(k,f)=>f,logReportDur=n=>n+' min';
+ const _selectedProfile='smart';
+ const _lviHist={'smart:fsm':[{t:1000,n:null,s:'HEAVY'},{t:31000,n:null,s:'SUSTAINED'},{t:61000,n:null,s:'HEAVY'}]};
+ eval(slice('function lviHistRender(box, key, color, extra) {','/* Raw facts behind a tile'));
+ const b=mk('div');lviHistRender(b,'fsm','white',[]);
+ const bar=find(b,'lvh-cat-bar'),legend=find(b,'lvh-cat-legend');
+ chk(bar&&legend,'categorical colour history is missing');
+ chk(bar.children.length===2&&legend.children.length===2,'FSM categories were not retained');
+ chk(bar.children[0].style.background==='var(--fsm-heavy)'&&bar.children[1].style.background==='var(--fsm-sustained)','FSM colours do not match their states');
+ chk(bar.attrs.role==='img'&&bar.attrs['aria-label'].includes('HEAVY'),'colour strip has no accessible text alternative');
+ chk(b.children.every(x=>x.className!=='lvh-line'),'old concatenated grey text strip remains');
 }
 /* Real scheduler: a timer becoming due mid-slide waits; it never starts a root poll there. */
 {
@@ -13918,7 +13971,7 @@ assert 'function cfgShortCategoryFit()' in h and 'page.scrollHeight > page.clien
 assert "if (cfgPage) cfgPage.classList.remove('cfg-short-fit');" in h
 assert '.config-page' in h and 'overflow-y:auto' in h
 assert '.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 1px solid var(--border) !important; }' not in h
-assert "fold.className = 'zy-note-fold'" in h and "document.createElement('summary')" in h
+assert "fold.className = 'zy-note-fold asb-disclosure'" in h and "document.createElement('summary')" in h
 zc=h[h.index('function zyCompact(body) {'):];zc=zc[:zc.index('\n}\n')];assert "fold.addEventListener('toggle'" in zc and 'zy-clamp' not in zc
 for key in ('bfx','soter','junk'):
  assert f"kernelMoreBlock(card, '{key}'" in h
