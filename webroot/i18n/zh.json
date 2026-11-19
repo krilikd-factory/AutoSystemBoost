@@ -344,7 +344,7 @@
       "name": "HeyTap / OPPO 推送通知"
     },
     "io_scheduler": {
-      "desc": "仅选择每个块设备实际提供的调度器。在启用的 Smart 配置中，Auto 遵循现有的有界 Smart 场景：游戏/重负载优先 ADIOS，亮屏日常使用优先 Kyber，空闲/熄屏优先 mq-deadline，并仅使用探测到的回退项。Smart 之外保留原配置策略。BFQ 永不自动选择，只作为明确的手动实验选项。Stock 分别恢复每台设备的原始值。不可用的人工选项会失败，不会替换。\n\n🔋 Smart 空闲/熄屏：优先 mq-deadline\n⚡ Smart 游戏/重负载：优先 ADIOS\n✋ 不确定：Smart 中使用 Auto；Stock 交还内核管理\n\n仅凭调度器选择不能证明 FPS、延迟或续航改善；请比较设备上的记录。",
+      "desc": "仅选择每个块设备实际提供的调度器。在启用的 Smart 配置中，Auto 遵循现有的有界 Smart 场景：游戏/重负载优先 ADIOS，亮屏日常使用优先 Kyber，空闲优先 mq-deadline，熄屏优先 none，并仅使用探测到的回退项。Smart 之外保留原配置策略。BFQ 永不自动选择，只作为明确的手动实验选项。Stock 分别恢复每台设备的原始值。不可用的人工选项会失败，不会替换。\n\n🔋 Smart 空闲：mq-deadline；熄屏/Battery：优先 none\n⚡ Smart 游戏/重负载：优先 ADIOS\n✋ 不确定：Smart 中使用 Auto；Stock 交还内核管理\n\n仅凭调度器选择不能证明 FPS、延迟或续航改善；请比较设备上的记录。",
       "descOpt": {
         "adios": "可用时由 Smart 在游戏和重负载中优先。不假定 UFS 延迟、FPS、吞吐量或电池收益。",
         "auto": "在 Smart 中遵循当前场景并使用探测到的回退项；排除 BFQ。其他配置保留静态 Auto 策略。",
