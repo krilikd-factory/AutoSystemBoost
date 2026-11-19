@@ -1758,8 +1758,8 @@ body.config-active #livePage.open {
 .smart-drain-ico { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 6px; display: flex;
   align-items: center; justify-content: center; color: #9ef2e4; background: rgba(0,225,200,0.14); }
 .smart-drain-ico .tech-icon { width: 13px; height: 13px; }
-.smart-drain-lbl { flex: 1 1 auto; min-width: 0; font: 8.5px/1.25 var(--mono); color: var(--text-tertiary);
-  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smart-drain-lbl { flex: 1 1 auto; min-width: 0; font: 600 9px/1.25 var(--sans); color: var(--text-tertiary);
+  letter-spacing: 0.025em; text-transform: uppercase; white-space: normal; overflow: visible; text-overflow: clip; }
 .smart-drain-more { flex: 0 0 auto; font-size: 15px; line-height: 1; color: rgba(158,242,228,0.60); }
 .smart-drain-val { max-width: 100%; font: 700 19px/1.1 var(--sans); color: #9ef2e4; font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2164,10 +2164,20 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
 #zygiskPage .zy-fold[hidden] { display: none !important; }
 #zygiskPage .zy-more { display: block; margin: 6px 0 2px auto; }
 #zygiskPage .zy-lsp-why > summary { font-size: 12.5px; color: var(--text-secondary); cursor: pointer; padding: 2px 0; }
-#zygiskPage .zy-note-fold { margin:5px 0; }
-#zygiskPage .zy-note-fold > summary { display:list-item; min-height:32px; padding:6px 0; color:var(--text-secondary); font-size:12px; font-weight:650; cursor:pointer; }
-#zygiskPage .zy-note-fold[open] > summary { color:var(--accent); }
-#zygiskPage .zy-note-fold > .lgr-note, #zygiskPage .zy-note-fold > .zy-mode-desc, #zygiskPage .zy-note-fold > .zy-auto-desc, #zygiskPage .zy-note-fold > .zy-auto-current { margin-top:2px; }
+.asb-disclosure { margin:10px 0 0; border-top:1px solid var(--border); }
+.asb-disclosure > summary { display:flex; align-items:center; justify-content:space-between; gap:12px;
+  min-height:40px; box-sizing:border-box; padding:9px 2px; color:var(--text-secondary);
+  font-size:12px; font-weight:650; line-height:1.35; cursor:pointer; list-style:none; }
+.asb-disclosure > summary::-webkit-details-marker { display:none; }
+.asb-disclosure > summary::after { content:'›'; flex:0 0 auto; color:var(--text-tertiary);
+  font-size:19px; line-height:1; transition:transform .18s ease-out; }
+.asb-disclosure[open] > summary { color:var(--accent); }
+.asb-disclosure[open] > summary::after { transform:rotate(90deg); }
+.asb-disclosure > summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:5px; }
+#zygiskPage .zy-note-fold { margin:10px 0 0; }
+#zygiskPage .zy-note-fold-body { padding:0 2px 4px; }
+#zygiskPage .zy-note-fold-body > :first-child { margin-top:0; }
+#zygiskPage .zy-note-fold-body > :last-child { margin-bottom:0; }
 .zy-ghost .zy-lsp-actions .dev-zygisk-btn { align-self: auto; }
 html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
 @media (max-width: 400px) {
@@ -2238,6 +2248,9 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-package-action::after { content:" ›"; }
 .lgr-package-action:active { opacity:.72; }
 .lgr-package-meta { color:var(--text-secondary); font-size:11px; line-height:1.4; text-align:end; overflow-wrap:anywhere; }
+.lgr-package-row-no-key .lgr-package-value { width:100%; max-width:100%; align-items:flex-start; text-align:start; }
+.lgr-package-row-no-key .lgr-package-action,
+.lgr-package-row-no-key .lgr-package-meta { text-align:start; }
 .lgr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
   font-size: 13px; padding: 2.5px 0; }
 .lgr-k { color: var(--text-secondary); flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
@@ -3760,8 +3773,10 @@ html[data-asb-theme="light"] .bfx-step.is-fail .bfx-step-s { color: #b3261e; }
 .junk-cat-meta { flex:0 0 auto; max-width:52%; color:var(--text); font-size:11.5px; line-height:1.4; text-align:right; font-variant-numeric:tabular-nums; }
 .junk-cat.is-warn .junk-cat-meta { color:#ffd27a; }
 .junk-card .bfx-btn { min-height:54px; }
-.soter-card .bfx-btn { min-height:50px; }
+.soter-card .bfx-btn { min-height:44px; }
 .soter-card .junk-cats { margin-top:10px; }
+.junk-disclosure .junk-cats, .soter-secondary .junk-cats { margin:0 0 7px; padding:0 2px; }
+.soter-primary-rows { margin-bottom:0 !important; }
 .soter-auto { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding-top:11px; border-top:1px solid var(--border); }
 .soter-auto-text { min-width:0; }
 .soter-auto-title { font-size:13px; font-weight:680; color:var(--text); }
@@ -6254,6 +6269,37 @@ html[data-asb-effects="reduced"] .live-info-src {
 html[data-asb-effects="reduced"] :is(.zygisk-header-dot,.zygisk-header-dot::after,.dev-zygisk-link-dot,.dev-zygisk-link-dot::after,.pico-smart .ai-glow) {
   animation:none !important;
 }
+/* buildfix23: the sheet owns the only material. Glass applies its own !important surface to
+ * inner regions, so these selectors intentionally include :root and the complete sheet class.
+ * No nested grey cards survive in ColorOS WebView, light mode or the host's Glass preview. */
+html:root .cfg-profile-sheet.live-info-sheet { min-height:0; max-height:min(86vh,760px); padding:18px 18px 16px; }
+html:root .cfg-profile-sheet.live-info-sheet .cfg-profile-head { margin-bottom:4px; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-now { margin:0 0 14px; padding:13px 2px 14px; gap:5px;
+  border:0 !important; border-bottom:1px solid var(--border) !important; border-radius:0 !important;
+  background:transparent !important; box-shadow:none !important; outline:0 !important;
+  -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-val { font-size:26px; line-height:1.18; overflow-wrap:anywhere; word-break:normal; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-text { padding:0 2px; font-size:13px; line-height:1.55; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-hist,
+html:root .cfg-profile-sheet.live-info-sheet .live-info-src,
+html:root .cfg-profile-sheet.live-info-sheet .live-info-pressure {
+  margin:14px 0 0; padding:12px 2px 0; border:0 !important; border-top:1px solid var(--border) !important;
+  border-radius:0 !important; background:transparent !important; box-shadow:none !important; outline:0 !important;
+  -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-src { font:500 11.5px/1.55 var(--sans); }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-scale { margin:0 0 14px; padding:0 2px; }
+html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px; }
+/* Categorical history is a tiny proportional strip plus a readable legend, not another prose
+ * card. All geometry is plain DOM/CSS; no animation, timer, canvas or additional root read. */
+.lvh-cat-caption { margin:0 0 8px; color:var(--text-tertiary); font:600 10px/1.35 var(--sans);
+  letter-spacing:.035em; text-transform:uppercase; }
+.lvh-cat-bar { display:flex; width:100%; height:8px; gap:2px; margin:0 0 10px; overflow:hidden; border-radius:5px; }
+.lvh-cat-seg { flex:0 0 auto; min-width:2px; height:100%; border-radius:3px; }
+.lvh-cat-legend { display:flex; flex-wrap:wrap; gap:7px 14px; }
+.lvh-cat-item { display:inline-flex; align-items:center; gap:6px; min-width:0; color:var(--text-secondary);
+  font:500 11.5px/1.4 var(--sans); white-space:normal; }
+.lvh-cat-dot { flex:0 0 auto; width:7px; height:7px; border-radius:50%; }
+.lvh-cat-pct { color:var(--text); font-variant-numeric:tabular-nums; font-weight:700; }
 </style>
 </head>
 <body>
@@ -8458,7 +8504,7 @@ let _livePageSeq = 0, _livePollSeq = 0;
 const _livePollMeta = {
   lastSuccess: 0,
   lastChange: 0,
-  nextDelay: 3000,
+  nextDelay: 5000,
   snapshots: { visible: '', home: '', prime: '' }
 };
 /* Root bridges are synchronous in the manager WebView. A timer that becomes due halfway
@@ -8507,13 +8553,16 @@ function livePollTrack(signature, visible, prime, success) {
   const slot = visible ? 'visible' : (prime ? 'prime' : 'home');
   const unchanged = success && _livePollMeta.snapshots[slot] === signature;
   if (unchanged) {
-    _livePollMeta.nextDelay = _livePollMeta.nextDelay < 5000 ? 5000 :
-      (_livePollMeta.nextDelay < 8000 ? 8000 : 12000);
+    _livePollMeta.nextDelay = _livePollMeta.nextDelay < 10000 ? 10000 :
+      (_livePollMeta.nextDelay < 15000 ? 15000 : 20000);
     return true;
   }
   _livePollMeta.snapshots[slot] = signature;
   _livePollMeta.lastChange = now;
-  _livePollMeta.nextDelay = 3000;
+  /* Five seconds is enough for a readable live view and leaves longer uninterrupted stretches
+   * for page transitions. Unchanged snapshots back off further; visibility/navigation still
+   * request an immediate catch-up through the same single timeout owner. */
+  _livePollMeta.nextDelay = 5000;
   return false;
 }
 /* Declared up here with the other page flags, not next to the report page: navUiDepth()
@@ -8957,13 +9006,29 @@ function lvOffFigure(profile) {
   if (g && g.x > 0) return { x: g.x, t: lvPct(g.x, 100, 2), n: g.n, src: 'gov', tip: tip(g.n) };
   return null;
 }
+function lvNightFresh(at, now) {
+  const t = Number(at) * 1000, n = Number.isFinite(now) ? now : Date.now();
+  if (!(t > 0) || !Number.isFinite(n) || t > n + 300000) return false;
+  /* "Last night" is the most recent local 04:00-11:59 morning, not an indefinitely
+   * retained older qualifying window. At 00:00-03:59 the previous morning is still latest. */
+  const cutoff = new Date(n); cutoff.setHours(4, 0, 0, 0);
+  if (cutoff.getTime() > n) cutoff.setDate(cutoff.getDate() - 1);
+  return t >= cutoff.getTime() && t <= n + 300000;
+}
 function lvNightFigure() {
   const n = _lvMeter.night;
-  if (!n) return null;
+  if (!n || !lvNightFresh(n.at)) return null;
   const tip = T('lv_drain_off_night_tip', 'last proven overnight screen-off stretch: %s; charging and sustained audio excluded').replace('%s', lvDurDHM(n.s));
   if (n.x > 0) return { x:n.x, t:lvPct(n.x, 100, 2), n:1, src:'night', lastS:n.s, lastAt:n.at, tip:tip };
   const ub = Math.max(1, Math.ceil(100 * 3600 / n.s));
   return { x:ub, t:'<' + lvPct(ub, 100, 2), n:1, src:'night', lastS:n.s, lastAt:n.at, tip:tip };
+}
+function lvProfileNightFigure(profile) {
+  const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
+  if (!e || e.nightLastS < 10800 || !lvNightFresh(e.nightLastAt)) return null;
+  const x = e.nightLast > 0 ? e.nightLast : Math.max(1, Math.ceil(360000 / e.nightLastS));
+  return { x:x, t:(e.nightLast > 0 ? '' : '<') + lvPct(x, 100, 2), n:1, src:'night', lastS:e.nightLastS, lastAt:e.nightLastAt,
+    tip:T('lv_drain_off_night_profile_tip', 'last overnight screen-off stretch recorded while this profile was active: %s').replace('%s', lvDurDHM(e.nightLastS)) };
 }
 function lvProfileOnFigure(profile) {
   const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
@@ -8973,17 +9038,21 @@ function lvProfileOnFigure(profile) {
   return e.on > 0 ? { x:e.on, upper:false, s:e.onMin * 60, src:'history' } : null;
 }
 function lvOnFigure(profile) {
-  return _lvMeter.cur === profile ? lvBootOnFigure() : lvProfileOnFigure(profile);
+  /* The selected WebUI profile owns the phone-wide since-boot view. The meter's "current"
+   * line is only a runtime publication and can lag a profile switch; using it here assigned
+   * another profile's history to the active card. */
+  return _selectedProfile === profile ? lvBootOnFigure() : lvProfileOnFigure(profile);
 }
 function lvPrimaryOffFigure(profile) {
-  if (_lvMeter.cur === profile) return lvNightFigure() || lvOffFigure(profile);
-  const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
-  if (e && e.nightLastS >= 10800 && e.nightLastAt > 0) {
-    const x = e.nightLast > 0 ? e.nightLast : Math.max(1, Math.ceil(360000 / e.nightLastS));
-    return { x:x, t:(e.nightLast > 0 ? '' : '<') + lvPct(x, 100, 2), n:1, src:'night', lastS:e.nightLastS, lastAt:e.nightLastAt,
-      tip:T('lv_drain_off_night_profile_tip', 'last overnight screen-off stretch recorded while this profile was active: %s').replace('%s', lvDurDHM(e.nightLastS)) };
+  const own = lvProfileNightFigure(profile);
+  if (_selectedProfile === profile) {
+    const shared = lvNightFigure();
+    /* The global file can lag the per-profile table. Never let its older 2.83 %/h night
+     * shadow the profile's newer 0.20 %/h night merely because this profile is active. */
+    if (own && (!shared || own.lastAt > shared.lastAt)) return own;
+    return shared || own || lvOffFigure(profile);
   }
-  return lvOffFigure(profile);
+  return own || lvOffFigure(profile);
 }
 function lvPct(x, div, digits) {
   return (x / div).toFixed(digits) + T('unit_pcth', '%/h');
@@ -9010,25 +9079,20 @@ function lvMeterPaint(profile) {
   const bootOn = lvOnFigure(profile), off = lvPrimaryOffFigure(profile);
   if (onEl) onEl.textContent = bootOn ? (bootOn.upper ? '<' : '') + lvPct(bootOn.x, 10, 1) : T('lv_measuring', 'measuring\u2026');
   if (offEl) offEl.textContent = off ? off.t : T('lv_measuring', 'measuring\u2026');
-  /* fix276: these are deliberately NOT the current infinite-log capture. Name the window on
-   * the tiles themselves, so 11.2%/h of accumulated Battery history cannot read as a
-   * contradiction of a separate 7.4%/h current active phase in the log report. */
+  /* Keep the tiles short in every language. The exact boot/latest/history/night scope remains
+   * available in the tooltip and detail sheet instead of being ellipsized in the label. */
   const onLab = _el('bnDrainOnLabel'), offLab = _el('bnDrainOffLabel');
-  if (onLab) onLab.textContent = T(_lvMeter.cur === profile ? 'lv_scr_on_boot' : (bootOn && bootOn.src === 'latest' ? 'lv_scr_on_latest' : 'lv_scr_on_history'),
-    _lvMeter.cur === profile ? 'Screen on · since boot' : (bootOn && bootOn.src === 'latest' ? 'Screen on · latest' : 'Screen on · history'));
-  if (offLab) offLab.textContent = off && off.src === 'night'
-    ? T('lv_scr_off_night', 'Screen off · last night')
-    : off && (off.src === 'meter_latest' || off.src === 'bound_latest')
-      ? T('lv_scr_off_latest', 'Screen off · latest') : T('lv_scr_off_history', 'Screen off · history');
+  if (onLab) onLab.textContent = T('lv_scr_on', 'Screen on');
+  if (offLab) offLab.textContent = T('lv_scr_off', 'Screen off');
   if (onEl) onEl.title = bootOn
-    ? (_lvMeter.cur === profile
+    ? (_selectedProfile === profile
       ? T('lv_drain_on_boot_tip', 'Battery-level drain with the screen on since this device boot: %s min. Charging and battery-level resets are excluded.').replace('%s', String(Math.max(1, Math.round(bootOn.s / 60))))
       : T('lv_drain_on_profile_tip', 'Latest recorded screen-on drain for this profile: %s min.').replace('%s', String(Math.max(1, Math.round(bootOn.s / 60)))))
     : T('lv_drain_on_boot_wait', 'needs a battery-level step with the screen on since this device boot');
   /* Rates are descriptive context, not alarms: both numeric %/h values stay neutral. */
   asbMetricPaint('bnDrain', 'metric-info');
   asbMetricPaint('bnDrainOff', 'metric-info');
-  _lvDrain.on = bootOn ? (_lvMeter.cur === profile ? 'boot' : 'profile') : 'meter_wait';
+  _lvDrain.on = bootOn ? (_selectedProfile === profile ? 'boot' : 'profile') : 'meter_wait';
   _lvDrain.onLabel = onLab ? onLab.textContent : T('lv_scr_on_boot', 'Screen on · since boot');
   _lvDrain.off = off ? 'measured' : 'wait';
   _lvDrain.offN = off ? off.n : 0;
@@ -9892,11 +9956,48 @@ function lviHistRender(box, key, color, extra) {
       share[h[i].s] = (share[h[i].s] || 0) + dt;
     }
     const tot = Object.keys(share).reduce(function (a, k) { return a + share[k]; }, 0) || 1;
-    const parts = Object.keys(share).sort(function (a, b) { return share[b] - share[a]; }).slice(0, 4)
-      .map(function (k) { return k + ' ' + Math.round(share[k] * 100 / tot) + '%'; });
-    const ln = document.createElement('div'); ln.className = 'lvh-line';
-    ln.textContent = T('lvi_hist_cat', 'Last %1: %2').replace('%1', logReportDur(span)).replace('%2', parts.join(' · '));
-    box.appendChild(ln);
+    const ordered = Object.keys(share).sort(function (a, b) { return share[b] - share[a]; });
+    const shown = ordered.slice(0, 6);
+    if (ordered.length > shown.length) {
+      const rest = ordered.slice(shown.length);
+      share['…'] = rest.reduce(function (a, k) { return a + share[k]; }, 0);
+      shown.push('…');
+    }
+    const tone = function (label, idx) {
+      const s = String(label || '').toLowerCase();
+      if (/deep_idle|сон/.test(s)) return 'var(--fsm-deep)';
+      if (/light_idle/.test(s)) return 'var(--fsm-light)';
+      if (/moderate/.test(s)) return 'var(--fsm-moderate)';
+      if (/heavy/.test(s)) return 'var(--fsm-heavy)';
+      if (/sustained/.test(s)) return 'var(--fsm-sustained)';
+      if (/gaming|игра/.test(s)) return 'var(--fsm-gaming)';
+      if (key === 'capsrc') {
+        if (/asb/.test(s)) return 'var(--accent)';
+        if (/raised|↑/.test(s)) return 'var(--bal)';
+        if (/vendor|thermal|clamp/.test(s)) return 'var(--perf)';
+        if (/shell/.test(s)) return 'var(--owner-shell)';
+      }
+      return ['var(--accent)', 'var(--bal)', 'var(--bat)', 'var(--perf)', 'var(--fsm-light)', 'var(--fsm-moderate)', 'var(--text-tertiary)'][idx % 7];
+    };
+    const parts = shown.map(function (k) { return k + ' ' + Math.round(share[k] * 100 / tot) + '%'; });
+    const caption = document.createElement('div'); caption.className = 'lvh-cat-caption';
+    caption.textContent = T('lvi_hist_cat', 'Last %1: %2').replace('%1', logReportDur(span)).replace('%2', '').trim();
+    box.appendChild(caption);
+    const bar = document.createElement('div'); bar.className = 'lvh-cat-bar';
+    bar.setAttribute('role', 'img'); bar.setAttribute('aria-label', parts.join(' · '));
+    const legend = document.createElement('div'); legend.className = 'lvh-cat-legend';
+    shown.forEach(function (k, idx) {
+      const pct = Math.round(share[k] * 100 / tot), color = tone(k, idx);
+      const seg = document.createElement('span'); seg.className = 'lvh-cat-seg';
+      seg.style.width = (share[k] * 100 / tot).toFixed(2) + '%'; seg.style.background = color;
+      seg.title = k + ' ' + pct + '%'; bar.appendChild(seg);
+      const item = document.createElement('span'); item.className = 'lvh-cat-item';
+      const dot = document.createElement('span'); dot.className = 'lvh-cat-dot'; dot.style.background = color;
+      const name = document.createElement('span'); name.textContent = k;
+      const value = document.createElement('span'); value.className = 'lvh-cat-pct'; value.textContent = pct + '%';
+      item.appendChild(dot); item.appendChild(name); item.appendChild(value); legend.appendChild(item);
+    });
+    box.appendChild(bar); box.appendChild(legend);
   } else if (key !== 'suptime' && key !== 'basis') {
     const ln = document.createElement('div'); ln.className = 'lvh-line';
     ln.textContent = T('lvi_hist_wait', 'The history of this reading builds up while Monitor stays open.');
@@ -10937,7 +11038,6 @@ function cfgRenderBatteryFixCard(list) {
   head.appendChild(titles);
   card.appendChild(head);
   card.appendChild(bfxEl('div', 'bfx-desc', T('bfx_summary', '100% + charger. Recompiles apps; resets statistics after reboot.')));
-  kernelMoreBlock(card, 'bfx', [bfxEl('div', 'bfx-desc', T('bfx_desc', 'Two steps. First every app is recompiled in place (speed-profile), with progress shown below app by app. Then, on the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and the learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.'))]);
   const steps = bfxEl('ol', 'bfx-steps');
   steps.appendChild(bfxStep('bfxStepCond', 'bfx_step_cond', 'Condition: 100% on charge'));
   const art = bfxStep('bfxStepArt', 'bfx_step_art', 'Recompile apps (ART)');
@@ -10961,6 +11061,9 @@ function cfgRenderBatteryFixCard(list) {
   card.appendChild(actions);
   const note = bfxEl('div', 'bfx-note'); note.id = 'bfxNote';
   card.appendChild(note);
+  /* Details belong after the complete condition/progress/action flow, not between the summary
+   * and the first condition row where the control visually collided with it. */
+  kernelMoreBlock(card, 'bfx', [bfxEl('div', 'bfx-desc', T('bfx_desc', 'Two steps. First every app is recompiled in place (speed-profile), with progress shown below app by app. Then, on the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and the learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.'))]);
   list.appendChild(card);
   batteryFixPaint();
 }
@@ -11324,9 +11427,11 @@ function soterRow(host, label, value, warn) {
   host.appendChild(row);
 }
 function soterPaint(parsed) {
-  const host = _el('soterRows'), chip = _el('soterChip'), runBtn = _el('soterRun'), refresh = _el('soterRefresh');
+  const host = _el('soterRows'), secondary = _el('soterSecondaryRows'), chip = _el('soterChip'), runBtn = _el('soterRun'), refresh = _el('soterRefresh');
   if (!host) return;
   host.textContent = '';
+  if (secondary) secondary.textContent = '';
+  const historyHost = secondary || host;
   const f = parsed.f || {};
   if (parsed.kind !== 'status') {
     _soterInstalled = '';
@@ -11349,11 +11454,11 @@ function soterPaint(parsed) {
   if (f.installed === '1') soterRow(host, T('soter_row_key', 'Physical SOTER key'),
     T('soter_key_unverified', 'Unverified — confirm PASS in AfterSale → Key Status → SOTER key'), true);
   const lt = parseInt(f.last_time, 10);
-  soterRow(host, T('soter_row_last', 'Last repair'),
+  soterRow(historyHost, T('soter_row_last', 'Last repair'),
     (lt > 0 && f.last_result && f.last_result !== 'none')
       ? new Date(lt * 1000).toLocaleString() + (f.last_trigger === 'boot' ? ' · ' + T('soter_trigger_boot', 'after reboot') : '') + ' · ' + soterResultText(f.last_result)
       : T('soter_never', 'not run yet'), false);
-  if (f.auto === '1') soterRow(host, T('soter_row_boot', 'Automatic repair, this boot'), soterBootText(f), soterBootWarn(f));
+  if (f.auto === '1') soterRow(historyHost, T('soter_row_boot', 'Automatic repair, this boot'), soterBootText(f), soterBootWarn(f));
   soterAutoPaint(f.auto === '1' ? '1' : f.auto === '0' ? '0' : '', f.installed === '1');
   if (f.auto === '1' && f.notify_lang !== soterLang()) soterStoreTexts();
   if (chip) {
@@ -11436,7 +11541,13 @@ function cfgRenderSoterFixCard(list) {
   head.appendChild(titles); card.appendChild(head);
   card.appendChild(bfxEl('div', 'bfx-desc', T('soter_summary', 'Rebuilds SOTER keys. Root and bootloader state stay visible.')));
   kernelMoreBlock(card, 'soter', [bfxEl('div', 'bfx-desc', T('soter_desc', 'SOTER is the Tencent key server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps. If those apps report a failed device check although everything else works, the repair stops the SOTER service, clears only the SOTER server data so it creates fresh keys, and starts the service again. Afterwards switch fingerprint payment on again in those apps. It does not hide root or an unlocked bootloader. A successful clear and running service do not prove a physical PASS: confirm the key in AfterSale → Key Status → SOTER key.'))]);
-  const rows = bfxEl('div', 'junk-cats'); rows.id = 'soterRows'; card.appendChild(rows);
+  const rows = bfxEl('div', 'junk-cats soter-primary-rows'); rows.id = 'soterRows'; card.appendChild(rows);
+  /* Last repair and this-boot diagnostics are useful evidence, but do not need to dominate
+   * the initial card. Server/service/physical-key warning remain visible at all times. */
+  const secondary = bfxEl('details', 'soter-secondary asb-disclosure');
+  secondary.appendChild(bfxEl('summary', '', T('kernel_more_show', 'Details')));
+  const secondaryRows = bfxEl('div', 'junk-cats'); secondaryRows.id = 'soterSecondaryRows';
+  secondary.appendChild(secondaryRows); card.appendChild(secondary);
   const actions = bfxEl('div', 'bfx-actions');
   const runBtn = bfxEl('button', 'bfx-btn bfx-primary', T('soter_run', 'Repair SOTER'));
   runBtn.type = 'button'; runBtn.id = 'soterRun'; runBtn.disabled = true; runBtn.onclick = soterFixRun; actions.appendChild(runBtn);
@@ -11593,15 +11704,17 @@ function cfgRenderJunkCleanupCard(list) {
   card.appendChild(bfxEl('div', 'bfx-desc', T('junk_summary', 'Removes safe caches and reports only. Personal files and settings stay.')));
   kernelMoreBlock(card, 'junk', [bfxEl('div', 'bfx-desc', T('junk_desc', 'Removes crash reports, ANR traces, diagnostic and installer caches, stale backup journals and files already in a trash state. Ordinary screenshots, recent tasks, module settings and working files are preserved. This frees storage; it does not prove or guarantee a fix for lag.'))]);
   const total = bfxEl('div', 'junk-total', T('junk_scan', 'Scanning…')); total.id = 'junkTotal'; card.appendChild(total);
-  const disclosure = bfxEl('details', 'junk-disclosure');
-  const summaryEl = bfxEl('summary', '', T('junk_categories', 'Cleanup categories')); disclosure.appendChild(summaryEl);
-  const cats = bfxEl('div', 'junk-cats'); cats.id = 'junkCats'; disclosure.appendChild(cats); card.appendChild(disclosure);
   const actions = bfxEl('div', 'bfx-actions');
   const runBtn = bfxEl('button', 'bfx-btn bfx-primary', T('junk_run', 'Clean up'));
   runBtn.type = 'button'; runBtn.id = 'junkRun'; runBtn.disabled = true; runBtn.onclick = junkCleanupRun; actions.appendChild(runBtn);
   const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('junk_refresh', 'Rescan'));
   refresh.type = 'button'; refresh.id = 'junkRefresh'; refresh.disabled = true; refresh.onclick = function () { junkCleanupPaint(true); }; actions.appendChild(refresh);
   card.appendChild(actions);
+  /* Secondary category detail follows the primary scan/clean actions and shares the same
+   * quiet disclosure treatment as Zygisk and SOTER. It remains closed by default. */
+  const disclosure = bfxEl('details', 'junk-disclosure asb-disclosure');
+  const summaryEl = bfxEl('summary', '', T('junk_categories', 'Cleanup categories')); disclosure.appendChild(summaryEl);
+  const cats = bfxEl('div', 'junk-cats'); cats.id = 'junkCats'; disclosure.appendChild(cats); card.appendChild(disclosure);
   const note = bfxEl('div', 'bfx-note'); note.id = 'junkNote'; card.appendChild(note);
   list.appendChild(card);
   junkCleanupPaint(false);
@@ -12206,8 +12319,9 @@ function kernelDecorateControlRow(row, key) {
   const badge = row.querySelector('.cfg-status');
   if (badge) {
     const showLive = a.live && a.live !== 'unknown' && a.state !== 'not_readable';
-    const livePrefix = key === 'kernel_bore' && a.mode === 'auto' && _selectedProfile === 'smart' ? 'Smart' : kernelStateText(a.state);
-    badge.textContent = livePrefix + (showLive ? ' · ' + String(a.live).slice(0, 16) : '');
+    /* The adjacent Smart owner already explains automatic control. The status badge itself
+     * shows the actual kernel value, not a redundant "On · value" composite. */
+    badge.textContent = showLive ? String(a.live).slice(0, 16) : kernelStateText(a.state);
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
@@ -18028,7 +18142,8 @@ function asbPageText(root) {
     }
     if (asbPageHas(e, 'lgr-row')) {
       const k = asbPageTxt(pick(e, 'lgr-k')), v = asbPageTxt(pick(e, 'lgr-v'));
-      out.push('  ' + k + (v ? ': ' + v : '') + mark(e));
+      const line = k ? k + (v ? ': ' + v : '') : v;
+      if (line) out.push('  ' + line + mark(e));
       return;
     }
     if (asbPageHas(e, 'lgr-hero')) {
@@ -18206,7 +18321,9 @@ function logReportPackageRow(k, pkg, value, warn, display) {
   const labels = dozeKeepLabels([pkg]), appName = labels[pkg] || '';
   if (!dozePkgOk(pkg)) return logReportRow(k, display || appName || pkg, warn);
   const r = document.createElement('div'); r.className = 'lgr-row lgr-package-row';
-  const a = document.createElement('span'); a.className = 'lgr-k'; a.textContent = k === pkg ? T('lr_package_app', 'Application') : k;
+  const generic = k === pkg;
+  if (generic) r.classList.add('lgr-package-row-no-key');
+  const a = document.createElement('span'); a.className = 'lgr-k'; a.textContent = generic ? '' : k; a.hidden = generic;
   const box = document.createElement('span'); box.className = 'lgr-v lgr-package-value';
   const b = document.createElement('button'); b.type = 'button';
   b.className = 'lgr-package-action' + (warn ? ' lgr-warn' : '');
@@ -19677,15 +19794,20 @@ const _zyFoldOpen = new Set();
 const ZY_NOTE_CLAMP = 90;
 function zyCompact(body) {
   if (!body || !body.querySelectorAll) return;
-  /* Long explanations are absent from the initial visual flow, not merely clipped. Native
-   * details gives tap, keyboard and accessibility without another handler or live worker. */
-  Array.prototype.forEach.call(body.querySelectorAll('.lgr-note,.zy-mode-desc,.zy-auto-desc,.zy-auto-current'), function (n) {
-    if (n.closest('.zy-note-fold') || String(n.textContent || '').length <= ZY_NOTE_CLAMP) return;
-    const sec = n.closest ? n.closest('.lgr-sec') : null;
-    const key = 'n:' + (sec && sec.id ? sec.id : '') + ':' + String(n.textContent).slice(0, 40);
-    const fold = document.createElement('details'); fold.className = 'zy-note-fold';
+  /* One disclosure per logical section, never a column of identical Explanation buttons.
+   * All long notes from that section open together at its foot; short operational text,
+   * controls and current values stay in place. Export still walks the folded DOM nodes. */
+  Array.prototype.forEach.call(body.querySelectorAll('.lgr-sec'), function (sec) {
+    const notes = Array.prototype.filter.call(sec.querySelectorAll('.lgr-note,.zy-mode-desc,.zy-auto-desc,.zy-auto-current'), function (n) {
+      return !n.closest('.zy-note-fold') && n.closest('.lgr-sec') === sec && String(n.textContent || '').length > ZY_NOTE_CLAMP;
+    });
+    if (!notes.length) return;
+    const key = 'n:' + (sec.id || 'section');
+    const fold = document.createElement('details'); fold.className = 'zy-note-fold asb-disclosure';
     const summary = document.createElement('summary'); summary.textContent = T('zy_explanation', 'Explanation');
-    n.parentNode.insertBefore(fold, n); fold.appendChild(summary); fold.appendChild(n);
+    const content = document.createElement('div'); content.className = 'zy-note-fold-body';
+    notes.forEach(function (n) { content.appendChild(n); });
+    fold.appendChild(summary); fold.appendChild(content); sec.appendChild(fold);
     fold.open = _zyFoldOpen.has(key);
     fold.addEventListener('toggle', function () {
       if (fold.open) _zyFoldOpen.add(key); else _zyFoldOpen.delete(key);
@@ -23714,24 +23836,23 @@ function asbFitPagesNow() {
  * Balanced's card a minute after the switch, and left Smart's. A card now shows only what was
  * measured in that profile. */
 function homeOffFigure(profile) {
-  return lvOffFigure(profile);
+  return lvPrimaryOffFigure(profile);
 }
 function homeMeterPaint() {
   document.querySelectorAll('.pmeta[data-meter]').forEach(function (box) {
     const prof = box.getAttribute('data-meter');
-    const e = (_lvMeter.p || {})[prof];
-    const off = homeOffFigure(prof);
+    const on = lvOnFigure(prof), off = homeOffFigure(prof);
     box.textContent = '';
-    if (!(e && e.on > 0) && !off) { box.hidden = true; return; }
-    [['sun', (e && e.on > 0) ? lvPct(e.on, 10, 1) : '', e && e.on > 0 ? T('lv_drain_on_history_tip', 'Long-term history in this profile: %s min accumulated. Not the current log capture.').replace('%s', String(e.onMin)) : ''], ['theme_moon', off ? off.t : '', off ? off.tip : '']].forEach(function (c) {
+    if (!on && !off) { box.hidden = true; return; }
+    const onTip = on ? (_selectedProfile === prof
+      ? T('lv_drain_on_boot_tip', 'Battery-level drain with the screen on since this device boot: %s min. Charging and battery-level resets are excluded.').replace('%s', String(Math.max(1, Math.round(on.s / 60))))
+      : T('lv_drain_on_profile_tip', 'Latest recorded screen-on drain for this profile: %s min.').replace('%s', String(Math.max(1, Math.round(on.s / 60))))) : '';
+    [['sun', on ? (on.upper ? '<' : '') + lvPct(on.x, 10, 1) : '', onTip], ['theme_moon', off ? off.t : '', off ? off.tip : '']].forEach(function (c) {
       if (!c[1]) return;
       const chip = document.createElement('span');
       chip.className = 'pmeta-chip';
       chip.innerHTML = techIcon(c[0]);
       chip.appendChild(document.createTextNode(c[1]));
-      const scope = document.createElement('span'); scope.className = 'pmeta-scope';
-      scope.textContent = T(c[0] === 'sun' ? 'lv_history_short' : 'lv_window_short', c[0] === 'sun' ? 'history' : 'window');
-      chip.appendChild(scope);
       if (c[2]) chip.title = c[2];
       box.appendChild(chip);
     });
@@ -25154,8 +25275,14 @@ async function pollLive(visible, prefetch) {
       return k + ':' + _lb[k].errno + ':' + (_lb[k].stdout || '');
     }).join('\n');
     const success = !!(_lb.state && _lb.state.errno === 0);
-    if (livePollTrack(snapshot, visible, prime, success)) { lvStale(false); return; }
+    /* Meter data is cheap to apply and may have moved even when the governor snapshot did not.
+     * Never let the unchanged-snapshot early return postpone a fresh battery reading. */
     if (_lb.meter) lvMeterApply(_lb.meter.stdout || '', false);
+    if (livePollTrack(snapshot, visible, prime, success)) {
+      lvStale(false);
+      if (visible) lvMeterPaint(_selectedProfile); else homeMeterPaint();
+      return;
+    }
     if (visible) lvGpuClockRead(_lb);
     /* Ordinary cold start paints Home from this same read. The boot preview's visible
      * warmer paints it after the complete Live pass instead of forcing another shell. */
