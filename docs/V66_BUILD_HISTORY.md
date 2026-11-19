@@ -4,6 +4,59 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix20 - active-drawing evidence, phase share and a repaired I/O read-back
+
+Input: a second user's 894-minute Infinite Log capture and its `asbdiag`. Base: the fully verified
+buildfix19 source archive. The longest on-battery night window was 303 minutes at 0.59 %/h with 3.6%
+CPU-awake; active speaker/media and gaming phases accounted for more of this capture's battery-percent
+steps. These are observations from this capture, not an improvement attributed to ASB or this release.
+
+- **Comparable smoothness evidence:** the digest adds ordinary intervals drawing at least 20 FPS and
+  excludes wake-spanning/near-still rows. The supplied capture has 1.0% late frames over 1,064,653
+  active-drawing frames; the separate 30.2% `LIGHT_IDLE` figure covers only 354 frames and is not used
+  as proof that a ceiling needs raising. Existing per-app, per-state and at-cap evidence remains intact.
+- **Where the capture's charge went:** the phase table now shows each phase's share of all positive
+  battery-percent steps alongside duration and rate. It is not causal per-component energy allocation;
+  the known under-reporting `current_now` gauge remains explicitly a measurement-quality issue.
+- **Honest LTPO engagement:** a zero capture delta remains visible instead of disappearing. Watching is
+  labelled as watching, not as an active lower rate. No compatible-video window, saving or decision
+  reason is inferred when the capture does not expose one. LTPO write/restore behavior is unchanged.
+- **Actual diagnostic bug fixed:** the two I/O scheduler `sed` expressions used their separator inside
+  the key, producing `bad pattern` and hiding the read-back. Exact literal-pipe matches now print both
+  scheduler and exposed options; `tools/asb_diag.sh` and `system/bin/asbdiag` remain byte-identical.
+- **No blind governor retuning:** this evidence does not justify new CPU/GPU/uclamp/scheduler/thermal
+  restrictions. ASB cost is about 3.1 ms per timer wakeup in the capture, night behavior is healthy and
+  at-cap jank is not worse. No native binary, persistent polling worker, universal frequency rule or
+  measured battery/performance improvement percentage was added.
+
+## V66 dev66 buildfix19 - evidence-scoped drain/heat, actionable report packages and component discovery
+
+Input: overnight drain improved while active-use drain remained high, conflicting screen-on labels,
+unsupported game/call/charging advice, a lone 45 °C CPU peak shown as danger, non-actionable report
+packages, volatile RuStore component discovery and a cramped exact-wakeup editor. Base: the fully
+verified buildfix18 source archive.
+
+- **Measurement windows stay distinct:** Home/Monitor/profile history, the current Smart window and
+  the whole Infinite Log capture now name their scope and duration instead of implying that different
+  windows must show one number. The repetitive Smart no-help observation is removed from Other
+  observations; the substantive Smart counters remain.
+- **Continuous heat evidence:** summary, hero, diagnosis and priority actions share one helper based
+  on the longest continuous warm run. Accumulated warm minutes and a 45 °C peak alone do not create
+  a red sustained-load verdict. Scattered episodes and real sustained runs retain different advice;
+  no games, video calls or charging activity is invented.
+- **Real report actions:** the main night holder, valid screen-off application starts and package
+  wakelock rows open the existing component manager for that exact package. Kernel tags, alarms and
+  malformed strings remain non-actionable evidence; device values continue through `textContent`.
+- **Component evidence without fabrication:** current Activity/Service records, Package Manager
+  declarations, exact batterystats job components and ASB's restoration ledger are merged with explicit
+  origins. RuStore job history exposes its real shared `SystemJobService`, never a Worker masquerading
+  as a separate Service. Declared-only components are read only; original-state capture, read-back,
+  rollback and Restore remain mandatory.
+- **Cleaner Kernel controls:** observation, exact-name entry, Always/Screen-off drafts and apply/refresh
+  actions have separate symmetric grids. MGLRU, timer-migration, LPM and related live explanations live
+  inside the existing collapsed card description. Writable kernel state is labelled Active. No polling
+  worker, broad blocklist, arbitrary writer, thermal bypass or automatic component freezer was added.
+
 ## V66 dev66 buildfix18 - concurrent Infinite Log starts join the verified live winner
 
 Input: a GitHub Actions `debug_support_contract` failure at concurrent round 8 returned
