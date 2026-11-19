@@ -1492,7 +1492,7 @@ dm_step "$((t + 30))" 79 0 1 none 0
 # that ended on the charger.
 [ "$dm_rej_media $dm_rej_short $dm_rej_charge" = "1 1 1" ] || f "rejections: media=$dm_rej_media short=$dm_rej_short charge=$dm_rej_charge, want 1 1 1"
 dm_flush "$t"
-awk '$1 == "smart" && NF == 9 && $2 == 1770 && $3 == 300 && $4 == 17300 && $5 == 300 && $6 == 3 && $7 == 69 && $8 == 5150 && $9 > 0 { ok=1 } END { exit !ok }' "$T/asb/drain_meter" \
+awk '$1 == "smart" && NF == 15 && $2 == 1770 && $3 == 300 && $4 == 17300 && $5 == 300 && $6 == 3 && $7 == 69 && $8 == 5150 && $9 > 0 && $10 == 300 && $11 == 1170 && $12 > 0 { ok=1 } END { exit !ok }' "$T/asb/drain_meter" \
   || f "file line for smart, including latest window: $(grep '^smart' "$T/asb/drain_meter")"
 grep -qx '1 1 1 smart:charge:50' "$T/asb/drain_meter.rej" || f "rejections not kept: $(cat "$T/asb/drain_meter.rej" 2>/dev/null)"
 dm_rej_media=0; dm_load; [ "$dm_rej_media" = 1 ] || f "rejections not read back"
@@ -1567,22 +1567,42 @@ grep -q '_aa_prev=""' "$A/probe.sh" || f "the loop does not restart the audio pr
   dm_boot_step 1000 1; dm_boot_step 1030 1; dm_boot_step 1060 1
   dm_boot_step 1090 0; dm_boot_step 4690 0
   dm_boot_step 4720 1; dm_boot_step 8320 1
-  read -r _i _on _off < "$ASB_DM_BOOT"
+  read -r _i _on _off _onx _last _lasts _lastat < "$ASB_DM_BOOT"
   [ "$_on" = 120 ] || { echo "screen-on seconds $_on, want 120 (90 + 30 of a long gap)" >&2; exit 1; }
   [ "$_off" = 7200 ] || { echo "screen-off seconds $_off, want 7200 (3600 + 30 + 3570)" >&2; exit 1; }
   dm_boot_load
   [ "$dm_b_on" = 120 ] && [ "$dm_b_off" = 7200 ] || { echo "a meter restart lost the counters ($dm_b_on/$dm_b_off)" >&2; exit 1; }
   [ -z "$dm_b_ts" ] || { echo "a restart kept the previous sample time" >&2; exit 1; }
   dm_boot_step 9000 1; dm_boot_step 9030 1
-  read -r _i _on _off < "$ASB_DM_BOOT"
+  read -r _i _on _off _onx _last _lasts _lastat < "$ASB_DM_BOOT"
   [ "$_on" = 150 ] || { echo "after a restart the gap to the first sample was counted ($_on)" >&2; exit 1; }
   echo "ffee0011-0000-1111-2222-333344445555" > "$ASB_DM_BOOTID"
   dm_boot_load
   [ "$dm_b_on" = 0 ] && [ "$dm_b_off" = 0 ] || { echo "a new boot kept the old counters ($dm_b_on/$dm_b_off)" >&2; exit 1; }
   dm_boot_step 100 0; dm_boot_step 160 0
-  read -r _i _on _off < "$ASB_DM_BOOT"
+  read -r _i _on _off _onx _last _lasts _lastat < "$ASB_DM_BOOT"
   [ "$_i" = "ffee00110000" ] && [ "$_on" = 0 ] && [ "$_off" = 60 ] || { echo "new boot file: $_i $_on $_off" >&2; exit 1; }
 ) || f "screen time since boot"
+# buildfix21: per-profile latest screen-on and night history must not borrow another profile's data.
+( N="$T/night"; mkdir -p "$N"
+  ASB_DM_DIR="$N"; export ASB_DM_DIR; . "$M"; dm_load
+  dm_prof=balanced; dm_add_off 14400 2 1763661600   # 2026-11-20 18:00 UTC: local-time dependent, not assumed night
+  _night_at="$(date -d '2026-11-20 07:00:00' +%s)"
+  dm_add_off 14400 2 "$_night_at"
+  dm_prof=smart; dm_add_off 10800 0 "$((_night_at + 86400))"
+  dm_flush "$_night_at"; dm_load
+  [ "$(dm_get balanced night_last)" = 50 ] && [ "$(dm_get balanced night_last_s)" = 14400 ] || { echo "balanced night missing" >&2; exit 1; }
+  [ "$(dm_get smart night_last)" = 0 ] && [ "$(dm_get smart night_last_s)" = 10800 ] || { echo "smart zero-step night missing" >&2; exit 1; }
+  [ "$(dm_get stock night_last_s)" = 0 ] || { echo "stock borrowed another profile's night" >&2; exit 1; }
+) || f "per-profile night history"
+( B="$T/soc"; mkdir -p "$B"
+  ASB_DM_BOOT="$B/meter.boot"; ASB_DM_BOOTID="$B/boot_id"; export ASB_DM_BOOT ASB_DM_BOOTID
+  echo "aa11bb22-0000-1111-2222-333344445555" > "$ASB_DM_BOOTID"; . "$M"; dm_boot_load
+  dm_boot_step 1000 1 90 0; dm_boot_step 1030 1 89 0; dm_boot_step 1060 1 89 0
+  [ "$dm_b_onx" = 100 ] || { echo "valid SOC step not counted: $dm_b_onx" >&2; exit 1; }
+  dm_boot_step 4060 1 88 0
+  [ "$dm_b_onx" = 100 ] || { echo "long-gap SOC drop inflated screen-on rate: $dm_b_onx" >&2; exit 1; }
+) || f "since-boot SOC evidence gate"
 grep -q '"lvi_scr_on_time"' "$ROOT/webroot/i18n/en.json" || f "the Uptime popup does not name the screen-on time"
 H="$ROOT/webroot/index.html"
 grep -q "function lvMeterParse(text)" "$H" || f "the Monitor does not read the meter"
@@ -4184,6 +4204,13 @@ exit "$fail"
 )
 
 t_battery_fix_runtime() (
+# Runtime (dev17): Infirmary Battery Fix. Offered only at 100% on charge; `run` arms a
+# one-shot flag, `boot` (post-fs-data, next boot) deletes exactly the three batterystats
+# files under /data/system and nothing else, then clears the flag. No battery claim here -
+# this only resets Android's stored usage record.
+# dev18: `run` also starts a background recompile whose progress (total/done/ok/fail/current
+# app), stop, busy, interruption and failure are visible in `status`, and the reset reports
+# whether Android has written a new record since.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
@@ -4191,56 +4218,396 @@ fail=0; f() { echo "FAIL battery fix: $*" >&2; fail=1; }
 A="$ROOT/runtime/asb_battery_fix.sh"
 [ -f "$A" ] || { echo "FAIL battery fix: runtime missing" >&2; exit 1; }
 mkdir -p "$T/d" "$T/sys"
-export ASB_BFIX_STATE_DIR="$T/d" ASB_BFIX_SYSDIR="$T/sys"
+export ASB_BFIX_STATE_DIR="$T/d" ASB_BFIX_SYSDIR="$T/sys" ASB_BFIX_NO_DEXOPT=1
+# Seed the three real targets plus a decoy that must survive.
 for b in batterystats.bin batterystats-checkin.bin batterystats-daily.xml packages.xml; do echo seed > "$T/sys/$b"; done
+
+# Eligibility gate.
 ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" eligible | grep 'eligible=0 reason=not_charging' >/dev/null || f "discharging at 100 not blocked"
-ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=95 sh "$A" eligible | grep 'eligible=0 reason=not_full' >/dev/null || f "95% on charge not blocked"
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=95  sh "$A" eligible | grep 'eligible=0 reason=not_full' >/dev/null || f "95% on charge not blocked"
 ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" eligible | grep 'eligible=1' >/dev/null || f "100% on charge not eligible"
-_status="$(ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" status)"
-printf '%s\n' "$_status" | grep -Fx 'eligible=1 reason=full_on_charge level=100 charging=1' >/dev/null || f "initial status lost live eligibility: $_status"
-printf '%s\n' "$_status" | grep -Fx 'reset=none compile=not_required' >/dev/null || f "initial reset state wrong: $_status"
-_status="$(ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" status)"
-printf '%s\n' "$_status" | grep -Fx 'eligible=0 reason=not_charging level=100 charging=0' >/dev/null || f "not-charging evidence wrong: $_status"
-_status="$(ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=95 sh "$A" status)"
-printf '%s\n' "$_status" | grep -Fx 'eligible=0 reason=not_full level=95 charging=1' >/dev/null || f "not-full evidence wrong: $_status"
+
+# run refused when not eligible: no flag armed.
 ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep 'result=refused' >/dev/null || f "run not refused while discharging"
-[ ! -f "$T/d/battery_fix.pending" ] || f "a refused run still armed the reset"
-_out="$(ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run)"
-printf '%s\n' "$_out" | grep -Fx 'result=armed reset_on=reboot compile=not_required' >/dev/null || f "eligible run contract: $_out"
+[ -f "$T/d/battery_fix.pending" ] && f "a refused run still armed the reset"
+
+# run armed when eligible.
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep 'result=armed reset_on=reboot' >/dev/null || f "eligible run did not arm"
 [ -f "$T/d/battery_fix.pending" ] || f "armed run wrote no pending flag"
-_status="$(ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" status)"
-printf '%s\n' "$_status" | grep -Fx 'eligible=1 reason=full_on_charge level=100 charging=1' >/dev/null || f "pending status lost live eligibility: $_status"
-printf '%s\n' "$_status" | grep -Fx 'reset=pending compile=not_required' >/dev/null || f "pending status has an ART dependency: $_status"
-[ ! -e "$T/d/battery_fix.compile" ] || f "run created legacy ART progress"
-sh "$A" boot | grep -Fx 'result=reset_done' >/dev/null || f "boot did not reset battery statistics"
+sh "$A" status | grep 'reset=pending' >/dev/null || f "status does not show the pending reset"
+
+# boot deletes exactly the three files, keeps the decoy, clears the flag.
+sh "$A" boot
 for b in batterystats.bin batterystats-checkin.bin batterystats-daily.xml; do
-  [ ! -e "$T/sys/$b" ] || f "$b was not deleted at boot"
+  [ -e "$T/sys/$b" ] && f "$b was not deleted at boot"
 done
 [ -e "$T/sys/packages.xml" ] || f "boot deleted a file it must never touch"
-[ ! -f "$T/d/battery_fix.pending" ] || f "pending flag not cleared after boot"
-_status="$(ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" status)"
-printf '%s\n' "$_status" | grep -Fx 'eligible=1 reason=full_on_charge level=100 charging=1' >/dev/null || f "completed reset collapsed 100%/charging evidence: $_status"
-printf '%s\n' "$_status" | grep -Fx 'reset=done compile=not_required' >/dev/null || f "completed reset status wrong: $_status"
-_out="$(ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run)"
-printf '%s\n' "$_out" | grep -Fx 'result=armed reset_on=reboot compile=not_required' >/dev/null || f "reset-only action was unavailable after done: $_out"
-sh "$A" cancel >/dev/null
+[ -f "$T/d/battery_fix.pending" ] && f "pending flag not cleared after boot"
+sh "$A" status | grep 'reset=none' >/dev/null || f "status still pending after boot"
 grep -q 'batterystats.bin' "$T/d/battery_fix.last" || f "last log did not record what was removed"
+
+# boot is a no-op without a flag (idempotent across reboots).
 echo keep > "$T/sys/batterystats.bin"
 sh "$A" boot
-[ -e "$T/sys/packages.xml" ] && [ "$(cat "$T/sys/batterystats.bin")" = keep ] || f "boot without a pending flag was not a no-op"
+[ -e "$T/sys/batterystats.bin" ] || f "a second boot deleted stats with no pending flag"
+
+# cancel clears an armed reset.
 ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run >/dev/null
-sh "$A" cancel | grep -Fx 'result=cancelled' >/dev/null || f "cancel did not report cancelled"
-[ ! -f "$T/d/battery_fix.pending" ] || f "cancel left the pending flag"
+sh "$A" cancel | grep 'result=cancelled' >/dev/null || f "cancel did not report cancelled"
+[ -f "$T/d/battery_fix.pending" ] && f "cancel left the pending flag"
+
+# post-fs-data wires the one-shot boot, gated on the flag.
 grep -q 'asb_battery_fix.sh" boot' "$ROOT/post-fs-data.sh" || f "post-fs-data never runs the boot reset"
 grep -q 'battery_fix.pending' "$ROOT/post-fs-data.sh" || f "post-fs-data boot not gated by the pending flag"
-if grep -nE '^[[:space:]]*#' "$A" | grep -v '^1:#!/system/bin/sh' >/dev/null; then f "comment lines in module shell code"; fi
-for token in asb_art_compile battery_fix.pkgs battery_fix.lock ASB_BFIX_COMPILE_CMD dex2oat 'cmd package compile'; do
-  grep -q "$token" "$A" && f "obsolete ART path remains in the battery reset runtime: $token"
+grep -q 'rm -rf /data/adb/asb/battery_fix.lock' "$ROOT/post-fs-data.sh" || f "a lock left by a reboot mid-compile is never cleared"
+grep -q 'battery_fix.pkgs\.\*' "$ROOT/post-fs-data.sh" || f "a reboot leaves the worker package list behind"
+grep -q 'battery_fix.compile\.tmp\.\*' "$ROOT/post-fs-data.sh" || f "a reboot leaves an atomic progress temp behind"
+
+# dev18: the recompile reports real progress. A scripted compiler stands in for
+# `cmd package compile`; "Success" in its output is the only thing counted as success.
+unset ASB_BFIX_NO_DEXOPT
+export ASB_BFIX_NO_BGJOB=1 ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100
+cat > "$T/fc.sh" <<'EOF'
+[ -n "${FC_SLEEP:-}" ] && sleep "$FC_SLEEP"
+case "$1" in *bad*) echo 'Failure: compile error' ;; *) echo 'Success' ;; esac
+EOF
+export ASB_BFIX_COMPILE_CMD="sh $T/fc.sh"
+st() { sh "$A" status; }
+kv() { st | tr ' ' '\n' | sed -n "s/^$1=//p"; }
+out="$(ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='a.one b.bad c.three' sh "$A" run)"
+echo "$out" | grep 'result=armed reset_on=reboot compile=started' >/dev/null || f "eligible run did not start the recompile: $out"
+[ "$(kv compile)" = done ] || f "finished recompile not reported done: $(st)"
+[ "$(kv total)/$(kv done)/$(kv ok)/$(kv fail)" = 3/3/2/1 ] || f "progress counts wrong: $(st)"
+[ "$(kv cur)" = - ] || f "a finished run still names a current app"
+case "$(kv finished)" in ''|-|*[!0-9]*) f "finished time missing" ;; esac
+[ -d "$T/d/battery_fix.lock" ] && f "the worker left its lock behind"
+ls "$T/d"/battery_fix.pkgs.* >/dev/null 2>&1 && f "the worker left its package list behind"
+for k in eligible reason level charging reset compile phase total done ok fail cur started finished now last_reset removed missing fresh; do
+  st | grep "\(^\| \)$k=" >/dev/null || f "status lacks $k"
 done
-grep -q 'asb_art_compile.sh' "$ROOT/runtime/asb_heytap_mcs.sh" && f "HeyTap still invokes ART compilation"
-[ "$fail" = 0 ] && echo "PASS battery fix: charge/full eligibility, one-shot exact battery-stat reset, cancel/idempotence and no ART/progress side effects"
+
+out="$(ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='' sh "$A" run)"
+[ "$(kv compile)/$(kv phase)" = failed/no_packages ] || f "an empty app list was not reported as failed: $(st)"
+
+FC_SLEEP=1 ASB_BFIX_FAKE_PKGS='p.1 p.2 p.3 p.4 p.5 p.6' sh "$A" run >/dev/null
+i=0; while [ "$i" -lt 30 ] && [ "$(kv done)" != 1 ]; do sleep 0.2; i=$((i + 1)); done
+[ "$(kv compile)" = running ] || f "a running recompile is not reported running: $(st)"
+case "$(kv cur)" in p.*) : ;; *) f "the current app is not named: $(st)" ;; esac
+[ "$(kv total)" = 6 ] || f "total not known while running"
+sh "$A" run | grep 'compile=busy' >/dev/null || f "a second run started another worker"
+sh "$A" stop | grep 'result=stopping' >/dev/null || f "stop not accepted while running"
+i=0; while [ "$i" -lt 40 ] && [ "$(kv compile)" = running ]; do sleep 0.2; i=$((i + 1)); done
+[ "$(kv compile)" = stopped ] || f "stop did not end the recompile: $(st)"
+d="$(kv done)"; [ "$d" -ge 1 ] && [ "$d" -lt 6 ] || f "stop did not take effect after the current app: done=$d"
+sh "$A" stop | grep 'result=idle' >/dev/null || f "stop reported work when nothing runs"
+[ -f "$T/d/battery_fix.stop" ] && f "the stop request outlived the run"
+
+# dev21: an externally terminated worker runs the same cleanup as normal Stop. Its last
+# complete record remains visible as interrupted; no package list, atomic temp or lock stays.
+FC_SLEEP=2 ASB_BFIX_FAKE_PKGS='term.one term.two term.three' sh "$A" run >/dev/null
+i=0; while [ "$i" -lt 30 ] && [ "$(kv compile)" != running ]; do sleep 0.2; i=$((i + 1)); done
+[ "$(kv compile)" = running ] || f "termination fixture never started: $(st)"
+_term_pid="$(sed -n 's/^pid=//p' "$T/d/battery_fix.compile" | head -1)"
+case "$_term_pid" in ''|*[!0-9]*) f "termination fixture has no worker pid" ;; *) kill -TERM "$_term_pid" 2>/dev/null ;; esac
+i=0; while [ "$i" -lt 50 ] && [ "$(kv compile)" = running ]; do sleep 0.2; i=$((i + 1)); done
+[ "$(kv compile)" = interrupted ] || f "a terminated worker is not reported interrupted: $(st)"
+ls "$T/d"/battery_fix.pkgs.* "$T/d"/battery_fix.compile.tmp.* >/dev/null 2>&1 && f "a terminated worker left temporary files"
+[ -d "$T/d/battery_fix.lock" ] && f "a terminated worker left its lock behind"
+[ -f "$T/d/battery_fix.compile" ] || f "termination discarded the last useful progress evidence"
+
+printf 'state=running\nphase=compile\ntotal=9\ndone=4\nok=4\nfail=0\ncur=x\nstarted=1\nfinished=-\npid=%s\nboot=old-boot\n' "$$" > "$T/d/battery_fix.compile"
+[ "$(ASB_BFIX_BOOT_ID=new-boot sh "$A" status | tr ' ' '\n' | sed -n 's/^compile=//p')" = interrupted ] || f "a run from a previous boot still shows as running"
+dead="$(sh -c 'echo $$')"
+printf 'state=running\nphase=compile\ntotal=9\ndone=4\nok=4\nfail=0\ncur=x\nstarted=1\nfinished=-\npid=%s\nboot=same\n' "$dead" > "$T/d/battery_fix.compile"
+[ "$(ASB_BFIX_BOOT_ID=same sh "$A" status | tr ' ' '\n' | sed -n 's/^compile=//p')" = interrupted ] || f "a dead worker still shows as running"
+
+# The reset's outcome is read back: fresh=1 only once Android has written a new record.
+sh "$A" boot
+echo old > "$T/sys/batterystats.bin"; touch -d '@1000' "$T/sys/batterystats.bin"
+[ "$(kv fresh)" = 0 ] || f "an old record was reported as a fresh one: $(st)"
+touch "$T/sys/batterystats.bin"
+[ "$(kv fresh)" = 1 ] || f "a new record was not detected: $(st)"
+[ "$(kv reset)" = none ] || f "the reset stayed pending after boot"
+
+# dev49, from a user's export: "succeeded 0, failed 560" with no reason, a reset dated
+# months back and "1 of 3 files removed". Every recompile refused now stops early and the
+# first answer is kept; the fallback `pm compile` runs when `cmd` rejects the options.
+cat > "$T/rf.sh" <<'EOF'
+echo "$1" >> "$RF_LOG"
+printf 'Error: Failed to compile package %s\nmore\n' "$1"
+EOF
+export RF_LOG="$T/rf.log"; : > "$RF_LOG"
+ASB_BFIX_COMPILE_CMD="sh $T/rf.sh" ASB_BFIX_REFUSE_AFTER=4 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='r.1 r.2 r.3 r.4 r.5 r.6 r.7 r.8' sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = refused/4/0/4 ] || f "uniform refusals did not stop early: $(st)"
+[ "$(wc -l < "$RF_LOG" | tr -d ' ')" = 4 ] || f "the worker kept compiling after the refusal limit"
+[ "$(st | sed -n 's/^err_text=//p')" = 'Error: Failed to compile package r.1' ] || f "first refusal reason not kept: $(st)"
+[ "$(st | grep -c .)" = 2 ] || f "status should be one line plus the reason line"
+ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_REFUSE_AFTER=2 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='x.bad y.bad z.one' sh "$A" run >/dev/null
+[ "$(kv compile)" = refused ] || f "two leading failures with limit 2 should stop: $(st)"
+ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_REFUSE_AFTER=2 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='z.one x.bad y.bad w.bad' sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv ok)/$(kv fail)" = done/1/3 ] || f "one success must keep the run going: $(st)"
+st | grep '^err_text=Failure: compile error$' >/dev/null || f "a mixed run lost its first failure reason"
+ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='a.ok' sh "$A" run >/dev/null
+st | grep '^err_text=' >/dev/null && f "a clean run still shows a failure reason"
+grep -q 'pm compile -m speed-profile -f "\$1"' "$A" || f "no pm fallback when cmd rejects the options or the Binder transaction fails"
+mkdir -p "$T/bin"
+cat > "$T/bin/cmd" <<'EOF'
+#!/bin/sh
+echo 'cmd: Failure calling service package: Failed transaction (2147483646)'
+EOF
+cat > "$T/bin/pm" <<'EOF'
+#!/bin/sh
+echo "$*" >> "$PM_FALLBACK_LOG"
+echo 'Success'
+EOF
+chmod 0755 "$T/bin/cmd" "$T/bin/pm"
+export PM_FALLBACK_LOG="$T/pm-fallback.log"
+unset ASB_BFIX_COMPILE_CMD
+PATH="$T/bin:$PATH" ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='binder.one' sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv ok)/$(kv fail)" = done/1/0 ] || f "pm fallback did not recover a Binder transaction failure: $(st)"
+grep -qx 'compile -m speed-profile -f binder.one' "$PM_FALLBACK_LOG" || f "pm fallback lost the force flag: $(cat "$PM_FALLBACK_LOG" 2>/dev/null)"
+
+# dev66 buildfix9: Binder refusal is bounded and package-scoped. Android's aggregate
+# compile operation is never called: its success cannot prove every requested package, and
+# its own Failed transaction was the reported defect. Unprocessed packages stay uncounted.
+cat > "$T/bin/cmd" <<'EOF'
+#!/bin/sh
+printf 'cmd %s\n' "$*" >> "$BINDER_LOG"
+case "$*" in
+  'package bg-dexopt-job') [ "${BG_JOB:-fail}" = success ] && exit 0 || { echo 'cmd: Failure calling service package: Failed transaction (2147483646)'; exit 1; } ;;
+  'package compile -m speed-profile -f p.good') echo 'Success' ;;
+  *) echo 'cmd: Failure calling service package: Failed transaction (2147483646)'; exit 1 ;;
+esac
+EOF
+cat > "$T/bin/pm" <<'EOF'
+#!/bin/sh
+printf 'pm %s\n' "$*" >> "$BINDER_LOG"
+echo 'pm: Failure calling service package: Failed transaction (2147483646)'
+exit 1
+EOF
+chmod 0755 "$T/bin/cmd" "$T/bin/pm"
+export BINDER_LOG="$T/binder.log"
+_binder_pkgs='binder.1 binder.2 binder.3 binder.4 binder.5 binder.6'
+: > "$BINDER_LOG"
+PATH="$T/bin:$PATH" BG_JOB=success ASB_BFIX_NO_BGJOB=0 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_binder_pkgs" sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = scheduled/3/0/3 ] || f "uniform Binder refusal did not schedule honest background recovery: $(st)"
+[ "$(grep -c '^cmd package compile .*binder\.' "$BINDER_LOG")" = 3 ] || f "Binder refusal did not stop after the configured package-scoped streak"
+[ "$(grep -c '^pm compile .*binder\.' "$BINDER_LOG")" = 3 ] || f "package-scoped pm fallback count differs from the Binder streak"
+[ "$(grep -c '^cmd package bg-dexopt-job$' "$BINDER_LOG")" = 1 ] || f "accepted background recovery was not requested exactly once"
+[ "$(grep -c 'compile .* -a' "$BINDER_LOG")" = 0 ] || f "an aggregate compile call survived Binder recovery"
+st | grep '^err_text=.*Failed transaction (2147483646)' >/dev/null || f "Binder refusal lost Android's answer: $(st)"
+: > "$BINDER_LOG"
+PATH="$T/bin:$PATH" BG_JOB=fail ASB_BFIX_NO_BGJOB=0 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_binder_pkgs" sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = refused/3/0/3 ] || f "rejected background recovery was not reported as refused: $(st)"
+[ "$(grep -c 'compile .* -a' "$BINDER_LOG")" = 0 ] || f "failed Binder recovery used aggregate compile"
+: > "$BINDER_LOG"
+PATH="$T/bin:$PATH" ASB_BFIX_NO_BGJOB=1 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='p.good p.bad1 p.bad2 p.bad3 p.bad4 p.bad5' sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv total)/$(kv done)/$(kv ok)/$(kv fail)" = partial/6/4/1/3 ] || f "partial success was hidden or unprocessed apps were fabricated as done: $(st)"
+[ "$(grep -c '^cmd package compile ' "$BINDER_LOG")" = 4 ] || f "partial Binder recovery did not stop after three failures following one success"
+[ "$(grep -c 'compile .* -a' "$BINDER_LOG")" = 0 ] || f "partial recovery used aggregate compile"
+! grep -Eq '(cmd package compile|pm compile).* -a' "$A" || f "runtime still contains an all-package compile writer"
+! grep -Eq '_bf_compile_bulk|phase === .bulk|bfx_art_bulk' "$A" || f "runtime still contains aggregate recovery state"
+! grep -Ei 'dalvik|dex2oat|art reset|art clear' "$A" || f "Battery Fix contains an unproven ART/Dalvik reset"
+unset ASB_BFIX_COMPILE_CMD
+
+# Files Android never created are absent, not failures; a boot clock earlier than the arm
+# time is not written as the reset time; `settle` derives it later in the same boot.
+rm -f "$T/sys/batterystats-checkin.bin" "$T/sys/batterystats-daily.xml"; echo x > "$T/sys/batterystats.bin"
+printf 'armed_at=%s\nlevel=100\n' "$(( $(date +%s) + 100000 ))" > "$T/d/battery_fix.pending"
+ASB_BFIX_BOOT_ID=bootA ASB_BFIX_UPTIME=20 sh "$A" boot
+grep -qx 'done_at=' "$T/d/battery_fix.last" || f "a boot clock behind the arm time was recorded: $(cat "$T/d/battery_fix.last")"
+grep -qx 'absent=batterystats-checkin.bin,batterystats-daily.xml' "$T/d/battery_fix.last" && grep -qx 'missing=-' "$T/d/battery_fix.last" \
+  && grep -qx 'removed=batterystats.bin' "$T/d/battery_fix.last" || f "absent files counted as failures: $(cat "$T/d/battery_fix.last")"
+[ "$(ASB_BFIX_BOOT_ID=bootA ASB_BFIX_UPTIME=30 sh "$A" status | tr ' ' '\n' | sed -n 's/^last_reset=//p')" = boot ] || f "an unsettled reset is not reported as boot"
+sed -i "s/^armed_at=.*/armed_at=1000/" "$T/d/battery_fix.last"
+ASB_BFIX_BOOT_ID=bootB ASB_BFIX_UPTIME=500 sh "$A" settle
+grep -qx 'done_at=' "$T/d/battery_fix.last" || f "settle used uptime from another boot"
+n0="$(date +%s)"
+ASB_BFIX_BOOT_ID=bootA ASB_BFIX_UPTIME=500 sh "$A" settle
+v="$(sed -n 's/^done_at=//p' "$T/d/battery_fix.last")"
+case "$v" in ''|*[!0-9]*) f "settle did not derive the reset time" ;; *)
+  d=$(( n0 - 480 - v )); [ "$d" -ge -2 ] && [ "$d" -le 2 ] || f "settled time is off by $d s" ;; esac
+grep -q 'absent=' "$T/d/battery_fix.last" && grep -q 'removed=batterystats.bin' "$T/d/battery_fix.last" || f "settle lost the file accounting"
+sed -i 's/^done_at=.*/done_at=1000/' "$T/d/battery_fix.last"
+ASB_BFIX_BOOT_ID=bootA ASB_BFIX_UPTIME=500 sh "$A" settle
+v2="$(sed -n 's/^done_at=//p' "$T/d/battery_fix.last")"
+case "$v2" in ''|*[!0-9]*) f "rebuilt RTC timestamp is invalid: $v2" ;; *) d=$((v2-v)); [ "$d" -ge -2 ] && [ "$d" -le 2 ] || f "a wrong RTC reset timestamp was not rebuilt from uptime: before=$v after=$v2" ;; esac
+st | tr ' ' '\n' | grep '^absent=batterystats-checkin.bin,batterystats-daily.xml$' >/dev/null || f "status lacks absent files"
+grep -q "grep -q '^done_at=\$' /data/adb/asb/battery_fix.last" "$ROOT/service.sh" && grep -q 'asb_battery_fix.sh" settle' "$ROOT/service.sh" || f "service.sh never settles the reset time"
+! grep -q '^[[:space:]]*#' <(tail -n +2 "$A") || f "comment lines in module shell code"
+
+[ "$fail" = 0 ] && echo "PASS battery fix runtime"
 exit "$fail"
 )
+
+t_bore_auto_dev65() (
+# dev65: conservative Auto has one owner, no worker and a fail-closed evidence gate.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_kernel_controls.sh"
+fail() { echo "FAIL BORE Auto dev65: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/mod/config" "$T/state" "$T/proc/sys/kernel" "$T/bin" "$T/data"
+NODE="$T/proc/sys/kernel/sched_bore"
+STATUS="$T/native-status"
+CAP="$T/capacity"
+SAFE="$T/safe-mode"
+RECOVERY="$T/data/recovery_disabled"
+cat > "$T/mod/config/governor.conf" <<'EOF'
+kernel_bore=auto
+auto_battery_low_pct=20
+sustained_temp_enter=55
+thermal_skin_c=47
+EOF
+cat > "$T/bin/settings" <<'SH'
+#!/bin/sh
+[ "${1:-} ${2:-} ${3:-}" = 'get global low_power' ] || exit 1
+printf '%s\n' "${LOW_POWER:-0}"
+SH
+REAL_CAT="$(command -v cat)"
+cat > "$T/bin/cat" <<'SH'
+#!/bin/sh
+if [ "${1:-}" = "$BORE_NODE" ] && [ -f "$CLAMP_FLAG" ]; then printf '0\n'; else exec "$REAL_CAT" "$@"; fi
+SH
+chmod 0755 "$T/bin/settings" "$T/bin/cat"
+write_status() {
+  _now="$(date +%s)"; _epoch=$((_now - EPOCH_OFFSET))
+  printf '{"state":"%s","thermal":%s,"temp":%s,"temp_valid":%s,"temp_age_s":%s,"temp_read_epoch":%s,"skin_temp":%s,"surface_hotspot":%s,"board_temp":%s}\n' \
+    "$STATE" "$THERMAL" "$TEMP" "$TEMP_VALID" "$AGE" "$_epoch" "$SKIN" "$SURFACE" "$BOARD" > "$STATUS"
+}
+reset_fixture() {
+  rm -f "$SAFE" "$RECOVERY" "$T/clamp" "$T/state/kernel_bore.prev" "$T/state/kernel_bore.prev.kid"
+  PROFILE=performance; LOW_POWER=0; STATE=MODERATE; THERMAL=0; TEMP=40; TEMP_VALID=1
+  AGE=0; EPOCH_OFFSET=0; SKIN=35; SURFACE=36; BOARD=37; TEST_PATH="$T/bin:/usr/bin:/bin"
+  printf '90\n' > "$CAP"; chmod 0644 "$NODE" 2>/dev/null || :; printf '0\n' > "$NODE"; write_status
+}
+run() {
+  PATH="$TEST_PATH" LOW_POWER="$LOW_POWER" REAL_CAT="$REAL_CAT" BORE_NODE="$NODE" CLAMP_FLAG="$T/clamp" \
+  MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_KERNEL_STATE_DIR="$T/state" \
+  ASB_BORE_NODE="$NODE" ASB_KC_KERNEL_ID=k-auto ASB_SAFE_MODE_FILE="$SAFE" \
+  ASB_RECOVERY_DISABLED_FILE="$RECOVERY" ASB_KC_BATTERY_CAPACITY="$CAP" \
+  ASB_KC_NATIVE_STATUS="$STATUS" ASB_KC_BORE_STATUS_MAX_AGE_S=120 \
+    sh "$S" apply kernel_bore '' "$PROFILE"
+}
+set_case() {
+  case "$1" in
+    battery|balanced|smart) PROFILE="$1" ;;
+    battery_saver) LOW_POWER=1 ;;
+    low_power_unknown) LOW_POWER=null ;;
+    settings_missing) TEST_PATH=/usr/bin:/bin ;;
+    low_charge) printf '20\n' > "$CAP" ;;
+    missing_capacity) rm -f "$CAP" ;;
+    invalid_capacity) printf 'unknown\n' > "$CAP" ;;
+    safe_mode) : > "$SAFE" ;;
+    watchdog) : > "$RECOVERY" ;;
+    missing_status) rm -f "$STATUS" ;;
+    stale_age) AGE=121; write_status ;;
+    stale_epoch) EPOCH_OFFSET=121; write_status ;;
+    future_epoch) EPOCH_OFFSET=-5; write_status ;;
+    malformed_status) printf '{broken\n' > "$STATUS" ;;
+    invalid_temp_valid) TEMP_VALID=0; write_status ;;
+    hot_cpu) TEMP=55; write_status ;;
+    hot_skin) SKIN=47; write_status ;;
+    hot_surface) SURFACE=50; write_status ;;
+    hot_board) BOARD=50; write_status ;;
+    thermal_cap) THERMAL=1; write_status ;;
+    idle) STATE=DEEP_IDLE; write_status ;;
+    light_idle) STATE=LIGHT_IDLE; write_status ;;
+    gaming) STATE=GAMING; write_status ;;
+    sustained) STATE=SUSTAINED; write_status ;;
+    unknown_state) STATE=UNKNOWN; write_status ;;
+    malformed_temp) TEMP=hot; write_status ;;
+    *) fail "unknown fixture $1" ;;
+  esac
+}
+want_applied() { [ "$out" = 'kernel_bore|applied|auto|1|0' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ "$("$REAL_CAT" "$T/state/kernel_bore.prev")" = 0 ] || fail "$1 apply: $out"; }
+want_restored() { [ "$out" = 'kernel_bore|restored|auto|0|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 restore: $out"; }
+want_unowned() { [ "$out" = 'kernel_bore|stock_unowned|auto|unknown|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 unowned: $out"; }
+reset_fixture; out="$(run)"; want_applied initial
+PROFILE=performance; STATE=HEAVY; write_status; out="$(run)"; want_applied heavy
+for c in battery balanced smart battery_saver low_power_unknown settings_missing low_charge missing_capacity invalid_capacity \
+         safe_mode watchdog missing_status stale_age stale_epoch future_epoch malformed_status invalid_temp_valid \
+         hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
+  reset_fixture; out="$(run)"; want_applied "$c setup"
+  set_case "$c"; out="$(run)"; want_restored "$c"
+  reset_fixture; set_case "$c"; out="$(run)"; want_unowned "$c"
+done
+# A stock one is captured and restored just as exactly as the zero used above.
+reset_fixture; printf '1\n' > "$NODE"; out="$(run)"
+[ "$out" = 'kernel_bore|applied|auto|1|1' ] || fail "one baseline capture: $out"
+PROFILE=battery; out="$(run)"
+[ "$out" = 'kernel_bore|restored|auto|1|none' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "one baseline restore: $out"
+# Auto never turns missing, read-only or non-binary ABI into a successful write.
+reset_fixture; rm -f "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|not_exposed|auto|unknown|none' ] || fail "missing ABI: rc=$rc out=$out"
+reset_fixture; chmod 0444 "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|not_writable|auto|unknown|none' ] || fail "read-only ABI: rc=$rc out=$out"
+reset_fixture; printf '2\n' > "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|baseline_failed|auto|unknown|none' ] && [ "$("$REAL_CAT" "$NODE")" = 2 ] || fail "malformed ABI: rc=$rc out=$out"
+# A clamped readback retains the baseline; a later successful restore consumes it.
+reset_fixture; : > "$T/clamp"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|readback_mismatch|auto|0|0' ] && [ -f "$T/state/kernel_bore.prev" ] || fail "Auto readback mismatch: rc=$rc out=$out"
+rm -f "$T/clamp"; PROFILE=battery; out="$(run)"; want_restored mismatch_recovery
+! sed -n '/^asb_kc_bore_auto_hold() {/,/^}/p' "$S" | grep -E '^[[:space:]]*#' >/dev/null || fail 'new helper comment contract changed unexpectedly'
+echo 'PASS BORE Auto dev65: Performance-only fresh MODERATE/HEAVY gate, all profile/thermal/battery/state/Safe-mode/watchdog holds, fail-closed ABI, exact baseline and readback cleanup'
+)
+
+
+t_zygisk_provider_dev63() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/runtime/asb_zygisk_info.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL Zygisk provider dev63: $*" >&2; exit 1; }
+sh -n "$H" || fail 'syntax'
+DATA="$T/data"; MODDIR="$T/mod"; PROC="$T/proc"
+export DATA MODDIR PROC
+_emit() { printf 'D\t%s\t%s\t%s\n' "$1" "$2" "$3"; }
+_read() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
+. "$H"
+mkdir -p "$DATA/modules" "$MODDIR" "$PROC"
+probe() { _asb_zygisk_provider_info; }
+val() { printf '%s\n' "$1" | awk -F '\t' -v k="$2" '$3==k {print $4; exit}'; }
+mod() { mkdir -p "$DATA/modules/$2"; printf 'id=%s\nname=%s\nversion=%s\n' "$3" "$1" "$4" > "$DATA/modules/$2/module.prop"; }
+for spec in 'NyaZygisk:nyazygisk:zygisksu:v2.5' 'NeoZygisk:neozygisk:zygisksu:v2.3' 'BreZygisk:bre:rezygisk:v1.0.0' 'ReZygisk:re:rezygisk:v1.0.0' 'Zygisk Next:next:zygisksu:1.5.3'; do
+ rm -rf "$DATA/modules"; mkdir -p "$DATA/modules"
+ IFS=: read -r name dir id ver <<EOF
+$spec
+EOF
+ mod "$name" "$dir" "$id" "$ver"
+ out="$(probe)"
+ [ "$(val "$out" provider)" = "$name" ] || fail "$name identity: $out"
+ [ "$(val "$out" version)" = "$ver" ] || fail "$name version"
+ [ "$(val "$out" install_state)" = enabled ] || fail "$name state"
+ [ "$(val "$out" runtime_state)" = 'not runtime-discoverable from module metadata alone' ] || fail "$name runtime overclaim"
+done
+# Disabled and remove markers remain installation evidence, never active-injection evidence.
+: > "$DATA/modules/next/disable"; out="$(probe)"
+[ "$(val "$out" install_state)" = disabled ] && [ "$(val "$out" provider)" = 'Zygisk Next' ] || fail "disabled: $out"
+rm "$DATA/modules/next/disable"; : > "$DATA/modules/next/remove"; out="$(probe)"
+[ "$(val "$out" install_state)" = pending_removal ] || fail "pending removal: $out"
+# No metadata means unknown, not an unsupported/absent-runtime verdict.
+rm -rf "$DATA/modules"; mkdir -p "$DATA/modules"; out="$(probe)"
+[ "$(val "$out" provider)" = unknown ] && [ "$(val "$out" install_state)" = not_detected ] || fail "missing: $out"
+# Shared IDs and duplicate enabled installations must not be resolved arbitrarily.
+mod NyaZygisk zygisksu zygisksu v2.5; mod NeoZygisk other zygisksu v2.3; out="$(probe)"
+[ "$(val "$out" provider)" = conflict ] && [ "$(val "$out" install_state)" = multiple_enabled ] || fail "ambiguous: $out"
+[ "$(val "$out" enabled_count)" = 2 ] || fail 'enabled count'
+# One enabled provider plus an old disabled one is unambiguous, with both installations shown.
+: > "$DATA/modules/other/disable"; out="$(probe)"
+[ "$(val "$out" provider)" = NyaZygisk ] && [ "$(val "$out" enabled_count)" = 1 ] || fail "enabled plus disabled: $out"
+printf '%s\n' "$out" | grep 'NeoZygisk (disabled)' >/dev/null || fail 'disabled installation hidden'
+# An unrelated/malformed module name is neither executed nor mistaken for a provider.
+mod 'Other `x`;$(id)' other unknown test; out="$(probe)"
+[ "$(val "$out" provider)" = NyaZygisk ] || fail 'unrelated metadata changed provider'
+! grep -Fq 'innerHTML' "$H" || fail 'markup rendering in shell collector'
+! grep -Eq 'cat .*(serial|imei)|getprop .*(serial|imei)|/data/(user|system)/.*(account|network)' "$H" || fail 'sensitive probe added'
+echo 'PASS Zygisk provider dev63: Nya/Neo/Bre/Re/Zygisk Next by name, shared IDs, enabled/disabled/remove, missing and conflicts; no runtime overclaim'
+)
+
+
+# Restored unchanged buildfix20 regression coverage after the buildfix21 edits.
+
 t_ltpo_video_runtime() (
 # Runtime: ltpo_video lowers the peak refresh only during quiet video playback and gives
 # it back at once - on the first touch, when playback stops, when switched off, and after
@@ -5780,7 +6147,6 @@ _direct="$(grep -RInE '> */proc/sys/kernel/hrtimer_migration|> */sys/module/(lpm
 echo 'PASS kernel power/USB controls: Battery Auto, exact profile release, manual override, signed USB values, stable baselines, failure states, safe config and one owner'
 )
 
-
 t_kernel_lpm_qcom_prediction_dev56() (
 # dev56: Snapdragon kernels with the qcom-cpu-lpm cpuidle governor have no lpm_levels
 # lpm_prediction switch, but the governor exposes the same choice inverted as
@@ -6163,9 +6529,14 @@ out="$(run set --always a0 a1 a2 a3 a4 a5 a6 a7 --sleep a7 b0 b1 b2 b3 b4 b5 b6 
 set +e; out="$(run set --always a0 a1 a2 a3 a4 a5 a6 a7 --sleep a7 b0 b1 b2 b3 b4 b5 b6 b7 b8)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|too_many_rules||' ] || fail '17-name effective union accepted'
 grep -Fq 'asb_wakeup_blocker.sh" apply auto' "$ROOT/service.sh" || fail 'five-minute screen-state reconciliation missing'
-echo 'PASS wakeup blocker: split Always/screen-off policies, on/off/unknown unions, exact readback, 16-name bound, fail-closed writes, clear/status and no worker'
+# buildfix21: the bounded boot_completed waiter performs a second exact-list apply
+# after Android is up, without Safe mode or another persistent worker.
+boot_waiter="$(sed -n '/while \[ "$(getprop sys.boot_completed/,/^) &/p' "$ROOT/service.sh")"
+grep -Fq 'asb_timeline_mark boot_completed_seen' <<< "$boot_waiter" || fail 'bounded boot_completed waiter missing'
+grep -Fq 'asb_wakeup_blocker.sh" apply auto' <<< "$boot_waiter" || fail 'late exact-name wakeup restore missing'
+grep -Fq '[ ! -f /dev/.asb/safe_mode ]' <<< "$boot_waiter" || fail 'late wakeup restore bypasses Safe mode'
+echo 'PASS wakeup blocker: split Always/screen-off policies, early/late boot restore, exact readback, fail-closed writes, Safe mode and no worker'
 )
-
 
 t_wakeup_observation_runtime() (
 # dev51: explicit idle-window deltas, not lifetime totals; no worker and no automatic policy.
@@ -9498,7 +9869,6 @@ cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag cop
 echo "PASS asbdiag lsposed modlog: the modules log is reported apart, with the app and message that fill it"
 )
 
-
 t_ltpo_touch_runtime() (
 # Integrated LTPO: event-driven active/idle transitions, advertised stepped decay,
 # guards, video ownership and fatal-input handling.
@@ -9636,7 +10006,6 @@ ASB_TEST_MODE=normal ASB_TEST_COUNT="$T/count" ASB_TEST_CURRENT="$T/current" \
 echo "PASS LTPO touch runtime: advertised steps, instant touch restore, guards, ownership and fatal-input handling"
 )
 
-
 t_ltpo_idle_speed_dev63() (
 # dev63: user-visible idle-drop presets drive the existing event wait, never a synthetic
 # Android 1 Hz mode. Different advertised mode ladders and legacy configs stay valid.
@@ -9751,7 +10120,6 @@ grep -qx 'ltpo_idle_speed|user|webui_standard|shell' "$ROOT/config/key_ownership
 echo 'PASS LTPO idle speed dev63: fast/balanced/gentle timing, legacy fallback, advertised 165/90 ladders, instant touch restore, no synthetic 1 Hz write, safe writer and update ownership'
 )
 
-
 t_ltpo_lock_runtime() (
 # Shared ownership lock: concurrent record editors are serialized, stale locks are
 # reclaimed, and orig replacement is atomic and preserves unrelated metadata.
@@ -9831,7 +10199,6 @@ printf '%s\n' "$dead" > "$ASB_LTPO_LOCK_DIR/pid"
 echo 'PASS LTPO ownership lock: atomic owner publication, mutual exclusion, orig update and stale recovery'
 )
 
-
 t_ltpo_external_fallback_runtime() (
 # If ASB's touch controller cannot initialise, the verified external writer must survive.
 set -eu
@@ -9880,7 +10247,6 @@ awk '/if _ltpo_touch_start; then/{s=NR} /_ltpo_external_pause$/{if(s && !p)p=NR}
   "$ROOT/runtime/asb_ltpo_apply.sh" || fail 'external pause still precedes watcher readiness'
 echo "PASS LTPO external fallback: no handover before watcher readiness; previous pause is resumed"
 )
-
 
 t_dsp_tone_filters_runtime() (
 # fix238: Clarity and the fourth-order sub-bass filter run in the same core for AIDL,
@@ -10121,7 +10487,12 @@ cat > "$T/bin/pm" <<'S'
 #!/bin/sh
 echo "pm $*" >> "$PM_LOG"
 if [ "$1" = list ] && [ "$2" = packages ]; then
-  printf 'package:com.example.sync\npackage:com.example.notes\npackage:ru.vk.store\n'; exit 0
+  if [ "${3:-}" = -3 ]; then
+    printf 'package:com.example.sync\npackage:com.example.notes\npackage:ru.vk.store\n'
+  else
+    printf 'package:com.example.sync\npackage:com.example.notes\npackage:ru.vk.store\npackage:com.android.settings\n'
+  fi
+  exit 0
 fi
 for c in "$@"; do :; done
 case "$1" in disable|enable|default-state) ;; *) exit 1 ;; esac
@@ -10148,6 +10519,11 @@ awk -F'|' -v p="$2" '$2=="enabled" && index($1,p "/")==1 {print "    " $1}' "$PM
 printf '  disabledComponents:\n'
 [ "${DUMP_HIDE_DISABLED:-0}" = 1 ] || awk -F'|' -v p="$2" '$2=="disabled" && index($1,p "/")==1 {print "    " $1}' "$PM_STATE"
 printf '  Queries:\n'
+S
+cat > "$T/bin/appops" <<'S'
+#!/bin/sh
+echo "appops $*" >> "$PM_LOG"
+exit 0
 S
 chmod +x "$T/bin/"*
 : > "$T/state"; : > "$T/pm.log"; : > "$T/running"; : > "$T/running_act"; : > "$T/jobs"; : > "$T/declared"
@@ -10246,7 +10622,33 @@ out="$(run sh "$SRC" component-list ru.vk.store)"
 printf '%s\n' "$out" | grep -x "component|service|$rjob|1|disabled|0|saved|1" >/dev/null || f "RuStore Restore entry disappeared with volatile evidence: $out"
 out="$(run sh "$SRC" component-set ru.vk.store restore "$rjob")"
 printf '%s\n' "$out" | grep -x 'result=restored' >/dev/null || f "RuStore SystemJobService Restore failed: $out"
-[ "$fail" = 0 ] && echo 'PASS wakelock components: current + declared + exact job evidence, RuStore SystemJobService without Worker fabrication, read-only declared rows, reversible state and no polling'
+# Android 17 / installed system package: modern Resolver Table declarations are
+# discoverable, while only exact running/job-observed components are writable.
+# The broader component check must not leak into package-wide WAKE_LOCK AppOps.
+: > "$T/running"; : > "$T/running_act"; : > "$T/jobs"; : > "$T/pm.log"
+sysact='com.android.settings/com.android.settings.Settings'
+syssvc='com.android.settings/com.android.settings.AsbFixtureService'
+printf '%s\n' "$syssvc" > "$T/running"
+printf '%s\n' '  Activity Resolver Table:' "    $sysact" '  Service Resolver Table:' "    $syssvc" > "$T/declared"
+out="$(run sh "$SRC" component-list com.android.settings)"
+printf '%s\n' "$out" | grep -x "component|activity|$sysact|0|default|0|declared|0" >/dev/null || f "Android 17 declared Activity missing: $out"
+printf '%s\n' "$out" | grep -x "component|service|$syssvc|0|default|1|running|1" >/dev/null || f "installed system Service missing: $out"
+out="$(run sh "$SRC" component-set com.android.settings disable "$sysact" activity)"
+printf '%s\n' "$out" | grep -x 'result=not_running' >/dev/null || f "system declared-only Activity became writable: $out"
+out="$(run sh "$SRC" component-set com.android.settings disable "$syssvc" service)"
+printf '%s\n' "$out" | grep -x 'result=disabled' >/dev/null || f "exact system Service disable failed: $out"
+grep -qx "com.android.settings|$syssvc|default|service" "$T/d/wakelock_services" || f 'system component original state/kind not recorded'
+grep -qx "$syssvc|disabled" "$T/state" || f 'system component disable read-back missing'
+: > "$T/running"; : > "$T/declared"
+out="$(run sh "$SRC" component-list com.android.settings)"
+printf '%s\n' "$out" | grep -x "component|service|$syssvc|1|disabled|0|saved|1" >/dev/null || f "saved system Restore row missing: $out"
+out="$(run sh "$SRC" component-set com.android.settings restore "$syssvc")"
+printf '%s\n' "$out" | grep -x 'result=restored' >/dev/null || f "system original-state Restore failed: $out"
+grep -qx "$syssvc|default" "$T/state" || f 'system default-state not restored'
+out="$(run sh "$SRC" manual-set com.android.settings ignore)"
+printf '%s\n' "$out" | grep -x 'result=not_user_app' >/dev/null || f "system package reached package-wide WAKE_LOCK controls: $out"
+! grep -Eq '^appops .*com.android.settings' "$T/pm.log" || f 'system package AppOps restriction attempted'
+[ "$fail" = 0 ] && echo 'PASS wakelock components: current + declared + exact job evidence, Android 17/system Resolver Table rows, reversible state and no polling'
 exit "$fail"
 )
 
@@ -11036,7 +11438,6 @@ node "$T/aotx.js" || fail "WebUI parse"
 echo "PASS zygisk aot exclude: owner exclusion reaches native policy and is never ranked or compiled again, ASB's own compile is reset (Android's is left alone), failed/missing policy sync is partial and retryable, refused resets are recorded, names are validated, allow-again restores compilation, clean uninstall"
 )
 
-
 t_junk_cleanup_runtime() (
 # dev32: the Infirmary cleanup is a fixed, manual owner. It previews metadata and deletes only
 # bounded residue classes; ASB temporary reports are never cleanup targets.
@@ -11483,7 +11884,6 @@ assert set(en['optFor']['kernel_mglru_min_ttl']) == {'stock', '1000', '2000'}
 PY
 echo 'PASS kernel MGLRU TTL: fixed node, strict bounded values, stable baseline, exact restore, explicit invalid_value and no legacy direct writer'
 )
-
 
 t_kernel_controls_kernel_bound_baseline_dev55() (
 # dev55: a captured kernel baseline belongs to the kernel build it was read from (uname -r and -v
@@ -12105,7 +12505,6 @@ grep -q 'echo 4 > ' "$T/fn.sh" || fail 'schema not bumped to 4'
 echo 'PASS kernel profile follow: Auto values per profile, exact release elsewhere and under Stock, one-process follow on profile switches, Smart MGLRU left to the governor, RT baseline deferred until post-boot, bounded RT values, safe writer, defaults, lists and schema-4 migration'
 )
 
-
 t_smart_kernel_scenarios_buildfix11() (
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -12256,7 +12655,6 @@ set +e; out="$(run restore 2>/dev/null)"; rc=$?; set -e
 echo 'PASS Smart BORE scenarios buildfix12: light/heavy=1, idle/conserve=0, fixed runtime interface, stable baseline, degraded not_exposed and exact restore'
 )
 
-
 t_bore_controls_dev63() (
 # dev63: BORE is an opt-in, fixed-node control. Build evidence alone never authorizes a write.
 set -eu
@@ -12331,172 +12729,6 @@ grep -qx 'kernel_bore|advanced|webui_sensitive|shell' "$ROOT/config/key_ownershi
 [ "$(grep -c 'apply kernel_bore' "$ROOT/service.sh")" = 3 ] || fail 'boot/reinforce passes'
 grep -Fq 'kernel_usb_autosuspend kernel_bore"' "$ROOT/runtime/asb_kernel_controls.sh" || fail 'profile follow list'
 echo 'PASS BORE controls dev63: fixed node, Stock/Auto/off/on, exact baseline, kernel-change guard, access failures, readback, safe writer and boot/profile ownership'
-)
-
-
-t_bore_auto_dev65() (
-# dev65: conservative Auto has one owner, no worker and a fail-closed evidence gate.
-set -eu
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-S="$ROOT/runtime/asb_kernel_controls.sh"
-fail() { echo "FAIL BORE Auto dev65: $*" >&2; exit 1; }
-T="$(mktemp -d)"; trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT HUP INT TERM
-mkdir -p "$T/mod/config" "$T/state" "$T/proc/sys/kernel" "$T/bin" "$T/data"
-NODE="$T/proc/sys/kernel/sched_bore"
-STATUS="$T/native-status"
-CAP="$T/capacity"
-SAFE="$T/safe-mode"
-RECOVERY="$T/data/recovery_disabled"
-cat > "$T/mod/config/governor.conf" <<'EOF'
-kernel_bore=auto
-auto_battery_low_pct=20
-sustained_temp_enter=55
-thermal_skin_c=47
-EOF
-cat > "$T/bin/settings" <<'SH'
-#!/bin/sh
-[ "${1:-} ${2:-} ${3:-}" = 'get global low_power' ] || exit 1
-printf '%s\n' "${LOW_POWER:-0}"
-SH
-REAL_CAT="$(command -v cat)"
-cat > "$T/bin/cat" <<'SH'
-#!/bin/sh
-if [ "${1:-}" = "$BORE_NODE" ] && [ -f "$CLAMP_FLAG" ]; then printf '0\n'; else exec "$REAL_CAT" "$@"; fi
-SH
-chmod 0755 "$T/bin/settings" "$T/bin/cat"
-write_status() {
-  _now="$(date +%s)"; _epoch=$((_now - EPOCH_OFFSET))
-  printf '{"state":"%s","thermal":%s,"temp":%s,"temp_valid":%s,"temp_age_s":%s,"temp_read_epoch":%s,"skin_temp":%s,"surface_hotspot":%s,"board_temp":%s}\n' \
-    "$STATE" "$THERMAL" "$TEMP" "$TEMP_VALID" "$AGE" "$_epoch" "$SKIN" "$SURFACE" "$BOARD" > "$STATUS"
-}
-reset_fixture() {
-  rm -f "$SAFE" "$RECOVERY" "$T/clamp" "$T/state/kernel_bore.prev" "$T/state/kernel_bore.prev.kid"
-  PROFILE=performance; LOW_POWER=0; STATE=MODERATE; THERMAL=0; TEMP=40; TEMP_VALID=1
-  AGE=0; EPOCH_OFFSET=0; SKIN=35; SURFACE=36; BOARD=37; TEST_PATH="$T/bin:/usr/bin:/bin"
-  printf '90\n' > "$CAP"; chmod 0644 "$NODE" 2>/dev/null || :; printf '0\n' > "$NODE"; write_status
-}
-run() {
-  PATH="$TEST_PATH" LOW_POWER="$LOW_POWER" REAL_CAT="$REAL_CAT" BORE_NODE="$NODE" CLAMP_FLAG="$T/clamp" \
-  MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_KERNEL_STATE_DIR="$T/state" \
-  ASB_BORE_NODE="$NODE" ASB_KC_KERNEL_ID=k-auto ASB_SAFE_MODE_FILE="$SAFE" \
-  ASB_RECOVERY_DISABLED_FILE="$RECOVERY" ASB_KC_BATTERY_CAPACITY="$CAP" \
-  ASB_KC_NATIVE_STATUS="$STATUS" ASB_KC_BORE_STATUS_MAX_AGE_S=120 \
-    sh "$S" apply kernel_bore '' "$PROFILE"
-}
-set_case() {
-  case "$1" in
-    battery|balanced|smart) PROFILE="$1" ;;
-    battery_saver) LOW_POWER=1 ;;
-    low_power_unknown) LOW_POWER=null ;;
-    settings_missing) TEST_PATH=/usr/bin:/bin ;;
-    low_charge) printf '20\n' > "$CAP" ;;
-    missing_capacity) rm -f "$CAP" ;;
-    invalid_capacity) printf 'unknown\n' > "$CAP" ;;
-    safe_mode) : > "$SAFE" ;;
-    watchdog) : > "$RECOVERY" ;;
-    missing_status) rm -f "$STATUS" ;;
-    stale_age) AGE=121; write_status ;;
-    stale_epoch) EPOCH_OFFSET=121; write_status ;;
-    future_epoch) EPOCH_OFFSET=-5; write_status ;;
-    malformed_status) printf '{broken\n' > "$STATUS" ;;
-    invalid_temp_valid) TEMP_VALID=0; write_status ;;
-    hot_cpu) TEMP=55; write_status ;;
-    hot_skin) SKIN=47; write_status ;;
-    hot_surface) SURFACE=50; write_status ;;
-    hot_board) BOARD=50; write_status ;;
-    thermal_cap) THERMAL=1; write_status ;;
-    idle) STATE=DEEP_IDLE; write_status ;;
-    light_idle) STATE=LIGHT_IDLE; write_status ;;
-    gaming) STATE=GAMING; write_status ;;
-    sustained) STATE=SUSTAINED; write_status ;;
-    unknown_state) STATE=UNKNOWN; write_status ;;
-    malformed_temp) TEMP=hot; write_status ;;
-    *) fail "unknown fixture $1" ;;
-  esac
-}
-want_applied() { [ "$out" = 'kernel_bore|applied|auto|1|0' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ "$("$REAL_CAT" "$T/state/kernel_bore.prev")" = 0 ] || fail "$1 apply: $out"; }
-want_restored() { [ "$out" = 'kernel_bore|restored|auto|0|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 restore: $out"; }
-want_unowned() { [ "$out" = 'kernel_bore|stock_unowned|auto|unknown|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 unowned: $out"; }
-reset_fixture; out="$(run)"; want_applied initial
-PROFILE=performance; STATE=HEAVY; write_status; out="$(run)"; want_applied heavy
-for c in battery balanced smart battery_saver low_power_unknown settings_missing low_charge missing_capacity invalid_capacity \
-         safe_mode watchdog missing_status stale_age stale_epoch future_epoch malformed_status invalid_temp_valid \
-         hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
-  reset_fixture; out="$(run)"; want_applied "$c setup"
-  set_case "$c"; out="$(run)"; want_restored "$c"
-  reset_fixture; set_case "$c"; out="$(run)"; want_unowned "$c"
-done
-# A stock one is captured and restored just as exactly as the zero used above.
-reset_fixture; printf '1\n' > "$NODE"; out="$(run)"
-[ "$out" = 'kernel_bore|applied|auto|1|1' ] || fail "one baseline capture: $out"
-PROFILE=battery; out="$(run)"
-[ "$out" = 'kernel_bore|restored|auto|1|none' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "one baseline restore: $out"
-# Auto never turns missing, read-only or non-binary ABI into a successful write.
-reset_fixture; rm -f "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|not_exposed|auto|unknown|none' ] || fail "missing ABI: rc=$rc out=$out"
-reset_fixture; chmod 0444 "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|not_writable|auto|unknown|none' ] || fail "read-only ABI: rc=$rc out=$out"
-reset_fixture; printf '2\n' > "$NODE"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|baseline_failed|auto|unknown|none' ] && [ "$("$REAL_CAT" "$NODE")" = 2 ] || fail "malformed ABI: rc=$rc out=$out"
-# A clamped readback retains the baseline; a later successful restore consumes it.
-reset_fixture; : > "$T/clamp"; set +e; out="$(run 2>/dev/null)"; rc=$?; set -e
-[ "$rc" -ne 0 ] && [ "$out" = 'kernel_bore|readback_mismatch|auto|0|0' ] && [ -f "$T/state/kernel_bore.prev" ] || fail "Auto readback mismatch: rc=$rc out=$out"
-rm -f "$T/clamp"; PROFILE=battery; out="$(run)"; want_restored mismatch_recovery
-! sed -n '/^asb_kc_bore_auto_hold() {/,/^}/p' "$S" | grep -E '^[[:space:]]*#' >/dev/null || fail 'new helper comment contract changed unexpectedly'
-echo 'PASS BORE Auto dev65: Performance-only fresh MODERATE/HEAVY gate, all profile/thermal/battery/state/Safe-mode/watchdog holds, fail-closed ABI, exact baseline and readback cleanup'
-)
-
-
-t_zygisk_provider_dev63() (
-set -eu
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-H="$ROOT/runtime/asb_zygisk_info.sh"
-T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
-fail() { echo "FAIL Zygisk provider dev63: $*" >&2; exit 1; }
-sh -n "$H" || fail 'syntax'
-DATA="$T/data"; MODDIR="$T/mod"; PROC="$T/proc"
-export DATA MODDIR PROC
-_emit() { printf 'D\t%s\t%s\t%s\n' "$1" "$2" "$3"; }
-_read() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
-. "$H"
-mkdir -p "$DATA/modules" "$MODDIR" "$PROC"
-probe() { _asb_zygisk_provider_info; }
-val() { printf '%s\n' "$1" | awk -F '\t' -v k="$2" '$3==k {print $4; exit}'; }
-mod() { mkdir -p "$DATA/modules/$2"; printf 'id=%s\nname=%s\nversion=%s\n' "$3" "$1" "$4" > "$DATA/modules/$2/module.prop"; }
-for spec in 'NyaZygisk:nyazygisk:zygisksu:v2.5' 'NeoZygisk:neozygisk:zygisksu:v2.3' 'BreZygisk:bre:rezygisk:v1.0.0' 'ReZygisk:re:rezygisk:v1.0.0' 'Zygisk Next:next:zygisksu:1.5.3'; do
- rm -rf "$DATA/modules"; mkdir -p "$DATA/modules"
- IFS=: read -r name dir id ver <<EOF
-$spec
-EOF
- mod "$name" "$dir" "$id" "$ver"
- out="$(probe)"
- [ "$(val "$out" provider)" = "$name" ] || fail "$name identity: $out"
- [ "$(val "$out" version)" = "$ver" ] || fail "$name version"
- [ "$(val "$out" install_state)" = enabled ] || fail "$name state"
- [ "$(val "$out" runtime_state)" = 'not runtime-discoverable from module metadata alone' ] || fail "$name runtime overclaim"
-done
-# Disabled and remove markers remain installation evidence, never active-injection evidence.
-: > "$DATA/modules/next/disable"; out="$(probe)"
-[ "$(val "$out" install_state)" = disabled ] && [ "$(val "$out" provider)" = 'Zygisk Next' ] || fail "disabled: $out"
-rm "$DATA/modules/next/disable"; : > "$DATA/modules/next/remove"; out="$(probe)"
-[ "$(val "$out" install_state)" = pending_removal ] || fail "pending removal: $out"
-# No metadata means unknown, not an unsupported/absent-runtime verdict.
-rm -rf "$DATA/modules"; mkdir -p "$DATA/modules"; out="$(probe)"
-[ "$(val "$out" provider)" = unknown ] && [ "$(val "$out" install_state)" = not_detected ] || fail "missing: $out"
-# Shared IDs and duplicate enabled installations must not be resolved arbitrarily.
-mod NyaZygisk zygisksu zygisksu v2.5; mod NeoZygisk other zygisksu v2.3; out="$(probe)"
-[ "$(val "$out" provider)" = conflict ] && [ "$(val "$out" install_state)" = multiple_enabled ] || fail "ambiguous: $out"
-[ "$(val "$out" enabled_count)" = 2 ] || fail 'enabled count'
-# One enabled provider plus an old disabled one is unambiguous, with both installations shown.
-: > "$DATA/modules/other/disable"; out="$(probe)"
-[ "$(val "$out" provider)" = NyaZygisk ] && [ "$(val "$out" enabled_count)" = 1 ] || fail "enabled plus disabled: $out"
-printf '%s\n' "$out" | grep 'NeoZygisk (disabled)' >/dev/null || fail 'disabled installation hidden'
-# An unrelated/malformed module name is neither executed nor mistaken for a provider.
-mod 'Other `x`;$(id)' other unknown test; out="$(probe)"
-[ "$(val "$out" provider)" = NyaZygisk ] || fail 'unrelated metadata changed provider'
-! grep -Fq 'innerHTML' "$H" || fail 'markup rendering in shell collector'
-! grep -Eq 'cat .*(serial|imei)|getprop .*(serial|imei)|/data/(user|system)/.*(account|network)' "$H" || fail 'sensitive probe added'
-echo 'PASS Zygisk provider dev63: Nya/Neo/Bre/Re/Zygisk Next by name, shared IDs, enabled/disabled/remove, missing and conflicts; no runtime overclaim'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

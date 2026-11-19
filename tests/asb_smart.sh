@@ -3007,8 +3007,9 @@ grep -q '"lv_avgdrain": "Расход"' "$ROOT/webroot/i18n/ru.json" || fail "dr
 grep -q "if (_fbs === 'now') _act = _frt;" "$W" || fail "tile does not show the actual rate"
 # fix131: until a window is measured the tile shows the same estimate the action screen
 # prints (marked "~"), not "measuring" - nearly always the case in short screen-on use.
-grep -Fq "} else if (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter') && !_chg) {" "$W" || fail "tile hides the estimate the action screen shows"
-grep -Fq "_bdEl.textContent = '~' + (_frt / 10).toFixed(1)" "$W" || fail "estimate not marked as one"
+grep -Fq "lvMeterPaint('smart');" "$W" || fail "tile does not use the active-profile since-boot rule"
+grep -Fq "_bdEl.textContent = '~'" "$W" && fail "an estimate silently replaced the since-boot tile"
+grep -Fq "const bootOn = lvOnFigure(profile), off = lvPrimaryOffFigure(profile);" "$W" || fail "battery figures do not use active/profile history"
 grep -q '_fb = "now";' "$G" || fail "governor forecast does not lead with the actual drain"
 
 echo "PASS forecast one source: actual drain first, same minutes on every screen, short labels"
@@ -3563,7 +3564,7 @@ grep -q '_asb_tombstones' "$T/fn.sh" || fail "function not found in asbdiag"
 out="$(P() { echo "$*"; }; NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_TOMBSTONE_DIR="$D" _asb_tombstones)"
 printf '%s\n' "$out" | grep 'audiohalservice.qti  signal 6 (SIGABRT)$' >/dev/null || fail "unrelated audio HAL crash not listed plainly: $out"
 [ "$(printf '%s\n' "$out" | grep -c '<< ASB code in this crash')" = 2 ] || fail "ASB crashes not told apart from the memory map: $out"
-printf '%s\n' "$out" | grep -q 'asb_dsp_attach .*<< ASB code' || fail "a crash of the attach daemon not flagged: $out"
+grep -q 'asb_dsp_attach .*<< ASB code' <<< "$out" || fail "a crash of the attach daemon not flagged: $out"
 printf '%s\n' "$out" | grep -q "Abort message: 'FORTIFY" || fail "abort message missing"
 printf '%s\n' "$out" | grep -q '^NOTE 2 of these crashes have ASB code' || fail "summary missing: $out"
 printf '%s\n' "$out" | grep -q 'pb' && fail "a .pb tombstone listed"
