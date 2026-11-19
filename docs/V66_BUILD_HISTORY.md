@@ -4,6 +4,44 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix21 - profile-scoped drain evidence, complete Battery Fix and compact controls
+
+Input: the owner's fifteen-point Activity/Service, report, Kernel, wakeup, Zygisk, battery-metric and
+Infirmary revision. Base: the fully verified buildfix20 source archive.
+
+- **Activity/Service discovery:** explicit component APIs now accept installed system packages as well
+  as user packages; package-wide WAKE_LOCK AppOps remains third-party-only. Both legacy Resolver and
+  modern `Activity/Service Resolver Table` declarations are parsed. Current, declared, exact job-history
+  and saved evidence stay distinct. Exact disable still requires original-state proof and read-back;
+  refusal rolls back and Restore returns the recorded state. The modal is width-bounded and its copy is short.
+- **Report and card hygiene:** actionable package rows show the application label when Android exposes it,
+  retain the exact package as action metadata and survive text export. Long Infinite Log explanations are
+  shorter. Kernel state and Smart ownership share one badge row and `On`/`Вкл.` wording; the obsolete Kernel
+  introduction is removed. Zygisk no longer calls its control page read-only, and complete long notes use
+  native on-demand disclosures without hiding root, Zygisk or memory evidence.
+- **Exact wakeup persistence:** saved Always/Screen-off rules are applied again by the existing bounded
+  `boot_completed` waiter after Android is up, covering kernels that expose `asb_wakeup` late. Early apply,
+  five-minute reconciliation, fail-closed read-back and Safe mode are unchanged; no polling worker was added.
+- **Battery metrics:** the active profile shows SOC-derived screen-on `%/h` since boot and the latest
+  qualifying night. An inactive profile shows only its own latest completed screen-on session (at least ten
+  minutes) and its own latest night, with the older aggregate only as a labelled fallback. Global active
+  evidence is never borrowed for another profile. Charging, resets, implausible steps and long unverified
+  screen-on gaps are excluded; a zero-step window is an upper bound, not a fabricated zero.
+- **Complete Infirmary Battery Fix:** the ART stage is restored beside the one-shot statistics reset. At 100%
+  on charge, the bounded worker compiles packages through Android's package-scoped `cmd package compile` or
+  `pm compile` speed-profile API, exposes progress/stop and distinguishes done, partial, refused, scheduled,
+  stopped and interrupted states. Android `bg-dexopt-job` is the recovery path. Direct `dex2oat`, ART/Dalvik
+  wipe and aggregate all-package compilation are absent. Statistics are still reset only by the explicit
+  pending flag on the next boot; neither operation proves added capacity or improved battery life.
+- **Compact Infirmary:** repair summaries are shorter and Junk Cleanup categories are collapsed by default
+  through native disclosure. The supported fixed category set, dry-run/readback, actions and ASB-report
+  protections are unchanged.
+- **Verification scope:** focused runtime/UI fixtures cover system Resolver Table rows, reversible component
+  state, late wakeup restore, per-profile screen/night ownership, zero-step bounds and complete ART states.
+  Chromium geometry checks at 360 and 440 CSS px cover the component close action, Kernel badges, ART card,
+  Zygisk notes and Junk disclosure. Host/browser checks are not physical OnePlus 15 or ColorOS WebView
+  validation and no energy or performance improvement percentage is claimed.
+
 ## V66 dev66 buildfix20 - active-drawing evidence, phase share and a repaired I/O read-back
 
 Input: a second user's 894-minute Infinite Log capture and its `asbdiag`. Base: the fully verified
