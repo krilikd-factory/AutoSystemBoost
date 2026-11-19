@@ -24,6 +24,7 @@
 #   jwake    wakes=<n>  pct=<x.x>  ord=<x.x>  frames=<n>  top=<pkg>  top_pct=<x.x>   (fix220)
 #   jphase   phase=<name>  intv=<n>  frames=<n>  pct=<x.x>  jps=<x.xx>               (fix220)
 #   jstate   state=<name>  intv=<n>  frames=<n>  pct=<x.x>  jps=<x.xx>               (fix220)
+#   jactive  intv=<n> frames=<n> pct=<x.x> jps=<x.xx>  (ordinary >=20 FPS intervals only)
 #   hz       mode=<60|90|120|..>  share=<n>  ma=<n>    (one row per refresh rate)
 #   asbcost  cpu_msh=<n>  writes_h=<n>  wakes_h=<n>
 #   capcheck total=<n> ok=<n> vendor=<n> other=<n>  (cap_verify observations)
@@ -1164,6 +1165,17 @@ if [ -f "$_RPT" ]; then
     if [ -n "$_jf" ] && [ -n "$_jp" ]; then
       printf 'jank\tpct=%s\tjps=%s\tframes=%s\n' "$_jp" "${_js:-0}" "$_jf"
     fi
+  fi
+  # Active drawing, excluding wake-spanning rows and near-still intervals. Android's
+  # deadline share on a handful of waiting frames is not comparable with a scrolling or
+  # video interval; the capture in buildfix20 had 30.2% in LIGHT_IDLE on only 354 frames.
+  if [ -s "$_DIR/jank_trace.tsv" ]; then
+    awk -F'|' '
+      /^#/ || NF < 17 || $18 == "wake" { next }
+      $5 !~ /^[0-9]+$/ || $5 <= 0 || $9 !~ /^[0-9]+$/ || $9 <= 0 || $10 !~ /^[0-9]+$/ { next }
+      $9 * 1.0 / $5 >= 20 { n++; sec += $5; frames += $9; late += $10 }
+      END { if (n > 0 && frames > 0) printf "jactive\tintv=%d\tframes=%d\tpct=%.1f\tjps=%.2f\n", n, frames, 100.0 * late / frames, late / sec }
+    ' "$_DIR/jank_trace.tsv" 2>/dev/null
   fi
   # Per-app jank, the "app in front" table: unindented rows of "pkg frames pct% jps",
   # most frames first, up to four. The indented per-interval table above it must not
