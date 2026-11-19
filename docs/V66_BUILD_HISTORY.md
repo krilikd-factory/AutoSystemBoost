@@ -4,6 +4,68 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix23 - flat Glass detail sheets and lightweight categorical graphics
+
+Input: the owner's screenshots of grey nested cards and dense text in the FSM, limit-source, slot, slot-heat and
+modem-mode sheets. Base: the fully verified buildfix22 source archive.
+
+- **Glass cascade corrected at its actual strength:** current, history, raw-source and pressure regions inside
+  live-info sheets now override Glass's own `!important` surface. They have transparent backgrounds, no nested
+  shadow, backdrop filter, lateral border or radius; only quiet dividers remain. The sheet itself retains the
+  single material surface. The selectors are expanded into bucketable equivalents rather than adding an
+  every-element CSS cost.
+- **Calmer information hierarchy:** the current value keeps a readable 26 px size, explanations wrap at natural
+  word boundaries and raw source facts use the normal sans font rather than a dense monospace block.
+- **Lightweight categorical graphics:** categorical history is a proportional colour strip with a compact legend
+  and accessible textual distribution. FSM and limit-source categories use existing semantic colour tokens;
+  remaining categorical sheets use the established palette. At most six primary categories are shown and the
+  remainder is aggregated. Numeric slot-heat history retains its sparkline. Insufficient history remains an
+  honest wait message rather than a fabricated chart.
+- **Actual latest-night ownership:** the active profile no longer lets an older global `drain_meter.night` record
+  shadow a newer per-profile night. Both global and per-profile records must belong to the most recent local
+  04:00-11:59 morning; an indefinitely retained older qualifying window is not presented as last night. The
+  regression fixture explicitly requires a newer profile-owned 0.20 %/h record to replace a stale shared
+  2.83 %/h record on Home, Monitor and the shared ETA chooser.
+- **No new runtime work:** graphics are ordinary DOM/CSS built by the existing sheet renderer. No canvas,
+  animation, timer, polling owner or additional root read was added. Values and labels still enter through
+  `textContent`; only numeric widths and known-token colours are assigned to bar segments.
+- **Verification scope:** categorical runtime coverage checks segment/legend generation and accessibility.
+  Twelve Chromium checks exercise the real sheet-opening function in Glass at 360 and 440 CSS px across FSM,
+  limit source, modem mode, slot and slot heat, including computed material styles, overflow and console errors;
+  all ten screenshots were visually reviewed. Host/browser checks are not physical OnePlus 15 or ColorOS WebView
+  validation and no energy or performance improvement percentage is claimed.
+
+## V66 dev66 buildfix22 - selected-profile battery truth and coherent compact WebUI
+
+Input: the owner's eleven-point battery-evidence and visual revision. Base: the fully verified buildfix21
+source archive.
+
+- **Selected active profile:** Home and Monitor now use `_selectedProfile`, not the meter's potentially stale
+  or empty runtime `current` publication, to decide which profile owns phone-wide since-boot screen-on drain
+  and the latest qualifying night. Inactive profiles retain only their own latest completed session or valid
+  aggregate and their own night. Both views share the same selection functions; visible `history`/`window`
+  scope labels are removed while exact evidence remains in tooltips and detail sheets.
+- **Live values and short labels:** Kernel badges show the actual readable value rather than a redundant
+  `On` prefix. Monitor battery tiles use the existing short localized `Screen on`/`Screen off` labels and wrap
+  without ellipsis. Fresh meter data is applied before an unchanged governor snapshot can return early.
+- **Coherent disclosures:** Zygisk long notes are grouped into one native disclosure per section. Junk Cleanup
+  categories and secondary SOTER diagnostics use the same quiet disclosure language. Junk categories follow
+  the primary actions, Battery Fix details follow its complete operational flow, and SOTER keeps its physical
+  key warning visible without claiming a physical PASS.
+- **Report and detail sheets:** repeated generic `Application` labels are omitted from package rows without
+  removing the package action or identity metadata; text export no longer creates a leading empty `: `. FSM,
+  limit-source, slot-heat, modem-mode and slot sheets share a flatter value/explanation/source hierarchy with
+  bounded wrapping and one Done action.
+- **Bounded refresh:** visible Monitor starts at a five-second refresh and backs off through 10/15/20 seconds
+  for unchanged snapshots. The existing single timeout owner, hidden-page cancellation and navigation defer
+  remain; no persistent worker or second polling owner was added.
+- **Verification scope:** the full host regression passes, including explicit active Home checks with stale
+  and empty meter-current data. Thirty-six Chromium checks at 360 and 440 CSS px cover Home/Monitor ownership,
+  short labels, five detail sheets, collapsed and expanded disclosures, Battery Fix ordering, compact SOTER,
+  Junk actions and horizontal geometry; the screenshots were also visually reviewed. Host/browser checks are
+  not physical OnePlus 15 or ColorOS WebView validation and no energy or performance improvement percentage
+  is claimed.
+
 ## V66 dev66 buildfix21 - profile-scoped drain evidence, complete Battery Fix and compact controls
 
 Input: the owner's fifteen-point Activity/Service, report, Kernel, wakeup, Zygisk, battery-metric and
