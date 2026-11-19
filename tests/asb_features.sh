@@ -10121,7 +10121,7 @@ cat > "$T/bin/pm" <<'S'
 #!/bin/sh
 echo "pm $*" >> "$PM_LOG"
 if [ "$1" = list ] && [ "$2" = packages ]; then
-  printf 'package:com.example.sync\npackage:com.example.notes\n'; exit 0
+  printf 'package:com.example.sync\npackage:com.example.notes\npackage:ru.vk.store\n'; exit 0
 fi
 for c in "$@"; do :; done
 case "$1" in disable|enable|default-state) ;; *) exit 1 ;; esac
@@ -10139,8 +10139,10 @@ if [ "$1 $2" = "activity activities" ]; then
   while IFS= read -r c; do [ -n "$c" ] && printf '  * ActivityRecord{abc u0 %s}\n    intent={cmp=%s}\n' "$c" "$c"; done < "$RUNNING_ACT"
   exit 0
 fi
+if [ "$1" = batterystats ]; then cat "$JOB_HISTORY"; exit 0; fi
 [ "$1" = package ] || exit 0
 printf 'Package [%s]\n' "$2"
+cat "$DECLARED"
 printf '  enabledComponents:\n'
 awk -F'|' -v p="$2" '$2=="enabled" && index($1,p "/")==1 {print "    " $1}' "$PM_STATE"
 printf '  disabledComponents:\n'
@@ -10148,8 +10150,8 @@ printf '  disabledComponents:\n'
 printf '  Queries:\n'
 S
 chmod +x "$T/bin/"*
-: > "$T/state"; : > "$T/pm.log"; : > "$T/running"; : > "$T/running_act"
-run() { PM_STATE="$T/state" RUNNING="$T/running" RUNNING_ACT="$T/running_act" PM_LOG="$T/pm.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" "$@"; }
+: > "$T/state"; : > "$T/pm.log"; : > "$T/running"; : > "$T/running_act"; : > "$T/jobs"; : > "$T/declared"
+run() { PM_STATE="$T/state" RUNNING="$T/running" RUNNING_ACT="$T/running_act" JOB_HISTORY="$T/jobs" DECLARED="$T/declared" PM_LOG="$T/pm.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" "$@"; }
 a='com.example.sync/com.example.sync.SyncService'; b='com.example.sync/com.example.sync.MediaService'
 printf '%s\n%s\n' "$a" "$b" > "$T/running"
 out="$(run sh "$SRC" service-list com.example.sync)"
@@ -10205,14 +10207,14 @@ act='com.example.sync/com.example.sync.MainActivity'
 job='com.example.sync/androidx.work.impl.background.systemjob.SystemJobService'
 printf '%s\n' "$act" > "$T/running_act"; printf '%s\n' "$job" > "$T/running"
 out="$(run sh "$SRC" component-list com.example.sync)"
-printf '%s\n' "$out" | grep -x "component|activity|$act|0|default|1" >/dev/null || f "Activity discovery failed: $out"
-printf '%s\n' "$out" | grep -x "component|service|$job|0|default|1" >/dev/null || f "Service discovery failed: $out"
+printf '%s\n' "$out" | grep -x "component|activity|$act|0|default|1|running|1" >/dev/null || f "Activity discovery failed: $out"
+printf '%s\n' "$out" | grep -x "component|service|$job|0|default|1|running|1" >/dev/null || f "Service discovery failed: $out"
 out="$(run sh "$SRC" component-set com.example.sync disable "$act" activity)"
 printf '%s\n' "$out" | grep -x 'result=disabled' >/dev/null || f "Activity disable failed: $out"
 grep -qx "com.example.sync|$act|default|activity" "$T/d/wakelock_services" || f 'Activity original state/kind not recorded'
 : > "$T/running_act"
 out="$(run sh "$SRC" component-list com.example.sync)"
-printf '%s\n' "$out" | grep -x "component|activity|$act|1|disabled|0" >/dev/null || f "selected stopped Activity is not restorable: $out"
+printf '%s\n' "$out" | grep -x "component|activity|$act|1|disabled|0|saved|1" >/dev/null || f "selected stopped Activity is not restorable: $out"
 out="$(run sh "$SRC" component-set com.example.sync restore "$act")"
 printf '%s\n' "$out" | grep -x 'result=restored' >/dev/null || f "Activity exact restore failed: $out"
 grep -qx "$act|default" "$T/state" || f 'Activity default-state not restored'
@@ -10223,7 +10225,28 @@ sed -n '/individual service control (fix319)/,/if \[ "${1:-}" = manual-status \]
 grep -q 'wakelock_services' "$ROOT/uninstall.sh" || f 'uninstall lacks component restore'
 grep -q 'default-state --user 0' "$ROOT/uninstall.sh" || f 'uninstall cannot restore default state'
 grep -q 'wlServiceOpen' "$ROOT/webroot/index.html" || f 'WebUI has no individual service manager'
-[ "$fail" = 0 ] && echo 'PASS wakelock components: on-demand Activity/Service discovery, exact reversible component state, WorkManager warning and no whole-package freeze or polling'
+# RuStore regression: no current Activity/Service record, but Android's exact job tag
+# proves the shared SystemJobService. The Worker is evidence, never a fabricated class.
+: > "$T/running"; : > "$T/running_act"
+rjob='ru.vk.store/androidx.work.impl.background.systemjob.SystemJobService'
+ract='ru.vk.store/one.me.android.MainActivity'
+printf '%s\n' '  Wake lock u0a691 *job*r/#OneTimePushReceiveWorker#@androidx.work.systemjobscheduler@ru.vk.store/androidx.work.impl.background.systemjob.SystemJobService: 2m 1s (1 times) realtime' > "$T/jobs"
+printf '%s\n' '  Activity Resolver:' "    $ract" '  Service Resolver:' "    $rjob" > "$T/declared"
+out="$(run sh "$SRC" component-list ru.vk.store)"
+printf '%s\n' "$out" | grep -x "component|service|$rjob|0|default|0|job_history|1" >/dev/null || f "RuStore SystemJobService job evidence missing: $out"
+printf '%s\n' "$out" | grep -x "component|activity|$ract|0|default|0|declared|0" >/dev/null || f "declared Activity is not read-only: $out"
+printf '%s\n' "$out" | grep -q 'OneTimePushReceiveWorker|' && f 'Worker was fabricated as a Service component'
+out="$(run sh "$SRC" component-set ru.vk.store disable "$ract" activity)"
+printf '%s\n' "$out" | grep -x 'result=not_running' >/dev/null || f "declared-only Activity became writable: $out"
+out="$(run sh "$SRC" component-set ru.vk.store disable "$rjob" service)"
+printf '%s\n' "$out" | grep -x 'result=disabled' >/dev/null || f "job-observed SystemJobService cannot be disabled with read-back: $out"
+grep -qx "ru.vk.store|$rjob|default|service" "$T/d/wakelock_services" || f 'RuStore original state was not recorded'
+: > "$T/jobs"; : > "$T/declared"
+out="$(run sh "$SRC" component-list ru.vk.store)"
+printf '%s\n' "$out" | grep -x "component|service|$rjob|1|disabled|0|saved|1" >/dev/null || f "RuStore Restore entry disappeared with volatile evidence: $out"
+out="$(run sh "$SRC" component-set ru.vk.store restore "$rjob")"
+printf '%s\n' "$out" | grep -x 'result=restored' >/dev/null || f "RuStore SystemJobService Restore failed: $out"
+[ "$fail" = 0 ] && echo 'PASS wakelock components: current + declared + exact job evidence, RuStore SystemJobService without Worker fabrication, read-only declared rows, reversible state and no polling'
 exit "$fail"
 )
 
@@ -11456,7 +11479,7 @@ def find(x, key):
             r = find(v, key)
             if r is not None: return r
     return None
-assert set(find(en, 'kernel_mglru_min_ttl')) == {'stock', '1000', '2000'}
+assert set(en['optFor']['kernel_mglru_min_ttl']) == {'stock', '1000', '2000'}
 PY
 echo 'PASS kernel MGLRU TTL: fixed node, strict bounded values, stable baseline, exact restore, explicit invalid_value and no legacy direct writer'
 )

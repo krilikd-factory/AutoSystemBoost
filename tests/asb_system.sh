@@ -507,7 +507,9 @@ run export legacy downloads >/dev/null 2>&1 || true
 LEG="$STATE/config_profiles"
 mkdir -p "$TMP/old" && cp "$LEG/legacy.conf" "$LEG/legacy.conf.sha256" "$TMP/old/" && cp -R "$LEG/legacy.smart" "$TMP/old/"
 run delete legacy >/dev/null
-run import-path "$TMP/old/legacy.conf" | grep -qx 'imported=legacy' || fail "an older .conf copy no longer opens"
+legacy_import="$(run import-path "$TMP/old/legacy.conf")"
+printf '%s\n' "$legacy_import" | grep -qx 'imported=legacy' || fail "an older .conf copy no longer opens"
+printf '%s\n' "$legacy_import" | grep -qx 'smart_learning=saved' || fail "an older .conf copy lost its Smart learning"
 
 # 5. The WebUI browser lists .asb files and shows the file the helper wrote.
 UI="$ROOT_DIR/webroot/index.html"

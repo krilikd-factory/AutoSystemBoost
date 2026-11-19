@@ -5303,6 +5303,8 @@ P
   cat <<'EOF'
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
+const _reportOpenedPackages = [];
+function wlServiceOpen(pkg) { _reportOpenedPackages.push(pkg); }
 function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } function trialExpired() { return false; }
 function packageTweakBadge() { return null; }
 const _netResult = {}; const _cfgVals = {};
@@ -6444,6 +6446,8 @@ done
   cat <<'EOF'
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
+const _reportOpenedPackages = [];
+function wlServiceOpen(pkg) { _reportOpenedPackages.push(pkg); }
 const CFG_ITEMS = [
   { key:'night_modem_idle', def:'0' }, { key:'net_screen_off_lte', def:'0' },
   { key:'doze_level', def:'stock' }, { key:'sustained_temp_mode', def:'stock' },
@@ -6451,7 +6455,7 @@ const CFG_ITEMS = [
 ];
 EOF
   sed -n '/^const LOG_REPORT_APPLY_WHITELIST = {/,/^};/p' "$H"
-  for fn in Tcfg Topt cfgDefOf logReportRecommendations logReportRecommendationLine parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
+  for fn in Tcfg Topt cfgDefOf logReportRecommendations logReportRecommendationLine parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportHeatEvidence logReportPackageRow logReportScreenOffStarts dozePkgOk logReportTips \
     logReportSysuiSteady logReportWakeBad logReportVendorHeld logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportRecorderGap logReportAnalyze logReportHighRefresh logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportTweakEvidence logReportZygiskGovernor logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
@@ -6641,7 +6645,7 @@ const dheat = function (heat, thermal, throttle, cfg) {
   dc.hist = [];
   return logReportTips(dc).map(function (t) { return t.key; });
 };
-const hh = { peak_phase: 'gaming', warm_min: '47', skin_min: '12' };
+const hh = { peak_phase: 'gaming', warm_min: '47', skin_min: '12', warm_episodes: '1', warm_run_min: '47' };
 chk(dheat(hh, { cpu: '52' }, { clamps: '3' }, {}).indexOf('lr_tip_heat_warm') >= 0, 'a hot stretch advises: ' + dheat(hh, { cpu: '52' }, { clamps: '3' }, {}).join(','));
 chk(dheat(hh, { cpu: '52' }, { clamps: '3' }, { sustained_temp_mode: 'stock' }).indexOf('lr_tip_heat_warm_set') >= 0, 'protection on Stock names the switch');
 const hk1 = dheat({ peak_phase: 'active', warm_min: '0', skin_min: '0' }, { cpu: '41' }, { clamps: '0' }, {});
@@ -6650,7 +6654,7 @@ const hk2 = dheat({ peak_phase: 'active', warm_min: '0', skin_min: '0' }, { cpu:
 chk(hk2.indexOf('lr_tip_heat_calm') < 0, 'a cool day WITH throttles does not claim calm');
 const hk3 = dheat({ peak_phase: 'active', warm_min: '12', skin_min: '0' }, { cpu: '46' }, { clamps: '0' }, {});
 chk(hk3.indexOf('lr_tip_heat_warm') < 0 && hk3.indexOf('lr_tip_heat_calm') < 0, 'a short warm spell stays quiet');
-chk(logReportT('lr_tip_heat_warm', '', { min: '47 мин', phase: 'Игры' }).indexOf('{') < 0, 'the heat tip fills its placeholders');
+chk(logReportT('lr_tip_heat_warm', '', { min: '47 мин', longest: '47 мин', phase: 'Игры' }).indexOf('{') < 0, 'the heat tip fills its placeholders');
 const heatRunsDay = parseLogReport('meta\telapsed_min=390\nheat\tpeak_phase=active\tpeak_c=58\twarm_min=10\tskin_min=0\twarm_episodes=8\twarm_run_min=2\n');
 const heatRunsDx = logReportDiagnose(heatRunsDay).find(x => x.cause === 'lr_dx_heat_some_runs');
 chk(heatRunsDx && heatRunsDx.cv.n === '8' && heatRunsDx.cv.longest === logReportDur(2), 'eight short warm spells are not described as one sustained load: ' + JSON.stringify(heatRunsDx));
@@ -6745,7 +6749,7 @@ const sortFixture = parseLogReport([
   'wlive\ttag=Holder\tpct=80\tmin=30\tpkg=com.example.holder',
   'cfg\tnight_modem_idle=1', 'cfg\twakelock_action=0', 'cfg\tnet_screen_off_lte=0',
   'audio\tspk_min=40\tpctph=6.0', 'sradio\tmib=60',
-  'heat\tpeak_phase=active\twarm_min=47\tskin_min=12', 'thermal\tcpu=52', 'throttle\tclamps=3',
+  'heat\tpeak_phase=active\twarm_min=47\tskin_min=12\twarm_episodes=1\twarm_run_min=47', 'thermal\tcpu=52', 'throttle\tclamps=3',
   'asbcost\tcpu_msh=9000\twrites_h=52\twakes_h=300', 'crash\tcount=3\tasb=0', ''].join('\n'));
 const sortKeys = logReportAnalyze(sortFixture).observations.map(t => t.key).join(',');
 chk(sortKeys === 'lr_tip_awake_who,lr_tip_sradio,lr_tip_night_doze,lr_tip_night,lr_tip_audio',
@@ -6945,8 +6949,11 @@ chk(zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_denylist_spawns + '|214')
 chk(zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_launch_long + '|1') >= 0 && zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_launch_short + '|41') >= 0 && zyChannelsText.indexOf(I18N.ru.lr_zy_launch_fallback + '|0') >= 0, 'slow/fast/fallback launch classes render as independent deltas: ' + zyChannelsText);
 const zyBalancedText = logReportT('lr_zy_launch_balanced', '', {n:'135',ok:'129',veto:'0',unavailable:'0',throttled:'6'});
 chk(zyChannelsText.indexOf(zyBalancedText) >= 0, 'all cold-start outcomes reconcile: ' + zyBalancedText);
-chk(zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_ledger_top_screen_off + '|com.example.sync 17/3') >= 0 &&
-  zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_ledger_restart_loops + '|4') >= 0, 'screen-off ledger leader and restart-loop peak survive into the report');
+let zyStartButton = null;
+(function findStartButton(e) { if (zyStartButton) return; if (e.attrs && e.attrs['data-package'] === 'com.example.sync' && String(e.className).indexOf('lgr-package-action') >= 0) { zyStartButton = e; return; } e.children.forEach(findStartButton); })(reportBody);
+chk(!!zyStartButton && zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_ledger_restart_loops + '|4') >= 0, 'screen-off ledger leader is an exact package action and restart-loop peak survives');
+zyStartButton.onclick({ preventDefault:function(){}, stopPropagation:function(){} });
+chk(_reportOpenedPackages.indexOf('com.example.sync') >= 0, 'the report action opens the real component manager for the exact package');
 const zyUnresolved = parseLogReport('meta\telapsed_min=390\nzygisk\tstate=confirmed\tcoverage=start_latest\tlaunch_events_delta=22\tlaunch_accepted_delta=20\tlaunch_vetoed_delta=1\tlaunch_unavailable_delta=0\tlaunch_throttled_delta=0\tdeltas=available\n');
 logReportRender(zyUnresolved);
 const zyUnresolvedText = logReportT('lr_zy_launch_unresolved', '', {n:'22',ok:'20',veto:'1',unavailable:'0',throttled:'0'});
@@ -7033,8 +7040,10 @@ chk(smartAdaptText.indexOf(I18N.ru.lr_sm_state_adapting.split('{n}').join('2')) 
 const smartNoHelpDay = JSON.parse(JSON.stringify(smartActiveDay));
 smartNoHelpDay.sections.smart.helped = '0'; smartNoHelpDay.sections.smart.nothelped = '3';
 const smartNoHelpTips = logReportTips(smartNoHelpDay, true);
-chk(smartNoHelpTips.some(t => t.key === 'lr_tip_smart_nohelp' && t.vars.n === '3') &&
-  !smartNoHelpTips.some(t => /^lr_tip_smart_help/.test(t.key)), 'zero retained headroom and three failed comparisons must not become three helped apps');
+chk(!smartNoHelpTips.some(t => t.key === 'lr_tip_smart_nohelp') &&
+  !smartNoHelpTips.some(t => /^lr_tip_smart_help/.test(t.key)), 'zero retained headroom stays out of repetitive general observations');
+logReportRender(smartNoHelpDay);
+chk(allText(reportBody).indexOf(I18N.ru.lr_sm_nothelped) >= 0, 'the substantive Smart section keeps the failed-comparison counter');
 logReportRender(smartNoHelpDay);
 chk(allText(reportBody).indexOf(I18N.ru.lr_sm_scope) >= 0, 'Smart snapshot scope and still-running tests are explained');
 chk(mixText.indexOf(I18N.ru.lr_idle) < 0, 'a five-minute pause gets no worst-idle row');
@@ -7415,7 +7424,7 @@ const applyDay = parseLogReport([
   'sradio\tmib=80', 'cfg\tkey=net_screen_off_lte\tvalue=0',
   'jank\tpct=8.0\tjps=3.0\tframes=100000',
   'jcap_main\tyes=8.0\tyes_f=20000\tyes_jps=3.0\tno=5.0\tno_f=80000\tno_jps=2.0',
-  'heat\tpeak_phase=active\tpeak_c=49\twarm_min=45\tskin_min=0',
+  'heat\tpeak_phase=active\tpeak_c=49\twarm_min=45\tskin_min=0\twarm_episodes=1\twarm_run_min=45',
   'thermal\tcpu=49\tsurf=35',
   'cfg\tkey=night_modem_idle\tvalue=0', 'cfg\tkey=doze_level\tvalue=stock',
   'cfg\tkey=perf_ceiling_pct\tvalue=85', 'cfg\tkey=sustained_temp_mode\tvalue=stock'
@@ -7430,7 +7439,7 @@ chk(logReportRecommendationLine(logReportTips(applyDay, true).find(t => t.op && 
   'the report does not show the current value beside the recommended ceiling');
 const trafficOnly = parseLogReport('meta\telapsed_min=200\nsradio\tmib=800\ncfg\tkey=net_screen_off_lte\tvalue=0\n');
 chk(!logReportRecommendations(trafficOnly).some(r => r.key === 'net_screen_off_lte'), 'traffic volume alone became an apply-worthy energy verdict');
-const manualHeat = parseLogReport('meta\telapsed_min=200\nheat\tpeak_phase=active\tpeak_c=50\twarm_min=40\tskin_min=0\nthermal\tcpu=50\tsurf=35\ncfg\tkey=sustained_temp_mode\tvalue=manual\ncfg\tkey=sustained_temp_enter\tvalue=70\n');
+const manualHeat = parseLogReport('meta\telapsed_min=200\nheat\tpeak_phase=active\tpeak_c=50\twarm_min=40\tskin_min=0\twarm_episodes=1\twarm_run_min=40\nthermal\tcpu=50\tsurf=35\ncfg\tkey=sustained_temp_mode\tvalue=manual\ncfg\tkey=sustained_temp_enter\tvalue=70\n');
 chk(logReportRecommendations(manualHeat).some(r => r.key === 'sustained_temp_enter' && r.value === '65'), 'sustained manual heat did not recommend the bounded 65 °C value');
 const alreadySet = parseLogReport('meta\telapsed_min=200\nnight\tdur_min=240\tdrop=4\tpctph=1.0\tawake=8\ncfg\tkey=night_modem_idle\tvalue=1\ncfg\tkey=doze_level\tvalue=night\n');
 chk(!logReportRecommendations(alreadySet).length, 'already matching values were offered as changes');
@@ -15543,6 +15552,188 @@ JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "runtime: $out"
 [ "$out" = ok ] || fail "runtime: $out"
 echo 'PASS WebUI perceived performance buildfix17: aligned 220 ms motion/deferred work, 400 ms bounded category entrance, unchanged hub DOM retention, live category/search repaint and larger icons with compact count pills in all fit tiers'
+)
+
+t_webui_buildfix19_kernel_layout_and_notes() (
+# buildfix19: the exact-name editor has one full-width input, a symmetric two-action grid,
+# separate draft sections and a stable action grid. Live kernel explanations belong to the
+# same collapsed description as the rest of the card; Available is presented as Active.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI buildfix19 Kernel layout/collapsed notes: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'static layout/locales'
+import json, pathlib, sys
+root=pathlib.Path(sys.argv[1]); h=(root/'webroot/index.html').read_text(encoding='utf-8')
+for token in ('.kernel-add-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));',
+              '.kernel-observe-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));',
+              '.kernel-policy-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));',
+              "const noteHost = row.querySelector && row.querySelector('.cfg-collapse-inner') || row;",
+              "available:'Active'"):
+    assert token in h, token
+assert '.kernel-input-row .kernel-input { flex-basis:100%; }' not in h
+assert '.kernel-input-row { flex-wrap:wrap; }' not in h
+for p in (root/'webroot/i18n').glob('*.json'):
+    d=json.loads(p.read_text(encoding='utf-8'))
+    assert d['kernel_state_available'].strip(), p.name
+assert json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))['kernel_state_available']=='Активно'
+assert json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8'))['kernel_state_available']=='Active'
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI buildfix19 Kernel runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const chk=(c,m)=>{if(!c)throw Error(m)};
+function grab(name){const m=h.match(new RegExp('function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0]}
+function E(tag,cls,text){this.tag=tag;this.className=cls||'';this.children=[];this.attrs={};this.style={};this.hidden=false;this.disabled=false;this.id='';this.textContent=text||'';}
+E.prototype.appendChild=function(x){this.children.push(x);return x};
+E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
+E.prototype.querySelector=function(sel){const key=sel[0]==='#'?'id':sel[0]==='.'?'className':null;if(!key)return null;const wanted=sel.slice(1);let found=null;(function walk(n){if(found)return;if(key==='id'?n.id===wanted:String(n.className||'').split(/\s+/).includes(wanted)){found=n;return}(n.children||[]).forEach(walk)})(this);return found};
+E.prototype.querySelectorAll=function(){return[]};
+function bfxEl(tag,cls,text){return new E(tag,cls,text)}
+global.document={createElement:t=>new E(t),getElementById:()=>null,body:new E('body')};
+global.T=(k,f)=>k==='kernel_state_available'?'Active':f;
+global.uiSound=()=>{};global.toast=()=>{};global._wbBusy=false;global._kernelMore=Object.create(null);
+let _kernelPanel={loading:false,wakeup:null,controls:{}};
+const drafts={always:['already'],sleep:['night']};global.kernelWakeupDraft=k=>drafts[k];
+let adds=[];global.kernelWakeupAdd=(name,kind)=>adds.push([name,kind]);
+global.kernelWakeupSave=()=>{};global.kernelWakeupObserve=()=>{};global.kernelWakeupSourceDialogOpen=()=>{};
+global.kernelRefreshButton=id=>new E('button','bfx-btn bfx-secondary','Refresh');
+global.kernelStateBadge=state=>new E('span','kernel-state good',T('kernel_state_'+state));
+global.kernelWakeupRisk=()=>({critical:false});global.kernelWakeupDuration=()=> '1 min';
+global.kernelMoreBlock=(card,id,nodes)=>{const body=new E('div','kernel-more-body');nodes.forEach(n=>body.appendChild(n));card.appendChild(body);return body};
+const source=['kernelWakeupDuration','kernelWakeupObservedList','kernelWakeupChipList','cfgRenderWakeupBlockerCard'].map(grab).join('\n');
+eval(source);
+_kernelPanel.wakeup={node:'writable',screen:'off',savedAlways:[],savedSleep:[],current:[],blocked:{},events:'0',abi:'2',observe:{state:'measuring',elapsed:60000,resets:0},sources:[{name:'source_a'}]};
+const list=new E('div');cfgRenderWakeupBlockerCard(list);const card=list.children[0];
+const input=card.querySelector('#kernelWakeupName'),always=card.querySelector('#kernelWakeupAddAlways'),sleep=card.querySelector('#kernelWakeupAddSleep');
+chk(input&&always&&sleep,'editor controls missing');
+chk(always.parent===undefined,'parent link must not be required');
+const inputRow=input&&card.querySelector('.kernel-input-row'),addGrid=card.querySelector('.kernel-add-actions');
+chk(inputRow.children.length===2&&inputRow.children[0]===input&&inputRow.children[1]===addGrid,'input and action grid are not separate rows');
+chk(addGrid.children.length===2&&addGrid.children[0]===always&&addGrid.children[1]===sleep,'add actions are not symmetric siblings');
+input.value='exact_source';always.onclick();sleep.onclick();chk(JSON.stringify(adds)===JSON.stringify([['exact_source','always'],['exact_source','sleep']]),'add handlers failed');
+chk(card.querySelector('#kernelWakeupAlwaysRules')&&card.querySelector('#kernelWakeupSleepRules'),'draft sections missing');
+const policy=card.querySelector('.kernel-policy-actions');chk(policy.children.length===3&&policy.children[0].id==='kernelWakeupApply','policy actions missing');
+const observe=card.querySelector('.kernel-observe-actions');chk(observe.children.length===2&&observe.children[1].id==='kernelWakeupOpenSources','observation actions missing');
+// A live fact is a child of collapsed content, never an always-visible row sibling.
+global.ASB_KERNEL_STATUS_KEYS=['mglru_mode'];global.KERNEL_HIDE_WHEN_ABSENT=[];global.Topt=o=>o;global.bfxT=(k,f,v)=>f;
+global.kernelHiddenAbsent=()=>[];global.kernelUnavailableWhy=()=>'';
+global.kernelControlAvailability=()=>({state:'available',live:'0x0001',mode:'smart'});
+global.kernelDefaultFact=()=> 'Unsupported 0x0004 explanation';global.kernelStateText=()=> 'Active';
+eval(grab('kernelDecorateControlRow'));
+const row=new E('div'),inner=new E('div','cfg-collapse-inner'),collapse=new E('div','cfg-collapse');collapse.appendChild(inner);row.appendChild(collapse);
+kernelDecorateControlRow(row,'mglru_mode');
+chk(row.children.length===1&&inner.children.length===1&&inner.children[0].className==='kernel-why kernel-fact','kernel fact escaped collapsed description');
+kernelDecorateControlRow(row,'mglru_mode');chk(inner.children.length===1,'kernel fact duplicated');
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI buildfix19 Kernel: symmetric add/observe/policy grids, separate draft sections, working exact-name handlers, collapsed live notes and Active status in 13 locales'
+)
+
+t_webui_buildfix19_report_evidence_actions() (
+# buildfix19: accumulated warm minutes are not sustained load, a lone 45 C peak is not a
+# red CPU verdict, and package-looking report rows open the existing component manager.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI buildfix19 report evidence/actions: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'wiring'
+import sys
+h=open(sys.argv[1],encoding='utf-8').read()
+for token in ('logReportPackageRow(', 'logReportScreenOffStarts(', "'data-report-action', 'components'", 'wlServiceOpen(pkg)'):
+    assert token in h, token
+assert "tips.push({ ic: 'ok', key: 'lr_tip_smart_nohelp'" not in h
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI buildfix19 report evidence runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const chk=(c,m)=>{if(!c)throw Error(m)};
+function grab(name){const m=h.match(new RegExp('function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0]}
+eval(grab('logReportHeatEvidence'));
+const scattered=logReportHeatEvidence({heat:{warm_min:138,skin_min:62,warm_episodes:69,warm_run_min:7},thermal:{cpu:59},throttle:{clamps:11}});
+chk(!scattered.sustained&&scattered.state==='normal'&&scattered.episodes===69&&scattered.longest===7,'69 short warm episodes became sustained/red');
+const peak45=logReportHeatEvidence({heat:{warm_min:0,skin_min:0,warm_episodes:0,warm_run_min:0},thermal:{cpu:45},throttle:{clamps:0}});
+chk(!peak45.sustained&&peak45.state==='normal','45 C peak became a red/problem verdict');
+const sustained=logReportHeatEvidence({heat:{warm_min:47,skin_min:0,warm_episodes:1,warm_run_min:47},thermal:{cpu:59},throttle:{clamps:0}});
+chk(sustained.sustained&&sustained.state==='problem','real continuous warm run lost its warning');
+function E(tag,cls,text){this.tag=tag;this.className=cls||'';this.children=[];this.attrs={};this.textContent=text||'';this.style={}}
+E.prototype.appendChild=function(x){this.children.push(x);return x};E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
+global.document={createElement:t=>new E(t)};
+global.bfxEl=(tag,cls,text)=>new E(tag,cls,text);global.T=(k,f)=>f;
+global.dozePkgOk=p=>/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(p);global.logReportRow=()=>{throw Error('valid package rejected')};global.logReportT=(k,f,v)=>f;
+const opened=[];global.wlServiceOpen=p=>opened.push(p);
+eval(grab('logReportPackageRow')+grab('logReportScreenOffStarts'));
+for(const pkg of ['com.sec.android.app.shealth','com.example.sync','ru.vk.store']){
+ const row=logReportPackageRow('night',pkg,3,true),button=row.children[1].children[0];
+ chk(button.tag==='button'&&button.attrs['data-package']===pkg&&button.attrs['data-report-action']==='components','not a DOM package action: '+pkg);
+ let prevented=0,stopped=0;button.onclick({preventDefault(){prevented++},stopPropagation(){stopped++}});
+ chk(opened[opened.length-1]===pkg&&prevented===1&&stopped===1,'wrong package opened: '+pkg);
+}
+const starts=logReportScreenOffStarts('com.example.sync 4/7, malformed, *job*r/#OneTimePushReceiveWorker#@ru.vk.store/androidx.work.impl.background.systemjob.SystemJobService, ru.vk.store 2/2');
+chk(starts.length===2&&starts[0].pkg==='com.example.sync'&&starts[1].pkg==='ru.vk.store','strict screen-off starts parser accepted malformed evidence');
+chk(opened.length===3,'unexpected action count');
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI buildfix19 report evidence: 69 scattered episodes (longest 7 min), neutral 45 C peak, sustained warning retained, three real package handlers and malformed start rejection'
+)
+
+t_webui_buildfix20_active_evidence_and_diag() (
+# buildfix20: the supplied capture has a healthy night but a misleading LIGHT_IDLE share.
+# Keep active drawing separate, show each phase's capture share, expose a zero LTPO delta,
+# and repair the two literal-pipe scheduler keys without matching one another.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL WebUI buildfix20 active evidence/diag: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/cap"
+cat > "$T/cap/_full_day_report.txt" <<'EOF'
+ capture: 0h target (until stopped), 894 min elapsed
+all screen-on intervals: 3 frames 10354 janky 30.2% deadline missed 30.2%
+janky frames per second on screen: 0.17
+ltpo_video (capture): lowered 0 times, 0 min at the lower rate, 0 restored by touch
+EOF
+cat > "$T/cap/jank_trace.tsv" <<'EOF'
+# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs|wake
+1|2026-01-01T00:00:00|active|LIGHT_IDLE|50|0|0|0|100|30|30|0|0|0|0|pkg|-|
+2|2026-01-01T00:01:00|active|MODERATE|50|0|0|0|5000|50|50|0|0|0|0|pkg|-|
+3|2026-01-01T00:02:00|active|MODERATE|50|0|0|0|5000|50|50|0|0|0|0|pkg|-|
+4|2026-01-01T00:03:00|active|MODERATE|100|0|0|0|254|30|30|0|0|0|0|pkg|-|wake
+EOF
+ASB_LK_DIGEST_DIR="$T/cap" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" > "$T/digest"
+grep -qx $'jactive\tintv=2\tframes=10000\tpct=1.0\tjps=1.00' "$T/digest" || { cat "$T/digest"; fail 'active-drawing aggregate includes quiet/wake rows or is absent'; }
+grep -qx $'ltpo\tn=0\tmin=0\tbasis=capture' "$T/digest" || fail 'zero capture LTPO delta disappeared'
+python3 - "$ROOT" <<'PYTEST' || fail 'production wiring'
+from pathlib import Path
+import sys
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
+for token in ("d.sections.jactive", "lr_jactive_note", "lr_th_capture_share", "lr_ltpo_none_note", "st_ltpo_vid_watch"):
+    assert token in h, token
+for p in (r/'tools/asb_diag.sh',r/'system/bin/asbdiag'):
+    s=p.read_text()
+    assert 's#^io_scheduler|# I/O scheduler: #p' in s
+    assert 's#^io_scheduler_options|# I/O schedulers exposed: #p' in s
+assert (r/'tools/asb_diag.sh').read_bytes()==(r/'system/bin/asbdiag').read_bytes()
+PYTEST
+out="$(printf '%s\n' 'io_scheduler|mq-deadline' 'io_scheduler_options|none [mq-deadline] kyber bfq' | sed -n 's#^io_scheduler|# I/O scheduler: #p; s#^io_scheduler_options|# I/O schedulers exposed: #p')"
+[ "$out" = " I/O scheduler: mq-deadline
+ I/O schedulers exposed: none [mq-deadline] kyber bfq" ] || fail "scheduler parser: $out"
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI buildfix20 digest parser: no node'; exit 0; }
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8'),digest=fs.readFileSync(process.argv[3],'utf8');
+function grab(name){const m=h.match(new RegExp('function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0]}
+eval(grab('parseLogReport'));const d=parseLogReport('meta\telapsed_min=894\n'+digest);
+if(!d.ok||!d.sections.jactive||d.sections.jactive.frames!==10000||d.sections.jactive.pct!==1)throw Error('jactive parse');
+if(!d.sections.ltpo||+d.sections.ltpo.n!==0||d.sections.ltpo.basis!=='capture')throw Error('zero LTPO parse');
+console.log('ok');
+JS
+node "$T/test.js" "$ROOT/webroot/index.html" "$T/digest" | grep -qx ok || fail 'WebUI digest parsing'
+echo 'PASS WebUI buildfix20: active >=20 FPS evidence excludes quiet/wake rows, phase-share and zero-LTPO wiring present, exact I/O scheduler keys and asbdiag copy verified'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
