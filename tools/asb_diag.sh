@@ -145,7 +145,7 @@ P " kernel  : $(uname -r 2>/dev/null)"
 if [ -r "$MODDIR/runtime/asb_io_scheduler.sh" ]; then
   _dio="$(MODDIR="$MODDIR" ASB_CONF="$MODDIR/config/governor.conf" sh "$MODDIR/runtime/asb_io_scheduler.sh" status 2>/dev/null)"
   printf '%s
-' "$_dio" | sed -n 's/^io_scheduler|/ I/O scheduler: /p; s/^io_scheduler_options|/ I/O schedulers exposed: /p'
+' "$_dio" | sed -n 's#^io_scheduler|# I/O scheduler: #p; s#^io_scheduler_options|# I/O schedulers exposed: #p'
 fi
 _root_mgr="unknown"
 [ -d /data/adb/ap ] && _root_mgr="APatch"
