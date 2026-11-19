@@ -8,7 +8,8 @@ DM_PROF_FILE="${ASB_DM_PROFILE:-/data/adb/modules/AutoSystemBoost/current_profil
 DM_PROFILES="smart balanced battery performance stock"
 DM_BOOT="${ASB_DM_BOOT:-$DM_LIVE.boot}"
 DM_BOOTID="${ASB_DM_BOOTID:-/proc/sys/kernel/random/boot_id}"
-dm_b_id=""; dm_b_on=0; dm_b_off=0; dm_b_ts=""; dm_b_scr=""
+dm_b_id=""; dm_b_on=0; dm_b_off=0; dm_b_onx=0; dm_b_pct=""; dm_b_chg=0; dm_b_ts=""; dm_b_scr=""
+dm_b_last=0; dm_b_last_s=0; dm_b_last_at=0
 
 dm_prof=""
 dm_prev_ts=""
@@ -19,6 +20,9 @@ dm_off_pct=""
 dm_off_media_s=0
 dm_glance_ts=""
 dm_glance_pct=""
+# One continuous, validated screen-on session per profile. Only completed sessions
+# become history; the recurring 30-second sampler must not look like many sessions.
+dm_on_s=0; dm_on_x=0; dm_on_at=0
 # A glance does not end a night (fix178): a screen-on shorter than this is folded into the
 # screen-off window, as the governor's own screen-off meter does. Checking the time once in
 # the night split every window under the hour, and no profile ever got a screen-off figure.
@@ -33,6 +37,8 @@ dm_flush_ts=0
 # nothing on disk to say whether the windows were short, had playback in them or ended on the
 # charger. "media short charge" counts, then the latest: profile:reason:minutes.
 DM_REJ="$DM_DIR/drain_meter.rej"
+DM_NIGHT="$DM_DIR/drain_meter.night"
+dm_night_x=0; dm_night_s=0; dm_night_at=0
 dm_rej_media=0; dm_rej_short=0; dm_rej_charge=0; dm_rej_last="-"
 dm_rej() {   # $1 reason  $2 seconds
   case "$1" in
@@ -52,16 +58,26 @@ dm_set() {
   eval "dm_${1}_${2}=\$3"
 }
 
+dm_night_load() {
+  dm_night_x=0; dm_night_s=0; dm_night_at=0
+  [ -r "$DM_NIGHT" ] || return 0
+  read -r _nx _ns _na < "$DM_NIGHT" 2>/dev/null
+  case "${_nx:-x}${_ns:-x}${_na:-x}" in ''|*[!0-9]*) return 0 ;; esac
+  [ "${_ns:-0}" -ge 10800 ] && [ "${_na:-0}" -gt 0 ] || return 0
+  dm_night_x="$_nx"; dm_night_s="$_ns"; dm_night_at="$_na"
+}
+
 dm_load() {
+  dm_night_load
   for _dp in $DM_PROFILES; do
-    for _df in on_s on_x off_s off_x off_n off_last off_last_s off_last_at; do dm_set "$_dp" "$_df" 0; done
+    for _df in on_s on_x off_s off_x off_n off_last off_last_s off_last_at on_last on_last_s on_last_at night_last night_last_s night_last_at; do dm_set "$_dp" "$_df" 0; done
   done
   if [ -r "$DM_REJ" ]; then
     read -r _rm _rs _rc _rl < "$DM_REJ" 2>/dev/null
     case "$_rm$_rs$_rc" in ''|*[!0-9]*) : ;; *) dm_rej_media="$_rm"; dm_rej_short="$_rs"; dm_rej_charge="$_rc"; dm_rej_last="${_rl:--}" ;; esac
   fi
   [ -r "$DM_FILE" ] || return 0
-  while read -r _dp _a _b _c _d _e _f _g _h _rest; do
+  while read -r _dp _a _b _c _d _e _f _g _h _i _j _k _l _m _n _rest; do
     case " $DM_PROFILES " in *" $_dp "*) : ;; *) continue ;; esac
     for _dv in "$_a" "$_b" "$_c" "$_d" "$_e"; do
       case "$_dv" in ''|*[!0-9]*) continue 2 ;; esac
@@ -74,14 +90,23 @@ dm_load() {
       case "$_dv" in ''|*[!0-9]*) _f=0; _g=0; _h=0; break ;; esac
     done
     dm_set "$_dp" off_last "${_f:-0}"; dm_set "$_dp" off_last_s "${_g:-0}"; dm_set "$_dp" off_last_at "${_h:-0}"
+    # fix21 appends the latest completed screen-on session and last qualifying night.
+    # Old 6/9-field files remain valid and expose no synthetic per-profile history.
+    for _dv in "${_i:-0}" "${_j:-0}" "${_k:-0}" "${_l:-0}" "${_m:-0}" "${_n:-0}"; do
+      case "$_dv" in ''|*[!0-9]*) _i=0; _j=0; _k=0; _l=0; _m=0; _n=0; break ;; esac
+    done
+    dm_set "$_dp" on_last "${_i:-0}"; dm_set "$_dp" on_last_s "${_j:-0}"; dm_set "$_dp" on_last_at "${_k:-0}"
+    dm_set "$_dp" night_last "${_l:-0}"; dm_set "$_dp" night_last_s "${_m:-0}"; dm_set "$_dp" night_last_at "${_n:-0}"
   done < "$DM_FILE"
 }
 
 dm_table() {
   for _dp in $DM_PROFILES; do
-    printf '%s %s %s %s %s %s %s %s %s\n' "$_dp" "$(dm_get "$_dp" on_s)" "$(dm_get "$_dp" on_x)" \
+    printf '%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n' "$_dp" "$(dm_get "$_dp" on_s)" "$(dm_get "$_dp" on_x)" \
       "$(dm_get "$_dp" off_s)" "$(dm_get "$_dp" off_x)" "$(dm_get "$_dp" off_n)" \
-      "$(dm_get "$_dp" off_last)" "$(dm_get "$_dp" off_last_s)" "$(dm_get "$_dp" off_last_at)"
+      "$(dm_get "$_dp" off_last)" "$(dm_get "$_dp" off_last_s)" "$(dm_get "$_dp" off_last_at)" \
+      "$(dm_get "$_dp" on_last)" "$(dm_get "$_dp" on_last_s)" "$(dm_get "$_dp" on_last_at)" \
+      "$(dm_get "$_dp" night_last)" "$(dm_get "$_dp" night_last_s)" "$(dm_get "$_dp" night_last_at)"
   done
 }
 
@@ -99,7 +124,15 @@ dm_flush() {
   dm_flush_ts="$1"
 }
 
+dm_on_finish() {
+  [ "${dm_on_s:-0}" -ge 600 ] && [ -n "$dm_prof" ] || { dm_on_s=0; dm_on_x=0; dm_on_at=0; return 0; }
+  dm_set "$dm_prof" on_last "$dm_on_x"; dm_set "$dm_prof" on_last_s "$dm_on_s"; dm_set "$dm_prof" on_last_at "${dm_on_at:-0}"
+  dm_on_s=0; dm_on_x=0; dm_on_at=0; dm_dirty=1
+}
+
 dm_add_on() {
+  dm_on_s=$(( ${dm_on_s:-0} + $1 )); dm_on_x=$(( ${dm_on_x:-0} + $2 * 100 ))
+
   _ds=$(( $(dm_get "$dm_prof" on_s) + $1 ))
   _dx=$(( $(dm_get "$dm_prof" on_x) + $2 * 100 ))
   if [ "$_ds" -gt 14400 ]; then _ds=$((_ds / 2)); _dx=$((_dx / 2)); fi
@@ -113,6 +146,22 @@ dm_add_off() {
   dm_set "$dm_prof" off_last "$(( $2 * 360000 / $1 ))"
   dm_set "$dm_prof" off_last_s "$1"
   dm_set "$dm_prof" off_last_at "${3:-0}"
+  # Latest completed idle window in this boot, published separately from profile history.
+  dm_b_last=$(( $2 * 360000 / $1 )); dm_b_last_s="$1"; dm_b_last_at="${3:-0}"
+  # Only an overnight window of at least three hours, ending from 04:00 through 11:59 local
+  # time, may be called "last night". A daytime idle stretch remains generic history instead.
+  # If the ROM's date cannot convert epoch time, leave the last proven night untouched.
+  if [ "$1" -ge 10800 ] && [ "${3:-0}" -gt 0 ] 2>/dev/null; then
+    _nh="$(date -d "@$3" '+%H' 2>/dev/null)"
+    case "$_nh" in
+      04|05|06|07|08|09|10|11)
+        dm_night_x=$(( $2 * 360000 / $1 )); dm_night_s="$1"; dm_night_at="$3"
+        dm_set "$dm_prof" night_last "$dm_night_x"; dm_set "$dm_prof" night_last_s "$1"; dm_set "$dm_prof" night_last_at "$3"
+        mkdir -p "$DM_DIR" 2>/dev/null
+        printf '%s %s %s\n' "$dm_night_x" "$dm_night_s" "$dm_night_at" > "$DM_NIGHT.tmp" 2>/dev/null \
+          && mv -f "$DM_NIGHT.tmp" "$DM_NIGHT" 2>/dev/null ;;
+    esac
+  fi
   _ds=$(( $(dm_get "$dm_prof" off_s) + $1 ))
   _dx=$(( $(dm_get "$dm_prof" off_x) + $2 * 100 ))
   _dn=$(( $(dm_get "$dm_prof" off_n) + 1 ))
@@ -127,18 +176,21 @@ dm_step() {
   _n="$1"; _p="$2"; _c="$3"; _s="$4"; _pf="$5"; _m="$6"
   case " $DM_PROFILES " in *" $_pf "*) : ;; *) _pf="" ;; esac
   if [ "$_pf" != "$dm_prof" ]; then
-    dm_prof="$_pf"; dm_prev_ts=""; dm_prev_scr=""; dm_off_ts=""; dm_off_media_s=0; dm_glance_ts=""
+    dm_on_finish
+    dm_prof="$_pf"; dm_on_s=0; dm_on_x=0; dm_on_at=0; dm_prev_ts=""; dm_prev_scr=""; dm_off_ts=""; dm_off_media_s=0; dm_glance_ts=""
   fi
   [ -n "$dm_prof" ] || return 0
   case "$_p" in ''|*[!0-9]*) dm_prev_ts=""; return 0 ;; esac
   case "$_n" in ''|*[!0-9]*) return 0 ;; esac
   if [ "$_c" = 1 ]; then
+    dm_on_finish
     # A window of ten minutes or more ended by the charger is worth knowing about.
     [ -n "$dm_off_ts" ] && [ $((_n - dm_off_ts)) -ge 600 ] && dm_rej charge $((_n - dm_off_ts))
     dm_prev_ts=""; dm_off_ts=""; dm_off_media_s=0; dm_glance_ts=""; dm_prev_scr="$_s"
     return 0
   fi
   if [ "$_s" = 1 ]; then
+    [ "${dm_on_s:-0}" -gt 0 ] || dm_on_at="$_n"
     if [ -n "$dm_off_ts" ]; then
       # The window ends where the screen came on, once it has stayed on past a glance.
       [ -n "$dm_glance_ts" ] || { dm_glance_ts="$_n"; dm_glance_pct="$_p"; }
@@ -162,6 +214,7 @@ dm_step() {
       fi
     fi
   else
+    dm_on_finish
     # Off again within the glance: the same window goes on.
     dm_glance_ts=""
     if [ -z "$dm_off_ts" ]; then dm_off_ts="$_n"; dm_off_pct="$_p"; dm_off_media_s=0; fi
@@ -211,12 +264,14 @@ dm_boot_load() {
   dm_b_id=""; [ -r "$DM_BOOTID" ] && read -r dm_b_id < "$DM_BOOTID" 2>/dev/null
   dm_b_id="$(printf '%s' "$dm_b_id" | tr -dc '0-9a-f' | cut -c1-12)"
   [ -n "$dm_b_id" ] || dm_b_id=0
-  dm_b_on=0; dm_b_off=0; dm_b_ts=""; dm_b_scr=""
+  dm_b_on=0; dm_b_off=0; dm_b_onx=0; dm_b_pct=""; dm_b_chg=0; dm_b_ts=""; dm_b_scr=""
+  dm_b_last=0; dm_b_last_s=0; dm_b_last_at=0
   [ -r "$DM_BOOT" ] || return 0
-  read -r _bi _bon _boff < "$DM_BOOT" 2>/dev/null
+  read -r _bi _bon _boff _bonx _blast _blasts _blastat < "$DM_BOOT" 2>/dev/null
   [ "$_bi" = "$dm_b_id" ] || return 0
-  case "$_bon$_boff" in ''|*[!0-9]*) return 0 ;; esac
-  dm_b_on="$_bon"; dm_b_off="$_boff"
+  case "$_bon$_boff${_bonx:-0}${_blast:-0}${_blasts:-0}${_blastat:-0}" in ''|*[!0-9]*) return 0 ;; esac
+  dm_b_on="$_bon"; dm_b_off="$_boff"; dm_b_onx="${_bonx:-0}"
+  dm_b_last="${_blast:-0}"; dm_b_last_s="${_blasts:-0}"; dm_b_last_at="${_blastat:-0}"
 }
 
 dm_boot_step() {
@@ -224,18 +279,24 @@ dm_boot_step() {
     _bd=$(( $1 - dm_b_ts ))
     if [ "$_bd" -gt 0 ]; then
       if [ "$dm_b_scr" = 1 ]; then
-        if [ "$_bd" -le 120 ]; then
-          dm_b_on=$((dm_b_on + _bd))
-        else
-          dm_b_on=$((dm_b_on + 30)); dm_b_off=$((dm_b_off + _bd - 30))
+        _bon_step=30; [ "$_bd" -le 120 ] && _bon_step="$_bd"
+        dm_b_on=$((dm_b_on + _bon_step))
+        [ "$_bd" -le 120 ] || dm_b_off=$((dm_b_off + _bd - 30))
+        # SOC-derived percent/hour for this boot only. Charging, resets and implausible
+        # jumps are excluded; sampled current_now is deliberately not used here.
+        if [ "$_bd" -le 120 ] && [ "${3:-}" != '' ] && [ "$dm_b_pct" != '' ] && [ "${4:-0}" = 0 ] && [ "$dm_b_chg" = 0 ]; then
+          case "$3$dm_b_pct" in *[!0-9]*) : ;; *)
+            _bq=$((dm_b_pct - $3)); [ "$_bq" -ge 0 ] && [ "$_bq" -le 5 ] && dm_b_onx=$((dm_b_onx + _bq * 100)) ;;
+          esac
         fi
       else
         dm_b_off=$((dm_b_off + _bd))
       fi
     fi
   fi
-  dm_b_ts="$1"; dm_b_scr="$2"
-  printf '%s %s %s\n' "$dm_b_id" "$dm_b_on" "$dm_b_off" > "$DM_BOOT.tmp" 2>/dev/null \
+  dm_b_ts="$1"; dm_b_scr="$2"; dm_b_pct="${3:-}"; dm_b_chg="${4:-0}"
+  printf '%s %s %s %s %s %s %s\n' "$dm_b_id" "$dm_b_on" "$dm_b_off" "$dm_b_onx" \
+    "$dm_b_last" "$dm_b_last_s" "$dm_b_last_at" > "$DM_BOOT.tmp" 2>/dev/null \
     && mv -f "$DM_BOOT.tmp" "$DM_BOOT" 2>/dev/null
   return 0
 }
@@ -263,7 +324,7 @@ dm_loop() {
       [ -n "${_aa_sig:-}" ] && _lm=1
     fi
     _was="$dm_prof"; _was_scr="$dm_prev_scr"
-    dm_boot_step "$_ln" "$_ls"
+    dm_boot_step "$_ln" "$_ls" "$_lp" "$_lc"
     dm_step "$_ln" "$_lp" "$_lc" "$_ls" "$_lf" "$_lm"
     if [ "$dm_dirty" = 1 ] || [ "$_was" != "$dm_prof" ]; then dm_publish; fi
     if [ "$dm_dirty" = 1 ]; then

@@ -804,6 +804,14 @@ _wl_man_installed() {
   _has pm || return 1
   pm list packages -3 2>/dev/null | sed -n 's/^package:\([^ ]*\).*/\1/p' | grep -qxF "$1"
 }
+# Component windows can also be opened from a system-package report row. This broader
+# installed-package check is deliberately local to explicit component management: the
+# package-wide WAKE_LOCK controls above remain restricted to third-party packages.
+_wl_cmp_installed() {
+  _wl_man_pkgok "$1" || return 1
+  _has pm || return 1
+  pm list packages 2>/dev/null | sed -n 's/^package:\([^ ]*\).*/\1/p' | grep -qxF "$1"
+}
 _wl_man_line() { awk -F'|' -v p="$1" '$1 == p { print; exit }' "$MAN" 2>/dev/null; }
 _wl_man_gone() {
   _wl_man_pkgok "$1" || return 1
@@ -1077,8 +1085,8 @@ _wl_cmp_jobs() {
 _wl_cmp_declared() {
   _cp="${1:-}"
   printf '%s\n' "${2:-}" | awk -v p="$_cp" '
-    /^[ \t]*Service Resolver:/ { k="service"; next }
-    /^[ \t]*Activity Resolver:/ { k="activity"; next }
+    /^[ \t]*Service Resolver( Table)?:/ { k="service"; next }
+    /^[ \t]*Activity Resolver( Table)?:/ { k="activity"; next }
     /^[ \t]*[A-Z][A-Za-z ]*:/ { k="" }
     k != "" {
       s=$0; while(match(s,/[A-Za-z0-9_.$]+\/[A-Za-z0-9_.$]+/)) {
@@ -1094,7 +1102,7 @@ _wl_cmp_actionable() {
 }
 _wl_cmp_status() {
   _sp="${1:-}"
-  _wl_man_installed "$_sp" || { printf 'result=not_user_app\nscan=unavailable\n'; return 1; }
+  _wl_cmp_installed "$_sp" || { printf 'result=not_user_app\nscan=unavailable\n'; return 1; }
   _has dumpsys || { printf 'result=unavailable\nscan=unavailable\n'; return 1; }
   _sd="$(dumpsys package "$_sp" 2>/dev/null)"; [ -n "$_sd" ] || { printf 'result=unavailable\nscan=unavailable\n'; return 1; }
   _cr="$(_wl_cmp_running "$_sp")"
@@ -1124,7 +1132,7 @@ _wl_cmp_status() {
 _wl_cmp_disable() {
   _sp="${1:-}"; _sc="${2:-}"; _ck="${3:-service}"
   _wl_svc_compok "$_sp" "$_sc" || { printf 'result=bad_request\n'; return 1; }
-  _wl_man_installed "$_sp" || { printf 'result=not_user_app\n'; return 1; }
+  _wl_cmp_installed "$_sp" || { printf 'result=not_user_app\n'; return 1; }
   _has dumpsys && _has pm || { printf 'result=unavailable\n'; return 1; }
   _sd="$(dumpsys package "$_sp" 2>/dev/null)"; [ -n "$_sd" ] || { printf 'result=unavailable\n'; return 1; }
   _sl="$(_wl_svc_line "$_sp" "$_sc")"
