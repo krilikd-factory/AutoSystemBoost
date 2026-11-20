@@ -1817,7 +1817,8 @@ async function back() { if (!hist.canGoBack()) { exited++; return; } hist.go(-1)
   liveDrainPaint();
   const blocks = _el('liveDrainBody').children;
   chk(blocks.length === 3, 'sheet: two figures and a note, have ' + blocks.length);
-  const txt = function (b) { return b.children[1].children.map(function (c) { return c.className + '=' + c.textContent; }).join(' | '); };
+  const nodeText = function (n) { return n.textContent + (n.children || []).map(nodeText).join(' '); };
+  const txt = function (b) { return b.children[1].children.map(function (c) { return c.className + '=' + nodeText(c); }).join(' | '); };
   const on = txt(blocks[0]), off = txt(blocks[1]);
   chk(/live-drain-val=~8\.5%\/h/.test(on) && /lv_drain_on_recent/.test(on) && /to 0%: 8h 56m/.test(on), 'screen-on block: ' + on);
   chk(/live-drain-val=0\.52%\/h/.test(off) && /stretch\(es\)/.test(off) && / 3 /.test(off) && /to 0%: > 72h/.test(off), 'screen-off block: ' + off);
@@ -9318,7 +9319,7 @@ assert 'id="asbBootIntroCount"' not in mark
 for forbidden in ('>LIVE<','>CONFIG<','>DEVICE<','>LOG<','asb-boot-stages','0 / 5','1 / 5','1/5'):
     assert forbidden not in mark, forbidden
 assert re.search(r'\.asb-boot-progress \{[^}]*height:11px;',s)
-assert '<text id="asbUfoInitials" x="48" y="40"' in s and 'font-size="11"' in s and 'fill="url(#asbUfoEngraving)"' in s and '>ASB</text>' in s
+assert '<text id="asbUfoInitials" x="48" y="40"' in s and 'font-size="13"' in s and 'fill="url(#asbUfoEngraving)"' in s and '>ASB</text>' in s
 assert '<button' not in mark
 for token in ('@keyframes asbBootSpin','@keyframes asbBootPulse','@keyframes asbBootScan',
               '@keyframes asbBootArrive','@keyframes asbBootHalo',
@@ -14119,7 +14120,7 @@ _livePollMeta.lastSuccess=0;chk(refreshDelay()===240,'missing fresh read delayed
 const classes=new Set();
 const page={scrollTop:9,attrs:{},classList:{add:c=>{classes.add(c);events.push('class:'+c)},remove:c=>classes.delete(c),contains:c=>classes.has(c)},setAttribute:(k,v)=>page.attrs[k]=String(v)};
 global._el=id=>id==='livePage'?page:null;
-global.uiSound=()=>{};global._liveOpen=false;global._livePageSeq=4;
+global.uiSound=()=>{};global.asbNavSound=()=>{};global._liveOpen=false;global._livePageSeq=4;
 global.liveBackgroundSchedule=()=>{};global.liveHeaderSync=()=>{};
 global.lvMonTilesRestore=()=>{events.push('tiles');return true};global.lvMonSmartRestore=()=>{events.push('smart');return true};
 global.lvStale=v=>events.push('stale:'+v);global._selectedProfile='stock';global._stockTelemetryKv={cpu:'1'};global._lvMonCache={rom:{}};
@@ -16052,8 +16053,7 @@ H="$ROOT/webroot/index.html"
 fail() { echo "FAIL WebUI buildfix28: $*" >&2; exit 1; }
 python3 - "$ROOT" <<'PY' || fail 'static/UI/Settings contract'
 from pathlib import Path
-from PIL import Image
-import json,re,sys
+import json,re,struct,sys,zlib
 r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
 # Live evidence is lazy and initially collapsed; persistent user expansion still works.
 assert "profileDetailsSection(body, T('pd_live_title', 'What is in effect right now'), false)" in h
@@ -16085,8 +16085,17 @@ for f in locales:
 symbol=h[h.index('<symbol id="asbUfoArt"'):];symbol=symbol[:symbol.index('</symbol>')]
 assert 'id="asbUfoEngravedInitials"' in symbol and symbol.count('href="#asbUfoInitials"')==3
 assert '<text id="asbUfoInitials"' in h and '>ASB</text>' in h and h.count('href="#asbUfoArt"')==8
-im=Image.open(r/'webroot/icon.png');assert im.size==(512,512) and im.mode=='RGB'
-red,green,blue=im.getpixel((0,0));assert green>red*2 and green>blue,(red,green,blue)
+png=(r/'webroot/icon.png').read_bytes()
+assert png[:8]==b'\x89PNG\r\n\x1a\n'
+w,h,depth,colour=struct.unpack('>IIBB',png[16:26]);assert (w,h,depth,colour)==(512,512,8,2)
+pos=8;compressed=[]
+while pos<len(png):
+    size=struct.unpack('>I',png[pos:pos+4])[0];kind=png[pos+4:pos+8]
+    if kind==b'IDAT': compressed.append(png[pos+8:pos+8+size])
+    pos+=12+size
+raw=zlib.decompress(b''.join(compressed));assert len(raw)>w*3
+# At x=0 every PNG row filter has zero left/up neighbours, so these are the first RGB bytes.
+red,green,blue=raw[1:4];assert green>red*2 and green>blue,(red,green,blue)
 # These vendor/network-policy writers are retired, not merely hidden from diagnostics.
 retired=('assisted_gps_enabled','gps_xtra_server','gps_xtra_server_1','gps_xtra_server_2',
          'ntp_server','ntp_server_2','ntp_server_3','ntp_server_4',
@@ -16166,8 +16175,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
-from PIL import Image
-import sys
+import struct,sys
 r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
 assert h.count('id="asbUfoArt"')==1
 assert h.count('id="asbUfoInitials"')==1 and h.count('>ASB</text>')==1
@@ -16182,7 +16190,8 @@ assert 'transform="translate(0 -.32)"' in group and 'transform="translate(0 .30)
 assert group.index('translate(0 -.32)') < group.index('translate(0 .30)') < group.index('fill="url(#asbUfoEngraving)"')
 assert '<text' not in group and 'stroke=' not in group and 'paint-order=' not in group
 assert group.count('<use ')==3
-im=Image.open(r/'webroot/icon.png');assert im.size==(512,512) and im.mode=='RGB'
+png=(r/'webroot/icon.png').read_bytes();assert png[:8]==b'\x89PNG\r\n\x1a\n'
+assert struct.unpack('>IIBB',png[16:26])==(512,512,8,2)
 print('engraved shared UFO artwork and RGB icon ok')
 PY
 echo 'PASS WebUI buildfix31: ASB is a stroke-free metallic engraving in the one shared UFO symbol and module icon'
@@ -16193,28 +16202,141 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
-from PIL import Image
-import re,sys
+import re,struct,sys
 r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
 hull=re.search(r'<linearGradient id="asbUfoHull"[^>]*>(.*?)</linearGradient>',h,re.S)
 assert hull and hull.group(1).count('<stop ')==3
 assert 'x1="48" y1="29" x2="48" y2="52"' in hull.group(0)
 for tone in ('#E3E9F1','#BECAD8','#91A3B8'):
     assert tone in hull.group(0),tone
-for tone in ('#315C50','#669582','#2B5549'):
+for tone in ('#173B32','#3F6B5A','#12342C'):
     assert tone in h,tone
 for band in ('#9498BC','#E4E3F2','#8C91B0','#555D83'):
     assert band not in hull.group(0),band
 assert '<path d="M15 36.8C30 30.6 64.8 29.8 81 36.4" fill="none" stroke="white" stroke-opacity=".48" stroke-width="1.1" stroke-linecap="round"/>' in h
 assert 'M12.2 38.2C24.6 30.9 63.5 28.6 81.7 37.1' not in h
-assert '<text id="asbUfoInitials" x="48" y="40" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="11" font-weight="800" letter-spacing=".18">ASB</text>' in h
+assert '<text id="asbUfoInitials" x="48" y="40" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="800" letter-spacing=".12">ASB</text>' in h
 assert h.count('href="#asbUfoArt"')==8 and "use.setAttribute('href', '#asbUfoArt')" in h
 symbol=h[h.index('<symbol id="asbUfoArt"'):];symbol=symbol[:symbol.index('</symbol>')]
 assert symbol.count('href="#asbUfoInitials"')==3 and 'fill="url(#asbUfoEngraving)"' in symbol
-im=Image.open(r/'webroot/icon.png');assert im.size==(512,512) and im.mode=='RGB'
+png=(r/'webroot/icon.png').read_bytes();assert png[:8]==b'\x89PNG\r\n\x1a\n'
+assert struct.unpack('>IIBB',png[16:26])==(512,512,8,2)
 print('smooth hull and larger optically centred engraving ok')
 PY
 echo 'PASS WebUI buildfix32: band-free smooth hull, thin highlight and larger ASB engraving centred above the rim'
+)
+
+t_webui_buildfix33_monitor_disclosures_and_cold_navigation() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI buildfix33: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'static disclosure/navigation/artwork contract'
+from pathlib import Path
+import re,struct,sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
+def body(sig):
+ i=h.index(sig);return h[i:h.index('\n}\n',i)+2]
+ensure=body('function liveInfoEnsure() {')
+assert '<details class="live-info-disclosure asb-disclosure" id="liveInfoDisclosure">' in ensure
+assert '<summary id="liveInfoSummary"></summary>' in ensure
+assert ensure.index('id="liveInfoDisclosure"') < ensure.index('id="liveInfoText"') < ensure.index('id="liveInfoHist"')
+explain=body('function liveInfoExplanationSet(text) {')
+assert 'fold.open = false;' in explain and "T('zy_explanation', 'Explanation')" in explain
+assert "_el('liveInfoText').textContent = value;" in explain
+assert 'const explanation = lviFill(T(txt[0], txt[1]));' in h
+assert "if (typeof liveInfoExplanationSet === 'function') liveInfoExplanationSet(explanation);" in h
+assert "if (typeof liveInfoExplanationSet === 'function') liveInfoExplanationSet(detail.text);" in h
+assert h.count("if (typeof liveInfoExplanationSet === 'function') liveInfoExplanationSet(")==2
+# All current and profile-specific LVI keys flow through this one owner.
+lvi=h[h.index('const LVI_TEXT = {'):];lvi=lvi[:lvi.index('\n};')]
+keys=re.findall(r'^\s*([a-z][a-z0-9]*):\s*\[',lvi,re.M)
+assert len(keys)==31 and len(set(keys))==31,keys
+# Drain basis paragraphs and the common battery-level note are collapsed independently.
+block=body('function liveDrainBlock(icon, label, value, basis, left, foldKey) {')
+assert "['live-drain-basis', basis]" not in block
+assert "tx.appendChild(liveDrainExplanation(basis, 'live-drain-basis', foldKey));" in block
+fold=body('function liveDrainExplanation(text, bodyClass, foldKey) {')
+assert "document.createElement('details')" in fold and "document.createElement('summary')" in fold
+assert "fold.setAttribute('data-drain-fold', foldKey);" in fold and 'body.textContent = text;' in fold
+paint=body('function liveDrainPaint() {')
+for key in ("'on'","'now'","'off'","'note'"):
+ assert key in paint,key
+assert 'openFolds' in paint and 'body.querySelectorAll(\'details[data-drain-fold]\')' in paint
+assert 'if (openFolds[fold.getAttribute(\'data-drain-fold\')]) fold.open = true;' in paint
+# Existing startup/intro work primes hidden static DOM; no new shell, worker or polling owner.
+load=body('function cfgLoad(force) {')
+assert load.index('cfgPrimeHub();') < load.index('cfgLoadFresh()')
+prime=body('function cfgPrimeHub() {')
+assert 'if (_cfgOpen || _cfgGroup || _cfgSearch) return;' in prime and 'cfgRender();' in prime
+assert 'run(' not in prime and 'setTimeout(' not in prime and 'setInterval(' not in prime
+sound=body('function asbNavSound() {')
+assert 'clearTimeout' in sound and '}, 32);' in sound and "uiSound('nav');" in sound
+for sig in ('function openLivePage() {','function closeLivePage() {','function openConfigPage() {'):
+ assert 'asbNavSound();' in body(sig),sig
+assert 'setInterval(' not in sound and 'Worker(' not in sound
+warm=body('function asbStartupWarmCaches() {')
+assert "if (typeof cfgPrimeHub === 'function') cfgPrimeHub();" in warm
+assert warm.index('cfgPrimeHub();') < warm.index('asbStartupLater(function () { return cfgLoad(); }, 0, 0);')
+# The shared artwork and regenerated bitmap carry the darker, larger engraving.
+assert 'font-size="13" font-weight="800" letter-spacing=".12">ASB</text>' in h
+for tone in ('#173B32','#3F6B5A','#12342C'): assert tone in h,tone
+assert h.count('href="#asbUfoArt"')==8 and h.count('href="#asbUfoInitials"')==3
+png=(r/'webroot/icon.png').read_bytes();assert png[:8]==b'\x89PNG\r\n\x1a\n'
+assert struct.unpack('>IIBB',png[16:26])==(512,512,8,2)
+# Zygisk: Mode directly follows Connection, both requested paragraphs have no renderer,
+# and report-style row/title/merged-subsection hairlines are not applied to this page.
+mode=body('function zygiskModeCard(d) {')
+assert "shown.id !== 'auto'" in mode and 'zy_mode_auto_desc' not in mode
+assert 'zy_mode_note' not in mode and 'if (desc.textContent) card.appendChild(desc);' in mode
+render_start=h.index('function zygiskPageRender(d, state) {')
+render=h[render_start:h.index('\nfunction ',render_start+1)]
+assert render.index('body.appendChild(st);') < render.index("mode.id = 'zy-mode'") < render.index('body.appendChild(asbPageJump([')
+for token in ('#reportPage .lgr-row + .lgr-row, #zygiskPage .lgr-row + .lgr-row',
+              'border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent)',
+              '.zy-merged-subsection { margin-top:12px; padding-top:11px; border-top:1px solid var(--border); }'):
+ assert token not in h,token
+# Infirmary: SOTER precedes System Fixes; Push and DocumentsUI remain its last two cards.
+group_start=h.index('function cfgRenderGroup(list, groupId) {')
+group=h[group_start:h.index('\nfunction ',group_start+1)]
+battery=group.index("if (section.card === 'batteryfix')")
+fixes=group.index("else if (section.card === 'systemfixes')")
+assert battery < group.index('cfgRenderSoterFixCard(list);') < fixes
+assert group.index('cfgRenderPackageFixCards(list, sectionItems);',fixes) < group.index("else if (section.card === 'junkcleanup')",fixes)
+assert "keys:['heytap_mcs','documentsui_fix'], card:'systemfixes'" in h
+print('static ok')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI buildfix33 runtime: no node'; exit 0; }
+T="$(mktemp -d)";trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(sig){const i=h.indexOf(sig);if(i<0)throw Error('missing '+sig);const j=h.indexOf('\n}\n',i);return h.slice(i,j+2)}
+const chk=(c,m)=>{if(!c)throw Error(m)};
+const nodes={liveInfoText:{},liveInfoDisclosure:{open:true,hidden:false},liveInfoSummary:{}};
+global._el=id=>nodes[id];global.T=(k,f)=>f;
+eval(grab('function liveInfoExplanationSet(text) {'));
+liveInfoExplanationSet('CPU <b>explanation</b>');
+chk(nodes.liveInfoText.textContent==='CPU <b>explanation</b>'&&!nodes.liveInfoDisclosure.open&&!nodes.liveInfoDisclosure.hidden,'tile prose did not reset to collapsed safe text');
+chk(nodes.liveInfoSummary.textContent==='Explanation','localized summary missing');
+nodes.liveInfoDisclosure.open=true;liveInfoExplanationSet('');
+chk(nodes.liveInfoDisclosure.hidden&&!nodes.liveInfoDisclosure.open,'empty data-driven prose left a dead tab');
+let timers=[],cleared=[],sounds=0;global.setTimeout=(f,ms)=>{timers.push({f,ms});return timers.length};global.clearTimeout=id=>cleared.push(id);
+global.document={hidden:false};global.uiSound=k=>{chk(k==='nav','wrong cue');sounds++};global._asbNavSoundTimer=0;
+eval(grab('function asbNavSound() {'));
+asbNavSound();asbNavSound();
+chk(timers.length===2&&timers.every(t=>t.ms===32)&&cleared.length===1,'navigation audio was not bounded/coalesced');
+chk(sounds===0,'audio still initialized in the tap task');timers[1].f();chk(sounds===1,'deferred cue never ran');
+document.hidden=true;asbNavSound();timers[2].f();chk(sounds===1,'hidden WebView played a navigation cue');
+let renders=0,loads=0;global._cfgOpen=false;global._cfgGroup=null;global._cfgSearch='';global._cfgHubSig='same';
+const list={firstChild:{}};global._el=id=>id==='cfgList'?list:null;global.cfgHubSig=()=> 'same';global.cfgRender=()=>renders++;
+eval(grab('function cfgPrimeHub() {'));
+cfgPrimeHub();chk(renders===0,'finished hidden hub was rebuilt');list.firstChild=null;cfgPrimeHub();chk(renders===1,'cold hidden hub was not primed');
+global._cfgOpen=true;list.firstChild=null;cfgPrimeHub();chk(renders===1,'visible Config was rebuilt by priming');
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "runtime: $out"
+[ "$out" = ok ] || fail "runtime: $out"
+echo 'PASS WebUI buildfix33: all Monitor prose is collapsed, drain tabs survive repaint, hidden Settings hub priming and post-tap audio scheduling, larger darker shared ASB engraving'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
