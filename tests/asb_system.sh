@@ -10570,14 +10570,14 @@ PY
 echo 'PASS Smart manual ownership: MGLRU remains explicit; scenario I/O runs only for active Smart + Auto + non-manual and receives HINT/SCREEN through the registered helper'
 )
 
-t_profile_details_collector_buildfix25() (
-# buildfix25: the active-profile explanation is a read-only projection of trusted profile
+t_profile_details_collector_buildfix26() (
+# buildfix26: the active-profile explanation is a read-only projection of trusted profile
 # intent plus the apply ledger. Exercise current, legacy and absent-ledger JSON, including
 # the per-device I/O readback trailer; never require Android sysfs on the host.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 D="$ROOT/tools/asb_profile_details.sh"
-fail() { echo "FAIL profile details collector buildfix25: $*" >&2; exit 1; }
+fail() { echo "FAIL profile details collector buildfix26: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 mkdir -p "$T/mod/profiles" "$T/state"
 cp "$ROOT/profiles/balanced.sh" "$ROOT/profiles/battery.sh" "$T/mod/profiles/"
@@ -10608,7 +10608,7 @@ assert [x['key'] for x in l['entries']]==['CPU_MIN_LITTLE','GPU_MIN_FREQ','VM_SW
 assert l['summary']['applied']==1 and l['summary']['already_set']==1 and l['summary']['unsupported']==1
 assert all(x['key']!='old_key' for x in l['entries'])
 assert isinstance(p['io'],list)
-assert all(set(x)=={'device','scheduler'} for x in p['io'])
+assert all(set(x)=={'device','active','scheduler'} for x in p['io'])
 PY
 # With no transaction marker the tool explicitly labels the bounded recent history legacy.
 grep -v '|profile|apply_begin|' "$T/ledger" > "$T/legacy"
@@ -10631,11 +10631,14 @@ if MODDIR="$T/mod" ASB_LEDGER="$T/ledger" sh "$D" stock > "$T/bad" 2>/dev/null; 
   fail 'unsupported profile returned success'
 fi
 [ "$(cat "$T/bad")" = '{"error":"unsupported_profile"}' ] || fail 'unsupported profile payload'
+grep -Fq 'case "$_io_dev" in loop*|ram*|zram*|dm-*) continue ;; esac' "$D" || fail 'virtual block filter missing'
+grep -Fq '[ -e "/sys/block/$_io_dev/device" ] || continue' "$D" || fail 'physical block-device gate missing'
+grep -Fq '{"device":"%s","active":"%s","scheduler":"%s"}' "$D" || fail 'active/raw scheduler JSON missing'
 # Opening the collector must not create state, workers or profile changes.
 find "$T/state" -mindepth 1 -print | grep . >/dev/null && fail 'collector created state'
 [ "$(cat "$T/mod/current_profile")" = smart ] || fail 'collector changed selected profile'
 grep -Eq '(^|[[:space:]])(apply_profile|asb_intent|asb_ledger_note)([[:space:]]|$)' "$D" && fail 'collector gained a writer call'
-echo 'PASS profile details collector buildfix25: valid 76-value Smart/Balanced/Battery JSON, exact transaction and legacy scopes, absent-ledger fallback, per-device I/O trailer and read-only behavior'
+echo 'PASS profile details collector buildfix26: valid 76-value Smart/Balanced/Battery JSON, exact transaction and legacy scopes, absent-ledger fallback, physical-device-only active/raw I/O evidence and read-only behavior'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

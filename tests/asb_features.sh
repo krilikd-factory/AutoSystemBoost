@@ -6535,7 +6535,29 @@ boot_waiter="$(sed -n '/while \[ "$(getprop sys.boot_completed/,/^) &/p' "$ROOT/
 grep -Fq 'asb_timeline_mark boot_completed_seen' <<< "$boot_waiter" || fail 'bounded boot_completed waiter missing'
 grep -Fq 'asb_wakeup_blocker.sh" apply auto' <<< "$boot_waiter" || fail 'late exact-name wakeup restore missing'
 grep -Fq '[ ! -f /dev/.asb/safe_mode ]' <<< "$boot_waiter" || fail 'late wakeup restore bypasses Safe mode'
-echo 'PASS wakeup blocker: split Always/screen-off policies, early/late boot restore, exact readback, fail-closed writes, Safe mode and no worker'
+# buildfix26: a first Save must persist the exact split lists, including this exact source.
+out="$(run set --always pedometer_minute_lock --sleep qcom,rx)"
+[ "$out" = 'wakeup_blocker|applied|1|unknown' ] || fail "first-try pedometer_minute_lock Save failed: $out"
+printf 'pedometer_minute_lock\n' > "$T/expected"
+cmp -s "$T/mod/config/wakeup_blocklist.conf" "$T/expected" || fail 'pedometer_minute_lock disappeared from Always policy'
+printf 'qcom,rx\n' > "$T/expected"
+cmp -s "$T/mod/config/wakeup_blocklist_sleep.conf" "$T/expected" || fail 'sleep policy was not saved on first attempt'
+out="$(run status)"
+printf '%s\n' "$out" | grep -Fqx 'wakeup_rule|saved_always|pedometer_minute_lock' || fail 'saved Always list readback missing'
+printf '%s\n' "$out" | grep -Fqx 'wakeup_rule|saved_sleep|qcom,rx' || fail 'saved sleep list readback missing'
+# A live owner gets an honest busy verdict and cannot overwrite the policy.
+mkdir "${ASB_WAKEUP_POLICY:-$T/mod/config/wakeup_blocklist.conf}.lock" 2>/dev/null || mkdir "$T/mod/config/wakeup_blocklist.conf.lock"
+printf '%s\n' "$$" > "$T/mod/config/wakeup_blocklist.conf.lock/pid"
+set +e; out="$(run set --always overwritten --sleep)"; rc=$?; set -e
+[ "$rc" -eq 75 ] && [ "$out" = 'wakeup_blocker|busy||' ] || fail "live lock owner was not busy: $rc $out"
+printf 'pedometer_minute_lock\n' > "$T/expected"
+cmp -s "$T/mod/config/wakeup_blocklist.conf" "$T/expected" || fail 'busy Save replaced policy'
+# An interrupted owner's stale PID is reclaimed, after which Save works normally.
+printf '999999\n' > "$T/mod/config/wakeup_blocklist.conf.lock/pid"
+out="$(run set --always pedometer_minute_lock --sleep qcom,rx)"
+[ "$out" = 'wakeup_blocker|applied|1|unknown' ] || fail "stale PID lock was not recovered: $out"
+[ ! -e "$T/mod/config/wakeup_blocklist.conf.lock" ] || fail 'Save left its lock directory behind'
+echo 'PASS wakeup blocker: first-try exact split Save/readback, live busy and stale-PID locking, screen-state unions, fail-closed writes, Safe mode and no worker'
 )
 
 t_wakeup_observation_runtime() (

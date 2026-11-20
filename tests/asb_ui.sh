@@ -8784,7 +8784,11 @@ set_start = h.index('async function cfgSet(key, val, ctl)')
 set_guard = h[set_start:h.index('const _fix = cfgConflictResolve', set_start)]
 assert 'kernelControlAvailability(key)' in set_guard and 'not_exposed' in set_guard and 'return;' in set_guard
 assert '/sys/kernel/asb_wakeup' not in h and 'ASB_WAKEUP_BLOCKLIST_NODE' not in h
-assert "asb_wakeup_blocker.sh') + ' set --always'" in h
+assert "const owner = 'sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh');" in h
+assert "+ ' && ' + owner + ' status'" in h
+assert 'JSON.stringify(wb.savedAlways) === JSON.stringify(always)' in h
+assert 'JSON.stringify(wb.savedSleep) === JSON.stringify(sleep)' in h
+assert 'if (applied) _wbDraft = null;' in h
 assert "kernelWakeupChipList" in h and "textContent" in h
 assert 'setInterval' not in panel
 observed_fn = panel[panel.index('function kernelWakeupObservedList'):panel.index('function cfgRenderWakeupBlockerCard')]
@@ -8795,7 +8799,7 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 131, len(new)
+assert len(new) == 132, len(new)
 assert 'kernel_wb_saved_toast' in new
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
@@ -8848,10 +8852,10 @@ observed.sources.push({name:'000',events:1,active:9,time:5,reset:false});
 if(kernelWakeupSelectSources(observed,emptyDrafts,{query:'',filter:'all',sort:'name'})[0].name!=='000'||kernelWakeupSelectSources(observed,emptyDrafts,{query:'',filter:'all',sort:'active'})[0].name!=='000')throw Error('dialog sorting failed');
 for(const n of ['NETLINK','a|b',"a'b",'!','-e'])if(!kernelWakeupValidName(n))throw Error('valid exact name rejected '+n);
 for(const n of ['','bad name','bad/name','bad\\name','é','a\nb'])if(kernelWakeupValidName(n))throw Error('unsafe name accepted '+JSON.stringify(n));
-let MD='/m',_wbDraft=null,_wbBusy=false,_kernelPanel={wakeup:wb,loading:false,controls:c},runs=[],toasts=[],refreshed=0;
-global.T=(k,f)=>f||k;global.Tcfg=(k)=>k;global.uiSound=()=>{};global.haptic=()=>{};global.toast=(m,t)=>toasts.push([m,t]);global.cfgRender=()=>{};
+let MD='/m',_wbDraft=null,_wbBusy=false,_kernelPanel={wakeup:wb,loading:false,loaded:true,seq:0,controls:c},runs=[],toasts=[],refreshed=0,nextStatus='',nextErrno=0;
+global.T=(k,f)=>f||k;global.Tcfg=(k)=>k;global.uiSound=()=>{};global.haptic=()=>{};global.toast=(m,t)=>toasts.push([m,t]);global.cfgRender=()=>{};global.kernelWakeupSourceDialogRender=()=>{};
 global.kernelWakeupVerdict=(v,n)=>v+':'+n;global.kernelPanelLoad=async()=>{refreshed++};
-global.run=async cmd=>{runs.push(cmd);return{errno:0,stdout:'wakeup_blocker|applied|2|'}};
+global.run=async cmd=>{runs.push(cmd);return{errno:nextErrno,stdout:nextStatus}};
 const nrButtons=[{disabled:false,setAttribute:function(k,v){this[k]=v;}},{disabled:false,setAttribute:function(k,v){this[k]=v;}}];
 const nrBadge={textContent:'',className:'',title:''},nrPop={hidden:false};
 const nrClasses=[];const nrRow={querySelector:function(s){return s==='.cfg-status'?nrBadge:s==='.cfg-sel-pop'?nrPop:null;},querySelectorAll:function(){return nrButtons;},classList:{add:function(c){nrClasses.push(c);}}};
@@ -8866,13 +8870,17 @@ if(nrBadge.textContent!=='1'||nrBadge.title!=='kernel: 1')throw Error('BORE card
  await cfgSet('kernel_sched_nr_migrate','stock',null);
  await cfgSet('kernel_hrtimer_migration','on',null);
  if(runs.length!==0)throw Error('unsupported/covered mutation reached the config writer before rejection');
- _wbDraft={always:['NETLINK',"a'b"],sleep:['sleep_lock']};await kernelWakeupSave(false);
- if(runs.length!==1||!runs[0].includes(" set --always 'NETLINK' 'a'\\''b' --sleep 'sleep_lock'"))throw Error('unsafe/wrong split set command '+runs[0]);
- if(_wbDraft!==null||_wbBusy||refreshed!==1||toasts[toasts.length-1][1]!=='good')throw Error('successful apply did not reconcile');
- await kernelWakeupSave(true);if(!runs[1].endsWith(' set --always --sleep'))throw Error('clear did not replace both policies with an empty set '+runs[1]);
+ _wbDraft={always:['NETLINK',"a'b"],sleep:['sleep_lock']};nextErrno=0;nextStatus="wakeup_blocker|applied|3|\nwakeup_blocker|status|node=writable\nwakeup_rule|saved_always|NETLINK\nwakeup_rule|saved_always|a'b\nwakeup_rule|saved_sleep|sleep_lock";await kernelWakeupSave(false);
+ if(runs.length!==1||!runs[0].includes(" set --always 'NETLINK' 'a'\\''b' --sleep 'sleep_lock'")||!runs[0].includes(" && sh '/m/runtime/asb_wakeup_blocker.sh' status"))throw Error('unsafe/non-transactional split set command '+runs[0]);
+ if(_wbDraft!==null||_wbBusy||refreshed!==0||toasts[toasts.length-1][1]!=='good')throw Error('successful apply did not reconcile');
+ nextStatus='wakeup_blocker|applied|0|\nwakeup_blocker|status|node=writable';await kernelWakeupSave(true);if(!runs[1].includes(' set --always --sleep &&'))throw Error('clear did not replace both policies with an empty set '+runs[1]);
  _wbDraft={always:['bad name'],sleep:[]};const before=runs.length;await kernelWakeupSave(false);if(runs.length!==before)throw Error('invalid draft reached shell');
- _wbDraft=null;_kernelPanel.wakeup=observed;observed.saved=[];observed.savedAlways=[];observed.savedSleep=[];await kernelWakeupBlockObserved('new_source','sleep');
+ _wbDraft=null;_kernelPanel.wakeup=observed;observed.saved=[];observed.savedAlways=[];observed.savedSleep=[];nextStatus='wakeup_blocker|applied|1|\nwakeup_blocker|status|node=writable\nwakeup_rule|saved_sleep|new_source';await kernelWakeupBlockObserved('new_source','sleep');
  if(!runs[runs.length-1].includes(" set --always --sleep 'new_source'"))throw Error('observed screen-off block bypassed policy owner '+runs[runs.length-1]);
+ _wbDraft={always:['keep_me'],sleep:[]};nextErrno=75;nextStatus='wakeup_blocker|busy||';await kernelWakeupSave(false);
+ if(!_wbDraft||_wbDraft.always[0]!=='keep_me'||toasts[toasts.length-1][0]!=='busy:')throw Error('busy Save destroyed draft or hid verdict');
+ nextErrno=0;nextStatus='wakeup_blocker|applied|1|\nwakeup_blocker|status|node=writable\nwakeup_rule|saved_always|different';await kernelWakeupSave(false);
+ if(!_wbDraft||_wbDraft.always[0]!=='keep_me'||!toasts[toasts.length-1][0].startsWith('readback_mismatch:'))throw Error('saved-list mismatch was accepted or destroyed draft '+JSON.stringify({draft:_wbDraft,toasts:toasts}));
  console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
@@ -9756,7 +9764,7 @@ import json, re, sys
 from pathlib import Path
 root=Path(sys.argv[1]); s=(root/'webroot/index.html').read_text(encoding='utf-8')
 for token in ('<div class="device-line" id="deviceLine">OnePlus · —</div>',
-              '<span class="status-val asb-value-pending" id="curProfile" aria-busy="true">—</span>',
+              '<button class="status-val profile-evidence-link asb-value-pending" id="curProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-busy="true" disabled>—</button>',
               '<div class="psub asb-value-pending" id="smartSubLine" aria-busy="true">—</div>',
               '<div class="pbtn pbtn-stock" data-p="stock"'):
     assert token in s, token
@@ -10349,7 +10357,7 @@ let now = 0; const performance = { now: () => now };
 let frames = [], timers = [], fits = 0;
 function requestAnimationFrame(f) { frames.push(f); }
 function setTimeout(f, ms) { timers.push({ f, at: now + ms }); }
-function _pageAnimMs() { return 220; }
+function _pageAnimMs() { return 160; }
 function asbFitPagesNow() { fits++; }
 const asbUiFrame = { request(f) { if (!frames.includes(f)) frames.push(f); } };
 JS
@@ -10363,7 +10371,7 @@ chk(fits === 0 && frames.length === 1, 'three requests did not coalesce into one
 flush(); chk(fits === 1, 'the coalesced fit did not run');
 asbNavAnimMark(); asbFitPages(); asbFitPages();
 chk(frames.length === 0 && timers.length === 1, 'a fit during a page slide was not deferred');
-tick(200); chk(fits === 1 && frames.length === 0, 'the fit ran inside the slide');
+tick(100); chk(fits === 1 && frames.length === 0, 'the fit ran inside the slide');
 tick(200); flush(); chk(fits === 2, 'the deferred fit never ran after the slide');
 let ran = 0; asbNavAnimMark(); asbAfterNavAnim(() => ran++, 30);
 tick(200); chk(ran === 0, 'after-slide work ran early'); tick(100); chk(ran === 1, 'after-slide work never ran');
@@ -10748,7 +10756,7 @@ guard=body('function zygiskGuardCard() {')
 assert "pd.open = true" in guard and 'nb.open' not in guard and 'bb.open' not in guard and 'ev.open' not in guard
 assert 'gh.open = !!(g.suggest.length || g.held.length);' in guard
 keys=('lr_nav_drain','lr_nav_smooth','lr_nav_thermal','lr_nav_zygisk','zy_nav_mode','zy_nav_auto',
-      'zy_nav_controls','zy_nav_activity','zy_nav_guard','zy_nav_art','zy_nav_apps')
+      'zy_nav_controls','zy_nav_activity','zy_nav_guard','zy_link_nav','zy_nav_art','zy_nav_apps')
 files=sorted((r/'webroot/i18n').glob('*.json')); assert len(files)==13
 for p in files:
     x=json.loads(p.read_text())
@@ -10812,7 +10820,7 @@ page.scrollTop=417;
 zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
 chk(navs().length===1,'populated state must have exactly one section map');
 const ids=body.children.filter(c=>c.id).map(c=>c.id);
-const expected=['zy-status','zy-mode','zy-auto','zy-activity','zy-engine','zy-guard','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
+const expected=['zy-status','zy-mode','zy-auto','zy-activity','zy-guard','zy-engine','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
 /* dev47: Controls live inside the Connection card, so "Connection and controls" is one card. */
 const zyStatus=body.children.find(c=>c.id==='zy-status');
@@ -10820,15 +10828,15 @@ chk(zyStatus.children.some(c=>c.id==='zy-controls'),'controls are not inside the
 chk(zyStatus.children[0]._text==='Connection and controls','merged card title missing');
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
 const nav=navs()[0], buttons=nav._asbJumpButtons;
-chk(buttons.length===9,'the populated section map lost a control');
+chk(buttons.length===10,'the populated section map lost a control');
 chk(nav.attrs.role==='navigation' && buttons.every(b=>b.attrs['aria-controls']),'navigation semantics/controlled section missing');
 chk(buttons[0].attrs['aria-current']==='location' && buttons[0].classList.contains('is-active'),'initial active section is not exposed');
-chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===9,'dock header/track did not render');
+chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===10,'dock header/track did not render');
 chk(buttons.every(b=>String(b.className).split(/\s+/).includes('asb-tab') && b.children[0].className==='asb-tab-ico' && b.children[1].className==='asb-tab-label'),'dock does not reuse the main tab structure');
 buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b._asbJumpLabel); b.onclick(); });
 chk(buttons.filter(b=>b.attrs['aria-current']==='location'&&b.classList.contains('is-active')).length===1,'active section is ambiguous after jumps');
 chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1]._asbJumpLabel,'dock header does not follow the active section');
-for (const id of ['zy-mode','zy-auto','zy-controls','zy-activity','zy-guard','zy-aot','zy-apps'])
+for (const id of ['zy-mode','zy-auto','zy-controls','zy-activity','zy-guard','zy-engine','zy-aot','zy-apps'])
   chk(_el(id) && _el(id).scrollHits===1,'jump did not reach its real section: '+id);
 /* Nav order may intentionally differ from section order. Execute the real watcher with
  * that arrangement, then verify that the bottom rule also uses rendered section order. */
@@ -10854,7 +10862,7 @@ console.log('ok');
 JS
 out="$(node "$T/render.js" "$H" 2>&1)" || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
-echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, nine working jumps, conditional report map, progressive disclosure and 13 complete locales"
+echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, ten working jumps, conditional report map, progressive disclosure and 13 complete locales"
 )
 
 
@@ -12159,7 +12167,7 @@ t_webui_soter_fix_runtime() (
 # text-only rows, no polling, 13 locales.
 # dev49: one tap runs the (now two-pass) repair; an opt-in switch drives `auto on|off`, shows
 # the state the script reads back, and says payment must be re-enabled after each reboot.
-# dev50: the card follows Battery Fix directly, before unrelated package repairs.
+# buildfix26: the card follows Battery Fix directly inside System Fixes.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 fail() { echo "FAIL webui soter fix: $*" >&2; exit 1; }
@@ -12169,7 +12177,7 @@ root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(en
 start = h.index('/* Infirmary → System Repairs → SOTER Repair (dev47).')
 end = h.index('/* Infirmary → Junk Cleanup (dev32).', start)
 b = h[start:end]
-assert "keys:['heytap_mcs','documentsui_fix'] }" in h
+assert "keys:['heytap_mcs','documentsui_fix'], card:'systemfixes' }" in h
 infirmary = h[h.index('  infirmary: ['):h.index('\n  ]', h.index('  infirmary: ['))]
 assert infirmary.index("card:'batteryfix'") < infirmary.index("id:'repairs'")
 group_start = h.index('function cfgRenderGroup(list, groupId)')
@@ -14037,7 +14045,7 @@ assert "cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', Str
 assert 'cfgLoadFresh' not in hub and 'cfgIsActive' not in hub and 'cfg-tile-bar' not in hub and 'foot.children.length' not in hub
 hub_sig = body('function cfgHubSig() {')
 assert 'cfgLoadFresh' not in hub_sig and '_cfgVals' not in hub_sig and 'cfgHubExtraSig()' in hub_sig
-assert '--page-anim-dur: 0.22s;' in s
+assert '--page-anim-dur: 0.16s;' in s
 assert 'function asbNavAnimMark() { _asbNavAnimUntil = performance.now() + _pageAnimMs() + 24; }' in s
 assert '_cfgAnimUntil = performance.now() + _pageAnimMs() + 32;' in s
 assert 'asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 16);' in s
@@ -14123,7 +14131,7 @@ console.log('ok');
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "runtime: $out"
 [ "$out" = ok ] || fail "runtime: $out"
-echo 'PASS WebUI release12: immediate undimmed Monitor entry, permanent centred Settings totals without Config dependence or bars, 220 ms navigation with bounded deferred work, simplified splash and compositor-friendly transitions'
+echo 'PASS WebUI release12: immediate undimmed Monitor entry, permanent centred Settings totals without Config dependence or bars, 160 ms navigation with bounded deferred work, simplified splash and compositor-friendly transitions'
 )
 
 t_webui_perceived_perf_buildfix17() (
@@ -14139,7 +14147,7 @@ import re,sys
 s=open(sys.argv[1],encoding='utf-8').read()
 def body(sig):
  i=s.index(sig); return s[i:s.index('\n}\n',i)+2]
-assert '--page-anim-dur: 0.22s;' in s
+assert '--page-anim-dur: 0.16s;' in s
 assert '--page-fade-in: 0.18s;' in s and '--page-fade-delay: 0.04s;' in s
 assert 'duration:180, delay:40' in s
 assert 'const LIVE_OPEN_SETTLE_MS = 240;' in s
@@ -14165,7 +14173,7 @@ for token in ('width:40px;\n  height:40px;\n  margin:0 0 3px;\n  border-radius:1
               'html.asb-fit-c2 .cfg-tile-ico { width:36px; height:36px; margin-bottom:3px; border-radius:12px; }',
               'html.asb-fit-c2 .cfg-tile-ico .tech-icon { width:22px; height:22px; }'):
  assert token in s,token
-assert 180+40 == 220 and 220+120 < 400
+assert 180+40 == 220 and 160+120 < 400
 PY
 command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI perceived performance buildfix17 runtime: no node'; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
@@ -14200,7 +14208,7 @@ console.log('ok');
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "runtime: $out"
 [ "$out" = ok ] || fail "runtime: $out"
-echo 'PASS WebUI perceived performance buildfix17: aligned 220 ms motion/deferred work, 400 ms bounded category entrance, unchanged hub DOM retention, live category/search repaint and larger icons with compact count pills in all fit tiers'
+echo 'PASS WebUI perceived performance buildfix17: aligned 160 ms motion/deferred work, 400 ms bounded category entrance, unchanged hub DOM retention, live category/search repaint and larger icons with compact count pills in all fit tiers'
 )
 
 t_webui_buildfix19_kernel_layout_and_notes() (
@@ -15792,26 +15800,101 @@ grep -q '/^verdict: / { print "      " $0 }' "$FD" || fail "report does not prin
 echo "PASS logkit sysui verdict: native, Java, other-process, low-memory, injected-code and shell settings-write cases"
 )
 
-t_webui_profile_details_buildfix25() (
-# buildfix25: active profile cards open a detailed, read-only evidence dialog; inactive
-# cards retain profile switching. Run the production functions with a small DOM/root bridge.
+t_webui_buildfix26_placement_and_motion() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+import json,sys
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
+assert "keys:['heytap_mcs','documentsui_fix'], card:'systemfixes'" in h
+assert "else if (section.card === 'systemfixes') cfgRenderSoterFixCard(list);" in h
+assert h.count('cfgRenderSoterFixCard(list);')==1
+start=h.index('function zygiskPageRender(d, state) {')
+zy=h[start:h.index('\n}\n',start)+2]
+assert zy.index("guard.id = 'zy-guard'") < zy.index("engine.id = 'zy-engine'") < zy.index("lsp.id = 'zy-lsp'")
+assert "['zy-engine', T('zy_link_nav', 'Unified engine')]" in h
+assert '--page-anim-dur: 0.16s;' in h and 'return 160;\n}\n/* Read once' in h
+assert 'border-bottom:1px solid rgba(95,240,190,.12); backdrop-filter:none;' in h
+open_start=h.index('function openConfigPage() {')
+open_body=h[open_start:h.index('\n}\n',open_start)+2]
+assert open_body.count('requestAnimationFrame(')==1 and 'if (_cfgOpen) p.classList.add(\'open\');' in open_body
+for p in (r/'webroot/i18n').glob('*.json'):
+ d=json.loads(p.read_text())
+ assert all(d.get(k) for k in ('pd_open','zy_link_nav','kernel_wb_busy')),(p.name,'missing locale')
+ assert 'prof_inspect_hint' not in d,p.name
+assert json.loads((r/'webroot/i18n/en.json').read_text())['cfg_inf_section_repairs']=='System Fixes'
+print('PASS WebUI buildfix26 placement/motion: Soter in System Fixes, engine adjacent to LSPosed, one-frame 160 ms navigation, no modal blur, complete locales')
+PY
+)
+
+t_webui_home_meter_freshness_buildfix26() (
+# Fresh Monitor meter data updates the shared snapshot and repaints a visible Home;
+# an open Monitor does not cause a second hidden-Home layout pass.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
-fail() { echo "FAIL WebUI profile details buildfix25: $*" >&2; exit 1; }
+fail() { echo "FAIL WebUI Home meter freshness buildfix26: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source contract'
+import sys
+h=open(sys.argv[1],encoding='utf-8').read()
+a=h.index('function lvMeterApply(text, cached) {'); b=h.index('\n}\n',a)+2
+f=h[a:b]
+assert "_lvMonCache.meter = String(text || '')" in f
+assert "!document.body.classList.contains('live-active')) homeMeterPaint();" in f
+assert 'setInterval(' not in f and 'Worker(' not in f
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI Home meter freshness runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const a=h.indexOf('function lvMeterApply(text, cached) {'),b=h.indexOf('\n}\n',a)+2;
+let active=false,saves=0,paints=0;
+global._lvMeter={};global._lvGovOff={};global._lvMonCache={meter:''};
+global.lvMeterParse=()=>({cur:'4.1',p:{smart:'x'}});global.lvGovOffParse=()=>({by:'test'});
+global.lvBootParse=()=>({boot:1});global.lvNightParse=()=>({night:1});
+global.lvMonCacheSave=()=>saves++;global.homeMeterPaint=()=>paints++;
+global.document={body:{classList:{contains:x=>x==='live-active'&&active}}};
+eval(h.slice(a,b));
+lvMeterApply('fresh---off---boot---night',false);
+if(_lvMonCache.meter!=='fresh---off---boot---night'||saves!==1||paints!==1||_lvMeter.cur!=='4.1')throw Error('fresh snapshot did not reach Home/cache');
+active=true;lvMeterApply('monitor---off---boot---night',false);
+if(saves!==2||paints!==1)throw Error('Monitor entry repainted hidden Home or lost cache');
+active=false;lvMeterApply('cached---off---boot---night',true);
+if(saves!==2||paints!==2||_lvMonCache.meter!=='monitor---off---boot---night')throw Error('cached restore rewrote freshness cache or skipped Home');
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI Home meter freshness buildfix26: one shared meter snapshot, visible-Home repaint, no hidden-Home pass or polling worker'
+)
+
+t_webui_profile_details_buildfix26() (
+# buildfix26: evidence has one entry point (the header pill), long sections are lazy
+# disclosures, and the user ledger hides only unsupported/not-writable noise.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI profile details buildfix26: $*" >&2; exit 1; }
 python3 - "$H" <<'PY' || fail 'accessibility/navigation source contract'
-import re,sys
+import sys
 h=open(sys.argv[1],encoding='utf-8').read()
 for p in ('smart','performance','balanced','battery'):
-    assert f'onclick="profileCardTap(\'{p}\')"' in h,p
+    assert f'onclick="go(\'{p}\')"' in h,p
     assert f'onkeydown="profileCardKey(event,\'{p}\')"' in h,p
+    assert f"profileCardTap('{p}')" not in h,p
+assert 'id="curProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)"' in h
+assert 'prof_inspect_hint' not in h and 'function profileCardTap(' not in h
 assert '{ id: \'profileDetailsModal\', close: function () { profileDetailsClose(); } }' in h
 block=h[h.index('function profileDetailsNode('):h.index('\nasync function go(p)')]
 assert 'innerHTML' not in block[block.index('async function profileDetailsRefresh()'):], 'dynamic evidence uses HTML interpolation'
 assert "body.replaceChildren(profileDetailsNode('div', 'profile-details-empty'" in block
 assert 'ticket !== _profileDetails.request' in block
+assert 'function profileDetailsSection(parent, title, open, build)' in block
+assert "row.result === 'unsupported' || row.result === 'not_writable'" in block
+assert "String(row.domain || '') + '\\n' + String(row.key || '')" in block
 PY
-command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI profile details buildfix25 runtime: no node'; exit 0; }
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI profile details buildfix26 runtime: no node'; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
@@ -15819,53 +15902,65 @@ const chk=(c,m)=>{if(!c)throw Error(m)};
 const nodes={};
 class Classes{constructor(el){this.el=el;this.s=new Set()}add(...x){x.forEach(v=>this.s.add(v));this.sync()}remove(...x){x.forEach(v=>this.s.delete(v));this.sync()}contains(x){return this.s.has(x)}toggle(x,on){if(on===undefined)on=!this.s.has(x);on?this.s.add(x):this.s.delete(x);this.sync()}sync(){this.el._class=[...this.s].join(' ')}}
 class E{
- constructor(tag,cls,text){this.tag=tag;this.children=[];this.attrs={};this.dataset={};this.style={};this.hidden=false;this._text=text||'';this._class='';this.classList=new Classes(this);if(cls)this.className=cls;if(text!==undefined)this.textContent=text;}
+ constructor(tag,cls,text){this.tag=tag;this.children=[];this.attrs={};this.dataset={};this.style={};this.hidden=false;this.open=false;this._text=text||'';this._class='';this.classList=new Classes(this);if(cls)this.className=cls;if(text!==undefined)this.textContent=text;}
  set className(v){this._class=v||'';this.classList.s=new Set(this._class.split(/\s+/).filter(Boolean))}get className(){return this._class}
  set id(v){this._id=v;nodes[v]=this}get id(){return this._id||''}
  set textContent(v){this._text=String(v);this.children=[]}get textContent(){return this.children.length?this.children.map(x=>x.textContent).join(''):this._text}
- set innerHTML(v){this._html=v;for(const m of v.matchAll(/id="([^"]+)"/g)){const n=new E(m[1].includes('Body')?'div':'div');n.id=m[1];}}
+ set innerHTML(v){this._html=v;for(const m of v.matchAll(/id="([^"]+)"/g)){const n=new E('div');n.id=m[1];}}
  appendChild(x){this.children.push(x);if(x.id)nodes[x.id]=x;return x}
  replaceChildren(...x){this.children=x}
  setAttribute(k,v){this.attrs[k]=String(v)}
  addEventListener(k,f){this['on'+k]=f}
  focus(){this.focused=true}
 }
-const cards={};
-for(const p of ['smart','performance','balanced','battery']){const e=new E('div','pbtn');e.dataset.p=p;cards[p]=e;}
-cards.smart.classList.add('on');
-global.document={createElement:t=>new E(t),body:new E('body'),querySelector:s=>{const m=s.match(/^\[data-p="([^"]+)"\]$/);return m?cards[m[1]]:null;}};
+const header=new E('button');header.id='curProfile';
+global.document={createElement:t=>new E(t),body:new E('body'),querySelector:()=>null};
 global._el=id=>nodes[id]||null;global.T=(k,f)=>f||k;global.MD='/module';global.navSync=()=>{};
 global.setTimeout=f=>{f();return 1};
-let switched=[],opened=0;global.go=p=>switched.push(p);
-const originalOpen=()=>{};
+let switched=[];global.go=p=>switched.push(p);
 const start=h.indexOf('let switching = false;\nconst _profileDetails'),end=h.indexOf('\nasync function go(p)',start);
 chk(start>=0&&end>start,'production dialog block missing');eval(h.slice(start,end));
-const details={schema:1,profile:'smart',intent_base:'balanced',epoch:410,intent:[{key:'CPU_MIN_LITTLE',value:'300000'},{key:'WALT_IDLE',value:'1'}],io:[{device:'sda',scheduler:'none [mq-deadline] adios'}],ledger:{scope:'current_profile_transaction',shown:3,summary:{applied:1,already_set:1,unsupported:1,not_writable:0,readback_mismatch:0,lease_denied:0,safety_veto:0,deferred:0},entries:[{ts:'201',domain:'cpu',key:'<img src=x onerror=alert(1)>',requested:'<b>300000</b>',previous:'0',readback:'<b>300000</b>',result:'applied',reason:'epoch=410'},{ts:'202',domain:'vm',key:'VM_SWAPPINESS',requested:'120',previous:'120',readback:'120',result:'already_set',reason:'same'},{ts:'203',domain:'gpu',key:'GPU_MIN_FREQ',requested:'0',previous:'0',readback:'',result:'unsupported',reason:'not exposed'}]}};
+const details={schema:1,profile:'smart',intent_base:'balanced',epoch:410,intent:[{key:'CPU_MIN_LITTLE',value:'300000'},{key:'WALT_IDLE',value:'1'}],io:[{device:'sda',active:'mq-deadline',scheduler:'none [mq-deadline] adios'}],ledger:{scope:'current_profile_transaction',shown:6,summary:{applied:1,already_set:1,unsupported:1,not_writable:1,readback_mismatch:1,lease_denied:0,safety_veto:0,deferred:0},entries:[
+ {ts:'200',domain:'cpu',key:'DUP',requested:'1',previous:'0',readback:'1',result:'applied',reason:'old'},
+ {ts:'201',domain:'cpu',key:'<img src=x onerror=alert(1)>',requested:'<b>300000</b>',previous:'0',readback:'<b>300000</b>',result:'applied',reason:'epoch=410'},
+ {ts:'202',domain:'vm',key:'VM_SWAPPINESS',requested:'120',previous:'120',readback:'120',result:'already_set',reason:'same'},
+ {ts:'203',domain:'gpu',key:'GPU_MIN_FREQ',requested:'0',previous:'0',readback:'',result:'unsupported',reason:'not exposed'},
+ {ts:'204',domain:'gpu',key:'GPU_MAX_FREQ',requested:'0',previous:'0',readback:'',result:'not_writable',reason:'read only'},
+ {ts:'205',domain:'cpu',key:'DUP',requested:'2',previous:'1',readback:'0',result:'readback_mismatch',reason:'latest'}
+]}};
 const effective={profile:{cap_owner:'smart governor'},cpu_min_policy:{strategy:'bounds',fsm_state:'LIGHT_IDLE'},thermal:{runtime_floor:'vendor'},energy_policy:{thermal_budget_stage:'normal',thermal_budget_reason:'within envelope'},writer_health:{applied:3,failures:0},config_health:'ok',network:{congestion_live:'bbr',qdisc_live:'fq'}};
 let commands=[],mode='ok',deferred=[];
 global.run=cmd=>{commands.push(cmd);if(mode==='defer')return new Promise(resolve=>deferred.push(()=>resolve({errno:0,stdout:cmd.includes('asb_profile_details')?JSON.stringify(details):JSON.stringify(effective),stderr:''})));if(mode==='error'&&cmd.includes('asb_profile_details'))return Promise.resolve({errno:1,stdout:'',stderr:'missing'});return Promise.resolve({errno:0,stdout:cmd.includes('asb_profile_details')?JSON.stringify(details):JSON.stringify(effective),stderr:''});};
 const flush=()=>new Promise(r=>setImmediate(()=>setImmediate(r)));
 function all(root,pred,out=[]){if(pred(root))out.push(root);for(const c of root.children||[])all(c,pred,out);return out}
+function disclosure(text){return all(nodes.profileDetailsBody,n=>n.tag==='details'&&n.children[0]&&n.children[0].textContent===text)[0]}
 (async()=>{
- profileCardTap('smart');await flush();opened++;
- chk(!nodes.profileDetailsModal.hidden&&nodes.profileDetailsModal.attrs['aria-hidden']==='false','active card did not open dialog');
- chk(commands.length===2&&commands[0]==='sh /module/tools/asb_profile_details.sh smart'&&commands[1]==='sh /module/tools/asb_effective_policy.sh','dialog issued a non-read-only or unexpected root command: '+commands);
+ profileDetailsOpen('smart');await flush();
+ chk(!nodes.profileDetailsModal.hidden&&nodes.profileDetailsModal.attrs['aria-hidden']==='false','header entry point did not open dialog');
+ chk(commands.length===2&&commands[0]==='sh /module/tools/asb_profile_details.sh smart'&&commands[1]==='sh /module/tools/asb_effective_policy.sh','dialog issued an unexpected command: '+commands);
  chk(nodes.profileDetailsClose.focused,'close control did not receive initial focus');
+ chk(all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry')).length===0,'closed ledger eagerly mounted rows');
+ chk(nodes.profileDetailsBody.textContent.includes('mq-deadline'),'separate active I/O scheduler missing');
+ const intent=disclosure('Profile blueprint · device-specific values'),ledger=disclosure('Actual write/readback ledger');
+ chk(intent&&!intent.open&&ledger&&!ledger.open,'long sections are not collapsed initially');
+ ledger.open=true;ledger.ontoggle();
  let entries=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry'));
- chk(entries.length===3,'all ledger rows not rendered');
+ chk(entries.length===3,'deduplicated user ledger should contain three actionable rows, got '+entries.length);
+ chk(!nodes.profileDetailsBody.textContent.includes('not exposed')&&!nodes.profileDetailsBody.textContent.includes('read only'),'unsupported/not-writable noise leaked into user ledger');
+ chk(nodes.profileDetailsBody.textContent.includes('readback_mismatch'),'real mismatch was hidden');
  chk(nodes.profileDetailsBody.textContent.includes('<img src=x onerror=alert(1)>')&&nodes.profileDetailsBody.textContent.includes('<b>300000</b>'),'untrusted evidence text lost');
  chk(all(nodes.profileDetailsBody,n=>n.tag==='img').length===0,'device evidence became an HTML element');
- const filters=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-filter'));
- chk(filters.length===3,'ledger filters missing');filters[1].onclick();entries=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry'));chk(entries.length===2,'confirmed filter');
- filters[2].onclick();entries=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry'));chk(entries.length===1&&entries[0].textContent.includes('unsupported'),'attention filter');
- profileDetailsClose();chk(nodes.profileDetailsModal.hidden&&cards.smart.focused,'close/navigation focus restore');
- profileCardTap('performance');chk(switched.length===1&&switched[0]==='performance','inactive card stopped switching profiles');
- let prevented=0;profileCardKey({key:'Enter',preventDefault(){prevented++}},'performance');chk(prevented===1&&switched.length===2,'Enter key behavior');
- profileCardKey({key:' ',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===3,'Space key behavior');
- profileCardKey({key:'Escape',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===3,'unrelated key activated profile');
- cards.balanced.classList.add('ld');profileCardTap('balanced');chk(switched.length===3,'loading card allowed duplicate action');cards.balanced.classList.remove('ld');
+ let filters=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-filter'));
+ chk(filters.length===3,'ledger filters missing');filters[1].onclick();
+ entries=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry'));chk(entries.length===2,'confirmed filter');
+ chk(disclosure('Actual write/readback ledger').open,'filter collapsed the ledger disclosure');
+ filters=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-filter'));filters[2].onclick();
+ entries=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry'));chk(entries.length===1&&entries[0].textContent.includes('readback_mismatch'),'attention filter');
+ profileDetailsClose();chk(nodes.profileDetailsModal.hidden&&header.focused,'close did not restore header focus');
+ let prevented=0;profileCardKey({key:'Enter',preventDefault(){prevented++}},'performance');chk(prevented===1&&switched.length===1&&switched[0]==='performance','Enter key behavior');
+ profileCardKey({key:' ',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===2,'Space key behavior');
+ profileCardKey({key:'Escape',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===2,'unrelated key activated profile');
  mode='error';profileDetailsOpen('smart');await flush();chk(nodes.profileDetailsBody.textContent.includes('No setting was changed'),'collector error path not honest');profileDetailsClose();
- // A response belonging to a closed dialog must not repaint or reopen it.
  mode='defer';profileDetailsOpen('smart');profileDetailsClose();deferred.shift()();await flush();deferred.shift()();await flush();
  chk(nodes.profileDetailsModal.hidden&&all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry')).length===0,'stale async response repainted closed dialog');
  chk(commands.every(c=>c==='sh /module/tools/asb_effective_policy.sh'||/^sh \/module\/tools\/asb_profile_details\.sh (smart|performance|balanced|battery)$/.test(c)),'write command leaked into open/refresh');
@@ -15874,7 +15969,7 @@ function all(root,pred,out=[]){if(pred(root))out.push(root);for(const c of root.
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS WebUI profile details buildfix25: active/inactive cards, Enter/Space, two read-only collectors, safe text rendering, ledger filters, error/stale-response and close/focus behavior'
+echo 'PASS WebUI profile details buildfix26: header-only evidence, lazy persistent disclosures, physical I/O active scheduler, deduplicated/filter-hygienic ledger, safe text and stale-response handling'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
