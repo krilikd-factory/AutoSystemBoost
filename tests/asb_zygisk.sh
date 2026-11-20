@@ -1500,6 +1500,8 @@ assert page.index("const zyOn = deviceVal(d, 'zygisk_observer', 'enabled') !== '
 assert page.index('const modeCard = zygiskModeCard(d);') < page.index('body.appendChild(zygiskOffCard());')
 assert page.index('const controls = zygiskControlsCard(d, true);') < page.index('const modeCard = zygiskModeCard(d);') < page.index('st.appendChild(mode);') < page.index('const automatic = zygiskAutoCard(d);')
 assert "mode.className = 'zy-merged-subsection'" in page and 'body.appendChild(mode);' not in page
+assert "lsp.id = 'zy-lsp'" in page and 'engine.appendChild(lsp); body.appendChild(engine);' in page
+assert "['zy-lsp', T('zy_nav_lsp'" not in page
 assert "st.appendChild(controls);" in page and "T('zy_sec_link_controls', 'Connection and controls')" in page, 'controls are not merged into the Connection card'
 assert "zygisk_enabled:'zygisk_master'" in source, 'master still reuses Connection evidence glyph'
 assert "logReportSec(T('zy_sec_mode', 'Mode'), 'zygisk_mode')" in source, 'Mode still reuses Controls glyph'
@@ -1803,7 +1805,7 @@ CPP
   grep -q 'runtime/asb_zygisk_link.sh' "$ROOT/.github/workflows/build-test.yml" && grep -q 'runtime/asb_zygisk_link.sh' "$ROOT/.github/workflows/build-release.yml" || fail 'not in the workflow file lists'
   grep -q 'grep -qxF "$1" "$LSPMOD"' "$ROOT/runtime/asb_zygisk_guard.sh" || fail 'guard protection missing'
   grep -q 'link_class :' "$ROOT/tools/asb_diag.sh" && cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'asbdiag does not show it'
-  grep -Fq "const engine = zygiskLinkCard(); engine.id = 'zy-engine'; body.appendChild(engine);" "$ROOT/webroot/index.html" || fail 'the Zygisk page does not show it'
+  grep -Fq "engine.appendChild(lsp); body.appendChild(engine);" "$ROOT/webroot/index.html" || fail 'the Zygisk page does not show it'
   echo 'PASS zygisk link: classes from LSPosed scope and measured cold starts, accepted by the native parser, written only on change, withdrawn with the lift or safe mode, LSPosed module apps protected from the guard, per-app evidence'
 )
 

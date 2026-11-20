@@ -4382,6 +4382,9 @@ EOF
 cat > "$T/bin/pm" <<'EOF'
 #!/bin/sh
 printf 'pm %s\n' "$*" >> "$BINDER_LOG"
+case "$*" in
+  'bg-dexopt-job') [ "${PM_BG_JOB:-fail}" = success ] && exit 0 ;;
+esac
 echo 'pm: Failure calling service package: Failed transaction (2147483646)'
 exit 1
 EOF
@@ -4399,6 +4402,16 @@ st | grep '^err_text=.*Failed transaction (2147483646)' >/dev/null || f "Binder 
 : > "$BINDER_LOG"
 PATH="$T/bin:$PATH" BG_JOB=fail ASB_BFIX_NO_BGJOB=0 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_binder_pkgs" sh "$A" run >/dev/null
 [ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = refused/3/0/3 ] || f "rejected background recovery was not reported as refused: $(st)"
+: > "$BINDER_LOG"
+PATH="$T/bin:$PATH" BG_JOB=fail PM_BG_JOB=success ASB_BFIX_NO_BGJOB=0 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_binder_pkgs" sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = scheduled/3/0/3 ] || f "pm background recovery did not recover rejected cmd scheduling: $(st)"
+[ "$(grep -c '^cmd package bg-dexopt-job$' "$BINDER_LOG")" = 1 ] || f "cmd background recovery was not tried first"
+[ "$(grep -c '^pm bg-dexopt-job$' "$BINDER_LOG")" = 1 ] || f "pm background recovery was not tried exactly once"
+[ "$(grep -c 'compile .* -a' "$BINDER_LOG")" = 0 ] || f "pm Binder recovery used aggregate compile"
+: > "$BINDER_LOG"
+PATH="$T/bin:$PATH" BG_JOB=fail PM_BG_JOB=fail ASB_BFIX_NO_BGJOB=0 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_binder_pkgs" sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = refused/3/0/3 ] || f "rejected background recovery was not reported as refused: $(st)"
+[ "$(grep -c '^pm bg-dexopt-job$' "$BINDER_LOG")" = 1 ] || f "both standard background channels were not attempted"
 [ "$(grep -c 'compile .* -a' "$BINDER_LOG")" = 0 ] || f "failed Binder recovery used aggregate compile"
 : > "$BINDER_LOG"
 PATH="$T/bin:$PATH" ASB_BFIX_NO_BGJOB=1 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='p.good p.bad1 p.bad2 p.bad3 p.bad4 p.bad5' sh "$A" run >/dev/null

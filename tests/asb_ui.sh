@@ -1650,17 +1650,18 @@ src='\n'.join([body,const('_lvMeter'),const('_lvGovOff'),const('_lvDrain'),const
  fn('lvBootParse'),fn('lvBootOnFigure'),fn('lvNightParse'),fn('lvMeterParse'),fn('lvDurDHM'),fn('lvPct'),fn('lvOffFigure'),
  fn('lvNightFresh'),fn('lvNightFigure'),fn('lvProfileNightFigure'),fn('lvProfileOnFigure'),fn('lvOnFigure'),fn('lvPrimaryOffFigure'),fn('lvMeterHasOn'),fn('lvMeterPaint'),fn('lvEtaFmt'),fn('lvEtaPaint'),fn('homeOffFigure'),fn('homeMeterPaint'),r"""
 let bad=0;function chk(c,m){if(!c){bad=1;console.log('FAIL '+m)}}
+const testNowDate=new Date();testNowDate.setHours(12,0,0,0);const testNow=Math.floor(testNowDate.getTime()/1000);Date.now=()=>testNow*1000;
 const parsed=lvMeterParse('smart 3600 500 14400 200 1 50 14400 1 500 3600 10 50 14400 10\ncurrent smart\n');
 chk(parsed.p.smart.onLast===500&&parsed.p.smart.onLastS===3600&&parsed.p.smart.nightLastS===14400,'15-field parser');
 _lvMeter.p=parsed.p;_lvMeter.cur='battery';_lvMeter.boot=lvBootParse('abc 7200 10000 1000 0 0 0');
-const nightNow=Math.floor(Date.now()/1000);_lvMeter.night=lvNightParse('25 14400 '+(nightNow-3600));
+const nightNow=testNow;_lvMeter.night=lvNightParse('25 14400 '+(nightNow-3600));
 _lvMeter.p.battery={on:100,onMin:60,off:80,offN:2,offS:20000,offLast:0,offLastS:0,offLastAt:0,onLast:120,onLastS:3600,onLastAt:20,nightLast:40,nightLastS:18000,nightLastAt:nightNow-1800};
 homeMeterPaint();
-chk(boxes[0].textContent==='5.0%/h0.25%/h','active Home uses boot and last night despite stale meter current: '+boxes[0].textContent);
+chk(boxes[0].textContent==='50.0%/h0.25%/h','active Home uses the mature latest profile sample and last night: '+boxes[0].textContent);
 chk(boxes[1].textContent==='12.0%/h0.40%/h','inactive Home uses only its own latest session and night: '+boxes[1].textContent);
 chk(boxes.every(b=>!b.children.some(c=>c.className==='pmeta-scope')),'Home cards do not create visible scope labels');
 _lvEta.cap=60;lvMeterPaint('smart');
-chk(els.bnDrain.textContent==='5.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on','selected active uses boot despite stale meter current: '+els.bnDrain.textContent);
+chk(els.bnDrain.textContent==='50.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on','selected active prefers its mature profile sample: '+els.bnDrain.textContent);
 chk(els.bnDrainOff.textContent==='0.25%/h'&&els.bnDrainOffLabel.textContent==='Screen off','active last night');
 /* Field regression: a stale shared 2.83 %/h record must not hide the active profile's
  * newer 0.20 %/h night. An older-than-latest-morning record is not "last night" at all. */
@@ -1669,23 +1670,23 @@ _lvMeter.p.smart.nightLast=20;_lvMeter.p.smart.nightLastS=18000;_lvMeter.p.smart
 lvMeterPaint('smart');
 chk(els.bnDrainOff.textContent==='0.20%/h','newer profile night replaces stale shared 2.83: '+els.bnDrainOff.textContent);
 homeMeterPaint();
-chk(boxes[0].textContent==='5.0%/h0.20%/h','Home also chooses the newer 0.20 profile night: '+boxes[0].textContent);
+chk(boxes[0].textContent==='50.0%/h0.20%/h','Home also chooses the newer 0.20 profile night: '+boxes[0].textContent);
 chk(lvNightFresh(nightNow-1800,nightNow*1000)&&!lvNightFresh(1,nightNow*1000),'calendar freshness rejects an old saved night');
 _lvMeter.night=lvNightParse('25 14400 '+(nightNow-3600));_lvMeter.p.smart.nightLastAt=10;
 lvMeterPaint('battery');
 chk(els.bnDrain.textContent==='12.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on','inactive own latest: '+els.bnDrain.textContent);
 chk(els.bnDrainOff.textContent==='0.40%/h'&&els.bnDrainOffLabel.textContent==='Screen off','inactive own night');
-chk(els.liveEtaOn.textContent==='12h 00m','ETA stays bound to the selected active profile while an inactive comparison is painted: '+els.liveEtaOn.textContent);
+chk(els.liveEtaOn.textContent==='1h 12m','ETA stays bound to the selected active profile while an inactive comparison is painted: '+els.liveEtaOn.textContent);
 _selectedProfile='battery';lvMeterPaint('battery');
-chk(els.bnDrain.textContent==='5.0%/h'&&els.liveEtaOn.textContent==='12h 00m','newly selected profile switches to active boot data');
+chk(els.bnDrain.textContent==='12.0%/h'&&els.liveEtaOn.textContent==='5h 00m','newly selected profile keeps its own mature sample: '+els.bnDrain.textContent+' '+els.liveEtaOn.textContent);
 _selectedProfile='smart';_lvMeter.p.battery.nightLastS=0;lvMeterPaint('battery');
 chk(els.bnDrainOff.textContent==='0.80%/h'&&els.bnDrainOffLabel.textContent==='Screen off','inactive aggregate fallback is labelled');
 chk(els.bnDrainOff.textContent!=='0.25%/h','inactive borrowed active global night');
-_lvMeter.cur='';_lvMeter.boot=lvBootParse('abc 3600 10000 0 0 0 0');lvMeterPaint('smart');
+_lvMeter.cur='';_lvMeter.p.smart.on=0;_lvMeter.p.smart.onLastS=0;_lvMeter.boot=lvBootParse('abc 3600 10000 0 0 0 0');lvMeterPaint('smart');
 chk(els.bnDrain.textContent==='<10.0%/h','zero-step since-boot must be an upper bound even with empty meter current: '+els.bnDrain.textContent);
 homeMeterPaint();
 chk(boxes[0].textContent==='<10.0%/h0.25%/h','active Home keeps boot ownership with empty meter current: '+boxes[0].textContent);
-_lvMeter.p.battery.onLast=0;lvMeterPaint('battery');
+_lvMeter.p.battery.on=0;_lvMeter.p.battery.onLast=0;lvMeterPaint('battery');
 chk(els.bnDrain.textContent==='<10.0%/h','zero-step profile latest must be an upper bound: '+els.bnDrain.textContent);
 if(bad)process.exit(1);console.log('ok');
 """])
@@ -7556,7 +7557,7 @@ keys = {
  'inf_advice_finished':('{applied}','{failed}','{skipped}'),
  'inf_advice_result_applied':(), 'inf_advice_result_failed':(),
  'inf_advice_result_changed':(), 'inf_advice_result_pending':(),
- 'bfx_art_partial':('{ok}','{fail}','{left}'), 'bfx_art_binder':('{err}',)
+ 'bfx_art_partial':('{ok}','{fail}','{left}'), 'bfx_art_binder':()
 }
 for p in sorted((Path(sys.argv[1]).parent/'i18n').glob('*.json')):
  d=json.loads(p.read_text(encoding='utf-8'))
@@ -7719,7 +7720,7 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
   await paint('eligible=1 reason=- level=100 charging=1 reset=none compile=refused phase=refused total=560 done=12 ok=0 fail=12 cur=- started=1000 finished=1010' + tail);
   chk(/Android said: no reason given$/.test(step('bfxStepArt').text), 'a refusal without output has no fallback');
   await paint(B + 'reset=pending compile=refused phase=refused total=560 done=1 ok=0 fail=1 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
-  chk(/repeatedly rejected both package-scoped compile calls/.test(step('bfxStepArt').text) && /no all-package fallback or ART\/Dalvik cleanup was used/.test(step('bfxStepArt').text) && /unprocessed apps were not counted as compiled/.test(step('bfxStepArt').text), 'Binder refusal does not describe the bounded package-scoped path: ' + step('bfxStepArt').text);
+  chk(/rejected immediate compilation and background optimisation/.test(step('bfxStepArt').text) && /No unprocessed app is counted as compiled/.test(step('bfxStepArt').text) && !/Failed transaction|2147483646|Android said/.test(step('bfxStepArt').text), 'Binder refusal exposes raw framework errors or fabricates completion: ' + step('bfxStepArt').text);
 
   await paint(B + 'reset=pending compile=scheduled phase=scheduled total=560 done=1 ok=0 fail=0 cur=- started=1000 finished=1002' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-wait' && /background optimisation job was started/.test(step('bfxStepArt').text) && /does not confirm speed-profile/.test(step('bfxStepArt').text), 'background scheduling was presented as verified compilation: ' + step('bfxStepArt').text);
@@ -7852,7 +7853,7 @@ global.asbFirstFrameMark = () => {};
 global._pageAnimMs = () => 320;
 const parse = () => { document.readyState = 'interactive'; barParsed = true; dcl.splice(0).forEach(f => f()); };
 
-eval(grab('var _asbNavAnimUntil = 0;', 'function asbFitPagesNow() {'));
+eval(grab('var _asbNavAnimUntil = 0,', 'function asbFitPagesNow() {'));
 let fits = [];
 global.asbFitPagesNow = () => { fits.push({ t: now, bar: !!document.querySelector('.asb-tabbar'), pending: rootCls.has('asb-home-pending') }); events.push('fit'); };
 eval(grab('let _asbHomeRevealed = false;', '// ── localized boot:'));
@@ -10365,7 +10366,7 @@ function _pageAnimMs() { return 160; }
 function asbFitPagesNow() { fits++; }
 const asbUiFrame = { request(f) { if (!frames.includes(f)) frames.push(f); } };
 JS
-  sed -n '/^var _asbNavAnimUntil = 0;/p; /^function asbNavAnimMark(/p; /^function asbAfterNavAnim(/,/^}/p; /^function asbFitPages(/,/^}/p' "$H"
+  sed -n '/^var _asbNavAnimUntil = 0,/p; /^function asbNavAnimMark(/,/^}/p; /^function asbAfterNavAnim(/,/^}/p; /^function asbFitPages(/,/^}/p' "$H"
   cat <<'JS'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const flush = () => { const f = frames; frames = []; f.forEach(x => x()); };
@@ -10374,7 +10375,7 @@ asbFitPages(); asbFitPages(); asbFitPages();
 chk(fits === 0 && frames.length === 1, 'three requests did not coalesce into one frame');
 flush(); chk(fits === 1, 'the coalesced fit did not run');
 asbNavAnimMark(); asbFitPages(); asbFitPages();
-chk(frames.length === 0 && timers.length === 1, 'a fit during a page slide was not deferred');
+chk(frames.length === 0 && timers.length === 2, 'a fit during a page slide was not deferred');
 tick(100); chk(fits === 1 && frames.length === 0, 'the fit ran inside the slide');
 tick(200); flush(); chk(fits === 2, 'the deferred fit never ran after the slide');
 let ran = 0; asbNavAnimMark(); asbAfterNavAnim(() => ran++, 30);
@@ -10751,8 +10752,7 @@ for token in ('#reportPage .logo-c', '#zygiskPage .logo-c', 'zoom: calc(1 / var(
     assert token not in h, 'drill-in header has independent scaling: ' + token
 report=body('function logReportAppendAnalysis(body, d, analysis) {')
 assert report.index('body.appendChild(asbPageJump(') < report.index('const brief = logReportBrief')
-for token in ("d.sections.drain || d.sections.cover || d.sections.night", "d.sections.jank || d.japps.length",
-              "d.sections.thermal || d.sections.throttle || d.sections.heat", "d.sections.zygisk || d.sections.zygov"):
+for token in ("d.sections.drain || d.sections.cover || d.sections.night", "['lgr-summary'", "['lgr-actions'", "['lgr-details'"):
     assert token in report, token
 link=body('function zygiskLinkCard() {')
 assert "document.createElement('details')" in link and 'box.open' not in link
@@ -10825,7 +10825,7 @@ page.scrollTop=417;
 zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
 chk(navs().length===1,'populated state must have exactly one section map');
 const ids=body.children.filter(c=>c.id).map(c=>c.id);
-const expected=['zy-status','zy-guard','zy-engine','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
+const expected=['zy-status','zy-guard','zy-engine','zy-s7','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
 /* dev47: Controls live inside the Connection card, so "Connection and controls" is one card. */
 const zyStatus=body.children.find(c=>c.id==='zy-status');
@@ -10836,15 +10836,15 @@ chk(JSON.stringify(zyFlow)===JSON.stringify(['zy-controls','zy-mode','zy-auto','
 chk(zyStatus.children[0]._text==='Connection and controls','merged card title missing');
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
 const nav=navs()[0], buttons=nav._asbJumpButtons;
-chk(buttons.length===7,'the populated section map must use seven top-level card links');
+chk(buttons.length===6,'the populated section map must use six top-level card links');
 chk(nav.attrs.role==='navigation' && buttons.every(b=>b.attrs['aria-controls']),'navigation semantics/controlled section missing');
 chk(buttons[0].attrs['aria-current']==='location' && buttons[0].classList.contains('is-active'),'initial active section is not exposed');
-chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===7,'dock header/track did not render');
+chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===6,'dock header/track did not render');
 chk(buttons.every(b=>String(b.className).split(/\s+/).includes('asb-tab') && b.children[0].className==='asb-tab-ico' && b.children[1].className==='asb-tab-label'),'dock does not reuse the main tab structure');
 buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b._asbJumpLabel); b.onclick(); });
 chk(buttons.filter(b=>b.attrs['aria-current']==='location'&&b.classList.contains('is-active')).length===1,'active section is ambiguous after jumps');
 chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1]._asbJumpLabel,'dock header does not follow the active section');
-for (const id of ['zy-status','zy-guard','zy-engine','zy-lsp','zy-s7','zy-aot','zy-apps'])
+for (const id of ['zy-status','zy-guard','zy-engine','zy-s7','zy-aot','zy-apps'])
   chk(_el(id) && _el(id).scrollHits===1,'jump did not reach its real section: '+id);
 /* Nav order may intentionally differ from section order. Execute the real watcher with
  * that arrangement, then verify that the bottom rule also uses rendered section order. */
@@ -10870,7 +10870,7 @@ console.log('ok');
 JS
 out="$(node "$T/render.js" "$H" 2>&1)" || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
-echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, seven top-level card jumps, conditional report map, progressive disclosure and 13 complete locales"
+echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, six top-level card jumps, conditional report map, progressive disclosure and 13 complete locales"
 )
 
 
@@ -13053,7 +13053,7 @@ help_fn = h[h.index('function cfgRenderKernelControlsHelp('):h.index('\n}\n', h.
 assert "kernelMoreBlock(card, 'help', more)" in help_fn and "kernelRefreshButton('kernelControlsRefresh')" in help_fn
 assert help_fn.index("T('kernel_controls_summary'") < help_fn.index("kernelMoreBlock(")
 wb = h[h.index('function cfgRenderWakeupBlockerCard('):h.index('\n}\n', h.index('function cfgRenderWakeupBlockerCard('))]
-assert "kernelMoreBlock(card, 'wb', [" in wb and "T('kernel_wb_summary'" not in wb and "kernelRefreshButton('kernelWakeupRefresh')" in wb
+assert "kernelMoreBlock(card, 'wb', [" in wb and "T('kernel_wb_summary'" not in wb and "kernelRefreshButton('kernelWakeupRefresh')" not in wb
 assert wb.index("kernelMoreBlock(card, 'wb', [") < wb.index("T('kernel_wb_sub'")
 assert 'kernel-wakeup-card' in wb and 'kernel-controls-actions' in help_fn
 assert '.kernel-more-body[hidden] { display:none; }' in h and '.bfx-btn.is-busy' in h
@@ -14058,7 +14058,7 @@ assert 'cfgLoadFresh' not in hub and 'cfgIsActive' not in hub and 'cfg-tile-bar'
 hub_sig = body('function cfgHubSig() {')
 assert 'cfgLoadFresh' not in hub_sig and '_cfgVals' not in hub_sig and 'cfgHubExtraSig()' in hub_sig
 assert '--page-anim-dur: 0.16s;' in s
-assert 'function asbNavAnimMark() { _asbNavAnimUntil = performance.now() + _pageAnimMs() + 24; }' in s
+assert 'function asbNavAnimMark() {' in s and "root.classList.add('asb-nav-moving')" in s
 assert '_cfgAnimUntil = performance.now() + _pageAnimMs() + 32;' in s
 assert 'asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 16);' in s
 assert "spec[0] === 'asb_properties'" in s and "createElement('details')" in s
@@ -14283,7 +14283,7 @@ chk(inputRow.children.length===2&&inputRow.children[0]===input&&inputRow.childre
 chk(addGrid.children.length===2&&addGrid.children[0]===always&&addGrid.children[1]===sleep,'add actions are not symmetric siblings');
 input.value='exact_source';always.onclick();sleep.onclick();chk(JSON.stringify(adds)===JSON.stringify([['exact_source','always'],['exact_source','sleep']]),'add handlers failed');
 chk(card.querySelector('#kernelWakeupAlwaysRules')&&card.querySelector('#kernelWakeupSleepRules'),'draft sections missing');
-const policy=card.querySelector('.kernel-policy-actions');chk(policy.children.length===3&&policy.children[0].id==='kernelWakeupApply','policy actions missing');
+const policy=card.querySelector('.kernel-policy-actions');chk(policy.children.length===2&&policy.children[0].id==='kernelWakeupApply','policy actions missing');
 const observe=card.querySelector('.kernel-observe-actions');chk(observe.children.length===2&&observe.children[1].id==='kernelWakeupOpenSources','observation actions missing');
 // A live fact is a child of collapsed content, never an always-visible row sibling.
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode'];global.KERNEL_HIDE_WHEN_ABSENT=[];global.Topt=o=>o;global.bfxT=(k,f,v)=>f;
@@ -16242,7 +16242,7 @@ def body(sig):
 ensure=body('function liveInfoEnsure() {')
 assert '<details class="live-info-disclosure asb-disclosure" id="liveInfoDisclosure">' in ensure
 assert '<summary id="liveInfoSummary"></summary>' in ensure
-assert ensure.index('id="liveInfoDisclosure"') < ensure.index('id="liveInfoText"') < ensure.index('id="liveInfoHist"')
+assert ensure.index('id="liveInfoHist"') < ensure.index('id="liveInfoSrc"') < ensure.index('id="liveInfoDisclosure"') < ensure.index('id="liveInfoText"') < ensure.index('id="liveInfoDone"')
 explain=body('function liveInfoExplanationSet(text) {')
 assert 'fold.open = false;' in explain and "T('zy_explanation', 'Explanation')" in explain
 assert "_el('liveInfoText').textContent = value;" in explain
@@ -16254,18 +16254,16 @@ assert h.count("if (typeof liveInfoExplanationSet === 'function') liveInfoExplan
 lvi=h[h.index('const LVI_TEXT = {'):];lvi=lvi[:lvi.index('\n};')]
 keys=re.findall(r'^\s*([a-z][a-z0-9]*):\s*\[',lvi,re.M)
 assert len(keys)==31 and len(set(keys))==31,keys
-# Drain basis paragraphs and the common battery-level note are collapsed independently.
-block=body('function liveDrainBlock(icon, label, value, basis, left, foldKey) {')
+# Drain basis paragraphs and the common battery-level note stay visible without tabs.
+block=body('function liveDrainBlock(icon, label, value, basis, left) {')
 assert "['live-drain-basis', basis]" not in block
-assert "tx.appendChild(liveDrainExplanation(basis, 'live-drain-basis', foldKey));" in block
-fold=body('function liveDrainExplanation(text, bodyClass, foldKey) {')
-assert "document.createElement('details')" in fold and "document.createElement('summary')" in fold
-assert "fold.setAttribute('data-drain-fold', foldKey);" in fold and 'body.textContent = text;' in fold
+assert "tx.appendChild(liveDrainExplanation(basis, 'live-drain-basis'));" in block
+fold=body('function liveDrainExplanation(text, bodyClass) {')
+assert "document.createElement('details')" not in fold and "document.createElement('summary')" not in fold
+assert 'body.textContent = text;' in fold
 paint=body('function liveDrainPaint() {')
-for key in ("'on'","'now'","'off'","'note'"):
- assert key in paint,key
-assert 'openFolds' in paint and 'body.querySelectorAll(\'details[data-drain-fold]\')' in paint
-assert 'if (openFolds[fold.getAttribute(\'data-drain-fold\')]) fold.open = true;' in paint
+assert "liveDrainExplanation(T('lv_drain_note_avg'" in paint
+assert 'data-drain-fold' not in paint and 'openFolds' not in paint
 # Existing startup/intro work primes hidden static DOM; no new shell, worker or polling owner.
 load=body('function cfgLoad(force) {')
 assert load.index('cfgPrimeHub();') < load.index('cfgLoadFresh()')
@@ -16343,7 +16341,62 @@ console.log('ok');
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "runtime: $out"
 [ "$out" = ok ] || fail "runtime: $out"
-echo 'PASS WebUI buildfix33: all Monitor prose is collapsed, drain tabs survive repaint, hidden Settings hub priming and post-tap audio scheduling, larger darker shared ASB engraving'
+echo 'PASS WebUI buildfix33: all Monitor prose is collapsed except direct Slot/drain prose, hidden Settings hub priming and post-tap audio scheduling, larger darker shared ASB engraving'
+)
+
+t_webui_buildfix35_regressions() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+import sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
+def fn(sig):
+ i=h.index(sig);return h[i:h.index('\n}\n',i)+2]
+render=fn('function zygiskPageRender(d, state) {')
+assert render.index("const engine = zygiskLinkCard();") < render.index("engine.appendChild(lsp); body.appendChild(engine);")
+assert "['zy-lsp', T('zy_nav_lsp'" not in render
+assert h.count("kernelRefreshButton('kernelControlsRefresh')")==1
+assert "kernelRefreshButton('kernelWakeupRefresh')" not in h
+assert "T('system_fix_reversible', 'REVERSIBLE SYSTEM FIX')" not in fn('function cfgRenderPackageFixCards(list, sectionItems) {')
+for token in ('id="devLogsBtn"','id="devTgBtn"','id="devBackChip"','class="status-row has-back"'): assert token in h,token
+report=fn('function logReportAppendAnalysis(body, d, analysis) {')
+for target in ('lgr-summary','lgr-actions','lgr-drain','lgr-details'): assert target in report,target
+for target in ('lgr-smooth','lgr-thermal','lgr-zygisk'): assert target not in report,target
+profile=fn('function profileDetailsPaint() {')
+assert "p === 'smart'" in profile and 'profile-details-smart-policy' in profile
+on=fn('function lvOnFigure(profile) {')
+assert on.index('lvProfileOnFigure(profile)') < on.index('lvBootOnFigure()')
+nav=fn('function asbNavAnimMark() {')
+assert 'asb-nav-moving' in nav and 'setTimeout' in nav and 'setInterval' not in nav and 'Worker(' not in nav
+assert "const simpleSlot = key === 'slot';" in h and "fold.open = simpleSlot;" in h
+assert "if (simpleSlot) { _el('liveInfoScale').hidden = true;" in h
+assert "hintKey:'cfg_audio_section_dsp_hint'" not in h
+print('buildfix35 static contracts ok')
+PY
+echo 'PASS WebUI buildfix35: compact docks, merged Zygisk engine, diagnostics actions, single Kernel refresh, Smart disclosure, bounded transition compositing'
+)
+
+
+t_webui_buildfix36_regressions() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+import re,sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
+a=h.index('const CFG_GROUP_SECTIONS = {');b=h.index('\n};',a)+3
+sections=h[a:b]
+assert "hintKey:" not in sections and re.search(r'\bhint\s*:',sections) is None
+render=h[h.index('function cfgRenderSection(list, section, catKey, groupId) {'):]
+render=render[:render.index('\n}\n')+2]
+assert 'cfg-section-hint' not in render and 'section.hint' not in render
+assert 'head.appendChild(ico);' in render and 'head.appendChild(title);' in render
+# Descriptions and warnings belonging to actual setting rows remain intact.
+assert 'function cfgRenderRow(' in h and 'Tcfg(it.key' in h
+print('buildfix36 subsection-hint contract ok')
+PY
+echo 'PASS WebUI buildfix36: all tweak-category subsection explanations removed while row descriptions and warnings remain'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
