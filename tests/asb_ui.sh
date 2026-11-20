@@ -10825,24 +10825,26 @@ page.scrollTop=417;
 zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
 chk(navs().length===1,'populated state must have exactly one section map');
 const ids=body.children.filter(c=>c.id).map(c=>c.id);
-const expected=['zy-status','zy-mode','zy-guard','zy-engine','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
+const expected=['zy-status','zy-guard','zy-engine','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
 /* dev47: Controls live inside the Connection card, so "Connection and controls" is one card. */
 const zyStatus=body.children.find(c=>c.id==='zy-status');
 chk(zyStatus.children.some(c=>c.id==='zy-controls'),'controls are not inside the Connection card');
 chk(zyStatus.children.some(c=>c.id==='zy-auto')&&zyStatus.children.some(c=>c.id==='zy-activity'),'automatic/activity are not merged into the Connection card');
+const zyFlow=zyStatus.children.filter(c=>c.id).map(c=>c.id);
+chk(JSON.stringify(zyFlow)===JSON.stringify(['zy-controls','zy-mode','zy-auto','zy-activity']),'Mode is not between Controls and Automatic: '+JSON.stringify(zyFlow));
 chk(zyStatus.children[0]._text==='Connection and controls','merged card title missing');
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
 const nav=navs()[0], buttons=nav._asbJumpButtons;
-chk(buttons.length===10,'the populated section map lost a control');
+chk(buttons.length===7,'the populated section map must use seven top-level card links');
 chk(nav.attrs.role==='navigation' && buttons.every(b=>b.attrs['aria-controls']),'navigation semantics/controlled section missing');
 chk(buttons[0].attrs['aria-current']==='location' && buttons[0].classList.contains('is-active'),'initial active section is not exposed');
-chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===10,'dock header/track did not render');
+chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===7,'dock header/track did not render');
 chk(buttons.every(b=>String(b.className).split(/\s+/).includes('asb-tab') && b.children[0].className==='asb-tab-ico' && b.children[1].className==='asb-tab-label'),'dock does not reuse the main tab structure');
 buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b._asbJumpLabel); b.onclick(); });
 chk(buttons.filter(b=>b.attrs['aria-current']==='location'&&b.classList.contains('is-active')).length===1,'active section is ambiguous after jumps');
 chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1]._asbJumpLabel,'dock header does not follow the active section');
-for (const id of ['zy-mode','zy-auto','zy-controls','zy-activity','zy-guard','zy-engine','zy-aot','zy-apps'])
+for (const id of ['zy-status','zy-guard','zy-engine','zy-lsp','zy-s7','zy-aot','zy-apps'])
   chk(_el(id) && _el(id).scrollHits===1,'jump did not reach its real section: '+id);
 /* Nav order may intentionally differ from section order. Execute the real watcher with
  * that arrangement, then verify that the bottom rule also uses rendered section order. */
@@ -10868,7 +10870,7 @@ console.log('ok');
 JS
 out="$(node "$T/render.js" "$H" 2>&1)" || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
-echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, ten working jumps, conditional report map, progressive disclosure and 13 complete locales"
+echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, seven top-level card jumps, conditional report map, progressive disclosure and 13 complete locales"
 )
 
 
@@ -16291,7 +16293,12 @@ assert "shown.id !== 'auto'" in mode and 'zy_mode_auto_desc' not in mode
 assert 'zy_mode_note' not in mode and 'if (desc.textContent) card.appendChild(desc);' in mode
 render_start=h.index('function zygiskPageRender(d, state) {')
 render=h[render_start:h.index('\nfunction ',render_start+1)]
-assert render.index('body.appendChild(st);') < render.index("mode.id = 'zy-mode'") < render.index('body.appendChild(asbPageJump([')
+assert render.index('st.appendChild(controls);') < render.index("mode.id = 'zy-mode'") < render.index('st.appendChild(mode);') < render.index('const automatic = zygiskAutoCard(d);')
+assert "mode.className = 'zy-merged-subsection'" in render
+assert 'body.appendChild(mode);' not in render
+nav=render[render.index('body.appendChild(asbPageJump(['):render.index('const automatic = zygiskAutoCard(d);')]
+assert "['zy-status', T('zy_nav_controls', 'Controls')]" in nav
+for target in ("['zy-controls'","['zy-mode'","['zy-auto'","['zy-activity'"): assert target not in nav,target
 for token in ('#reportPage .lgr-row + .lgr-row, #zygiskPage .lgr-row + .lgr-row',
               'border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent)',
               '.zy-merged-subsection { margin-top:12px; padding-top:11px; border-top:1px solid var(--border); }'):
