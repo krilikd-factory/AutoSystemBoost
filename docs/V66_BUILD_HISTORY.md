@@ -4,6 +4,52 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix26 - transactional wakeup editing and quieter evidence UI
+
+Input: the owner's ten-point Infirmary, Zygisk, profile-evidence, I/O, wakeup-editor, battery-freshness, motion and icon revision, together with current and older field captures. Base: the verified buildfix25 source archive.
+
+- **Information architecture:** SOTER Repair is rendered inside **System Fixes**, and the unified ZYGISK · GOVERNOR · LSPOSED engine card sits immediately before LSPosed with its own page-jump entry. All 13 locales carry the new navigation and busy-state strings.
+- **Header-only profile evidence:** profile cards only select profiles. The green active-profile pill in the header opens the read-only evidence sheet. Blueprint and ledger sections are native, initially collapsed disclosures with lazy row construction; their open state survives filtering and repainting. Ledger rows are deduplicated by domain/key with only the latest outcome shown. `unsupported` and `not_writable` are omitted only from this user projection; `readback_mismatch`, `lease_denied`, `safety_veto`, raw logs and diagnostics remain visible.
+- **Physical I/O evidence:** the collector excludes loop, RAM, zram and device-mapper nodes and requires a physical `/sys/block/<dev>/device`. It reports the active bracketed scheduler separately from the raw capability list, so virtual devices and repeated `[none] mq-deadline kyber adios bfq` text are not presented as ASB storage rails.
+- **Transactional exact-name wakeup Save:** one owner invocation performs `set --always … --sleep … && status`; success requires an `applied` verdict and exact ordered readback of both saved lists. The editor preserves drafts on busy, errors and mismatches. A bounded mkdir/PID lock returns `busy` for a live owner and recovers stale locks. Sequence tickets reject stale panel responses, including obsolete/frozen-app source lists. First-try `pedometer_minute_lock`, split on/off/unknown policies, live busy and stale-PID recovery are covered.
+- **Shared battery freshness and lighter motion:** fresh Monitor meter data updates the same cached snapshot and repaints Home when it is visible underneath, without another polling worker. Config opens after one presentation frame with a 160 ms shared page duration/fallback; modal backdrop blur is disabled. These are code-path improvements, not measured power or smoothness percentages.
+- **Full-bleed icon:** `webroot/icon.png` is a 512×512 RGB rendering of the existing UFO artwork with edge-to-edge background, no transparent rounded mask and no lateral rails; Android supplies the launcher shape.
+- **Capability-only uclamp handling:** TOP/BG/SYBG text readbacks remain integer-decimal/`max` aware. Three consecutive successful writes with persistent zero readback now produce `unsupported_readback` and a day-long capability backoff, never an applied/success claim. asbdiag prints recent `UNSUPPORTED` capability events separately from rejected writes; unchanged DSP prebuilts are not represented as new AOSP/AIDL builds.
+- **Field-evidence boundary:** current and older captures motivated eliminating retry storms and misleading UI, not universal frequency increases, broad wakeup blocklists or automatic restrictions on Shealth, WhatsApp or Telegram. Sampled current and frame/jank figures remain capture-specific evidence rather than proof of a universal improvement.
+- **Host and browser verification:** the canonical staged-tree regression passed 429 suites/test cases with 581 anchored PASS lines, zero failures, zero lint errors/warnings and 48 strict native warnings against the existing budget of 62. Focused first-Save/readback, live-busy, stale-lock, physical-I/O, ledger, freshness and navigation tests passed. Real headless Chromium checks at 360 and 440 CSS px verified header-only evidence, lazy disclosures, filter persistence, actionable mismatch visibility, Guard → Unified engine → LSPosed ordering and no horizontal overflow or JavaScript page errors; screenshots were visually reviewed. The sandbox could not resolve the external `mui.kernelsu.org/internal/insets.css` request, which is classified as an environmental resource error rather than a page-script failure. None of this is physical OnePlus 15/ColorOS WebView validation. The exact release ZIP additionally has to pass the clean-unpack gate recorded in `RELEASE_MANIFEST.json`.
+
+## V66 dev66 buildfix25 - Zygisk hot-path hygiene and per-profile evidence
+
+Input: the owner's request to reduce Zygisk overhead and improve lifecycle hygiene, make active profile cards explain their actual device-specific changes, and add the same UFO module icon used by the WebUI. Base: the verified buildfix24 source archive.
+
+- **Companion policy cache:** unchanged policy is still checked by inode, size and nanosecond mtime, but is not opened, read and strictly parsed again for every spawn/exit. Missing, malformed and replaced policies fail closed rather than reusing an old allowlist. `policy_reads` and `policy_cache_hits` make the behavior inspectable.
+- **Less filesystem and spawn work:** governor hints bind an abstract Unix datagram client instead of creating/unlinking a socket node; one spawn shares one lazy published-screen read, and `onLoad` no longer performs a redundant policy open/close probe. The one-shot SPAWN, `DLCLOSE_MODULE_LIBRARY`, exclusions, rate limits, Safe mode and governor veto remain intact.
+- **No unchanged policy rewrite:** sync builds its candidate in the runtime tmpfs when available, compares semantic content without generation/version metadata, and leaves an unchanged policy's inode, mtime and generation alone. Changed content retains atomic replacement, permissions, context and rollback behavior.
+- **Active-profile evidence sheet:** tapping the active Smart, Performance, Balanced or Battery card opens a localized read-only dialog; tapping an inactive card still switches profile. The sheet combines 76 intent values, Smart's Balanced baseline, live ownership/FSM/thermal/writer/network state, per-device I/O readback, and a filterable requested/previous/readback/result ledger bounded by the latest profile transaction. Missing evidence stays unavailable/unsupported rather than becoming an applied claim. Dynamic values use `textContent`; Enter/Space, stale-response rejection, error and close/focus paths are covered.
+- **Module icon:** `webroot/icon.png` is rendered from the existing `#asbUfoArt` SVG symbol, with only a rounded-square module background added.
+- **Native and verification:** both Zygisk shared libraries were rebuilt with Android NDK r28c and checked as AArch64/ARM ELF shared objects with both Zygisk entry exports. The complete canonical host regression passes; targeted collector/UI tests and real Chromium checks at 360 and 440 CSS px pass, with screenshots visually reviewed. These are not physical OnePlus 15/ColorOS WebView results and no power, latency or smoothness improvement percentage is claimed.
+
+## V66 dev66 buildfix24 - mainline I/O choices and split idle policies
+
+Input: the owner's request for modern I/O schedulers beyond Kyber on the OnePlus 15 and matching ASB policy. Base:
+the verified buildfix23 ASB source and the paired android16-6.12 kernel source with ADIOS 3.3.0 already integrated.
+
+- **Kernel exposure without a forced default:** the OnePlus 15 final config requests and verifies
+  `CONFIG_IOSCHED_BFQ=y`, `CONFIG_MQ_IOSCHED_DEADLINE=y` and `CONFIG_MQ_IOSCHED_KYBER=y`. The existing conditional
+  ADIOS action and stock default-elevator ownership remain. No legacy SIO/FIOPS/Zen port or private scheduler
+  tunable was added.
+- **Distinct screen-off policy:** Smart screen-off and Battery Auto try `none` first, then `mq-deadline`, Kyber and
+  ADIOS only when exposed by each queue. Smart screen-on idle and Balanced Auto start with `mq-deadline`; ordinary
+  interactive Smart work retains Kyber, and gaming/heavy plus Performance retain ADIOS/Kyber priority.
+- **BFQ remains manual:** upstream BFQ is intended for interactivity/fairness, but that does not establish lower UFS
+  energy use on this phone. Explicit BFQ and exact Stock restore remain covered; BFQ-only Auto stays `not_exposed`.
+- **No new runtime owner:** selection still uses the existing bounded per-device discovery, preflight, readback,
+  rollback and kernel-bound baseline. No arbitrary sysfs writer, polling worker or silent persisted-setting reset.
+- **Verification scope:** focused fixtures cover full and reduced scheduler exposure, missing-none fallback,
+  Balanced/Battery static orders, manual BFQ and invalid input. The kernel final-config guard rejects missing or
+  wrong scheduler symbols. Host tests do not compile/boot the complete kernel or prove OnePlus 15 UFS, latency,
+  throughput or battery improvements; same-device A/B remains required.
+
 ## V66 dev66 buildfix23 - flat Glass detail sheets and lightweight categorical graphics
 
 Input: the owner's screenshots of grey nested cards and dense text in the FSM, limit-source, slot, slot-heat and
