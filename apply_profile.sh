@@ -326,6 +326,9 @@ run_worker() {
     asb_log "worker failed: asb_apply_profile_once missing"
     exit 1
   fi
+  # A read-only profile-details sheet can separate this transaction from older ledger
+  # rows and later dynamic FSM adjustments. The marker itself performs no device write.
+  command -v asb_ledger_note >/dev/null 2>&1 &&     asb_ledger_note profile apply_begin "$PROFILE" "" "" deferred "epoch=$WORKER_EPOCH trigger=$PROFILE_FLAG" ""
 
   _rc=0
   _i=1
@@ -352,6 +355,11 @@ run_worker() {
     _kc_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_kernel_controls.sh" follow "$PROFILE" 2>/dev/null)"
     _kc_sum="$(printf '%s\n' "$_kc_out" | awk -F'|' '$3 == "auto" { k = $1; sub(/^kernel_/, "", k); printf "%s%s=%s:%s", (n++ ? " " : ""), k, $2, $4 }')"
     asb_log "profile=$PROFILE: kernel controls follow the profile ${_kc_sum:-(none set to auto)}"
+  fi
+  if command -v asb_ledger_note >/dev/null 2>&1; then
+    _profile_result=applied
+    [ "$_rc" = "0" ] || _profile_result=readback_mismatch
+    asb_ledger_note profile apply_end "$PROFILE" "" "" "$_profile_result" "epoch=$WORKER_EPOCH rc=$_rc" ""
   fi
   asb_log "worker done profile=$PROFILE rc=$_rc"
 
