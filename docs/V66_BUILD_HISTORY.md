@@ -4,6 +4,14 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix34 - Mode controls above Automatic setup
+
+Input: the owner's device screenshots showing that buildfix33 placed the separate Mode card after the entire Connection card, leaving Automatic setup visually above the mode switches. Base: the verified buildfix33 source archive.
+
+- **Actual visual order corrected:** Mode is now an internal `zy-merged-subsection` of the Connection and controls card. Its contents render between Controls and Automatic setup, followed by Activity and cost. There is no second standalone Mode card below the merged card; all jump anchors and mode actions remain intact.
+- **Dock matches the card hierarchy:** Controls, Mode, Automatic and Activity no longer consume four separate top-level dock items for one visual card. A single Controls item targets `zy-status`; Guard, engine, LSPosed, Budgets, ART and Apps remain. The dock has seven working top-level links instead of ten, while internal section anchors remain available.
+- **Verified in the real DOM:** focused rendering contracts require `zy-controls → zy-mode → zy-auto → zy-activity`. HTTP-served Chromium measured their visual top positions in that same strictly increasing order, with Mode visible, no deleted prose restored, no horizontal overflow and zero page/console/HTTP errors. This remains browser/host evidence, not physical ColorOS WebView validation.
+
 ## V66 dev66 buildfix33 - compact Monitor explanations and cold-start navigation
 
 Input: the owner's request to collapse long explanations in every Monitor detail window, smooth the initial transitions between Home, Monitor and Settings, make the shared UFO initials larger and darker, simplify Zygisk, place its two package repairs last in Infirmary, and fix the reported CI failure. Base: the verified buildfix32 source archive.
