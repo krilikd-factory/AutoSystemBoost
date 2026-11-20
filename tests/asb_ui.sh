@@ -9313,9 +9313,12 @@ mark=s[s.index('<div class="asb-boot-intro"'):s.index('<div class="status-bar-sc
 assert mark.count('id="asbBootIntro"')==1 and 'hidden aria-hidden="true"' in mark
 assert 'role="status"' in mark and 'aria-live="polite"' in mark
 assert mark.count('data-boot-stage=')==0 and 'role="progressbar"' in mark
-assert 'id="asbBootIntroCount">0 / 5</div>' in mark and 'id="asbBootIntroStatus"' in mark
-for forbidden in ('>LIVE<','>CONFIG<','>DEVICE<','>LOG<','asb-boot-stages'):
+assert 'id="asbBootIntroStatus"' in mark
+assert 'id="asbBootIntroCount"' not in mark
+for forbidden in ('>LIVE<','>CONFIG<','>DEVICE<','>LOG<','asb-boot-stages','0 / 5','1 / 5','1/5'):
     assert forbidden not in mark, forbidden
+assert re.search(r'\.asb-boot-progress \{[^}]*height:11px;',s)
+assert '<text x="48" y="40.1"' in s and '>ASB</text>' in s
 assert '<button' not in mark
 for token in ('@keyframes asbBootSpin','@keyframes asbBootPulse','@keyframes asbBootScan',
               '@keyframes asbBootArrive','@keyframes asbBootHalo',
@@ -9360,9 +9363,9 @@ cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function E(id){this.id=id;this.hidden=true;this.attrs={};this.style={};this.textContent='';this.set=new Set();this.classList={toggle:(c,v)=>{if(v)this.set.add(c);else this.set.delete(c)},add:c=>this.set.add(c),remove:c=>this.set.delete(c),contains:c=>this.set.has(c)}}
 E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};E.prototype.getAttribute=function(k){return k in this.attrs?this.attrs[k]:null};E.prototype.removeAttribute=function(k){delete this.attrs[k]};
-const overlay=new E('asbBootIntro'),status=new E('asbBootIntroStatus'),bar=new E('asbBootIntroBar'),progress=new E('asbBootIntroProgress'),count=new E('asbBootIntroCount'),body=new E('body');
+const overlay=new E('asbBootIntro'),status=new E('asbBootIntroStatus'),bar=new E('asbBootIntroBar'),progress=new E('asbBootIntroProgress'),body=new E('body');
 const stages=[0,1,2,3,4].map(()=>new E('stage'));
-const els={asbBootIntro:overlay,asbBootIntroStatus:status,asbBootIntroBar:bar,asbBootIntroProgress:progress,asbBootIntroCount:count};
+const els={asbBootIntro:overlay,asbBootIntroStatus:status,asbBootIntroBar:bar,asbBootIntroProgress:progress};
 global.document={body,querySelectorAll:s=>s==='.asb-boot-stage'?stages:[]};global.window={};global._el=id=>els[id]||null;global.T=(k,d)=>d;
 const local={},session={};global.localStorage={getItem:k=>local[k]||null,setItem:(k,v)=>local[k]=String(v)};global.sessionStorage={getItem:k=>session[k]||null,setItem:(k,v)=>session[k]=String(v)};
 let boot='11111111-1111-4111-8111-111111111111',failBoot=false,hang=false,calls=[];
@@ -10386,7 +10389,7 @@ h = open(sys.argv[1], encoding='utf-8').read()
 def body(sig):
     i = h.index(sig); j = h.index('\n}\n', i); return h[i:j]
 nav = body('function asbNavGo(target) {')
-assert 'zygiskHeaderRefresh()' not in nav and 'zygiskHeaderRefreshLazy();' in nav, 'every tab tap still probes the Zygisk header'
+assert 'zygiskHeaderRefresh' not in nav and 'asbNavSyncSoon();' in nav and 'setTimeout(asbNavSync, 60)' not in nav, 'tab navigation still does unrelated probes or duplicate delayed syncs'
 live = body('function openLivePage() {')
 assert 'run(' not in live and 'zygiskHeaderRefresh' not in live, 'opening Monitor starts a root shell on the tap'
 assert 'liveMonitorSchedule(liveOpenRefreshDelay());' in live, 'Monitor no longer schedules its read after the slide'
@@ -10774,6 +10777,7 @@ function el(tag, cls) {
   const n = { tag, children:[], _text:'', className:cls || '', id:'', open:false, scrollHits:0, dataset:{},
     set textContent(v) { this._text=String(v); this.children=[]; }, get textContent() { return this._text; },
     appendChild(c) { this.children.push(c); return c; },
+    get firstChild() { return this.children[0] || null; },
     scrollIntoView() { this.scrollHits++; }
   };
   const classes = new Set(String(n.className).split(/\s+/).filter(Boolean));
@@ -10820,11 +10824,12 @@ page.scrollTop=417;
 zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
 chk(navs().length===1,'populated state must have exactly one section map');
 const ids=body.children.filter(c=>c.id).map(c=>c.id);
-const expected=['zy-status','zy-mode','zy-auto','zy-activity','zy-guard','zy-engine','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
+const expected=['zy-status','zy-mode','zy-guard','zy-engine','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
 /* dev47: Controls live inside the Connection card, so "Connection and controls" is one card. */
 const zyStatus=body.children.find(c=>c.id==='zy-status');
 chk(zyStatus.children.some(c=>c.id==='zy-controls'),'controls are not inside the Connection card');
+chk(zyStatus.children.some(c=>c.id==='zy-auto')&&zyStatus.children.some(c=>c.id==='zy-activity'),'automatic/activity are not merged into the Connection card');
 chk(zyStatus.children[0]._text==='Connection and controls','merged card title missing');
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
 const nav=navs()[0], buttons=nav._asbJumpButtons;
@@ -11794,7 +11799,8 @@ for token in (
  ":is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #b0704a; }",
  ":is(.cfg-section,.cfg-tile).cat-feel    { --cat: #b3d65a; }",
  ":is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #b1b6bc; }",
- "bfxEl('div', 'cfg-row kernel-card cat-kernel')",
+ "bfxEl('div', 'cfg-row kernel-card kernel-controls-help cat-kernel')",
+ "bfxEl('div', 'cfg-row kernel-card kernel-wakeup-card cat-kernel')",
  ':is(.cfg-icon,.cfg-row).cat-camera  { --cat: #82b8ff; }',
  ':is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #b0704a; }',
  ':is(.cfg-icon,.cfg-row).cat-feel    { --cat: #b3d65a; }',
@@ -12391,7 +12397,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
  soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1|boot_state=skipped|boot_result=auto_off|boot_unlock=35|boot_via=ce_available|boot_time=1700000000|boot_first=none|notify_lang=ru'));
  if(!/cancelled - automatic repair was switched off/.test(host.textContent))throw Error('auto-off cancellation not shown');
  soterPaint(soterParse('soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=0|boot_state=off|boot_result=none|boot_unlock=0|boot_via=none|boot_time=0|boot_first=none|notify_lang=none'));
- if(/this boot/.test(host.textContent))throw Error('boot row shown with the switch off');
+ if(!/Automatic SOTER repair is off/.test(host.textContent))throw Error('auto-off state missing from the unified Details history');
  console.log('ok');
 })().catch(e=>{console.error(e.stack||e);process.exit(1);});
 JS
@@ -13044,8 +13050,9 @@ help_fn = h[h.index('function cfgRenderKernelControlsHelp('):h.index('\n}\n', h.
 assert "kernelMoreBlock(card, 'help', more)" in help_fn and "kernelRefreshButton('kernelControlsRefresh')" in help_fn
 assert help_fn.index("T('kernel_controls_summary'") < help_fn.index("kernelMoreBlock(")
 wb = h[h.index('function cfgRenderWakeupBlockerCard('):h.index('\n}\n', h.index('function cfgRenderWakeupBlockerCard('))]
-assert "kernelMoreBlock(card, 'wb', [" in wb and "T('kernel_wb_summary'" in wb and "kernelRefreshButton('kernelWakeupRefresh')" in wb
-assert wb.index("T('kernel_wb_summary'") < wb.index("kernelMoreBlock(card, 'wb', [") < wb.index("T('kernel_wb_sub'")
+assert "kernelMoreBlock(card, 'wb', [" in wb and "T('kernel_wb_summary'" not in wb and "kernelRefreshButton('kernelWakeupRefresh')" in wb
+assert wb.index("kernelMoreBlock(card, 'wb', [") < wb.index("T('kernel_wb_sub'")
+assert 'kernel-wakeup-card' in wb and 'kernel-controls-actions' in help_fn
 assert '.kernel-more-body[hidden] { display:none; }' in h and '.bfx-btn.is-busy' in h
 assert "bfxEl('div', 'cfg-row bfx-card camtools-card cat-camera')" in h
 assert '.bfx-card.cfg-row.cat-camera .bfx-emblem { --tech-icon:var(--cat); color:var(--cat);' in h
@@ -13068,7 +13075,7 @@ L = {p.stem: json.loads(p.read_text(encoding='utf-8')) for p in sorted((root / '
 assert len(L) == 13
 en = L['en']
 new = ['cfg_sw_on', 'cfg_sw_off', 'kernel_more_show', 'kernel_more_hide', 'kernel_refreshed', 'kernel_refresh_failed', 'kernel_refreshing',
-       'kernel_controls_summary', 'kernel_hidden_count', 'kernel_absent_hrtimer', 'kernel_wb_summary', 'kc_default_same',
+       'kernel_controls_summary', 'kernel_hidden_count', 'kernel_absent_hrtimer', 'kc_default_same',
        'kc_mglru_no_nonleaf', 'ct_wc_summary', 'ct_la_summary']
 ph = re.compile(r'\{[a-z_]+\}')
 for k in new:
@@ -13348,7 +13355,7 @@ const slice = (a, b) => { const i = h.indexOf(a); const j = h.indexOf(b, i); if 
   let b = mk('div'); lviPressureRender(b, psi, 'apphint');
   const r = rows(b);
   chk(r[0] === 'psi_cpu_some_avg10=3.00 %' && r[1] === 'psi_memory_some_avg10=0.50 %' && r[2] === 'psi_io_some_avg10=1.25 %', 'PSI rows: ' + r);
-  chk(r[4] === 'gpu_busy_pct=62.0 % · 160 MHz', 'GPU row: ' + r[4]);
+  chk(r[4] === 'gpu_busy_pct=62.0 %', 'GPU pressure row must be percent-only: ' + r[4]);
   chk(!r.some(x => /^load_per_core|^memory_used_pct/.test(x)), 'loadavg rows next to PSI');
   const gpuFill = b.children.find(c => c.className === 'lvp-parts').children[4].children[1].children[0];
   chk(gpuFill && gpuFill.style.width === '11%', 'GPU bar is not busy x clock: ' + (gpuFill && gpuFill.style.width));
@@ -13981,9 +13988,11 @@ assert '.config-page' in h and 'overflow-y:auto' in h
 assert '.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 1px solid var(--border) !important; }' not in h
 assert "fold.className = 'zy-note-fold asb-disclosure'" in h and "document.createElement('summary')" in h
 zc=h[h.index('function zyCompact(body) {'):];zc=zc[:zc.index('\n}\n')];assert "fold.addEventListener('toggle'" in zc and 'zy-clamp' not in zc
-for key in ('bfx','soter','junk'):
+for key in ('bfx','junk'):
  assert f"kernelMoreBlock(card, '{key}'" in h
-assert "kernelMoreBlock(card, 'soter_auto'" in h
+soter=h[h.index('function cfgRenderSoterFixCard(list) {'):];soter=soter[:soter.index('\n}\n')]
+assert "kernelMoreBlock(card, 'soter'" not in soter and "kernelMoreBlock(card, 'soter_auto'" not in soter
+assert soter.count("bfxEl('details'")==1 and "secondaryRows.id = 'soterSecondaryRows'" in soter
 assert h.index('list.appendChild(la);') < h.index('list.appendChild(wc);') < h.rindex('ctLoad(false);')
 assert 'asb_audio_apply.sh mirror' not in f
 for p in (r/'webroot/i18n').glob('*.json'):
@@ -15808,8 +15817,9 @@ from pathlib import Path
 import json,sys
 r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
 assert "keys:['heytap_mcs','documentsui_fix'], card:'systemfixes'" in h
-assert "else if (section.card === 'systemfixes') cfgRenderSoterFixCard(list);" in h
+assert 'cfgRenderPackageFixCards(list, sectionItems);' in h
 assert h.count('cfgRenderSoterFixCard(list);')==1
+assert "card.id = it.key === 'heytap_mcs' ? 'heytapFixCard' : 'documentsuiFixCard';" in h
 start=h.index('function zygiskPageRender(d, state) {')
 zy=h[start:h.index('\n}\n',start)+2]
 assert zy.index("guard.id = 'zy-guard'") < zy.index("engine.id = 'zy-engine'") < zy.index("lsp.id = 'zy-lsp'")
@@ -15914,7 +15924,8 @@ class E{
  focus(){this.focused=true}
 }
 const header=new E('button');header.id='curProfile';
-global.document={createElement:t=>new E(t),body:new E('body'),querySelector:()=>null};
+global.document={createElement:t=>new E(t),body:new E('body'),querySelector:()=>null,querySelectorAll:()=>[header],activeElement:header};
+header.isConnected=true;global.shQuote=s=>"'"+s+"'";
 global._el=id=>nodes[id]||null;global.T=(k,f)=>f||k;global.MD='/module';global.navSync=()=>{};
 global.setTimeout=f=>{f();return 1};
 let switched=[];global.go=p=>switched.push(p);
@@ -15930,14 +15941,14 @@ const details={schema:1,profile:'smart',intent_base:'balanced',epoch:410,intent:
 ]}};
 const effective={profile:{cap_owner:'smart governor'},cpu_min_policy:{strategy:'bounds',fsm_state:'LIGHT_IDLE'},thermal:{runtime_floor:'vendor'},energy_policy:{thermal_budget_stage:'normal',thermal_budget_reason:'within envelope'},writer_health:{applied:3,failures:0},config_health:'ok',network:{congestion_live:'bbr',qdisc_live:'fq'}};
 let commands=[],mode='ok',deferred=[];
-global.run=cmd=>{commands.push(cmd);if(mode==='defer')return new Promise(resolve=>deferred.push(()=>resolve({errno:0,stdout:cmd.includes('asb_profile_details')?JSON.stringify(details):JSON.stringify(effective),stderr:''})));if(mode==='error'&&cmd.includes('asb_profile_details'))return Promise.resolve({errno:1,stdout:'',stderr:'missing'});return Promise.resolve({errno:0,stdout:cmd.includes('asb_profile_details')?JSON.stringify(details):JSON.stringify(effective),stderr:''});};
+global.run=cmd=>{commands.push(cmd);const output=JSON.stringify(details)+'\n__ASB_EFFECTIVE_POLICY__\n'+JSON.stringify(effective);if(mode==='defer')return new Promise(resolve=>deferred.push(()=>resolve({errno:0,stdout:output,stderr:''})));if(mode==='error'&&cmd.includes('asb_profile_details'))return Promise.resolve({errno:1,stdout:'',stderr:'missing'});return Promise.resolve({errno:0,stdout:output,stderr:''});};
 const flush=()=>new Promise(r=>setImmediate(()=>setImmediate(r)));
 function all(root,pred,out=[]){if(pred(root))out.push(root);for(const c of root.children||[])all(c,pred,out);return out}
 function disclosure(text){return all(nodes.profileDetailsBody,n=>n.tag==='details'&&n.children[0]&&n.children[0].textContent===text)[0]}
 (async()=>{
  profileDetailsOpen('smart');await flush();
  chk(!nodes.profileDetailsModal.hidden&&nodes.profileDetailsModal.attrs['aria-hidden']==='false','header entry point did not open dialog');
- chk(commands.length===2&&commands[0]==='sh /module/tools/asb_profile_details.sh smart'&&commands[1]==='sh /module/tools/asb_effective_policy.sh','dialog issued an unexpected command: '+commands);
+ chk(commands.length===1&&commands[0].includes("asb_profile_details.sh' smart")&&commands[0].includes('__ASB_EFFECTIVE_POLICY__')&&commands[0].includes("asb_effective_policy.sh'"),'dialog did not use one marker-framed shell: '+commands);
  chk(nodes.profileDetailsClose.focused,'close control did not receive initial focus');
  chk(all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry')).length===0,'closed ledger eagerly mounted rows');
  chk(nodes.profileDetailsBody.textContent.includes('mq-deadline'),'separate active I/O scheduler missing');
@@ -15961,9 +15972,10 @@ function disclosure(text){return all(nodes.profileDetailsBody,n=>n.tag==='detail
  profileCardKey({key:' ',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===2,'Space key behavior');
  profileCardKey({key:'Escape',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===2,'unrelated key activated profile');
  mode='error';profileDetailsOpen('smart');await flush();chk(nodes.profileDetailsBody.textContent.includes('No setting was changed'),'collector error path not honest');profileDetailsClose();
- mode='defer';profileDetailsOpen('smart');profileDetailsClose();deferred.shift()();await flush();deferred.shift()();await flush();
+ mode='defer';profileDetailsOpen('smart');profileDetailsClose();deferred.shift()();await flush();
  chk(nodes.profileDetailsModal.hidden&&all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry')).length===0,'stale async response repainted closed dialog');
- chk(commands.every(c=>c==='sh /module/tools/asb_effective_policy.sh'||/^sh \/module\/tools\/asb_profile_details\.sh (smart|performance|balanced|battery)$/.test(c)),'write command leaked into open/refresh');
+ chk(commands.every(c=>c.includes('asb_profile_details.sh')&&c.includes('asb_effective_policy.sh')&&!/settings put|echo .*sys|printf .*sys/.test(c)),'write command leaked into open/refresh');
+ chk(!h.includes("T('pd_evidence_note'"),'removed read-only footer returned');
  console.log('ok');
 })().catch(e=>{console.error(e.stack||e);process.exit(1)});
 JS
@@ -15971,6 +15983,182 @@ out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI profile details buildfix26: header-only evidence, lazy persistent disclosures, physical I/O active scheduler, deduplicated/filter-hygienic ledger, safe text and stale-response handling'
 )
+
+t_webui_buildfix27_regressions() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+import json,sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text()
+for id_ in ('curProfile','liveCurProfile','cfgCurProfile','rpCurProfile','devCurProfile','zyCurProfile'):
+    assert f'id="{id_}" type="button" onclick="profileDetailsOpen(_selectedProfile)"' in h,id_
+assert h.count('class="status-val profile-evidence-link') == 6
+assert "document.querySelectorAll('.profile-evidence-link').forEach" in h
+assert '_profileDetails.opener' in h and 'pd_evidence_note' not in h
+assert "Number(d.epoch) > 0" in h and 'pd_epoch_unavailable' in h
+assert 'cfgRenderPackageFixCards(list, sectionItems);' in h
+assert 'heytapFixCard' in h and 'documentsuiFixCard' in h and 'package-fix-card' in h
+zy=h[h.index('function zygiskPageRender(d, state) {'):];zy=zy[:zy.index('\n}\n')]
+assert "st.appendChild(auto);" in zy and 'st.appendChild(activity);' in zy
+assert 'body.appendChild(automatic)' not in zy and 'body.appendChild(act)' not in zy
+assert 'kernel-controls-actions' in h and 'kernel-wakeup-card' in h
+wb=h[h.index('function cfgRenderWakeupBlockerCard('):];wb=wb[:wb.index('\n}\n')]
+assert 'kernel_wb_summary' not in wb
+assert "function lviPressureGpu(v, d) {\n  return v + ' %';\n}" in h
+nav=h[h.index('function asbNavGo(target) {'):];nav=nav[:nav.index('\n}\n')]
+assert 'zygiskHeaderRefresh' not in nav and 'setTimeout(asbNavSync' not in nav
+assert 'network_recommendations_enabled' not in (r/'service.sh').read_text()
+for p in (r/'webroot/i18n').glob('*.json'):
+    d=json.loads(p.read_text());assert d.get('system_fix_reversible') and d.get('pd_epoch_unavailable'),p
+print('static ok')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP buildfix27 wakeup runtime: no node'; exit 0; }
+T="$(mktemp -d)";trap 'rm -rf "$T"' EXIT
+cat > "$T/wakeup.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(sig,end){const a=h.indexOf(sig),b=h.indexOf(end,a);if(a<0||b<0)throw Error(sig);return h.slice(a,b)}
+global.MD='/m';global.shQuote=s=>"'"+s+"'";global.ASB_IO_SCHEDULERS=null;global._cfgGroup='kernel';global._cfgOpen=true;global._cfgSearch=false;
+global._kernelPanel={loaded:false,loading:false,seq:0,controls:Object.create(null),wakeup:null};global._wbDraft={always:[],sleep:[]};global._wbBusy=false;
+global.cfgRender=()=>{};global.cfgHubRepaintIfShowing=()=>{};global.kernelWakeupSourceDialogRender=()=>{};
+eval(grab('function kernelControlParse(', 'async function kernelPanelLoad('));
+let status='wakeup_blocker|status|node=writable|screen=off\nwakeup_rule|saved_always|alarm\nwakeup_rule|saved_sleep|pedometer_minute_lock';
+global.runBatch=async()=>({controls:{errno:0,stdout:''},wakeup:{errno:0,stdout:status}});
+eval(grab('async function kernelPanelLoad(', 'function kernelStateText('));
+eval(grab('function kernelWakeupDrafts(', 'let _wbSourceView'));
+(async()=>{
+ await kernelPanelLoad(false);
+ if(_wbDraft!==null)throw Error('initial empty draft survived first readback');
+ const first=kernelWakeupDrafts();
+ if(first.sleep.length!==1||first.sleep[0]!=='pedometer_minute_lock')throw Error('saved sleep rule not visible: '+JSON.stringify(first));
+ _wbDraft={always:['user_edit'],sleep:[]};_kernelPanel.loaded=false;
+ await kernelPanelLoad(false);
+ if(!_wbDraft||_wbDraft.always[0]!=='user_edit')throw Error('automatic refresh destroyed real edits');
+ await kernelPanelLoad(true);
+ if(_wbDraft!==null)throw Error('explicit refresh did not reconcile saved state');
+ console.log('ok');
+})().catch(e=>{console.error(e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/wakeup.js" "$H" 2>&1)" || { echo "FAIL buildfix27 wakeup: $out" >&2;exit 1; }
+[ "$out" = ok ] || { echo "FAIL buildfix27 wakeup: $out" >&2;exit 1; }
+echo 'PASS WebUI buildfix27: six evidence pills, repair cards, merged Zygisk card, compact kernel/wakeup UI, percent-only GPU pressure, deferred navigation and first-readback wakeup draft'
+)
+
+t_webui_buildfix28_regressions() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI buildfix28: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'static/UI/Settings contract'
+from pathlib import Path
+from PIL import Image
+import json,re,sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
+# Live evidence is lazy and initially collapsed; persistent user expansion still works.
+assert "profileDetailsSection(body, T('pd_live_title', 'What is in effect right now'), false)" in h
+# Soter keeps its primary state/actions and has exactly one secondary disclosure.
+s=h[h.index('function cfgRenderSoterFixCard(list) {'):]
+s=s[:s.index('\n}\n')]
+assert s.count("bfxEl('details'")==1 and 'kernelMoreBlock(' not in s
+assert "secondaryRows.id = 'soterSecondaryRows'" in s
+p=h[h.index('function soterPaint(parsed) {'):];p=p[:p.index('\n}\n')]
+assert "T('soter_row_last'" in p and "T('soter_row_boot'" in p
+assert p.count('soterRow(historyHost')==2 and 'soterAutoPaint(' in p
+# One shared exact-component ledger powers the Infirmary card and dialog.
+assert 'cfgRenderComponentManagerCard(list);' in h
+for token in ('componentManagerCard','wlComponentsModal','component-ledger','activity|service',
+              " + ' manual'", 'wlComponentsRestore','wlComponentsManualSet','Date.now() - _wlComponents.armedAt >= 5000'):
+    assert token in h,token
+shell=(r/'runtime/asb_wakelock_watch.sh').read_text()
+assert 'component-ledger' in shell and '_wl_cmp_declared' in shell and '_orig=default' in shell
+# Every locale carries the expanded, evidence-based Smart explanation and component UI.
+keys=('cmp_card_title','cmp_card_desc','cmp_card_open','cmp_card_count','cmp_dialog_title',
+      'cmp_dialog_copy','cmp_empty','cmp_meta','cmp_add_title','cmp_add_placeholder',
+      'cmp_add_kind','cmp_add_disable','cmp_add_note','cmp_add_invalid','cmp_not_declared')
+locales=list((r/'webroot/i18n').glob('*.json'));assert len(locales)==13
+for f in locales:
+    d=json.loads(f.read_text(encoding='utf-8'))
+    assert len(d.get('pd_smart_note',''))>60,f.name
+    for k in keys: assert d.get(k),f'{f.name}:{k}'
+# Reusable UFO artwork, including splash/header/Zygisk/dynamic copies, carries ASB.
+symbol=h[h.index('<symbol id="asbUfoArt"'):];symbol=symbol[:symbol.index('</symbol>')]
+assert '>ASB</text>' in symbol and h.count('href="#asbUfoArt"')>=6
+im=Image.open(r/'webroot/icon.png');assert im.size==(512,512) and im.mode=='RGB'
+red,green,blue=im.getpixel((0,0));assert green>red*2 and green>blue,(red,green,blue)
+# These vendor/network-policy writers are retired, not merely hidden from diagnostics.
+retired=('assisted_gps_enabled','gps_xtra_server','gps_xtra_server_1','gps_xtra_server_2',
+         'ntp_server','ntp_server_2','ntp_server_3','ntp_server_4',
+         'cloud_dns_happy_eyeballs_priority_enabled')
+for name in ('service.sh','runtime/profile_core.sh'):
+    text=(r/name).read_text()
+    for key in retired:
+        assert not re.search(r'^\s*asb_settings_put\s+\S+\s+'+re.escape(key)+r'\s',text,re.M),(name,key)
+for name in ('profiles/balanced.sh','profiles/battery.sh','profiles/performance.sh'):
+    assert 'NET_HAPPY_EYEBALLS=' not in (r/name).read_text(),name
+print('static ok')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP buildfix28 component runtime: no node'; exit 0; }
+T="$(mktemp -d)";trap 'rm -rf "$T"' EXIT
+cat > "$T/components.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const a=h.indexOf('const _wlComponents ='),b=h.indexOf('const DOZE_MESSENGERS',a);
+if(a<0||b<0)throw Error('component source not found');
+const nodes={wlComponentsModal:{hidden:false},wlComponentsName:{value:''},wlComponentsKind:{value:'activity'}};
+const commands=[],toasts=[];
+global.MD='/m';global._el=id=>nodes[id]||null;global.T=(k,d)=>d;global.bfxT=(k,d,v)=>d.replace('{n}',v.n);
+global.shQuote=s=>"'"+s+"'";global.runText=r=>r&&r.stdout||'';global.toast=(m,k)=>toasts.push(m+':'+k);
+global.run=async c=>{commands.push(c);return{errno:0,stdout:c.includes(' restore ')?'result=restored\n':'result=disabled\n'}};
+eval(h.slice(a,b)+`
+wlComponentsPaint=()=>{};wlComponentsLoad=async()=>{};wlComponentCardLoad=async()=>{};
+(async()=>{
+ const parsed=wlComponentsParse('scan=ok\\nselected=1\\ncomponent|activity|com.example.app/com.example.app.MainActivity|1|disabled|0|saved|1\\ncomponent|service|bad/value/extra|1|disabled|0|saved|1');
+ if(parsed.scan!=='ok'||parsed.selected!==1||parsed.rows.length!==1||parsed.rows[0].state!=='disabled')throw Error('strict ledger parse');
+ nodes.wlComponentsName.value='.ShortService';await wlComponentsManualSet();
+ if(commands.length)throw Error('shorthand reached root writer');
+ nodes.wlComponentsName.value='com.example.app/com.example.app.MainActivity';
+ await wlComponentsManualSet();if(commands.length||_wlComponents.armed!=='com.example.app/com.example.app.MainActivity')throw Error('first tap did not arm exact component');
+ await wlComponentsManualSet();
+ const disable="sh '/m/runtime/asb_wakelock_watch.sh' component-set 'com.example.app' disable 'com.example.app/com.example.app.MainActivity' activity manual";
+ if(commands[0]!==disable)throw Error('wrong manual writer: '+commands[0]);
+ await wlComponentsRestore(parsed.rows[0]);
+ const restore="sh '/m/runtime/asb_wakelock_watch.sh' component-set 'com.example.app' restore 'com.example.app/com.example.app.MainActivity'";
+ if(commands[1]!==restore)throw Error('wrong restore writer: '+commands[1]);
+ if(nodes.wlComponentsName.value!=='')throw Error('confirmed disable did not clear input');
+ console.log('ok');
+})().catch(e=>{console.error(e.stack||e);process.exit(1)});`);
+JS
+out="$(node "$T/components.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI buildfix28: collapsed evidence, expanded Smart, single Soter Details, shared exact component ledger with two-tap manual writer/restore, ASB artwork/icon and retired Settings writers'
+)
+
+t_profile_details_epoch_zero_buildfix27() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)";trap 'rm -rf "$T"' EXIT
+cat > "$T/ledger" <<'L'
+1790000000|profile|apply_begin|balanced||||fixture|
+1790000001|cpu|CPU_MIN_LITTLE|300000|0|300000|applied|fixture
+L
+printf '0\n' > "$T/epoch"
+out="$(MODDIR="$ROOT" ASB_PROFILE_EPOCH_FILE="$T/epoch" ASB_LEDGER="$T/ledger" sh "$ROOT/tools/asb_profile_details.sh" balanced)" || { echo 'FAIL epoch-zero collector' >&2;exit 1; }
+EPOCH_OUT="$out" python3 - <<'PY'
+import json,os
+x=json.loads(os.environ['EPOCH_OUT'])
+assert x['epoch']==0 and x['ledger']['scope']=='saved_history',x['ledger']['scope']
+assert x['ledger']['shown']==1
+PY
+printf '7\n' > "$T/epoch"
+out="$(MODDIR="$ROOT" ASB_PROFILE_EPOCH_FILE="$T/epoch" ASB_LEDGER="$T/ledger" sh "$ROOT/tools/asb_profile_details.sh" balanced)" || { echo 'FAIL epoch collector' >&2;exit 1; }
+EPOCH_OUT="$out" python3 - <<'PY'
+import json,os
+x=json.loads(os.environ['EPOCH_OUT'])
+assert x['epoch']==7 and x['ledger']['scope']=='current_profile_transaction',x['ledger']['scope']
+PY
+echo 'PASS profile evidence epoch: zero is saved history, positive epoch scopes the current transaction'
+)
+
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in

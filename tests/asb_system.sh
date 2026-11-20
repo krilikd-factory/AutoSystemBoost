@@ -10601,8 +10601,8 @@ python3 - "$T/current.json" <<'PY' || fail 'current transaction JSON'
 import json,sys
 p=json.load(open(sys.argv[1]))
 assert p['schema']==1 and p['profile']=='smart' and p['intent_base']=='balanced'
-assert p['epoch']==410 and len(p['intent'])==76
-assert len({x['key'] for x in p['intent']})==76
+assert p['epoch']==410 and len(p['intent'])==75
+assert len({x['key'] for x in p['intent']})==75
 l=p['ledger']; assert l['scope']=='current_profile_transaction' and l['shown']==3,l
 assert [x['key'] for x in l['entries']]==['CPU_MIN_LITTLE','GPU_MIN_FREQ','VM_SWAPPINESS']
 assert l['summary']['applied']==1 and l['summary']['already_set']==1 and l['summary']['unsupported']==1
@@ -10625,7 +10625,7 @@ python3 - "$T/missing.json" <<'PY' || fail 'absent ledger JSON'
 import json,sys
 p=json.load(open(sys.argv[1])); l=p['ledger']
 assert l['scope']=='unavailable' and l['shown']==0 and l['entries']==[]
-assert sum(l['summary'].values())==0 and len(p['intent'])==76 and isinstance(p['io'],list)
+assert sum(l['summary'].values())==0 and len(p['intent'])==75 and isinstance(p['io'],list)
 PY
 if MODDIR="$T/mod" ASB_LEDGER="$T/ledger" sh "$D" stock > "$T/bad" 2>/dev/null; then
   fail 'unsupported profile returned success'
@@ -10638,7 +10638,7 @@ grep -Fq '{"device":"%s","active":"%s","scheduler":"%s"}' "$D" || fail 'active/r
 find "$T/state" -mindepth 1 -print | grep . >/dev/null && fail 'collector created state'
 [ "$(cat "$T/mod/current_profile")" = smart ] || fail 'collector changed selected profile'
 grep -Eq '(^|[[:space:]])(apply_profile|asb_intent|asb_ledger_note)([[:space:]]|$)' "$D" && fail 'collector gained a writer call'
-echo 'PASS profile details collector buildfix26: valid 76-value Smart/Balanced/Battery JSON, exact transaction and legacy scopes, absent-ledger fallback, physical-device-only active/raw I/O evidence and read-only behavior'
+echo 'PASS profile details collector buildfix26: valid 75-value Smart/Balanced/Battery JSON after ROM-owned DNS retirement, exact transaction and legacy scopes, absent-ledger fallback, physical-device-only active/raw I/O evidence and read-only behavior'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

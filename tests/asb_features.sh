@@ -8527,10 +8527,19 @@ out="$(run)"
 printf '%s\n' "$out" | grep 'All configured tweaks verified applied' >/dev/null || fail "empty ledger not clean: $out"
 cat > "$T/ledger" <<'L'
 1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable
+1790000000|settings|cloud_dns_happy_eyeballs_priority_enabled|0|1|fixture|not_writable
+1790000000|settings|assisted_gps_enabled|0|1|fixture|unsupported
+1790000000|settings|gps_xtra_server|0|1|fixture|not_writable
+1790000000|settings|gps_xtra_server_1|0|1|fixture|not_writable
+1790000000|settings|gps_xtra_server_2|0|1|fixture|not_writable
+1790000000|settings|ntp_server|0|1|fixture|unsupported
+1790000000|settings|ntp_server_2|0|1|fixture|not_writable
+1790000000|settings|ntp_server_3|0|1|fixture|not_writable
+1790000000|settings|ntp_server_4|0|1|fixture|not_writable
 1790000001|settings|other_android_key|0|1|fixture|readback_mismatch
 L
 out="$(run)"
-printf '%s\n' "$out" | grep 'Applied except 2 Android setting(s): settings/network_recommendations_enabled, settings/other_android_key' >/dev/null || fail "outstanding refusals not reported: $out"
+printf '%s\n' "$out" | grep 'Applied except 1 Android setting(s): settings/other_android_key' >/dev/null || fail "active refusal not reported or retired key still reported: $out"
 printf '%s\n' "$out" | grep 'All configured tweaks verified applied' >/dev/null && fail 'refusal also printed the all-OK verdict'
 cat > "$T/ledger" <<'L'
 1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable
@@ -8547,7 +8556,7 @@ printf '%s\n' "$out" | grep 'Applied except' >/dev/null && fail "recovered key s
   cat "$ROOT/runtime/i18n/action_ru.sh"
   sed -n '/^if \[ -n "\$_bad" \]; then$/,/^fi$/p' "$A"
 } | sed "s#/data/adb/asb/apply_ledger#$T/ledger#g" > "$T/run-ru.sh"
-printf '1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable\n' > "$T/ledger"
+printf '1790000000|settings|other_android_key|0|1|fixture|not_writable\n' > "$T/ledger"
 out="$(sh "$T/run-ru.sh")"
 printf '%s\n' "$out" | grep 'Применено всё, кроме настроек Android: 1' >/dev/null || fail "Russian refusal missing: $out"
 for f in "$ROOT"/runtime/i18n/action_*.sh; do
@@ -10670,7 +10679,28 @@ grep -qx "$syssvc|default" "$T/state" || f 'system default-state not restored'
 out="$(run sh "$SRC" manual-set com.android.settings ignore)"
 printf '%s\n' "$out" | grep -x 'result=not_user_app' >/dev/null || f "system package reached package-wide WAKE_LOCK controls: $out"
 ! grep -Eq '^appops .*com.android.settings' "$T/pm.log" || f 'system package AppOps restriction attempted'
-[ "$fail" = 0 ] && echo 'PASS wakelock components: current + declared + exact job evidence, Android 17/system Resolver Table rows, reversible state and no polling'
+# buildfix28: the Infirmary may explicitly add a declared-only exact component. Ordinary
+# report rows stay read-only, while the manual flag still requires Package Manager proof,
+# exact read-back and the same ledger. The global ledger survives volatile evidence loss.
+: > "$T/running"; : > "$T/running_act"; : > "$T/jobs"; : > "$T/d/wakelock_services"
+mact='com.example.sync/com.example.sync.MainActivity'
+printf '%s\n' '  Activity Resolver Table:' "    $mact" > "$T/declared"
+out="$(run sh "$SRC" component-set com.example.sync disable "$mact" activity)"
+printf '%s\n' "$out" | grep -x 'result=not_running' >/dev/null || f "ordinary declared-only row became writable: $out"
+out="$(run sh "$SRC" component-set com.example.sync disable "$mact" activity manual)"
+printf '%s\n' "$out" | grep -x 'result=disabled' >/dev/null || f "manual declared Activity was not disabled: $out"
+grep -qx "com.example.sync|$mact|default|activity" "$T/d/wakelock_services" || f 'manual component original state/kind not recorded'
+: > "$T/declared"
+out="$(run sh "$SRC" component-ledger)"
+printf '%s\n' "$out" | grep -x "component|activity|$mact|1|disabled|0|saved|1" >/dev/null || f "shared Infirmary/Infinite Log ledger row missing: $out"
+out="$(run sh "$SRC" component-set com.example.sync restore "$mact")"
+printf '%s\n' "$out" | grep -x 'result=restored' >/dev/null || f "manual component exact restore failed: $out"
+[ ! -s "$T/d/wakelock_services" ] || f 'restored manual component ledger entry retained'
+unknown='com.example.sync/com.example.sync.NotDeclared'
+out="$(run sh "$SRC" component-set com.example.sync disable "$unknown" service manual)"
+printf '%s\n' "$out" | grep -x 'result=not_running' >/dev/null || f "undeclared manual component accepted: $out"
+grep -q "$unknown" "$T/state" && f 'undeclared manual component reached state'
+[ "$fail" = 0 ] && echo 'PASS wakelock components: current + declared + exact job evidence, Android 17/system Resolver Table rows, shared Infirmary ledger, reversible manual entries and no polling'
 exit "$fail"
 )
 
