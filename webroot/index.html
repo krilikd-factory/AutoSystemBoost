@@ -6401,6 +6401,39 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
 .lvh-cat-dot { flex:0 0 auto; width:7px; height:7px; border-radius:50%; }
 .lvh-cat-pct { color:var(--text); font-variant-numeric:tabular-nums; font-weight:700; }
 
+/* buildfix38: one compact EQ console instead of ten ordinary setting cards. The response
+ * plot is a static SVG derived from the saved bands; it has no timer, animation or root read. */
+.dsp-eq-console { padding:16px !important; overflow:hidden; background:linear-gradient(145deg,rgba(251,95,79,.075),transparent 42%),var(--card) !important; }
+.dsp-eq-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.dsp-eq-title { min-width:0; color:var(--text); font:800 17px/1.2 var(--sans); letter-spacing:-.015em; }
+.dsp-eq-mark { flex:0 0 auto; padding:5px 8px; border:1px solid rgba(251,95,79,.28); border-radius:7px; color:#fb5f4f; font:800 9px/1 var(--mono); letter-spacing:.12em; }
+.dsp-eq-outputs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; margin:14px 0 12px; padding:4px; border-radius:12px; background:rgba(127,127,127,.075); }
+.dsp-eq-outputs button, .dsp-eq-bands button { min-width:0; min-height:38px; border:0; border-radius:9px; background:transparent; color:var(--text-secondary); font:700 12px/1.15 var(--sans); }
+.dsp-eq-outputs button.on { color:#fff; background:#fb5f4f; box-shadow:0 3px 12px rgba(251,95,79,.18); }
+.dsp-eq-plot { position:relative; height:76px; margin:0 0 10px; border-radius:11px; background:rgba(0,0,0,.16); overflow:hidden; }
+.dsp-eq-plot svg { display:block; width:100%; height:100%; }
+.dsp-eq-grid { stroke:var(--border); stroke-width:.7; stroke-dasharray:2 5; }
+.dsp-eq-zero { stroke:var(--text-tertiary); stroke-width:.8; opacity:.5; }
+.dsp-eq-curve { fill:none; stroke:#fb5f4f; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+.dsp-eq-bands { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin:0 0 8px; }
+.dsp-eq-bands button { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:3px; min-height:49px; padding:7px 10px; text-align:left; border:1px solid var(--border); }
+.dsp-eq-bands button.on { border-color:rgba(251,95,79,.48); color:var(--text); background:rgba(251,95,79,.09); }
+.dsp-eq-band-hz { color:var(--text-tertiary); font:600 9px/1 var(--mono); font-variant-numeric:tabular-nums; }
+.dsp-eq-bands button.on .dsp-eq-band-hz { color:#fb8b80; }
+.dsp-eq-editor { padding:1px 2px 0; }
+.dsp-eq-editor .cfg-row { margin:0 !important; padding:8px 0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
+.dsp-eq-editor .cfg-row-top { display:grid; grid-template-columns:92px minmax(0,1fr); align-items:center; gap:10px; min-height:38px; }
+.dsp-eq-editor .cfg-icon, .dsp-eq-editor .cfg-status-row, .dsp-eq-editor .cfg-caret, .dsp-eq-editor .cfg-row-desc { display:none !important; }
+.dsp-eq-editor .cfg-main { min-width:0; }
+.dsp-eq-editor .cfg-name { color:var(--text-secondary); font:650 11px/1.25 var(--sans); }
+.dsp-eq-editor .cfg-range { display:grid; grid-template-columns:minmax(0,1fr) 48px; align-items:center; gap:8px; width:100%; }
+.dsp-eq-editor .cfg-range input { width:100%; min-width:0; margin:0; accent-color:#fb5f4f; }
+.dsp-eq-editor .cfg-range-val { position:static; min-width:0; padding:0; color:var(--text); background:transparent; font:700 11px/1 var(--mono); text-align:right; font-variant-numeric:tabular-nums; }
+.dsp-eq-details { margin-top:7px; border-top:1px solid var(--border); }
+.dsp-eq-details summary { padding:9px 1px 0; color:var(--text-tertiary); font:600 10px/1.3 var(--sans); cursor:pointer; }
+.dsp-eq-details .cfg-row-desc { padding:8px 1px 0; font-size:11px; line-height:1.45; }
+@media (max-width:360px) { .dsp-eq-console { padding:13px !important; } .dsp-eq-editor .cfg-row-top { grid-template-columns:78px minmax(0,1fr); gap:7px; } }
+
 </style>
 </head>
 <body>
@@ -9083,20 +9116,25 @@ function lvDrainHome(banner) {
 const _lvMeter = { at: 0, cur: '', p: {}, boot: null, night: null };
 /* fix248: screen-on and screen-off seconds since the phone started, counted by the drain
  * meter ("<boot id> <on> <off>"); null until the meter has written one this boot. */
-function lvBootParse(text) {
+function lvBootParse(text, uptimeS) {
   const f = String(text || '').trim().split(/\s+/);
   if (f.length < 3) return null;
   const n = f.slice(1, 7).map(function (x) { return parseInt(x, 10); });
   if (!n.slice(0, 2).every(function (x) { return Number.isFinite(x) && x >= 0; })) return null;
+  /* Kernel elapsed time is the upper bound for a this-boot meter. It rejects a stale or
+   * corrupt boot file instead of presenting its duration and synthetic no-drop rate. */
+  const up = parseInt(uptimeS, 10);
+  if (Number.isFinite(up) && up >= 0 && n[0] + n[1] > up + 90) return null;
   return { on:n[0], off:n[1], onX:Number.isFinite(n[2]) ? n[2] : 0,
     last:Number.isFinite(n[3]) ? n[3] : 0, lastS:Number.isFinite(n[4]) ? n[4] : 0,
     lastAt:Number.isFinite(n[5]) ? n[5] : 0 };
 }
 function lvBootOnFigure() {
   const b = _lvMeter.boot;
-  if (!b || b.on < 60) return null;
-  return { x:b.onX > 0 ? Math.round(b.onX * 360 / b.on) : Math.max(1, Math.ceil(360000 / b.on)),
-    upper:!(b.onX > 0), s:b.on };
+  /* Without an observed battery-level step there is no measured rate. An upper bound from
+   * a few quiet minutes becomes an absurd 100%/h and a false time-to-empty forecast. */
+  if (!b || b.on < 60 || !(b.onX > 0)) return null;
+  return { x:Math.round(b.onX * 360 / b.on), upper:false, s:b.on };
 }
 function lvNightParse(text) {
   const f = String(text || '').trim().split(/\s+/);
@@ -9140,14 +9178,14 @@ function lvMeterParse(text) {
 }
 /* fix189: with the governor's per-profile screen-off figures, read from its file so the
  * home cards have them on every profile, Stock included (no state is read there). */
-const LV_METER_CMD = '{ cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null; }; echo ---; cat /data/adb/asb/offdrain_profiles 2>/dev/null; echo ---; cat /dev/.asb_drain_meter.boot 2>/dev/null; echo ---; cat /data/adb/asb/drain_meter.night 2>/dev/null';
+const LV_METER_CMD = '{ cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null; }; echo ---; cat /data/adb/asb/offdrain_profiles 2>/dev/null; echo ---; cat /dev/.asb_drain_meter.boot 2>/dev/null; echo ---; cat /data/adb/asb/drain_meter.night 2>/dev/null; echo ---; cut -d" " -f1 /proc/uptime 2>/dev/null';
 function lvMeterApply(text, cached) {
   const parts = String(text || '').split('---');
   const m = lvMeterParse(parts[0] || '');
   if (cached && !Object.keys(m.p).length) return;
   _lvMeter.cur = m.cur; _lvMeter.p = m.p;
   _lvGovOff.by = lvGovOffParse(parts[1] || '');
-  _lvMeter.boot = lvBootParse(parts[2] || '');
+  _lvMeter.boot = lvBootParse(parts[2] || '', parts[4] || '');
   _lvMeter.night = lvNightParse(parts[3] || '');
   if (!cached) { _lvMonCache.meter = String(text || ''); lvMonCacheSave(); }
   if (document.body && !document.body.classList.contains('live-active')) homeMeterPaint();
@@ -12131,32 +12169,92 @@ async function junkCleanupRun() {
   else { uiSound('success'); toast(bfxT('junk_done', 'Removed: {count} · freed {size}', { count:junkNum(parsed.head.removed_count), size:junkBytes(parsed.head.freed_bytes) }), 'ok'); }
 }
 
-function cfgRenderParametricEqCard(list) {
-  const card = document.createElement('section');
-  card.className = 'cfg-card cat-audio dsp-eq-card';
-  const title = document.createElement('div'); title.className = 'cfg-section-title';
-  title.textContent = T('dsp_eq_title', 'Parametric EQ · per output'); card.appendChild(title);
-  const note = document.createElement('div'); note.className = 'cfg-row-desc';
-  note.textContent = T('dsp_eq_desc', 'Three independent parametric bands for Speaker, Wired and Bluetooth. Frequency, Q and gain are stored separately for each output. Zero gain disables a band.');
-  card.appendChild(note);
-  const targets = ['speaker','wired','bt'];
-  let target = String(_cfgVals.dsp_eq_target || 'speaker');
-  if (targets.indexOf(target) < 0) target = 'speaker';
-  cfgRenderRow(card, {key:'dsp_eq_target',type:'seg',def:'speaker',opts:targets,
-    name:T('dsp_eq_output','EQ output'),desc:T('dsp_eq_output_desc','Selects which independently stored EQ you are editing.')}, false);
-  const names = [T('dsp_eq_band_low','Low band'),T('dsp_eq_band_mid','Mid band'),T('dsp_eq_band_high','High band')];
-  for (let b=0;b<3;b++) {
-    const h=document.createElement('div');h.className='cfg-section-title';h.textContent=names[b];card.appendChild(h);
-    const prefix='dsp_eq_'+target+'_b'+b;
-    const fdef=b===0?'100':(b===1?'1000':'8000');
-    cfgRenderRow(card,{key:prefix+'_f',type:'range',def:fdef,min:40,max:16000,step:10,
-      name:T('dsp_eq_frequency','Frequency'),desc:T('dsp_eq_frequency_desc','Band centre in Hz.')},false);
-    cfgRenderRow(card,{key:prefix+'_q',type:'range',def:'10',min:3,max:40,step:1,
-      name:T('dsp_eq_q','Q × 10'),desc:T('dsp_eq_q_desc','Bandwidth: 3 means Q 0.3; 40 means Q 4.0.')},false);
-    cfgRenderRow(card,{key:prefix+'_g',type:'range',def:'0',min:-120,max:120,step:5,
-      name:T('dsp_eq_gain','Gain × 0.1 dB'),desc:T('dsp_eq_gain_desc','Range −12…+12 dB. Zero bypasses this band.')},false);
+let _dspEqBand = 0;
+function cfgEqPlotPaint(svg, target, preview) {
+  if (!svg) return;
+  const ns='http://www.w3.org/2000/svg', W=320, H=76, mid=H/2;
+  const line=svg.querySelector('.dsp-eq-curve');
+  const points=[];
+  for (let n=0;n<=64;n++) {
+    const freq=40*Math.pow(400,n/64), w=2*Math.PI*freq/48000;
+    const c1=Math.cos(w), s1=Math.sin(w), c2=Math.cos(2*w), s2=Math.sin(2*w);
+    let db=0;
+    for (let b=0;b<3;b++) {
+      const prefix='dsp_eq_'+target+'_b'+b;
+      const draft=preview||{};
+      const f=parseInt(draft[prefix+'_f']!==undefined?draft[prefix+'_f']:_cfgVals[prefix+'_f'],10)||(b===0?100:(b===1?1000:8000));
+      const q=(parseInt(draft[prefix+'_q']!==undefined?draft[prefix+'_q']:_cfgVals[prefix+'_q'],10)||10)/10;
+      const g=parseInt(draft[prefix+'_g']!==undefined?draft[prefix+'_g']:_cfgVals[prefix+'_g'],10)||0;
+      if (!g) continue;
+      const A=Math.pow(10,g/400), w0=2*Math.PI*Math.max(40,Math.min(16000,f))/48000;
+      const alpha=Math.sin(w0)/(2*q), cw=Math.cos(w0);
+      const b0=1+alpha*A, b1=-2*cw, b2=1-alpha*A;
+      const a0=1+alpha/A, a1=-2*cw, a2=1-alpha/A;
+      const nr=b0+b1*c1+b2*c2, ni=-b1*s1-b2*s2;
+      const dr=a0+a1*c1+a2*c2, di=-a1*s1-a2*s2;
+      const den=dr*dr+di*di;
+      if (den>0) {
+        const rr=(nr*dr+ni*di)/den, ri=(ni*dr-nr*di)/den;
+        db+=20*Math.log10(Math.max(1e-6,Math.sqrt(rr*rr+ri*ri)));
+      }
+    }
+    const x=n*W/64, y=mid-Math.max(-12,Math.min(12,db))*2.45;
+    points.push((n?'L':'M')+x.toFixed(1)+' '+y.toFixed(1));
   }
-  list.appendChild(card);
+  line.setAttribute('d',points.join(' '));
+}
+function cfgRenderParametricEqCard(list) {
+  const card=document.createElement('section');
+  card.className='cfg-card cat-audio dsp-eq-console';
+  const targets=['speaker','wired','bt'];
+  const names=[T('dsp_eq_band_low','Low band'),T('dsp_eq_band_mid','Mid band'),T('dsp_eq_band_high','High band')];
+  function render() {
+    card.textContent='';
+    let target=String(_cfgVals.dsp_eq_target||'speaker');
+    if (targets.indexOf(target)<0) target='speaker';
+    const head=document.createElement('div');head.className='dsp-eq-head';
+    const title=document.createElement('div');title.className='dsp-eq-title';title.textContent=T('dsp_eq_title','Parametric EQ · per output');
+    const mark=document.createElement('span');mark.className='dsp-eq-mark';mark.textContent='3 BAND · PEQ';
+    head.appendChild(title);head.appendChild(mark);card.appendChild(head);
+    const outputs=document.createElement('div');outputs.className='dsp-eq-outputs';outputs.setAttribute('role','group');outputs.setAttribute('aria-label',T('dsp_eq_output','EQ output'));
+    targets.forEach(o=>{
+      const btn=document.createElement('button');btn.type='button';btn.textContent=Topt(o,'dsp_eq_target');
+      if(o===target){btn.className='on';btn.setAttribute('aria-pressed','true');}else btn.setAttribute('aria-pressed','false');
+      btn.onclick=async e=>{e.stopPropagation();if(o===target)return;const ok=await cfgSet('dsp_eq_target',o,btn);if(ok!==false)render();};
+      outputs.appendChild(btn);
+    });card.appendChild(outputs);
+    const plot=document.createElement('div');plot.className='dsp-eq-plot';
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 320 76');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-hidden','true');
+    const grid=document.createElementNS('http://www.w3.org/2000/svg','path');grid.setAttribute('class','dsp-eq-grid');grid.setAttribute('d','M0 12H320M0 64H320M80 0V76M160 0V76M240 0V76');
+    const zero=document.createElementNS('http://www.w3.org/2000/svg','path');zero.setAttribute('class','dsp-eq-zero');zero.setAttribute('d','M0 38H320');
+    const curve=document.createElementNS('http://www.w3.org/2000/svg','path');curve.setAttribute('class','dsp-eq-curve');
+    svg.appendChild(grid);svg.appendChild(zero);svg.appendChild(curve);plot.appendChild(svg);card.appendChild(plot);
+    const bands=document.createElement('div');bands.className='dsp-eq-bands';
+    for(let b=0;b<3;b++){
+      const prefix='dsp_eq_'+target+'_b'+b, f=_cfgVals[prefix+'_f']||(b===0?'100':(b===1?'1000':'8000'));
+      const btn=document.createElement('button');btn.type='button';
+      if(b===_dspEqBand){btn.className='on';btn.setAttribute('aria-pressed','true');}else btn.setAttribute('aria-pressed','false');
+      const nm=document.createElement('span');nm.textContent=names[b];
+      const hz=document.createElement('span');hz.className='dsp-eq-band-hz';hz.textContent=f+' Hz';
+      btn.appendChild(nm);btn.appendChild(hz);btn.onclick=e=>{e.stopPropagation();_dspEqBand=b;render();};bands.appendChild(btn);
+    }card.appendChild(bands);
+    const editor=document.createElement('div');editor.className='dsp-eq-editor';
+    const b=_dspEqBand, prefix='dsp_eq_'+target+'_b'+b, fdef=b===0?'100':(b===1?'1000':'8000');
+    cfgRenderRow(editor,{key:prefix+'_f',type:'range',def:fdef,min:40,max:16000,step:10,name:T('dsp_eq_frequency','Frequency'),desc:T('dsp_eq_frequency_desc','Band centre in Hz.')},false);
+    cfgRenderRow(editor,{key:prefix+'_q',type:'range',def:'10',min:3,max:40,step:1,name:T('dsp_eq_q','Q × 10'),desc:T('dsp_eq_q_desc','Bandwidth: 3 means Q 0.3; 40 means Q 4.0.')},false);
+    cfgRenderRow(editor,{key:prefix+'_g',type:'range',def:'0',min:-120,max:120,step:5,name:T('dsp_eq_gain','Gain × 0.1 dB'),desc:T('dsp_eq_gain_desc','Range −12…+12 dB. Zero bypasses this band.')},false);
+    card.appendChild(editor);
+    const details=document.createElement('details');details.className='dsp-eq-details';
+    const summary=document.createElement('summary');summary.textContent=T('dsp_eq_output_desc','Selects which independently stored EQ you are editing.');
+    const note=document.createElement('div');note.className='cfg-row-desc';note.textContent=T('dsp_eq_desc','Three independent parametric bands for Speaker, Wired and Bluetooth. Frequency, Q and gain are stored separately for each output. Zero gain disables a band.');
+    details.appendChild(summary);details.appendChild(note);card.appendChild(details);
+    editor.querySelectorAll('input[type="range"]').forEach(r=>r.addEventListener('input',()=>{
+      const preview={};editor.querySelectorAll('input[type="range"]').forEach(x=>{preview[x.closest('.cfg-row').getAttribute('data-key')]=x.value;});
+      cfgEqPlotPaint(svg,target,preview);bands.children[b].querySelector('.dsp-eq-band-hz').textContent=editor.querySelector('input').value+' Hz';
+    }));
+    cfgEqPlotPaint(svg,target);
+  }
+  render();list.appendChild(card);
 }
 
 function cfgRenderGroup(list, groupId) {
