@@ -1496,7 +1496,10 @@ apply_net() {
   sysctlw net.ipv4.tcp_max_orphans 8192
   sysctlw net.ipv4.tcp_rfc1337 1
   [ -n "$_P_UDP_MEM" ] && [ -e /proc/sys/net/ipv4/udp_mem ] && sysctlw net.ipv4.udp_mem "$_P_UDP_MEM"
-  [ -n "$_P_HAPPY_EYEBALLS" ] && asb_settings_put system cloud_dns_happy_eyeballs_priority_enabled "$_P_HAPPY_EYEBALLS"
+  # buildfix28: cloud_dns_happy_eyeballs_priority_enabled is a vendor-private,
+  # optional key, not a portable network profile control. Recent ColorOS builds reject
+  # it or expose no key; leaving DNS Happy Eyeballs to the ROM avoids repeated refused
+  # writes and does not claim an unapplied value as active.
   sysctlw net.ipv4.tcp_keepalive_time   $_P_TCP_KEEPIDLE
   sysctlw net.ipv4.tcp_keepalive_intvl  75
   sysctlw net.ipv4.tcp_keepalive_probes 9
@@ -1775,15 +1778,12 @@ asb_wifi_link_reassert() {
 }
 # ASB:GPS:BEGIN
 apply_gps_hygiene() {
-  has settings || return 0
-  asb_settings_put global assisted_gps_enabled 1
-  asb_settings_put global gps_xtra_server "https://xtra3.gpsonextra.net/xtra3grc.bin"
-  asb_settings_put global gps_xtra_server_1 "https://xtra2.gpsonextra.net/xtra2.bin"
-  asb_settings_put global gps_xtra_server_2 "https://xtra1.gpsonextra.net/xtra.bin"
-  asb_settings_put global ntp_server time.google.com
-  asb_settings_put global ntp_server_2 ntp1.inrim.it
-  asb_settings_put global ntp_server_3 0.it.pool.ntp.org
-  asb_settings_put global ntp_server_4 1.it.pool.ntp.org
+  # buildfix28: leave assisted GPS, XTRA download endpoints and NTP server selection
+  # to the ROM. These are optional vendor/network-policy settings, not a safe universal
+  # GNSS repair: current ColorOS builds reject several of them, and replacing a user's
+  # or carrier's endpoint choices has no verified accuracy or battery benefit. Retire
+  # every active writer rather than filtering their refusal evidence in diagnostics.
+  return 0
 }
 # GPS settings are applied with deferred connectivity after boot completion.
 asb_timeline_mark service_connectivity_complete
@@ -3445,7 +3445,6 @@ apply_extra_settings() {
   # the reboot, and the full-day recorder's SystemUI restart check found "Drop box contents:
   # 4 entries, Max entries: 5" with no crash among them. The saving was a few small files.
   asb_settings_put global dropbox_max_files 50
-  asb_settings_put global network_recommendations_enabled 0
   asb_settings_put global activity_starts_logging_enabled 0
   # Moved to runtime/asb_system_tweaks.sh, driven by phantom_procs. Setting it here as
   # well would mean the module overrides the user's choice on every boot - the exact
@@ -4349,7 +4348,6 @@ fi
     fi
   fi
   asb_log "light reinforce 60s profile=$ASB_PROFILE"
-  has settings && asb_settings_put global network_recommendations_enabled 0
   # If the user opted to manage OEM toggles, OxygenOS often re-enables RAM
   if [ -r "$MODDIR/config/governor.conf" ]; then
     _oem="$(grep -E '^[[:space:]]*UX_MANAGE_OEM_TOGGLES=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
