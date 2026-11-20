@@ -159,16 +159,44 @@ _zygisk_sync() {
   [ -d "${POLICY%/*}" ] || { _zygisk_sync_done; echo 'policy=unavailable'; return 1; }
   _s_gen="$(date +%s 2>/dev/null)"
   case "$_s_gen" in ''|*[!0-9]*) _s_gen=1 ;; esac
+  # Compare the semantic payload in tmpfs before touching the module partition. An
+  # unchanged boot/WebUI sync must not replace policy, advance its generation or cause
+  # the companion to parse the same 24 KiB contract again.
+  if mkdir -p "$AUTO_RUN" 2>/dev/null; then
+    _s_payload="$AUTO_RUN/policy.payload.$$.tmp"
+  else
+    # Host fixtures and recovery shells may not have /dev/.asb yet. The state directory
+    # is root-only too; production normally takes the tmpfs branch above.
+    _s_payload="$ZDIR/policy.payload.$$.tmp"
+  fi
+  rm -f "$_s_payload" 2>/dev/null
   {
-    printf 'v=2\ngen=%s\nobserver=%s\nhints=%s\nlaunch=%s\nledger=%s\n' \
-      "$_s_gen" "$_s_obs" "$_s_hints" "$_s_launch" "$_s_ledger"
+    printf 'observer=%s\nhints=%s\nlaunch=%s\nledger=%s\n' \
+      "$_s_obs" "$_s_hints" "$_s_launch" "$_s_ledger"
     printf '%s\n' "$_s_pkgs" | while IFS= read -r _s_p; do
       if [ -n "$_s_p" ]; then printf 'pkg=%s\n' "$_s_p"; fi
     done
     printf '%s\n' "$_s_excl" | while IFS= read -r _s_x; do
       if [ -n "$_s_x" ]; then printf 'xpkg=%s\n' "$_s_x"; fi
     done
-  } > "$POLICY.tmp" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
+  } > "$_s_payload" 2>/dev/null || { rm -f "$_s_payload" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
+  if [ -s "$POLICY" ] && sed -e '/^gen=/d' -e '/^v=2$/d' "$POLICY" 2>/dev/null | cmp -s - "$_s_payload"; then
+    _s_gen="$(sed -n 's/^gen=//p' "$POLICY" 2>/dev/null | head -n 1)"
+    rm -f "$_s_payload" 2>/dev/null
+    if ! _zygisk_classes; then
+      _zygisk_sync_restore
+      echo 'policy=rolled_back reason=classes_write_failed'
+      return 1
+    fi
+    _zygisk_sync_done
+    echo "policy=unchanged gen=$_s_gen observer=$_s_obs hints=$_s_hints launch=$_s_launch ledger=$_s_ledger"
+    return 0
+  fi
+  {
+    printf 'v=2\ngen=%s\n' "$_s_gen"
+    cat "$_s_payload"
+  } > "$POLICY.tmp" 2>/dev/null || { rm -f "$POLICY.tmp" "$_s_payload" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
+  rm -f "$_s_payload" 2>/dev/null
   chmod 600 "$POLICY.tmp" 2>/dev/null || true
   chcon u:object_r:system_file:s0 "$POLICY.tmp" 2>/dev/null || true
   mv -f "$POLICY.tmp" "$POLICY" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
