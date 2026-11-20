@@ -2,6 +2,7 @@
 #include "asb_observer_core.h"
 
 #include <cerrno>
+#include <cstddef>
 #include <cstdlib>
 #include <fcntl.h>
 #include <map>
@@ -190,10 +191,17 @@ GovernorHintResult request_governor(const char *command) {
     if (fd < 0) return GovernorHintResult::unavailable;
     struct sockaddr_un client_addr {};
     client_addr.sun_family = AF_UNIX;
-    std::snprintf(client_addr.sun_path, sizeof(client_addr.sun_path),
-                  "%s/zygisk_hint_%d.sock", ASB_GOVERNOR_CLIENT_DIR, static_cast<int>(getpid()));
-    unlink(client_addr.sun_path);
-    if (bind(fd, reinterpret_cast<struct sockaddr *>(&client_addr), sizeof(client_addr)) != 0) {
+    /* An abstract Linux socket gives the governor a reply address without creating a
+     * filesystem node. There is no stale socket after process death and no unlink() in
+     * the launch hot path. The abstract name is private to this one-shot PID socket. */
+    const int client_name = std::snprintf(client_addr.sun_path + 1, sizeof(client_addr.sun_path) - 1,
+                                          "asb-zygisk-hint-%d", static_cast<int>(getpid()));
+    if (client_name <= 0 || static_cast<size_t>(client_name) >= sizeof(client_addr.sun_path) - 1) {
+        close(fd);
+        return GovernorHintResult::unavailable;
+    }
+    const socklen_t client_len = static_cast<socklen_t>(offsetof(struct sockaddr_un, sun_path) + 1 + client_name);
+    if (bind(fd, reinterpret_cast<struct sockaddr *>(&client_addr), client_len) != 0) {
         close(fd);
         return GovernorHintResult::unavailable;
     }
@@ -212,7 +220,6 @@ GovernorHintResult request_governor(const char *command) {
         if (got > 0) result = std::strcmp(reply, "ok") == 0
             ? GovernorHintResult::accepted : GovernorHintResult::vetoed;
     }
-    unlink(client_addr.sun_path);
     close(fd);
     return result;
 }
@@ -252,7 +259,7 @@ public:
             const int result = read_frame(client, frame);
             const int64_t now = asb_observer_boottime_ms();
             AsbObserverPolicy policy;
-            load_policy_root(policy);
+            load_policy_cached(policy);
             Request request = Request::none;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -343,6 +350,36 @@ private:
         }
     }
 
+    /* The root companion is long-lived, so unlike the app-side object it CAN reuse a
+     * parsed policy. Atomic policy replacement changes the inode; size and nanosecond
+     * mtime close the remaining same-inode update cases. An absent, malformed or
+     * inaccessible update is cached as inactive too: fail closed, never reuse an older
+     * allowlist. Only the 24 KiB policy copy remains on an unchanged event; the open,
+     * read and strict parse do not. */
+    void load_policy_cached(AsbObserverPolicy &policy) {
+        std::lock_guard<std::mutex> lock(policy_cache_mutex_);
+        struct stat st {};
+        if (stat(ASB_ZYGISK_POLICY_ABS, &st) != 0 || !S_ISREG(st.st_mode)) {
+            policy = AsbObserverPolicy();
+            policy_cache_ = policy;
+            policy_cache_ino_ = 0; policy_cache_size_ = -1; policy_cache_mtime_ns_ = -1;
+            return;
+        }
+        const int64_t mtime_ns = static_cast<int64_t>(st.st_mtim.tv_sec) * 1000000000LL + st.st_mtim.tv_nsec;
+        if (static_cast<uint64_t>(st.st_ino) == policy_cache_ino_ &&
+            static_cast<int64_t>(st.st_size) == policy_cache_size_ && mtime_ns == policy_cache_mtime_ns_) {
+            policy = policy_cache_;
+            ++policy_cache_hits_;
+            return;
+        }
+        policy_cache_ino_ = static_cast<uint64_t>(st.st_ino);
+        policy_cache_size_ = static_cast<int64_t>(st.st_size);
+        policy_cache_mtime_ns_ = mtime_ns;
+        ++policy_reads_;
+        load_policy_root(policy_cache_);
+        policy = policy_cache_;
+    }
+
     /* fix339: one thread for the whole companion, blocked in poll() on the process fds of the
      * observed apps and an eventfd that announces a new one. No timeout: it runs only when an
      * observed app exits or starts. */
@@ -398,7 +435,7 @@ private:
             const uint64_t cpu_before = cpu_us();
             const int64_t now = asb_observer_boottime_ms();
             AsbObserverPolicy policy;
-            load_policy_root(policy);
+            load_policy_cached(policy);
             Request request = Request::none;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -451,12 +488,13 @@ private:
         }
     }
 
-    Request refresh_locked(bool changed, const AsbObserverPolicy &policy, int64_t now) {
+    Request refresh_locked(bool changed, const AsbObserverPolicy &policy, int64_t now, int screen_on = -2) {
         if (!changed || !policy.valid || !policy.hints) return Request::none;
         /* fix286: the governor vetoes a refresh with the screen off; when it has published
          * screen=0 the round trip (a governor wakeup per observed start or exit during sleep)
          * is not made at all. An unknown state still asks. */
-        if (governor_screen_on() == 0) { ++hints_screen_off_; return Request::none; }
+        if (screen_on == -2) screen_on = governor_screen_on();
+        if (screen_on == 0) { ++hints_screen_off_; return Request::none; }
         if (!core_.hint_permit(now)) { ++hints_throttled_; return Request::none; }
         ++policy_hints_;
         return Request::refresh;
@@ -465,6 +503,11 @@ private:
     Request spawn_locked(const AsbObserverFrame &frame, const AsbObserverPolicy &policy, int64_t now,
                          SpawnTrack &track) {
         ++spawn_events_;
+        int screen_on = -2;
+        const auto published_screen = [&screen_on]() {
+            if (screen_on == -2) screen_on = governor_screen_on();
+            return screen_on;
+        };
         if (!policy.valid) { ++policy_absent_; return Request::none; }
         if (policy.excluded(frame.package)) {
             /* One owner exclusion covers observation, the ledger and launch assistance. Do not
@@ -476,24 +519,24 @@ private:
         policy_generation_ = policy.generation;
         const bool top = (frame.flags & ASB_OBSERVER_FLAG_TOP_APP) != 0;
         if ((frame.flags & ASB_OBSERVER_FLAG_LEDGER) && policy.ledger)
-            core_.ledger_record(frame.package, governor_screen_on(), top, now);
+            core_.ledger_record(frame.package, published_screen(), top, now);
         if (frame.flags & ASB_OBSERVER_FLAG_DENYLIST) ++denylist_spawns_;
         bool started = false;
         if ((frame.flags & ASB_OBSERVER_FLAG_OBSERVE) && policy.observer && policy.selected(frame.package)) {
             track = observe_locked(frame, now);
             started = track == SpawnTrack::tracked;
         }
-        if (!(frame.flags & ASB_OBSERVER_FLAG_LAUNCH) || !policy.launch) return refresh_locked(started, policy, now);
+        if (!(frame.flags & ASB_OBSERVER_FLAG_LAUNCH) || !policy.launch) return refresh_locked(started, policy, now, published_screen());
         ++launch_events_;
         /* A published screen-off state already proves that the governor will veto a launch
          * lift. Do not wake it for that fixed answer: count a local veto, keep the ledger,
          * and leave the one-second launch budget untouched for the next real screen-on start.
          * Unknown state still asks the governor, exactly like the lifecycle-hint path. */
-        if (governor_screen_on() == 0) {
+        if (published_screen() == 0) {
             ++launch_screen_off_; ++launch_vetoed_;
             return Request::none;
         }
-        if (!core_.launch_permit(now)) { ++launch_throttled_; return refresh_locked(started, policy, now); }
+        if (!core_.launch_permit(now)) { ++launch_throttled_; return refresh_locked(started, policy, now, published_screen()); }
         classes_locked();
         switch (classes_.lookup(frame.package)) {
             case ASB_LAUNCH_LONG: ++launch_long_; return Request::launch_long;
@@ -542,6 +585,8 @@ private:
         out << "Z\tupdated_boottime_ms\t" << now << "\n";
         out << "Z\tpolicy_generation\t" << (policy.valid ? policy.generation : policy_generation_) << "\n";
         out << "Z\tpolicy_generation_seen\t" << policy_generation_ << "\n";
+        out << "Z\tpolicy_reads\t" << policy_reads_ << "\n";
+        out << "Z\tpolicy_cache_hits\t" << policy_cache_hits_ << "\n";
         out << "Z\tevents_total\t" << core_.events_total() << "\n";
         out << "Z\tevents_dropped_total\t" << core_.dropped() << "\n";
         out << "Z\tevents_dropped_rate_limit\t" << core_.rate_limited() << "\n";
@@ -630,6 +675,10 @@ private:
 
     std::mutex mutex_;
     std::mutex ipc_mutex_;
+    std::mutex policy_cache_mutex_;
+    AsbObserverPolicy policy_cache_ {};
+    uint64_t policy_cache_ino_ = 0, policy_reads_ = 0, policy_cache_hits_ = 0;
+    int64_t policy_cache_size_ = -1, policy_cache_mtime_ns_ = -1;
     AsbObserverCore core_;
     std::map<int, RssSample> rss_cache_;
     uint64_t rss_reads_ = 0;
@@ -654,16 +703,15 @@ private:
 
 class Observer final : public zygisk::ModuleBase {
 public:
-    /* Where this runs depends on the loader. Magisk forks first and then dlopens the module
-     * in the child, so onLoad runs once per app process (ZygiskContext::app_specialize_pre ->
-     * run_modules_pre) and this probe is one open/close per process. A loader that calls onLoad
-     * in zygote runs it once. Either way, if the absolute path is blocked (EACCES under
-     * SELinux), read_policy goes straight to the loader's module-directory fd. */
+    /* Magisk constructs this object in each freshly forked app process. Keep onLoad
+     * allocation- and syscall-free; the actual policy read handles both the absolute
+     * path and the loader's module-directory fallback. */
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
         api_ = api; env_ = env;
-        const int fd = open(ASB_ZYGISK_POLICY_ABS, O_RDONLY | O_CLOEXEC);
-        if (fd >= 0) { close(fd); abs_path_ = true; }
-        else abs_path_ = errno == ENOENT;
+        /* No probe here: preAppSpecialize already tries the absolute path once and
+         * falls back to the loader fd on EACCES. A second onLoad open/close per app
+         * process paid for information that the real read immediately obtained again. */
+        abs_path_ = true;
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
