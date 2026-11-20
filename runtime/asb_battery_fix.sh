@@ -87,11 +87,19 @@ _bf_compile_one() {
 }
 _bf_schedule_bgjob() {
   [ "${ASB_BFIX_NO_BGJOB:-0}" != 1 ] || return 1
-  command -v cmd >/dev/null 2>&1 || return 1
-  _bgo="$(cmd package bg-dexopt-job 2>&1)"; _bgrc=$?
-  [ "$_bgrc" -eq 0 ] || return 1
-  case "$_bgo" in *[Ff]ail*|*[Ee]rror*|*Exception*|*'not found'*) return 1 ;; esac
-  return 0
+  if command -v cmd >/dev/null 2>&1; then
+    _bgo="$(cmd package bg-dexopt-job 2>&1)"; _bgrc=$?
+    if [ "$_bgrc" -eq 0 ]; then
+      case "$_bgo" in *[Ff]ail*|*[Ee]rror*|*Exception*|*'not found'*) ;; *) return 0 ;; esac
+    fi
+  fi
+  if command -v pm >/dev/null 2>&1; then
+    _bgo="$(pm bg-dexopt-job 2>&1)"; _bgrc=$?
+    if [ "$_bgrc" -eq 0 ]; then
+      case "$_bgo" in *[Ff]ail*|*[Ee]rror*|*Exception*|*'not found'*) ;; *) return 0 ;; esac
+    fi
+  fi
+  return 1
 }
 _prog_write() {
   _t="$PROG.tmp.$$"
