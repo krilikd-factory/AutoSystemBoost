@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-660-dev66-buildfix33-source",
-  "base": "AutoSystemBoost-V66-660-dev66-buildfix32-source.zip",
+  "release": "AutoSystemBoost-V66-660-dev66-buildfix34-source",
+  "base": "AutoSystemBoost-V66-660-dev66-buildfix33-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 274,
@@ -12,14 +12,13 @@
       "tests/asb_ui.sh",
       "tests/asb_zygisk.sh",
       "tools/asb_tree.sha256",
-      "webroot/icon.png",
       "webroot/index.html"
     ],
     "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 7,
+      "changed": 6,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -181,13 +180,13 @@
   ],
   "host_verification": {
     "source_regression": "ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_source_regression.sh passed on a freshly recreated executable staging copy of the final pre-manifest source: 440 suites/test cases, 587 anchored PASS lines, zero FAILED, lint 0 errors and 0 warnings, native strict warnings 48 against budget 62, GCC warning inventory new=0 resolved=12 baseline_sites=60, and ALL ASB HOST REGRESSIONS PASSED. Release-manifest/tree-hash snapshots and executable modes are verified separately by the clean-unpack regression gate.",
-    "targeted_runtime": "Monitor/back-navigation, buildfix28/31/32/33 artwork and disclosure contracts, real Zygisk rendering/order, SOTER/Infirmary runtime and Zygisk UI runtime pass. PNG assertions use only Python struct/zlib; no Pillow import remains in tests. Both requested Zygisk prose blocks have no render owner.",
-    "browser_layout": "HTTP-served Chromium confirmed all 31 Monitor variants, four preserved drain disclosures and six cold navigation transitions. The additional final-page pass confirmed zy-status then zy-mode, both deleted paragraphs absent, 0px title/controls/merged borders, heytapFixCard then documentsuiFixCard as the final content cards, zero page/console/HTTP errors and no horizontal overflow. Screenshots were visually reviewed. No physical ColorOS WebView validation is claimed.",
-    "native_build": "No native source or binary changed in buildfix33. ASB, DSP and both Zygisk shared objects remain byte-identical to buildfix32.",
-    "clean_unpack_regression": "Passed on the exact clean-unpacked buildfix33 source ZIP: ASB_DSP_REFERENCE_OPTIONAL=1 canonical source-only regression completed 440 suites/test cases with 587 anchored PASS lines, zero FAILED and ALL ASB HOST REGRESSIONS PASSED. Separate gates verify all 274 manifest-listed files plus the manifest (275 ZIP entries), per-file SHA-256/size/mode equality, regular-file-only entries, strict 267-file tree hash, CRC, executable modes, five unchanged native/DSP/Zygisk binaries and release identity.",
+    "targeted_runtime": "Real Zygisk rendering contracts pass with internal order zy-controls, zy-mode, zy-auto, zy-activity and exactly seven top-level dock links. Mode is a merged subsection, not a standalone lower card. Existing Monitor, Infirmary, prose-removal and Zygisk UI contracts remain green.",
+    "browser_layout": "HTTP-served Chromium measured visual tops Controls=513, Mode=572, Automatic=675, Activity=789 and enumerated seven dock targets: zy-status, zy-guard, zy-engine, zy-lsp, zy-s7, zy-aot, zy-apps. Mode is visible inside zy-status; deleted prose remains absent, borders are 0px, page/console/HTTP errors are zero and horizontal overflow is false. Screenshots were visually reviewed. No physical ColorOS WebView validation is claimed.",
+    "native_build": "No native source or binary changed in buildfix34. ASB, DSP and both Zygisk shared objects remain byte-identical to buildfix33.",
+    "clean_unpack_regression": "Passed on the exact clean-unpacked buildfix34 source ZIP: ASB_DSP_REFERENCE_OPTIONAL=1 canonical source-only regression completed 440 suites/test cases with 587 anchored PASS lines, zero FAILED and ALL ASB HOST REGRESSIONS PASSED. Separate gates verify all 274 manifest-listed files plus the manifest (275 ZIP entries), per-file SHA-256/size/mode equality, regular-file-only entries, strict 267-file tree hash, CRC, executable modes, five unchanged native/DSP/Zygisk binaries and release identity.",
     "skip": "DSP reference staging only: optional reference prebuilt .so files absent; static DSP gates and available host-compiled DSP tests passed."
   },
-  "evidence_scope": "WebUI presentation/order, shared artwork and test-infrastructure refinement only. No functional policy, power, performance, privacy, thermal, Safe-mode or native behavior changed. Host regression and Chromium layout checks are not physical ColorOS validation or measured improvement evidence.",
+  "evidence_scope": "Zygisk visual hierarchy and dock-navigation refinement only. No functional policy, power, performance, privacy, thermal, Safe-mode or native behavior changed. Host regression and Chromium layout checks are not physical ColorOS validation or measured improvement evidence.",
   "files": [
     {
       "path": ".github/workflows/build-dsp-aidl.yml",
@@ -443,9 +442,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 256388,
+      "bytes": 257764,
       "mode": "0644",
-      "sha256": "5ed7a76aae18bef4cb2a12a96bd3b10a0be6e7ee0f0e678eaa6a600278782cb9"
+      "sha256": "b74528f1a1963d240a230d1daca383fdb3bacae880ce59e4382e001219ca79fb"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -1379,15 +1378,15 @@
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1242231,
+      "bytes": 1242899,
       "mode": "0755",
-      "sha256": "ee2e8098b59b8eaa0b3c6ba79fe19f045913f7bad4b2d7d9b0430b45064c09fa"
+      "sha256": "5209d6623815934a4b150053182decb503556b8827630c013c48b67173594372"
     },
     {
       "path": "tests/asb_zygisk.sh",
-      "bytes": 153042,
+      "bytes": 153191,
       "mode": "0755",
-      "sha256": "9834fcf1b6f0bd14a75822177a56e5fca3db1409f9a2714ee46eda550a5e6267"
+      "sha256": "75a64bb66aef40b5706539d66629ac71c1fcbb9ecddc1bb6981ff6355a9dc2df"
     },
     {
       "path": "tools/asb_analyze.py",
@@ -1603,7 +1602,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24315,
       "mode": "0644",
-      "sha256": "a6af407b2619ceb2391dfab7b75c12cecf66646f164f5cfdd5ad482029e12546"
+      "sha256": "34708dc3371ac1b665f54293549bd29197c611e79513c829054fb09659d8640d"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1817,9 +1816,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1720738,
+      "bytes": 1720838,
       "mode": "0644",
-      "sha256": "44557bc6283082bb01b72e6f7b9155b775c90e457999a4ba3267fcbc1f8621f2"
+      "sha256": "3565817e6e43125b76371085ee0a3997ea70a56bae8288883ca98eb9a171885c"
     },
     {
       "path": "zygisk/arm64-v8a.so",
