@@ -6716,7 +6716,7 @@ fail() { echo "FAIL webui visual hierarchy: $*" >&2; exit 1; }
 python3 - "$H" <<'PY' || fail 'DSP order or icons'
 import re, sys
 h = open(sys.argv[1], encoding='utf-8').read()
-assert "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom']" in h, 'DSP Outputs is not first'
+assert "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect']" in h, 'DSP Outputs is not first'
 for name in ('smart','performance','theme_glass'):
     if name == 'smart':
         m = re.search(r'^  smart: ([\s\S]*?),\n  /\* Performance:', h, re.M)
@@ -7557,7 +7557,7 @@ keys = {
  'inf_advice_finished':('{applied}','{failed}','{skipped}'),
  'inf_advice_result_applied':(), 'inf_advice_result_failed':(),
  'inf_advice_result_changed':(), 'inf_advice_result_pending':(),
- 'bfx_art_partial':('{ok}','{fail}','{left}'), 'bfx_art_binder':()
+ 'bfx_art_partial':('{ok}','{fail}','{left}'), 'bfx_art_binder':('{err}',)
 }
 for p in sorted((Path(sys.argv[1]).parent/'i18n').glob('*.json')):
  d=json.loads(p.read_text(encoding='utf-8'))
@@ -7720,7 +7720,7 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
   await paint('eligible=1 reason=- level=100 charging=1 reset=none compile=refused phase=refused total=560 done=12 ok=0 fail=12 cur=- started=1000 finished=1010' + tail);
   chk(/Android said: no reason given$/.test(step('bfxStepArt').text), 'a refusal without output has no fallback');
   await paint(B + 'reset=pending compile=refused phase=refused total=560 done=1 ok=0 fail=1 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
-  chk(/rejected immediate compilation and background optimisation/.test(step('bfxStepArt').text) && /No unprocessed app is counted as compiled/.test(step('bfxStepArt').text) && !/Failed transaction|2147483646|Android said/.test(step('bfxStepArt').text), 'Binder refusal exposes raw framework errors or fabricates completion: ' + step('bfxStepArt').text);
+  chk(/rejected both package-scoped compile calls/.test(step('bfxStepArt').text) && /no all-package fallback or ART\/Dalvik cleanup was used/.test(step('bfxStepArt').text) && /Android said: cmd: Failure calling service package: Failed transaction \(2147483646\)/.test(step('bfxStepArt').text) && !/\{err\}/.test(step('bfxStepArt').text), 'Binder refusal hides Android response, leaves a placeholder or fabricates completion: ' + step('bfxStepArt').text);
 
   await paint(B + 'reset=pending compile=scheduled phase=scheduled total=560 done=1 ok=0 fail=0 cur=- started=1000 finished=1002' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-wait' && /background optimisation job was started/.test(step('bfxStepArt').text) && /does not confirm speed-profile/.test(step('bfxStepArt').text), 'background scheduling was presented as verified compilation: ' + step('bfxStepArt').text);
@@ -8943,9 +8943,6 @@ for k in audited:
 all_en = json.dumps(en, ensure_ascii=False)
 for rejected in ('no real fps loss', 'free battery with zero impact', 'This is where most of the overnight drain saving comes from', 'the single most expensive thing that can happen to a battery'):
     assert rejected not in all_en, 'unsupported absolute returned: ' + rejected
-hint_keys = set('''cfg_audio_section_playback_hint cfg_audio_section_dsp_hint
-cfg_camera_section_processing_hint cfg_camera_section_perf_hint cfg_net_section_speed_hint
-cfg_net_section_stack_hint cfg_ui_section_diag_hint cfg_ui_section_zygisk_hint'''.split())
 same = {('de', 'haptic_strength'), ('fr', 'haptic_strength')}
 def lab(d, k, o):
     v = d.get('optFor', {}).get(k, {}).get(o)
@@ -8956,10 +8953,6 @@ for p in files:
     d = json.loads(p.read_text(encoding='utf-8'))
     if 'desc' in d:
         probs.append('%s: stray top-level "desc" table' % lg)
-    if lg != 'en':
-        for hk in hint_keys:
-            if not str(d.get(hk, '')).strip() or d.get(hk) == en.get(hk):
-                probs.append('%s: audited section hint %s missing or untranslated' % (lg, hk))
     for k, v in d.get('cfg', {}).items():
         if not isinstance(v, dict):
             probs.append('%s: cfg.%s is a %s, Tcfg needs {name, desc}' % (lg, k, type(v).__name__))
@@ -11035,7 +11028,7 @@ function E(tag,cls){const n={tag,children:[],className:cls||'',id:'',attrs:{},st
 const body=E('body'),doc={createElement:E,body};global.document=doc;global.window={_asbUiScale:1};global.getComputedStyle=()=>({scrollMarginTop:'12px'});
 global.T=(k,d)=>d;global.techIcon=k=>'svg:'+k;global.ASB_GRADE={};global.cfgEnsureCaps=()=>{};global.cfgLoadGrade=()=>Promise.resolve();
 global.cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
-global.cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));global.cfgRenderNotifCard=()=>{};
+global.cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));global.cfgRenderNotifCard=()=>{};global.cfgRenderParametricEqCard=()=>{};
 global.kernelPanelEnsure=()=>{};global.kernelDecorateControlRow=()=>{};
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_bore'];
 global.cfgRenderWakeupBlockerCard=list=>list.appendChild(E('section','kernel-card'));
@@ -13759,7 +13752,7 @@ assert "devicePressureScale(d, key === 'apphint' ? 'system' : '')" in h
 assert "function devicePressureScale(d, context)" in h
 assert "T('lvp_system_band', 'System: {band}')" in h
 assert 'html:root .cfg-profile-sheet.live-info-sheet .live-info-now' in h
-assert 'border:0 !important; border-bottom:1px solid var(--border) !important;' in h
+assert 'border:0 !important; border-bottom:0 !important;' in h
 for region in ('live-info-hist', 'live-info-src', 'live-info-pressure'):
     assert 'html:root .cfg-profile-sheet.live-info-sheet .' + region in h
 assert "bar.className = 'lvh-cat-bar'" in h and "legend.className = 'lvh-cat-legend'" in h
@@ -16397,6 +16390,139 @@ assert 'function cfgRenderRow(' in h and 'Tcfg(it.key' in h
 print('buildfix36 subsection-hint contract ok')
 PY
 echo 'PASS WebUI buildfix36: all tweak-category subsection explanations removed while row descriptions and warnings remain'
+)
+
+t_webui_dsp_advanced_buildfix37() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"; H="$ROOT/webroot/index.html"
+fail(){ echo "FAIL WebUI DSP advanced buildfix37: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+import json,sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
+for key in ('dsp_true_peak','dsp_lookahead','dsp_dc_protect'):
+ assert f"{key}:'audio'" in h,f'{key} is not routed to Audio'
+a=h.index('const CFG_GROUP_SECTIONS = {');b=h.index('\n};',a)+3
+s=h[a:b]
+for key in ('dsp_true_peak','dsp_lookahead','dsp_dc_protect'):
+ assert f"'{key}'" in s,f'{key} missing from DSP section'
+ assert f'{key}:APPLY_LIVE' in h,f'{key} is not live'
+ assert f"'{key}'" in h[h.index('var AUDIO_DSP_KEYS'):h.index('var AUDIO_OVERLAY_KEYS')],f'{key} missing DSP live apply'
+assert "key.indexOf('dsp_eq_') === 0" in h[h.index('if (AUDIO_LIVE_KEYS.indexOf(key)'):], 'PEQ live apply missing'
+a=h.index('const SNAP_KEYS = [');b=h.index('\n];',a)+3
+assert "'dsp_eq_target'" in h[a:b]
+a=(r/'config/governor.conf').read_text();b=(r/'config/governor.conf.shipped').read_text();assert a==b
+keys=['dsp_true_peak','dsp_lookahead','dsp_dc_protect','dsp_eq_target']
+keys += [f'dsp_eq_{o}_b{n}_{v}' for o in ('speaker','wired','bt') for n in range(3) for v in ('f','q','g')]
+for key in keys:
+ assert f'{key}=' in a,f'default missing: {key}'
+owners=(r/'config/key_ownership.tsv').read_text()
+for key in keys: assert f'{key}|advanced|webui_sensitive|shell' in owners,f'ownership missing: {key}'
+custom=('dsp_eq_title','dsp_eq_desc','dsp_eq_output','dsp_eq_output_desc','dsp_eq_band_low','dsp_eq_band_mid','dsp_eq_band_high','dsp_eq_frequency','dsp_eq_frequency_desc','dsp_eq_q','dsp_eq_q_desc','dsp_eq_gain','dsp_eq_gain_desc')
+for p in sorted((r/'webroot/i18n').glob('*.json')):
+ d=json.loads(p.read_text(encoding='utf-8'))
+ for key in custom: assert key in d,f'{p.name}: {key}'
+ for key in ('dsp_true_peak','dsp_lookahead','dsp_dc_protect'): assert key in d['cfg'],f'{p.name}: cfg.{key}'
+print('advanced DSP schema/locales ok')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI DSP advanced renderer: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(sig){const a=h.indexOf(sig);if(a<0)throw Error(sig);const b=h.indexOf('\n}\n',a);return h.slice(a,b+2);}
+global.T=(k,d)=>d;global._cfgVals={dsp_eq_target:'speaker'};let rows=[];
+global.document={createElement:()=>({children:[],className:'',textContent:'',appendChild(x){this.children.push(x);return x;}})};
+global.cfgRenderRow=(card,it)=>{rows.push(it);card.appendChild(it);};
+eval(grab('function cfgRenderParametricEqCard(list)'));
+let list=document.createElement('section');cfgRenderParametricEqCard(list);
+if(rows.length!==10||rows[0].key!=='dsp_eq_target')throw Error('speaker row count/target');
+for(const o of ['speaker','wired','bt']){
+ _cfgVals.dsp_eq_target=o;rows=[];list=document.createElement('section');cfgRenderParametricEqCard(list);
+ for(let b=0;b<3;b++)for(const v of ['f','q','g'])if(!rows.some(x=>x.key===`dsp_eq_${o}_b${b}_${v}`))throw Error(`${o} band ${b} ${v}`);
+ const f=rows.find(x=>x.key===`dsp_eq_${o}_b0_f`),q=rows.find(x=>x.key===`dsp_eq_${o}_b0_q`),g=rows.find(x=>x.key===`dsp_eq_${o}_b0_g`);
+ if(f.min!==40||f.max!==16000||q.min!==3||q.max!==40||g.min!==-120||g.max!==120)throw Error('range contract');
+}
+_cfgVals.dsp_eq_target='invalid';rows=[];cfgRenderParametricEqCard(document.createElement('section'));
+if(!rows.some(x=>x.key==='dsp_eq_speaker_b0_f'))throw Error('invalid target fallback');
+const a=h.indexOf('const SNAP_KEYS = ['),b=h.indexOf('\n];',a)+3;
+eval(h.slice(a,b).replace('const SNAP_KEYS','global.SNAP_KEYS'));
+for(const k of ['dsp_true_peak','dsp_lookahead','dsp_dc_protect','dsp_eq_target'])if(!SNAP_KEYS.includes(k))throw Error(`snapshot ${k}`);
+for(const o of ['speaker','wired','bt'])for(let n=0;n<3;n++)for(const v of ['f','q','g'])if(!SNAP_KEYS.includes(`dsp_eq_${o}_b${n}_${v}`))throw Error('snapshot PEQ');
+console.log('ok');
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"; [ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI DSP advanced buildfix37: Audio routing, 13 locales, defaults/ownership/snapshots and independent Speaker/Wired/BT renderer ranges'
+)
+
+
+t_webui_zygisk_app_selection_buildfix37() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"; H="$ROOT/webroot/index.html"
+fail(){ echo "FAIL WebUI Zygisk app selection buildfix37: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+import json,sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
+assert "T('zy_auto_title', 'Automatic app selection')" in h
+assert "T('zy_auto_enabled', 'Automatic app selection is on')" in h
+assert "T('zy_auto_disable', 'Turn off automatic app selection')" in h
+assert "T('zy_auto_summary', 'Profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4')" in h
+locales=sorted((r/'webroot/i18n').glob('*.json'));assert len(locales)==13
+for p in locales:
+ d=json.loads(p.read_text(encoding='utf-8'))
+ for key in ('zy_auto_title','zy_auto_enabled','zy_auto_disable','zy_auto_summary'):
+  assert key in d,f'{p.name}: {key}'
+ru=json.loads((r/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
+assert ru['zy_auto_title']=='Автоматический выбор приложений'
+assert ru['zy_auto_enabled']=='Автоматический выбор приложений включён'
+assert ru['zy_auto_disable']=='Отключить автоматический выбор приложений'
+assert ru['zy_auto_summary'].startswith('Профиль: %1')
+print('Zygisk app-selection terminology: 13 locales ok')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI Zygisk app-selection renderer: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const ru=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+function grab(sig){const a=h.indexOf(sig);if(a<0)throw Error(sig);const b=h.indexOf('\n}\n',a);return h.slice(a,b+2);}
+global.T=(k,d)=>ru[k]||d;global._zyGuard={enabled:true,level:'wakers'};global._zyAot={enabled:false};
+global._zygiskAutoBusy='';global._zygiskModeBusy=false;global.zygiskButtonIcon=()=>{};global.logReportNote=t=>document.createElement('div');
+global.deviceVal=(d,g,k)=>({auto_mode:'1',auto_profile:'battery',enabled_packages:'7'})[k]||'';
+global.document={createElement:()=>({children:[],className:'',textContent:'',classList:{add(){}},setAttribute(){},appendChild(x){this.children.push(x);return x;}})};
+eval(grab('function zygiskAutoCard(d)'));
+const card=zygiskAutoCard({});
+const text=[];(function walk(n){if(n.textContent)text.push(n.textContent);for(const c of n.children||[])walk(c);})(card);
+const all=text.join('\n');
+for(const expected of [ru.zy_auto_enabled,ru.zy_auto_disable,'Профиль: Экономия · наблюдаемых приложений: 7'])if(!all.includes(expected))throw Error('missing: '+expected+' in '+all);
+if(all.includes('Автоматический профиль:'))throw Error('profile still described as automatic mode');
+console.log('ok');
+JS
+out="$(node "$T/t.js" "$H" "$ROOT/webroot/i18n/ru.json" 2>&1)" || fail "$out"; [ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI Zygisk app selection buildfix37: Battery remains the selected profile while automatic app selection is named independently in HTML and 13 locales'
+)
+
+
+t_webui_separator_harmony_buildfix37() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT/webroot/index.html" <<'PY'
+from pathlib import Path
+import sys
+h=Path(sys.argv[1]).read_text(encoding='utf-8')
+# Screenshot-driven audit: action-only rows and modal evidence groups use whitespace,
+# not decorative grey rules. True adjacent report/list rows keep their separators.
+assert '.zy-ghost { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 0; border-top: 0; }' in h
+assert '.device-page .dev-section-guide { margin: -3px 0 10px; padding: 0; border-bottom: 0; }' in h
+assert 'margin-top: 12px; padding-top: 0; border-top: 0;' in h
+assert 'padding:13px 2px 0; gap:5px;\n  border:0 !important; border-bottom:0 !important;' in h
+assert 'margin:14px 0 0; padding:0 2px; border:0 !important; border-top:0 !important;' in h
+for semantic in ('.lgr-chain { padding: 8px 0; border-top: 1px solid var(--border);',
+                 '.lgr-dx { padding: 9px 0 10px; border-top: 1px solid var(--border);',
+                 '.lgr-summary-legend { margin-top: 5px; padding-top: 8px; border-top: 1px solid var(--border);'):
+ assert semantic in h,semantic
+print('separator harmony: decorative action/modal rules removed; semantic list boundaries retained')
+PY
+echo 'PASS WebUI separator harmony buildfix37: Zygisk actions, Device guides and metric sheets use spacing instead of stacked grey lines'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

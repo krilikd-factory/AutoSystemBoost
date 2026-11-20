@@ -2145,7 +2145,7 @@ UI="$ROOT/webroot/index.html"
 grep -q "key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:\['off','all'," "$UI" || fail "no off in the WebUI"
 grep -q "const DSP_CFG_KEYS = .*dsp_clarity.*dsp_rumble.*dsp_headroom" "$UI" || fail "DSP card registry is incomplete"
 grep -q "function dspEngineActive()" "$UI" || fail "common DSP engine state is missing"
-grep -q "if (DSP_CFG_KEYS.indexOf(it.key) >= 0 && !dspEngineActive())" "$UI" || fail "the DSP cards do not show off"
+grep -q "if ((DSP_CFG_KEYS.indexOf(it.key) >= 0 || it.key.indexOf('dsp_eq_') === 0) && !dspEngineActive())" "$UI" || fail "the DSP cards do not show off"
 for l in ar de en es fr hy id it pt ru tr uk zh; do
   python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['optFor']['dsp_outputs']['off']" "$ROOT/webroot/i18n/$l.json" \
     || fail "$l.json has no label for off"
@@ -2213,7 +2213,7 @@ grep -q 'DSP status: requested' "$ROOT/action.sh" || {
 # fix74: the legacy effect runs the shared core, so its cap IS the core's cap.
 grep -Fq '#include "asb_dsp_core.h"' "$ROOT/src/DSP/asb_dsp.c" || { echo 'FAIL: legacy DSP does not use the shared core (+30 dB cap)' >&2; exit 1; }
 grep -Fq '#define ASB_GAIN_MB_MAX    3000' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" || { echo 'FAIL: AIDL DSP cap is not +30 dB' >&2; exit 1; }
-grep -Fq '#define ASB_GAIN_CAP_MARKER "gain_cap_mb=3000"' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" || { echo 'FAIL: DSP capability marker missing' >&2; exit 1; }
+grep -Fq '#define ASB_GAIN_CAP_MARKER "gain_cap_mb=3000;dsp_advanced_v1=true_peak4x_lookahead_peq3_dc_diag"' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" || { echo 'FAIL: DSP advanced-v1 capability marker missing' >&2; exit 1; }
 grep -Fq 'ASB_GAIN_CAP_MARKER' "$ROOT/src/DSP_AIDL/asb_effect_aidl.cpp" || { echo 'FAIL: AIDL does not embed the capability marker' >&2; exit 1; }
 grep -Fq 'ASB_GAIN_CAP_MARKER' "$ROOT/src/DSP/asb_dsp.c" || { echo 'FAIL: legacy DSP does not embed the capability marker' >&2; exit 1; }
 grep -Fq '[ "$_dsp_applied_mb" -gt 3000 ] && _dsp_applied_mb=3000' "$ROOT/runtime/asb_audio_apply.sh" || { echo 'FAIL: runtime DSP cap is not +30 dB' >&2; exit 1; }
@@ -2559,7 +2559,7 @@ done
 grep -qx 'dsp_voice|advanced|webui_sensitive|shell' "$ROOT/config/key_ownership.tsv" || fail "ownership registry"
 [ "$(grep -c ' dsp_voice ' "$ROOT/common/install.sh")" = 2 ] || fail "installer does not carry dsp_voice over on update"
 grep -q '_dspp voice "$_vox"' "$ROOT/runtime/asb_audio_apply.sh" || fail "apply script does not publish the voice prop"
-grep -Eq 'bass_db voice( [a-z_]+)*; do' "$ROOT/runtime/asb_audio_apply.sh" || fail "voice prop not mirrored into the vendor namespace"
+grep -Eq 'bass_db voice( [a-z0-9_]+)*; do' "$ROOT/runtime/asb_audio_apply.sh" || fail "voice prop not mirrored into the vendor namespace"
 grep -q 'asb_core_set_voice(&c->core, asb_dsp_prop("voice", 0), rate);' "$ROOT/src/DSP/asb_dsp.c" || fail "legacy effect ignores voice"
 grep -q 'asb_core_set_voice(&mCore, voice' "$ROOT/src/DSP_AIDL/asb_effect_aidl.cpp" || fail "AIDL effect ignores voice"
 grep -q 'for _lit in " voice="[^;]*; do' "$ROOT/src/build_ndk_release.sh" || fail "build does not warn about a pre-voice AIDL prebuilt"
@@ -4367,6 +4367,30 @@ PATH="$T/bin:$PATH" ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='binder.one' sh "$A" run 
 [ "$(kv compile)/$(kv ok)/$(kv fail)" = done/1/0 ] || f "pm fallback did not recover a Binder transaction failure: $(st)"
 grep -qx 'compile -m speed-profile -f binder.one' "$PM_FALLBACK_LOG" || f "pm fallback lost the force flag: $(cat "$PM_FALLBACK_LOG" 2>/dev/null)"
 
+# buildfix37: a generic cmd failure also reaches pm; if both forced requests fail,
+# the ordinary package-scoped speed-profile request can still succeed without -f.
+cat > "$T/bin/cmd" <<'EOF'
+#!/bin/sh
+printf 'cmd %s\n' "$*" >> "$PM_FALLBACK_LOG"
+echo 'Failure: compile error'
+exit 1
+EOF
+cat > "$T/bin/pm" <<'EOF'
+#!/bin/sh
+printf 'pm %s\n' "$*" >> "$PM_FALLBACK_LOG"
+case "$*" in
+  'compile -m speed-profile soft.one') echo 'Success'; exit 0 ;;
+  *) echo 'Failure: compile error'; exit 1 ;;
+esac
+EOF
+chmod 0755 "$T/bin/cmd" "$T/bin/pm"
+: > "$PM_FALLBACK_LOG"
+PATH="$T/bin:$PATH" ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='soft.one' sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv ok)/$(kv fail)" = done/1/0 ] || f "ordinary package-scoped fallback did not recover forced/generic failures: $(st)"
+grep -qx 'pm compile -m speed-profile -f soft.one' "$PM_FALLBACK_LOG" && grep -qx 'pm compile -m speed-profile soft.one' "$PM_FALLBACK_LOG" \
+  || f "forced pm and ordinary package-scoped requests were not both attempted: $(cat "$PM_FALLBACK_LOG")"
+[ "$(grep -c 'compile .* -a' "$PM_FALLBACK_LOG")" = 0 ] || f "ordinary fallback used aggregate compile"
+
 # dev66 buildfix9: Binder refusal is bounded and package-scoped. Android's aggregate
 # compile operation is never called: its success cannot prove every requested package, and
 # its own Failed transaction was the reported defect. Unprocessed packages stay uncounted.
@@ -4394,8 +4418,8 @@ _binder_pkgs='binder.1 binder.2 binder.3 binder.4 binder.5 binder.6'
 : > "$BINDER_LOG"
 PATH="$T/bin:$PATH" BG_JOB=success ASB_BFIX_NO_BGJOB=0 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS="$_binder_pkgs" sh "$A" run >/dev/null
 [ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = scheduled/3/0/3 ] || f "uniform Binder refusal did not schedule honest background recovery: $(st)"
-[ "$(grep -c '^cmd package compile .*binder\.' "$BINDER_LOG")" = 3 ] || f "Binder refusal did not stop after the configured package-scoped streak"
-[ "$(grep -c '^pm compile .*binder\.' "$BINDER_LOG")" = 3 ] || f "package-scoped pm fallback count differs from the Binder streak"
+[ "$(grep -c '^cmd package compile .*binder\.' "$BINDER_LOG")" = 6 ] || f "Binder refusal did not stop after the configured package-scoped streak"
+[ "$(grep -c '^pm compile .*binder\.' "$BINDER_LOG")" = 6 ] || f "package-scoped pm fallback count differs from the Binder streak"
 [ "$(grep -c '^cmd package bg-dexopt-job$' "$BINDER_LOG")" = 1 ] || f "accepted background recovery was not requested exactly once"
 [ "$(grep -c 'compile .* -a' "$BINDER_LOG")" = 0 ] || f "an aggregate compile call survived Binder recovery"
 st | grep '^err_text=.*Failed transaction (2147483646)' >/dev/null || f "Binder refusal lost Android's answer: $(st)"
@@ -4416,7 +4440,7 @@ PATH="$T/bin:$PATH" BG_JOB=fail PM_BG_JOB=fail ASB_BFIX_NO_BGJOB=0 ASB_BFIX_BIND
 : > "$BINDER_LOG"
 PATH="$T/bin:$PATH" ASB_BFIX_NO_BGJOB=1 ASB_BFIX_BINDER_REFUSE_AFTER=3 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='p.good p.bad1 p.bad2 p.bad3 p.bad4 p.bad5' sh "$A" run >/dev/null
 [ "$(kv compile)/$(kv total)/$(kv done)/$(kv ok)/$(kv fail)" = partial/6/4/1/3 ] || f "partial success was hidden or unprocessed apps were fabricated as done: $(st)"
-[ "$(grep -c '^cmd package compile ' "$BINDER_LOG")" = 4 ] || f "partial Binder recovery did not stop after three failures following one success"
+[ "$(grep -c '^cmd package compile ' "$BINDER_LOG")" = 7 ] || f "partial Binder recovery did not stop after three failures following one success"
 [ "$(grep -c 'compile .* -a' "$BINDER_LOG")" = 0 ] || f "partial recovery used aggregate compile"
 ! grep -Eq '(cmd package compile|pm compile).* -a' "$A" || f "runtime still contains an all-package compile writer"
 ! grep -Eq '_bf_compile_bulk|phase === .bulk|bfx_art_bulk' "$A" || f "runtime still contains aggregate recovery state"
@@ -10290,6 +10314,169 @@ i=0; while [ ! -f "$T/resumed" ] && [ "$i" -lt 20 ]; do sleep 0.05; i=$((i + 1))
 awk '/if _ltpo_touch_start; then/{s=NR} /_ltpo_external_pause$/{if(s && !p)p=NR} END{exit !(s && p && p>s)}' \
   "$ROOT/runtime/asb_ltpo_apply.sh" || fail 'external pause still precedes watcher readiness'
 echo "PASS LTPO external fallback: no handover before watcher readiness; previous pause is resumed"
+)
+
+t_dsp_advanced_v1_runtime() (
+# buildfix37: numerical evidence for the shared advanced-v1 core and the runtime mirror.
+# This is host DSP validation, not an audibility, codec, analogue-output or field-power claim.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL dsp advanced-v1: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP dsp advanced-v1: no C compiler"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/a.c" <<'X'
+#include "asb_dsp_core.h"
+#include <stdio.h>
+#include <string.h>
+#define N 48000
+#define R 48000u
+static float in[N], out[N], ref[N];
+static int16_t si[N], so[N];
+static void cfg(asb_core_t *c, int enabled, int gain, int ceil, int soft) {
+    memset(c,0,sizeof(*c));
+    asb_core_configure_ex(c,enabled,gain,ceil,0,60,-2400,1,R,1,soft,300);
+    asb_core_set_rumble(c,0,R); asb_core_set_bass(c,0,R); asb_core_set_voice(c,0,R);
+    asb_core_set_clarity(c,0,R); asb_core_set_width(c,0,R);
+    asb_core_set_advanced(c,0,0,0,R);
+    for(int b=0;b<ASB_EQ_BANDS;b++) asb_core_set_eq(c,b,b==0?100:(b==1?1000:8000),100,0,R);
+    asb_core_reset(c);
+}
+static void sine(float hz,float amp,int n) {
+    for(int i=0;i<n;i++) in[i]=amp*sinf(2.0f*3.14159265358979323846f*hz*(float)i/(float)R);
+}
+static double rms(const float *x,int n) { double s=0;for(int i=n/2;i<n;i++)s+=(double)x[i]*x[i];return sqrt(s/(n/2)); }
+static float response(float hz,int dc,int gain_mb) {
+    asb_core_t a,b; sine(hz,0.005f,N);
+    cfg(&a,1,1,-100,0);cfg(&b,1,1,-100,0);
+    asb_core_set_advanced(&b,0,0,dc,R);asb_core_set_eq(&b,0,1000,100,gain_mb,R);
+    asb_core_process_f32(&a,in,ref,N,0);asb_core_process_f32(&b,in,out,N,0);
+    return (float)(20.0*log10(rms(out,N)/rms(ref,N)));
+}
+static float peak(const float *x,int n) { float p=0;for(int i=0;i<n;i++)if(fabsf(x[i])>p)p=fabsf(x[i]);return p; }
+int main(void) {
+    int bad=0;asb_core_t a,b;
+    /* Disabled processing remains bit-exact even with every advanced stage requested. */
+    sine(997,0.2f,2048);for(int i=0;i<2048;i++)si[i]=(int16_t)(in[i]*30000.0f);
+    cfg(&a,0,0,-100,0);asb_core_set_advanced(&a,1,5,1,R);asb_core_set_eq(&a,0,1000,100,600,R);
+    asb_core_process_f32(&a,in,out,2048,0);asb_core_process_s16(&a,si,so,2048,0);
+    if(memcmp(in,out,2048*sizeof(float))||memcmp(si,so,2048*sizeof(int16_t))){puts("FAIL advanced bypass");bad++;}
+    /* Zero-gain bands do not enter the chain and are bit-identical to no PEQ. */
+    cfg(&a,1,100,-100,0);cfg(&b,1,100,-100,0);
+    for(int j=0;j<3;j++)asb_core_set_eq(&b,j,100+j*1000,100,0,R);
+    asb_core_process_f32(&a,in,ref,2048,0);asb_core_process_f32(&b,in,out,2048,0);
+    if(b.eq_mask||memcmp(ref,out,2048*sizeof(float))){puts("FAIL zero PEQ");bad++;}
+    /* A 5 ms request is exactly 240 frames at 48 kHz, with deterministic zero priming. */
+    cfg(&a,1,100,-100,0);asb_core_set_advanced(&a,0,5,0,R);asb_core_process_f32(&a,in,out,2048,0);
+    if(a.la_frames!=240||a.la_fallback){puts("FAIL look-ahead configuration");bad++;}
+    for(int i=0;i<2048;i++){
+        float want=i<240?0.0f:in[i-240]*a.gain;
+        if(memcmp(&out[i],&want,sizeof(float))){printf("FAIL exact delay at %d\n",i);bad++;break;}
+    }
+    cfg(&a,1,100,-100,0);asb_core_set_advanced(&a,0,0,0,R);asb_core_process_f32(&a,in,out,2048,0);
+    for(int i=0;i<2048;i++){float want=in[i]*a.gain;if(memcmp(&out[i],&want,sizeof(float))){puts("FAIL zero latency");bad++;break;}}
+    cfg(&a,1,100,-100,0);asb_core_set_advanced(&a,0,5,0,480000u);
+    if(!a.la_fallback||a.la_frames!=0){puts("FAIL fixed-ring fallback");bad++;}
+    asb_core_process_f32(&a,in,out,2048,0);
+    for(int i=0;i<2048;i++){float want=in[i]*a.gain;if(memcmp(&out[i],&want,sizeof(float))){puts("FAIL fallback added latency");bad++;break;}}
+    /* fs/4 sampled at 45 degrees: reconstructed peaks exceed every sampled peak. */
+    cfg(&a,1,1,-30,0);asb_core_set_advanced(&a,1,0,0,R);
+    for(int i=0;i<4096;i++)in[i]=0.5f*sinf(2.0f*3.14159265358979323846f*12000.0f*(float)i/(float)R+0.7853981634f);
+    float sp=peak(in,4096);asb_core_process_f32(&a,in,out,4096,0);
+    printf("true_peak sample=%.6f reconstructed=%.6f\n",sp,a.max_detected_peak);
+    if(a.max_detected_peak<sp*1.15f){puts("FAIL inter-sample detection");bad++;}
+    /* Peaking direction and centre frequency, plus DC rejection and passband. */
+    float boost=response(1000,0,600),cut=response(1000,0,-600),off=response(100,0,600);
+    float dcdc=response(5,1,0),dchi=response(1000,1,0);
+    printf("peq boost=%.3f cut=%.3f off100=%.3f dc5=%.3f dc1k=%.3f\n",boost,cut,off,dcdc,dchi);
+    if(boost<5.8f||boost>6.2f||cut<-6.2f||cut>-5.8f||fabsf(off)>1.5f){puts("FAIL PEQ response");bad++;}
+    if(dcdc>-15.0f||fabsf(dchi)>0.15f){puts("FAIL DC protection response");bad++;}
+    for(int i=0;i<N;i++)in[i]=0.1f;
+    cfg(&a,1,1,-100,0);asb_core_set_advanced(&a,0,0,1,R);asb_core_process_f32(&a,in,out,N,0);
+    if(fabsf(out[N-1])>0.0002f){printf("FAIL constant DC tail %.7f\n",out[N-1]);bad++;}
+    /* Final sample ceiling and diagnostics on both PCM formats. */
+    sine(1000,0.9f,N);for(int i=0;i<N;i++)si[i]=(int16_t)(in[i]*32767.0f);
+    cfg(&a,1,3000,-100,0);asb_core_set_advanced(&a,1,0,1,R);asb_core_process_f32(&a,in,out,N,0);
+    float lim=asb_core_mb_to_lin(-100);
+    if(peak(out,N)>lim+0.0002f||a.frames!=N||!a.limited_frames||a.max_detected_peak<=lim){puts("FAIL f32 ceiling/counters");bad++;}
+    cfg(&a,1,3000,-100,0);asb_core_set_advanced(&a,1,0,1,R);asb_core_process_s16(&a,si,so,N,0);
+    int sl=(int)lrintf(lim*32767.0f)+1;
+    for(int i=0;i<N;i++)if(so[i]>sl||so[i]<-sl){puts("FAIL s16 ceiling");bad++;break;}
+    if(a.frames!=N||!a.limited_frames){puts("FAIL s16 counters");bad++;}
+    /* ACCUMULATE adds, including the shared softclip/advanced final path. */
+    for(int i=0;i<2048;i++){in[i]=0.001f;out[i]=0.01f;si[i]=1000;so[i]=1000;}
+    cfg(&a,1,100,-100,0);asb_core_process_f32(&a,in,out,2048,1);asb_core_process_s16(&a,si,so,2048,1);
+    for(int i=0;i<2048;i++){
+        float wf=0.01f+0.001f*a.gain;
+        int32_t q=(int32_t)lrintf(((float)si[i]/32768.0f)*a.gain*32767.0f)+1000;
+        if(memcmp(&out[i],&wf,sizeof(float))||so[i]!=q){puts("FAIL accumulate");bad++;break;}
+    }
+    /* Softclip also honours look-ahead/counters; RESET never leaks primed old audio. */
+    sine(1000,0.1f,2048);cfg(&a,1,600,-100,1);asb_core_set_advanced(&a,1,5,0,R);asb_core_process_f32(&a,in,out,2048,0);
+    if(a.frames!=2048||a.la_frames!=240||peak(out,240)!=0.0f||peak(out+240,2048-240)==0.0f){puts("FAIL softclip advanced path");bad++;}
+    asb_core_reset(&a);for(int i=0;i<2048;i++)in[i]=0;asb_core_process_f32(&a,in,out,2048,0);
+    if(peak(out,2048)!=0.0f||a.frames!=2048){puts("FAIL look-ahead reset");bad++;}
+    for(int i=0;i<2048;i++){si[i]=0;so[i]=1000;}asb_core_process_s16(&a,si,so,2048,1);
+    for(int i=0;i<2048;i++)if(so[i]!=1000){puts("FAIL softclip s16 accumulate");bad++;break;}
+    if(bad)return 1;
+    puts("ADVANCED_DSP_HOST_TEST_PASS");return 0;
+}
+X
+_san=""
+printf 'int main(void){return 0;}\n' > "$T/probe.c"
+if "$CC" -fsanitize=address,undefined "$T/probe.c" -o "$T/probe" >/dev/null 2>&1 && "$T/probe" >/dev/null 2>&1; then _san="-fsanitize=address,undefined -fno-sanitize-recover=all"; fi
+# shellcheck disable=SC2086
+"$CC" -std=c99 -O1 -g -Wall -Wextra -Werror $_san -I"$ROOT/src/DSP_AIDL" "$T/a.c" -lm -o "$T/a"
+"$T/a" || fail 'advanced numerical core fixture'
+# Mirror must derive advanced values from config, select only the active output's PEQ,
+# convert UI units, mirror both namespaces and wake the existing one-shot attacher.
+mkdir -p "$T/mod/config" "$T/mod/runtime" "$T/bin"
+cp "$ROOT/runtime/asb_audio_apply.sh" "$ROOT/runtime/asb_dsp_thermal.sh" "$ROOT/runtime/asb_dsp_live.sh" "$T/mod/runtime/"
+cat > "$T/mod/config/governor.conf" <<'X'
+dsp_loudness=5
+dsp_bass=0
+dsp_voice=0
+dsp_width=0
+dsp_headroom=15
+dsp_true_peak=0
+dsp_lookahead=10
+dsp_dc_protect=0
+dsp_eq_target=bt
+dsp_eq_speaker_b0_f=100
+dsp_eq_speaker_b0_q=10
+dsp_eq_speaker_b0_g=0
+dsp_eq_bt_b0_f=125
+dsp_eq_bt_b0_q=14
+dsp_eq_bt_b0_g=-25
+dsp_eq_bt_b1_f=1000
+dsp_eq_bt_b1_q=10
+dsp_eq_bt_b1_g=0
+dsp_eq_bt_b2_f=8000
+dsp_eq_bt_b2_q=10
+dsp_eq_bt_b2_g=0
+X
+PROPS="$T/props"; export PROPS; printf 'persist.asb.dsp.route=bt\n' > "$PROPS"
+cat > "$T/bin/getprop" <<'X'
+#!/bin/sh
+grep -m1 "^$1=" "$PROPS" 2>/dev/null | cut -d= -f2-
+X
+cat > "$T/bin/resetprop" <<'X'
+#!/bin/sh
+[ "$1" = "-n" ] && shift
+grep -v "^$1=" "$PROPS" > "$PROPS.t" 2>/dev/null || true
+printf '%s=%s\n' "$1" "$2" >> "$PROPS.t"; mv "$PROPS.t" "$PROPS"
+X
+cp "$T/bin/resetprop" "$T/bin/setprop"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "$ASB_TEST_PKILL"\n' > "$T/bin/pkill"
+chmod 755 "$T/bin"/*
+ASB_TEST_PKILL="$T/pkill"; export ASB_TEST_PKILL; : > "$ASB_TEST_PKILL"
+MODDIR="$T/mod" PATH="$T/bin:$PATH" sh "$T/mod/runtime/asb_audio_apply.sh" mirror >/dev/null 2>&1
+for kv in persist.asb.dsp.true_peak=0 persist.vendor.asb.dsp.true_peak=0 persist.vendor.asb.dsp.lookahead_ms=10 persist.vendor.asb.dsp.dc_protect=0 persist.vendor.asb.dsp.eq_b0_f=125 persist.vendor.asb.dsp.eq_b0_q_x100=140 persist.vendor.asb.dsp.eq_b0_gain_mb=-250; do
+  grep -qx "$kv" "$PROPS" || fail "runtime mirror missing $kv"
+done
+grep -q -- '-USR1' "$ASB_TEST_PKILL" || fail 'advanced mirror did not wake attacher'
+grep -q 'dsp_advanced_v1=true_peak4x_lookahead_peq3_dc_diag' "$ROOT/tools/asb_diag.sh" || fail 'diagnostic capability marker absent'
+echo 'PASS dsp advanced-v1: bypass, zero PEQ, 4x inter-sample detection, exact/fallback look-ahead, DC/PEQ responses, float/PCM16 ceiling, accumulate, counters/reset and route-aware mirror'
 )
 
 t_dsp_tone_filters_runtime() (

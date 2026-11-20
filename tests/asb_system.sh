@@ -733,8 +733,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "247" ] || fail "expected 247 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "247" ] || fail "expected 247 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "278" ] || fail "expected 278 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "278" ] || fail "expected 278 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -758,7 +758,15 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "115" ] || fail "expected 115 WebUI cards, got $(wc -l < "$TMP/cards")"
+# The PEQ renderer exposes one target selector and 27 output/band controls dynamically.
+for _route in speaker wired bt; do
+  for _band in 0 1 2; do
+    for _field in f q g; do printf 'dsp_eq_%s_b%s_%s\n' "$_route" "$_band" "$_field"; done
+  done
+done >> "$TMP/cards"
+printf 'dsp_eq_target\n' >> "$TMP/cards"
+sort -u "$TMP/cards" > "$TMP/cards.all"; mv "$TMP/cards.all" "$TMP/cards"
+[ "$(wc -l < "$TMP/cards")" = "146" ] || fail "expected 146 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -802,7 +810,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (247 keys; 50 user, 65 advanced, 132 internal)'
+echo 'PASS config ownership registry contract (278 keys; 50 user, 96 advanced, 132 internal)'
 )
 
 t_config_metadata_coherence_buildfix1() (
@@ -829,7 +837,7 @@ cmp -s "$CONF" "$SHIPPED" || fail 'active and shipped config copies differ'
 shape="$(cd "$ROOT" && grep -oE "key:'[a-zA-Z0-9_]+'[^}]*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
   | sed -E "s/.*key:'([a-zA-Z0-9_]+)'.*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)/\1=\2/" \
   | sort | md5sum | cut -c1-12)"
-[ "$shape" = cd239239061c ] || fail "unexpected computed WebUI shape: $shape"
+[ "$shape" = e8f9efe20c38 ] || fail "unexpected computed WebUI shape: $shape"
 grep -Fqx "# CONFIG_SHAPE=$shape" "$CONF" || fail 'governor.conf shape is stale'
 grep -Fqx "# CONFIG_SHAPE=$shape" "$SHIPPED" || fail 'shipped config shape is stale'
 schema="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' "$ROOT/common/install.sh" \
@@ -863,7 +871,7 @@ for rel in ('config/governor.conf', 'config/governor.conf.shipped', 'config/key_
             kept.append(line)
     text = ''.join(kept)
     if separator == '=':
-        text = text.replace('# CONFIG_SHAPE=cd239239061c',
+        text = text.replace('# CONFIG_SHAPE=e8f9efe20c38',
                             '# CONFIG_SHAPE=928eea600217', 1)
     path.write_text(text, encoding='utf-8')
 PY
@@ -871,7 +879,7 @@ if (cd "$TMP/stale" && MODE=RELEASE_STRICT bash tools/asb_lint.sh) > "$TMP/befor
   fail 'stale 237-key metadata with dev64 WebUI cards passed lint'
 fi
 need "$TMP/before.log" 'internal-or-unregistered-cards=[feel_dc_dimming feel_game_memc feel_gesture_mistouch feel_pointer_speed ui_nav_handle_autohide ui_recents_corner_radius ui_recents_memory ui_smooth_corners ] stale-public-keys=[]' 'ownership drift no longer reproduces the CI failure'
-need "$TMP/before.log" 'config shape changed (928eea600217 -> cd239239061c) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
+need "$TMP/before.log" 'config shape changed (928eea600217 -> e8f9efe20c38) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
 if ! grep -Fq 'Lint: ❌ 2 errors  ⚠️  0 warnings' "$TMP/before.log"; then cat "$TMP/before.log" >&2; fail 'stale fixture has unexpected additional lint findings'; fi
 
 cp "$CONF" "$TMP/stale/config/governor.conf"
@@ -883,7 +891,7 @@ cp "$REG" "$TMP/stale/config/key_ownership.tsv"
 }
 need "$TMP/after.log" 'config shape matches the recorded fingerprint (schema 4)' 'schema 4 coherence was not reported'
 need "$TMP/after.log" 'Lint: ❌ 0 errors  ⚠️  0 warnings' 'corrected fixture is not lint-clean'
-echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 247-key configs, shape cd239239061c/schema 4, exact stale-CI failure and three-file repair'
+echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 278-key configs, shape e8f9efe20c38/schema 4, exact stale-CI failure and three-file repair'
 )
 
 t_config_restore_outcome_runtime() (
@@ -1354,7 +1362,7 @@ grep -q "const _fix = cfgConflictResolve(key, val, cfgCurVal);" "$H" || fail "cf
 grep -q "' set-many --snapshot ' + shQuote(snap) + ' ' +" "$H" || fail "no atomic set-many write"
 grep -Fq "_fix.map(function(c) { return ' ' + shQuote(c.key) + ' ' + shQuote(c.val); }).join('')" "$H" || fail "counterparts not in the same write"
 grep -Fq "_fix.forEach(function(c) { _cfgVals[c.key] = c.val; });" "$H" || fail "UI state not updated for the switched-off card"
-grep -Fq "(AUDIO_DSP_KEYS.indexOf(key) >= 0 && !_fix.length) ? ' dsp' : ''" "$H" || fail "a resolved audio_profile change would take the DSP-only path"
+grep -Fq "((AUDIO_DSP_KEYS.indexOf(key) >= 0 || key.indexOf('dsp_eq_') === 0) && !_fix.length) ? ' dsp' : ''" "$H" || fail "a resolved audio_profile change would take the DSP-only path"
 # The pair is real: the runtime resolves it the same way.
 grep -q 'eq_compat wins and the DSP is turned off outright' "$ROOT/runtime/asb_audio_apply.sh" || fail "eq_compat/DSP precedence gone from runtime - re-check the rule"
 grep -q '_radio_policy_enabled' "$ROOT/runtime/asb_lpm.sh" || fail "night_modem_idle dependency no longer real"
@@ -4066,7 +4074,7 @@ echo "PASS: fix164 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix165: $*"; exit 1; }
 H="$ROOT/webroot/index.html"
-grep -q '^#define ASB_CFG_MAX_KEYS 512$' "$ROOT/src/asb_config.h" || fail "the config reader still stops at 192 keys"
+grep -q '^#define ASB_CFG_MAX_KEYS 1024$' "$ROOT/src/asb_config.h" || fail "the config reader still stops at 192 keys"
 asb_has_test test_config_shipped_load_runtime.sh || fail "no host test loads the shipped governor.conf"
 grep -q "governor accepted governor.conf" "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not check that the governor took the config"
 grep -q 'T_CFG_REFUSED' "$ROOT/action.sh" || fail "the action screen does not say when the config was refused"
@@ -6052,7 +6060,7 @@ need "$HELPER" 'asb_settings_backup.conf'
 need "$UI" "const CFG_GROUP_SECTIONS = {"
 need "$UI" "audio: ["
 need "$UI" "titleKey:'cfg_audio_section_dsp'"
-need "$UI" "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom']"
+need "$UI" "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect']"
 need "$UI" 'function cfgRenderGroup(list, groupId)'
 need "$UI" 'cfgRenderGroup(list, _cfgGroup);'
 need "$UI" '.cfg-section-hint'
@@ -6089,8 +6097,8 @@ need "$UI" 'function uiSound(kind) {'
 need "$UI" "uiSound('profile');"
 need "$UI" "uiSound('capture');"
 need "$UI" "tile.onclick = () => { uiSound('nav');"
-need "$UI" "if (CFG_SILENT_KEYS.indexOf(key) < 0) uiSound(cfgSoundKind(key, val));"
-need "$UI" "const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble'];"
+need "$UI" "if (CFG_SILENT_KEYS.indexOf(key) < 0 && key.indexOf('dsp_eq_') !== 0) uiSound(cfgSoundKind(key, val));"
+need "$UI" "const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_true_peak','dsp_lookahead','dsp_dc_protect'];"
 
 python3 - "$UI" <<'PY'
 import re, sys
@@ -6102,7 +6110,7 @@ assert section_order == ['dsp', 'playback', 'safety'], f'audio priority/order dr
 dsp = re.search(r"\{ id:'dsp'.*?keys:\[([^]]+)\]", audio.group(1), re.S)
 assert dsp, 'DSP section keys missing'
 dsp_keys = re.findall(r"'([^']+)'", dsp.group(1))
-assert dsp_keys == ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'], f'DSP order drifted: {dsp_keys}'
+assert dsp_keys == ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect'], f'DSP order drifted: {dsp_keys}'
 items = set(re.findall(r"\{ key:'([^']+)'", text))
 block = re.search(r'const CFG_ICONS = \{(.*?)\n\};', text, re.S)
 assert block, 'CFG_ICONS block missing'
@@ -7027,7 +7035,7 @@ int main(int argc, char **argv) {
            rc, c.gaming_gpu_enter, c.sustained_temp_enter, c.thermal_skin_c, c.device_bounds_override);
     if (rc != 0) return 1;
     char path[512];
-    for (int n = 300; n <= 600; n += 300) {
+    for (int n = 300; n <= ASB_CFG_MAX_KEYS + 1; n += ASB_CFG_MAX_KEYS + 1 - 300) {
         snprintf(path, sizeof(path), "%s/many_%d.conf", argv[2], n);
         FILE *f = fopen(path, "w");
         if (!f) return 91;
@@ -7037,7 +7045,7 @@ int main(int argc, char **argv) {
         rc = load(path, &c);
         printf("keys=%d rc=%d gaming_gpu_enter=%d\n", n, rc, c.gaming_gpu_enter);
         if (n == 300 && (rc != 0 || c.gaming_gpu_enter != 58)) return 2;
-        if (n == 600 && rc != ASB_CFG_RC_TOO_MANY_KEYS) return 3;
+        if (n != 300 && rc != ASB_CFG_RC_TOO_MANY_KEYS) return 3;
     }
     snprintf(path, sizeof(path), "%s/dup.conf", argv[2]);
     FILE *f = fopen(path, "w");
@@ -10639,6 +10647,54 @@ find "$T/state" -mindepth 1 -print | grep . >/dev/null && fail 'collector create
 [ "$(cat "$T/mod/current_profile")" = smart ] || fail 'collector changed selected profile'
 grep -Eq '(^|[[:space:]])(apply_profile|asb_intent|asb_ledger_note)([[:space:]]|$)' "$D" && fail 'collector gained a writer call'
 echo 'PASS profile details collector buildfix26: valid 75-value Smart/Balanced/Battery JSON after ROM-owned DNS retirement, exact transaction and legacy scopes, absent-ledger fallback, physical-device-only active/raw I/O evidence and read-only behavior'
+)
+
+
+t_io_scheduler_ab_runner_buildfix37() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"; U="$ROOT/tools/asb_io_scheduler_ab.sh"
+fail(){ echo "FAIL I/O scheduler A/B buildfix37: $*" >&2; exit 1; }
+T="$(mktemp -d)"; mkdir -p "$T/block/sda/queue" "$T/block/sda/device" "$T/bin" "$T/data/local/tmp" "$T/state"
+printf '0\n' > "$T/block/sda/queue/rotational"
+printf 'kyber [adios] mq-deadline bfq none\n' > "$T/block/sda/queue/scheduler"
+cat > "$T/bin/fio" <<'EOF'
+#!/bin/sh
+out=;file=;while [ $# -gt 0 ];do case "$1" in --output)out=$2;shift 2;;--output=*)out=${1#*=};shift;;--filename)file=$2;shift 2;;--filename=*)file=${1#*=};shift;;*)shift;;esac;done
+printf x > "$file"
+[ "${ASB_TEST_FIO_FAIL:-0}" != 1 ] || exit 42
+cat > "$out" <<'J'
+{"jobs":[{"clat_ns":{"percentile":{"50.000000":1000,"95.000000":2000,"99.000000":3000}}}]}
+J
+EOF
+chmod 755 "$T/bin/fio"
+# Host-only bounded sysfs emulator. The shipped utility itself has no worker or polling loop.
+( while [ ! -f "$T/stop" ]; do for node in "$T"/block/*/queue/scheduler; do [ -f "$node" ] || continue; v="$(cat "$node")"; case "$v" in *\[*) continue;; esac; case "$node" in */dm-0/*) opts='adios none';; *) opts='kyber adios mq-deadline bfq none';; esac; line=''; for s in $opts; do if [ "$s" = "$v" ]; then line="$line [$s]"; else line="$line $s"; fi; done; printf '%s\n' "${line# }" > "$node"; done; sleep 0.01; done ) & wp=$!
+trap 'touch "$T/stop"; kill "$wp" 2>/dev/null || true; rm -rf "$T"' EXIT HUP INT TERM
+PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock" sh "$U" status | grep -F 'queue=sda active=adios' >/dev/null || fail 'status evidence'
+out="$(PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/new.fio" --seconds 2 --rounds 1)" || fail "$out"
+printf '%s\n' "$out" | grep -F 'scheduler=adios round=1 p50=1000 p95=2000 p99=3000' >/dev/null || fail "latency evidence: $out"
+printf '%s\n' "$out" | grep -F 'verdict=complete_no_auto_selection' >/dev/null || fail 'auto-selection boundary'
+[ "$(cat "$T/block/sda/queue/scheduler")" = 'kyber [adios] mq-deadline bfq none' ] || fail 'baseline not restored'
+[ ! -e "$T/data/local/tmp/new.fio" ] && [ ! -d "$T/state/lock" ] || fail 'cleanup failed'
+printf old > "$T/data/local/tmp/existing"
+if PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock2" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/existing" --seconds 2 >"$T/refused" 2>&1; then fail 'existing file accepted'; fi
+grep -F 'error=test_file_must_be_new' "$T/refused" >/dev/null || fail 'unsafe-file refusal'
+mkdir -p "$T/block/dm-0/queue" "$T/block/dm-0/device"
+printf '0\n' > "$T/block/dm-0/queue/rotational"
+printf 'adios [none]\n' > "$T/block/dm-0/queue/scheduler"
+out="$(PATH="$T/bin:$PATH" ASB_TEST_FIO_FAIL=1 ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock3" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/partial.fio" --seconds 2 --rounds 1)" || fail "$out"
+printf '%s\n' "$out" | grep -F 'skip scheduler=kyber reason=not_exposed_on_every_queue' >/dev/null || fail 'partial exposure was not excluded'
+printf '%s\n' "$out" | grep -F 'scheduler=adios round=1 verdict=fio_failed' >/dev/null || fail 'fio failure not reported'
+printf '%s\n' "$out" | grep -F 'scheduler=none round=1 verdict=fio_failed' >/dev/null || fail 'common scheduler missing'
+printf '%s\n' "$out" | grep -F 'scheduler=kyber round=1' >/dev/null && fail 'partial scheduler ran'
+[ "$(cat "$T/block/sda/queue/scheduler")" = 'kyber [adios] mq-deadline bfq none' ] || fail 'sda restore after fio failure'
+[ "$(cat "$T/block/dm-0/queue/scheduler")" = 'adios [none]' ] || fail 'dm-0 restore after fio failure'
+[ ! -e "$T/data/local/tmp/partial.fio" ] && [ ! -d "$T/state/lock3" ] || fail 'failure cleanup'
+mkdir "$T/state/busy"
+if PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/busy" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/busy.fio" --seconds 2 >"$T/busy.out" 2>&1; then fail 'busy lock accepted'; fi
+grep -F 'error=busy' "$T/busy.out" >/dev/null || fail 'busy error missing'
+[ "$(cat "$T/block/dm-0/queue/scheduler")" = 'adios [none]' ] || fail 'busy path changed scheduler'
+echo 'PASS I/O scheduler A/B buildfix37: physical/common exposure, interleaved fio percentiles, new-file-only safety, no winner, fio/busy failures and exact sda/dm-0 baseline restoration'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
