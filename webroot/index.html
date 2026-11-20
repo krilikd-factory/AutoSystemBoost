@@ -20298,11 +20298,13 @@ function zygiskPageRender(d, state) {
   if (zyOn) {
     const controls = zygiskControlsCard(d, true); controls.id = 'zy-controls';
     st.classList.add('zy-status-merged'); st.appendChild(controls);
+    /* The mode controls belong above Automatic setup, inside this same visual flow. */
+    const modeCard = zygiskModeCard(d);
+    const mode = document.createElement('section'); mode.id = 'zy-mode'; mode.className = 'zy-merged-subsection';
+    while (modeCard.firstChild) mode.appendChild(modeCard.firstChild);
+    st.appendChild(mode);
   }
   body.appendChild(st);
-  if (zyOn) {
-    const mode = zygiskModeCard(d); mode.id = 'zy-mode'; body.appendChild(mode);
-  }
   if (!zyOn) {
     body.appendChild(zygiskOffCard());
     const lspOff = lspLiteCard(); lspOff.id = 'zy-lsp'; body.appendChild(lspOff);
@@ -20312,8 +20314,7 @@ function zygiskPageRender(d, state) {
     return;
   }
   body.appendChild(asbPageJump([
-    ['zy-controls', T('zy_nav_controls', 'Controls')], ['zy-mode', T('zy_nav_mode', 'Mode')],
-    ['zy-auto', T('zy_nav_auto', 'Automatic')], ['zy-activity', T('zy_nav_activity', 'Activity')],
+    ['zy-status', T('zy_nav_controls', 'Controls')],
     ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-engine', T('zy_link_nav', 'Unified engine')], ['zy-lsp', T('zy_nav_lsp', 'LSPosed')], ['zy-s7', T('zy_nav_s7', 'Budgets')], ['zy-aot', T('zy_nav_art', 'ART')],
     ['zy-apps', T('zy_nav_apps', 'Apps')]
   ], T('dev_nav_title', 'Jump to'), 'zy-page-nav'));
