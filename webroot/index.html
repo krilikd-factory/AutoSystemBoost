@@ -9,6 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>AutoSystemBoost</title>
 <meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="icon.png">
 <meta name="color-scheme" content="dark light">
 <style>
 /* Critical canvas only: a WebView can paint before the full stylesheet is parsed.
@@ -6223,6 +6224,66 @@ html:root[data-asb-glass="1"] .cfg-reset-dialog {
     box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
 }
+
+/* Active-profile evidence sheet. The card remains a profile switch while inactive;
+ * once active it opens this read-only, on-demand explanation instead of doing nothing. */
+.pinspect { display:none; margin-top:3px; color:var(--text-secondary); font:650 10px/1.25 var(--sans); letter-spacing:.015em; }
+.pbtn.on .pinspect { display:block; color:var(--c); opacity:.88; }
+.pbtn.on { cursor:pointer; }
+.pbtn.on .pchk::after { content:'i'; position:absolute; inset:0; display:grid; place-items:center; color:#061711; font:900 13px/1 var(--sans); }
+.pbtn.on .pchk svg { opacity:0; }
+.pbtn[data-p="stock"].on .pchk::after { content:''; }
+.pbtn[data-p="stock"].on .pchk svg { opacity:1; }
+.profile-details-sheet { width:min(100%,560px); max-height:92vh; max-height:92dvh; overflow:hidden; padding:0 !important; }
+.profile-details-scroll { max-height:92vh; max-height:92dvh; overflow-y:auto; overscroll-behavior:contain; padding:0 16px calc(18px + env(safe-area-inset-bottom,0px)); -webkit-overflow-scrolling:touch; }
+.profile-details-head { position:sticky; top:0; z-index:4; display:flex; align-items:center; gap:10px; margin:0 -16px; padding:15px 16px 12px; background:rgba(8,15,17,.96); border-bottom:1px solid rgba(95,240,190,.12); backdrop-filter:blur(16px); }
+.profile-details-headtext { flex:1; min-width:0; }
+.profile-details-kicker { color:#72e8bd; font:750 10px/1.3 var(--sans); letter-spacing:.12em; text-transform:uppercase; }
+.profile-details-title { margin-top:2px; color:var(--text); font:800 21px/1.2 var(--sans); }
+.profile-details-close,.profile-details-refresh { width:38px; height:38px; flex:0 0 auto; border:1px solid var(--border); border-radius:13px; background:var(--surface); color:var(--text); font:700 20px/1 var(--sans); }
+.profile-details-refresh { font-size:17px; }
+.profile-details-hero { position:relative; overflow:hidden; margin-top:14px; padding:16px; border:1px solid rgba(64,230,165,.28); border-radius:20px; background:radial-gradient(circle at 90% 0,rgba(56,225,170,.18),transparent 48%),linear-gradient(145deg,rgba(31,155,111,.18),rgba(9,19,19,.88)); }
+.profile-details-hero-name { color:#78efbf; font:850 24px/1.15 var(--sans); }
+.profile-details-hero-sub { margin-top:7px; color:var(--text-secondary); font:500 12px/1.5 var(--sans); }
+.profile-details-epoch { display:inline-flex; margin-top:11px; padding:5px 9px; border:1px solid rgba(100,238,189,.22); border-radius:999px; color:#9af2cf; background:rgba(30,180,125,.08); font:700 10px/1 var(--mono); }
+.profile-details-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:12px 0; }
+.profile-details-stat { padding:10px 5px; text-align:center; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+.profile-details-stat b { display:block; color:var(--text); font:800 18px/1.1 var(--sans); font-variant-numeric:tabular-nums; }
+.profile-details-stat span { display:block; margin-top:5px; color:var(--text-tertiary); font:650 9px/1.25 var(--sans); }
+.profile-details-stat.good b { color:#65e7b4; } .profile-details-stat.warn b { color:#f4bd61; } .profile-details-stat.bad b { color:#ff8585; }
+.profile-details-section { margin:11px 0; border:1px solid var(--border); border-radius:18px; background:var(--surface); overflow:hidden; }
+.profile-details-section > summary { padding:14px; cursor:pointer; color:var(--text); font:750 13px/1.35 var(--sans); list-style:none; }
+.profile-details-section > summary::-webkit-details-marker { display:none; }
+.profile-details-section > summary::after { content:'+'; float:right; color:#67dbae; font-size:18px; }
+.profile-details-section[open] > summary::after { content:'−'; }
+.profile-details-section-body { padding:0 12px 12px; }
+.profile-details-row { display:grid; grid-template-columns:minmax(112px,.85fr) minmax(0,1.15fr); gap:10px; padding:9px 2px; border-top:1px solid rgba(150,180,170,.08); content-visibility:auto; contain-intrinsic-height:auto 45px; }
+.profile-details-row-k { color:var(--text-secondary); font:600 10.5px/1.45 var(--mono); overflow-wrap:anywhere; }
+.profile-details-row-v { color:var(--text); font:600 11px/1.45 var(--mono); text-align:right; overflow-wrap:anywhere; white-space:pre-wrap; }
+.profile-details-subhead { padding:12px 2px 5px; color:#71dfaf; font:750 10px/1.3 var(--sans); letter-spacing:.07em; text-transform:uppercase; }
+.profile-details-filters { display:flex; gap:6px; padding:0 12px 10px; }
+.profile-details-filter { flex:1; min-height:34px; border:1px solid var(--border); border-radius:11px; background:transparent; color:var(--text-secondary); font:700 10px/1 var(--sans); }
+.profile-details-filter.on { color:#72e8bd; border-color:rgba(70,220,160,.42); background:rgba(40,190,130,.09); }
+.profile-details-entry { margin:7px 0; padding:11px; border:1px solid var(--border); border-radius:14px; background:rgba(0,0,0,.10); content-visibility:auto; contain-intrinsic-height:auto 126px; }
+.profile-details-entry-top { display:flex; align-items:center; gap:8px; }
+.profile-details-entry-key { flex:1; min-width:0; color:var(--text); font:700 11px/1.35 var(--mono); overflow-wrap:anywhere; }
+.profile-details-badge { flex:0 0 auto; padding:4px 7px; border-radius:999px; font:750 8.5px/1 var(--sans); text-transform:uppercase; }
+.profile-details-badge.good { color:#72e8bd; background:rgba(50,210,145,.11); }
+.profile-details-badge.warn { color:#f4bd61; background:rgba(235,165,55,.11); }
+.profile-details-badge.bad { color:#ff9191; background:rgba(235,80,80,.11); }
+.profile-details-values { margin-top:8px; display:grid; grid-template-columns:1fr; gap:4px; color:var(--text-secondary); font:500 10.5px/1.45 var(--mono); overflow-wrap:anywhere; }
+.profile-details-values b { color:var(--text); font-weight:650; }
+.profile-details-reason { margin-top:7px; color:var(--text-tertiary); font:500 10.5px/1.45 var(--sans); }
+.profile-details-note { margin:11px 2px; color:var(--text-secondary); font:500 11px/1.55 var(--sans); }
+.profile-details-empty { padding:20px 10px; text-align:center; color:var(--text-secondary); font:500 12px/1.5 var(--sans); }
+.profile-details-loading { padding:52px 18px; text-align:center; color:#82e9bf; font:650 13px/1.5 var(--sans); }
+html[data-asb-theme="light"] .profile-details-head { background:rgba(246,251,248,.96); }
+html[data-asb-theme="light"] .profile-details-hero { background:radial-gradient(circle at 90% 0,rgba(30,190,125,.16),transparent 52%),linear-gradient(145deg,#e4fff1,#f8fffb); }
+html[data-asb-theme="light"] .profile-details-hero-name { color:#087a4d; }
+html[data-asb-theme="light"] .profile-details-entry { background:rgba(255,255,255,.55); }
+@media (max-width:360px) { .profile-details-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } .profile-details-row { grid-template-columns:minmax(100px,.9fr) minmax(0,1.1fr); } }
+@media (prefers-reduced-motion:reduce) { .profile-details-sheet { animation:none !important; } }
+
 /* dev63: reduced effects preserve the palette, selected states and interaction feedback, but
  * avoid full-screen blur layers and decorative perpetual motion. No content-visibility is
  * applied: asbFitPages still measures the real page height. */
@@ -6300,6 +6361,7 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
   font:500 11.5px/1.4 var(--sans); white-space:normal; }
 .lvh-cat-dot { flex:0 0 auto; width:7px; height:7px; border-radius:50%; }
 .lvh-cat-pct { color:var(--text); font-variant-numeric:tabular-nums; font-weight:700; }
+
 </style>
 </head>
 <body>
@@ -6457,7 +6519,7 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
   </div>
   <div class="profiles">
 
-    <div class="pbtn pbtn-smart" data-p="smart" onclick="go('smart')">
+    <div class="pbtn pbtn-smart" data-p="smart" onclick="profileCardTap('smart')" role="button" tabindex="0" onkeydown="profileCardKey(event,'smart')" aria-haspopup="dialog">
       <div class="pico pico-smart">
         <div class="ai-glow"></div>
         <span class="tech-icon-slot" data-tech-icon="smart"></span>
@@ -6465,17 +6527,19 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
       <div class="pinfo">
         <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" id="smartEngineTag" style="display:none"></span></div>
         <div class="psub asb-value-pending" id="smartSubLine" aria-busy="true">—</div>
+        <div class="pinspect" data-i18n="prof_inspect_hint">Tap for actual changes</div>
         <div class="pmeta" data-meter="smart" hidden></div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
     </div>
 
-    <div class="pbtn" data-p="performance" onclick="go('performance')">
+    <div class="pbtn" data-p="performance" onclick="profileCardTap('performance')" role="button" tabindex="0" onkeydown="profileCardKey(event,'performance')" aria-haspopup="dialog">
       <div class="pico" data-tech-icon="performance"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_performance">Performance</div>
         <div class="pdesc" data-i18n="prof_performance_desc">Top clocks for games and heavy apps</div>
+        <div class="pinspect" data-i18n="prof_inspect_hint">Tap for actual changes</div>
         <div class="pmeta" data-meter="performance" hidden></div>
       </div>
       <div class="pload"></div>
@@ -6483,22 +6547,24 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
     </div>
 
 
-    <div class="pbtn" data-p="balanced" onclick="go('balanced')">
+    <div class="pbtn" data-p="balanced" onclick="profileCardTap('balanced')" role="button" tabindex="0" onkeydown="profileCardKey(event,'balanced')" aria-haspopup="dialog">
       <div class="pico" data-tech-icon="balanced"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_balanced">Balanced</div>
         <div class="pdesc" data-i18n="prof_balanced_desc">Everyday use - smooth and frugal</div>
+        <div class="pinspect" data-i18n="prof_inspect_hint">Tap for actual changes</div>
         <div class="pmeta" data-meter="balanced" hidden></div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
     </div>
 
-    <div class="pbtn" data-p="battery" onclick="go('battery')">
+    <div class="pbtn" data-p="battery" onclick="profileCardTap('battery')" role="button" tabindex="0" onkeydown="profileCardKey(event,'battery')" aria-haspopup="dialog">
       <div class="pico" data-tech-icon="battery"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_battery">Battery</div>
         <div class="pdesc" data-i18n="prof_battery_desc">Longest battery life, lower clocks</div>
+        <div class="pinspect" data-i18n="prof_inspect_hint">Tap for actual changes</div>
         <div class="pmeta" data-meter="battery" hidden></div>
       </div>
       <div class="pload"></div>
@@ -8348,6 +8414,164 @@ function ui(p) {
 }
 
 let switching = false;
+const _profileDetails = { profile:'', data:null, effective:null, filter:'all', request:0 };
+function profileCardTap(p) {
+  const btn = document.querySelector('[data-p="' + p + '"]');
+  if (!btn || switching || btn.classList.contains('ld')) return;
+  if (btn.classList.contains('on')) profileDetailsOpen(p); else go(p);
+}
+function profileCardKey(e, p) {
+  if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+  e.preventDefault(); profileCardTap(p);
+}
+function profileDetailsNode(tag, cls, text) {
+  const n = document.createElement(tag); if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text; return n;
+}
+function profileDetailsEnsure() {
+  let m = _el('profileDetailsModal'); if (m) return m;
+  m = document.createElement('div'); m.className = 'cfg-profile-modal'; m.id = 'profileDetailsModal';
+  m.hidden = true; m.setAttribute('aria-hidden', 'true');
+  m.innerHTML = '<div class="cfg-profile-sheet profile-details-sheet" role="dialog" aria-modal="true" aria-labelledby="profileDetailsTitle">'
+    + '<div class="profile-details-scroll"><div class="profile-details-head"><div class="profile-details-headtext">'
+    + '<div class="profile-details-kicker" id="profileDetailsKicker"></div><div class="profile-details-title" id="profileDetailsTitle"></div></div>'
+    + '<button class="profile-details-refresh" id="profileDetailsRefresh" type="button" aria-label="Refresh">↻</button>'
+    + '<button class="profile-details-close" id="profileDetailsClose" type="button" aria-label="Close">×</button></div>'
+    + '<div id="profileDetailsBody"></div></div></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', function(e) { if (e.target === m) profileDetailsClose(); });
+  _el('profileDetailsClose').onclick = profileDetailsClose;
+  _el('profileDetailsRefresh').onclick = function() { profileDetailsRefresh(); };
+  return m;
+}
+function profileDetailsOpen(p) {
+  if (!['smart','performance','balanced','battery'].includes(p)) return;
+  _profileDetails.profile = p; _profileDetails.filter = 'all';
+  const m = profileDetailsEnsure();
+  _el('profileDetailsKicker').textContent = T('pd_kicker', 'ACTIVE PROFILE · LIVE EVIDENCE');
+  _el('profileDetailsTitle').textContent = T('prof_' + p, p);
+  m.hidden = false; m.setAttribute('aria-hidden', 'false'); navSync();
+  profileDetailsRefresh();
+  setTimeout(function() { _el('profileDetailsClose').focus(); }, 0);
+}
+function profileDetailsClose() {
+  const m = _el('profileDetailsModal'); if (!m || m.hidden) return;
+  _profileDetails.request++;
+  m.hidden = true; m.setAttribute('aria-hidden', 'true'); navSync();
+  const btn = document.querySelector('[data-p="' + _profileDetails.profile + '"]');
+  if (btn) btn.focus();
+}
+async function profileDetailsRefresh() {
+  const p = _profileDetails.profile; if (!p) return;
+  const ticket = ++_profileDetails.request;
+  const body = _el('profileDetailsBody');
+  body.replaceChildren(profileDetailsNode('div', 'profile-details-loading', T('pd_loading', 'Reading profile intent, live ownership and write readbacks…')));
+  try {
+    const dr = await run('sh ' + MD + '/tools/asb_profile_details.sh ' + p);
+    const er = await run('sh ' + MD + '/tools/asb_effective_policy.sh');
+    if (ticket !== _profileDetails.request) return;
+    if (!dr || dr.errno !== 0) throw new Error((dr && dr.stderr) || 'profile details unavailable');
+    _profileDetails.data = JSON.parse(dr.stdout || '{}');
+    _profileDetails.effective = er && er.errno === 0 ? JSON.parse(er.stdout || '{}') : null;
+    profileDetailsPaint();
+  } catch (e) {
+    if (ticket !== _profileDetails.request) return;
+    body.replaceChildren(profileDetailsNode('div', 'profile-details-empty', T('pd_error', 'Could not read current evidence. No setting was changed. Close and try again.')));
+  }
+}
+function profileDetailsSection(parent, title, open) {
+  const d = profileDetailsNode('details', 'profile-details-section'); if (open) d.open = true;
+  d.appendChild(profileDetailsNode('summary', '', title));
+  const b = profileDetailsNode('div', 'profile-details-section-body'); d.appendChild(b); parent.appendChild(d); return b;
+}
+function profileDetailsRow(parent, key, value) {
+  const r = profileDetailsNode('div', 'profile-details-row');
+  r.appendChild(profileDetailsNode('div', 'profile-details-row-k', key));
+  r.appendChild(profileDetailsNode('div', 'profile-details-row-v', value === '' ? T('pd_not_forced', 'not forced') : (value === undefined || value === null || value === '' ? 'unknown' : String(value))));
+  parent.appendChild(r);
+}
+function profileDetailsIntentGroup(key) {
+  if (/^(CPU_|SCHED_|UCL_|LATENCY_)/.test(key)) return 'cpu';
+  if (/^(RAVG_|WALT_)/.test(key)) return 'walt';
+  if (/^GPU_/.test(key)) return 'gpu';
+  if (/^VM_/.test(key)) return 'memory';
+  if (/^(NET_|WIFI_)/.test(key)) return 'network';
+  return 'ux';
+}
+function profileDetailsPaint() {
+  const d = _profileDetails.data || {}, e = _profileDetails.effective || {};
+  const p = _profileDetails.profile, body = _el('profileDetailsBody'); body.replaceChildren();
+  const hero = profileDetailsNode('div', 'profile-details-hero');
+  hero.appendChild(profileDetailsNode('div', 'profile-details-hero-name', T('prof_' + p, p)));
+  hero.appendChild(profileDetailsNode('div', 'profile-details-hero-sub', T('pd_' + p + '_note', '')));
+  hero.appendChild(profileDetailsNode('div', 'profile-details-epoch', T('pd_epoch', 'apply epoch').toUpperCase() + ' · ' + String(d.epoch || 0)));
+  body.appendChild(hero);
+  const sum = (d.ledger && d.ledger.summary) || {};
+  const good = (sum.applied || 0) + (sum.already_set || 0);
+  const attention = (sum.unsupported || 0) + (sum.not_writable || 0) + (sum.readback_mismatch || 0) + (sum.lease_denied || 0) + (sum.safety_veto || 0);
+  const stats = profileDetailsNode('div', 'profile-details-summary');
+  [[good,T('pd_confirmed','confirmed'),'good'],[sum.applied || 0,T('pd_written','written'),'good'],[attention,T('pd_attention','attention'),attention ? 'warn' : 'good'],[(d.intent || []).length,T('pd_rails','profile values'),'']].forEach(function(x) {
+    const n = profileDetailsNode('div', 'profile-details-stat ' + x[2]);
+    n.appendChild(profileDetailsNode('b','',String(x[0]))); n.appendChild(profileDetailsNode('span','',x[1])); stats.appendChild(n);
+  }); body.appendChild(stats);
+
+  const live = profileDetailsSection(body, T('pd_live_title', 'What is in effect right now'), true);
+  const prof = e.profile || {}, cpu = e.cpu_min_policy || {}, thermal = e.thermal || {}, wh = e.writer_health || {}, energy = e.energy_policy || {}, net = e.network || {};
+  profileDetailsRow(live, T('pd_owner','Policy owner'), prof.cap_owner || 'unknown');
+  profileDetailsRow(live, T('pd_cpu_strategy','CPU minimum strategy'), cpu.strategy || 'unknown');
+  profileDetailsRow(live, T('pd_fsm','Smart FSM state'), cpu.fsm_state || 'not_applicable');
+  profileDetailsRow(live, T('pd_thermal_floor','Runtime thermal floor'), thermal.runtime_floor || 'none');
+  profileDetailsRow(live, T('pd_thermal_stage','Efficiency / thermal stage'), (energy.thermal_budget_stage || 'unknown') + ' · ' + (energy.thermal_budget_reason || 'unknown'));
+  profileDetailsRow(live, T('pd_writer','Writer applied / failures'), String(wh.applied || 0) + ' / ' + String(wh.failures || 0));
+  profileDetailsRow(live, T('pd_config','Configuration health'), e.config_health || 'unknown');
+  profileDetailsRow(live, T('pd_network','Network congestion / qdisc'), (net.congestion_live || 'unknown') + ' / ' + (net.qdisc_live || 'unknown'));
+  (d.io || []).forEach(function(io) { profileDetailsRow(live, 'I/O · ' + io.device, io.scheduler); });
+
+  const intent = profileDetailsSection(body, T('pd_intent_title', 'Profile blueprint · device-specific values'), false);
+  intent.appendChild(profileDetailsNode('div','profile-details-note',p === 'smart' ? T('pd_smart_base','Smart inherits these Balanced rails; the live FSM section above shows subsequent dynamic ownership.') : T('pd_intent_note','These are requested rails, not proof of a successful write. Confirm individual outcomes in the readback ledger below.')));
+  const groups = {};
+  (d.intent || []).forEach(function(item) { const g = profileDetailsIntentGroup(item.key); (groups[g] || (groups[g] = [])).push(item); });
+  ['cpu','walt','gpu','memory','network','ux'].forEach(function(g) {
+    if (!groups[g]) return;
+    intent.appendChild(profileDetailsNode('div','profile-details-subhead',T('pd_group_' + g,g)));
+    groups[g].forEach(function(item) { profileDetailsRow(intent,item.key,item.value); });
+  });
+
+  const ledger = d.ledger || {entries:[],summary:{}};
+  const ledgerSection = profileDetailsSection(body, T('pd_ledger_title','Actual write/readback ledger'), true);
+  const scopeKey = ledger.scope === 'current_profile_transaction' ? 'pd_scope_current' : (ledger.scope === 'unavailable' ? 'pd_no_entries' : 'pd_scope_legacy');
+  const scope = profileDetailsNode('div','profile-details-note',T(scopeKey, ''));
+  ledgerSection.appendChild(scope);
+  const filters = profileDetailsNode('div','profile-details-filters');
+  [['all',T('pd_all','All')],['good',T('pd_only_confirmed','Confirmed')],['attention',T('pd_only_attention','Needs attention')]].forEach(function(f) {
+    const b = profileDetailsNode('button','profile-details-filter' + (_profileDetails.filter === f[0] ? ' on' : ''),f[1]); b.type = 'button';
+    b.onclick = function() { _profileDetails.filter = f[0]; profileDetailsPaint(); }; filters.appendChild(b);
+  }); ledgerSection.appendChild(filters);
+  const entries = (ledger.entries || []).slice().reverse().filter(function(row) {
+    const goodRow = row.result === 'applied' || row.result === 'already_set';
+    return _profileDetails.filter === 'all' || (_profileDetails.filter === 'good' ? goodRow : !goodRow);
+  });
+  if (!entries.length) ledgerSection.appendChild(profileDetailsNode('div','profile-details-empty',T('pd_no_entries','No ledger entries in this view. Apply the profile again to create a fresh transaction boundary.')));
+  entries.forEach(function(row) {
+    const goodRow = row.result === 'applied' || row.result === 'already_set';
+    const badRow = ['unsupported','not_writable','readback_mismatch'].includes(row.result);
+    const card = profileDetailsNode('div','profile-details-entry');
+    const top = profileDetailsNode('div','profile-details-entry-top');
+    top.appendChild(profileDetailsNode('div','profile-details-entry-key',row.domain + ' · ' + row.key));
+    top.appendChild(profileDetailsNode('span','profile-details-badge ' + (goodRow ? 'good' : (badRow ? 'bad' : 'warn')),T('pd_result_' + row.result,row.result)));
+    card.appendChild(top);
+    const vals = profileDetailsNode('div','profile-details-values');
+    vals.appendChild(profileDetailsNode('div','',T('pd_requested','Requested') + ': ' + (row.requested || '—')));
+    vals.appendChild(profileDetailsNode('div','',T('pd_readback','Readback') + ': ' + (row.readback || '—')));
+    vals.appendChild(profileDetailsNode('div','',T('pd_previous','Previous') + ': ' + (row.previous || '—')));
+    card.appendChild(vals);
+    const stamp = row.ts && Number(row.ts) > 0 ? new Date(Number(row.ts) * 1000).toLocaleString() : '';
+    card.appendChild(profileDetailsNode('div','profile-details-reason',[stamp,row.reason].filter(Boolean).join(' · ')));
+    ledgerSection.appendChild(card);
+  });
+  body.appendChild(profileDetailsNode('div','profile-details-note',T('pd_evidence_note','Read-only view: no value is changed by opening or refreshing it. “Confirmed” means the recorded readback matched; unsupported or missing evidence is never presented as applied.')));
+}
+
 async function go(p) {
   const btn = document.querySelector('[data-p="' + p + '"]');
   if (switching || !btn || btn.classList.contains('on')) return;
@@ -8650,7 +8874,8 @@ const NAV_OVERLAYS = [
   { id: 'cfgFm',            close: function () { cfgFmClose(); } },
   { id: 'dozeKeepModal',    close: function () { dozeKeepClose(); } },
   { id: 'cfgResetModal',    close: function () { cfgResetDialogClose(); } },
-  { id: 'cfgProfileModal',  close: function () { cfgProfileClose(); } }
+  { id: 'cfgProfileModal',  close: function () { cfgProfileClose(); } },
+  { id: 'profileDetailsModal', close: function () { profileDetailsClose(); } }
 ];
 const _nav = { depth: 0, pending: false, queued: false };
 function navOverlaysOpen() {
