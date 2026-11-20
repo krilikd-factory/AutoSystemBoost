@@ -4,6 +4,25 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix36 - remove tweak-category subsection explanations
+
+Input: the owner's request to remove the prose beneath subsection headings throughout the tweak categories, including Charging, Camera Tools, Photo Processing and Diagnostics. Base: the verified buildfix35 source archive.
+
+- **One complete presentation removal:** all 23 `hintKey`/`hint` definitions are removed from `CFG_GROUP_SECTIONS`, covering Audio, Battery, Network, Zygisk, Display & Haptics, System Services, Diagnostics, Camera, Interface and Infirmary. `cfgRenderSection()` now emits only the icon and localized title; it no longer creates a `.cfg-section-hint` node. Existing locale resources are retained harmlessly for history compatibility, while per-setting descriptions, safety warnings, status evidence and custom repair/tool cards remain unchanged.
+- **Regression boundary:** a dedicated source contract rejects subsection-hint definitions and their renderer while requiring the ordinary setting-row description path to remain. Existing buildfix35 and earlier UI contracts remain active. No runtime policy, native source, binary, workflow, audio processing, camera processing or kernel behavior changed; host/browser checks are not physical OnePlus 15/ColorOS validation.
+
+## V66 dev66 buildfix35 - coherent metric sheets, compact docks and Binder recovery
+
+Input: the owner's twelve-point WebUI follow-up, followed by a request to simplify the Slot sheet and remove the optional-DSP explanation from Audio. Base: the verified buildfix34 source archive.
+
+- **Monitor information hierarchy:** all common metric sheets keep values, scales, pressure, history and sources visible, with the Explanation disclosure moved after the evidence and restyled without nested grey strips. Battery-drain basis text is always visible and no longer creates disclosure tabs. Slot is intentionally simpler: no scale bar and no folded explanation, just its current time-based value and direct prose. Smart's adaptive-policy paragraph has its own compact disclosure.
+- **Compact navigation and consistent actions:** the Infinite Log dock retains only Summary, Actions, conditionally Battery, and Details. Zygisk has six top-level destinations; Unified engine and LSPosed share one card while the internal `zy-lsp` anchor remains. Device diagnostics receives the same Back, Logs and Telegram actions as Zygisk. Kernel has one shared Refresh action in its compact initial card, not a duplicate in wakeup rules.
+- **Zygisk and Infirmary cleanup:** Automatic setup has one title and a state-aware badge instead of unconditionally claiming to follow the selected mode. The two final package repairs no longer carry the reversible-system-fix kicker. The Audio DSP section no longer renders `cfg_audio_section_dsp_hint`.
+- **Stable initial drain:** a mature per-profile screen-on sample now takes priority over the coarse since-boot estimate; the latter remains only a fallback. No number is hardcoded and no display delay was added.
+- **Battery Fix Binder recovery:** after the bounded package-scoped `cmd`/`pm compile` refusal streak, the worker tries Android's standard `cmd package bg-dexopt-job`, then `pm bg-dexopt-job`. Accepted scheduling is reported as scheduled, not as verified speed-profile compilation. If both refuse, the UI gives a concise honest refusal without raw Binder transaction text; unprocessed apps are never counted as compiled. Aggregate `-a`, direct dex2oat and ART/Dalvik cleanup remain forbidden.
+- **Bounded transition compositing:** backdrop sampling and shadows are suspended only during the existing page slide through one bounded class/timer. No persistent worker, polling loop or speculative root call was added.
+- **Verification boundary:** targeted shell/Node contracts cover both background recovery channels, final refusal honesty, source priority, Slot/Audio presentation and all changed structures. HTTP-served Chromium verified Zygisk order/dock, metric/disclosure order, always-visible drain prose, Device actions, one Kernel Refresh, no horizontal overflow and zero page/console errors. The staged canonical source-only regression passed 441 suites/test cases with 588 anchored PASS lines, zero FAILED, lint 0 errors/0 warnings, native strict warnings 48 against budget 62, and GCC new=0 / resolved=12 / baseline_sites=60. This is host/browser evidence, not physical OnePlus 15/ColorOS WebView validation and not a measured performance or energy improvement.
+
 ## V66 dev66 buildfix34 - Mode controls above Automatic setup
 
 Input: the owner's device screenshots showing that buildfix33 placed the separate Mode card after the entire Connection card, leaving Automatic setup visually above the mode switches. Base: the verified buildfix33 source archive.
