@@ -6349,6 +6349,13 @@ html[data-asb-effects="reduced"] .live-info-src {
 html[data-asb-effects="reduced"] :is(.zygisk-header-dot,.zygisk-header-dot::after,.dev-zygisk-link-dot,.dev-zygisk-link-dot::after,.pico-smart .ai-glow) {
   animation:none !important;
 }
+/* During a page slide, compositing the moving surface matters more than backdrop sampling.
+ * This bounded class exists only for the slide; it is not a worker or a persistent render mode. */
+html.asb-nav-moving .page, html.asb-nav-moving .live-page, html.asb-nav-moving .config-page,
+html.asb-nav-moving .lgr-sec, html.asb-nav-moving .cfg-row, html.asb-nav-moving .live-cell,
+html.asb-nav-moving .pbtn, html.asb-nav-moving .cfg-tile, html.asb-nav-moving .header, html.asb-nav-moving .status-row {
+  -webkit-backdrop-filter:none !important; backdrop-filter:none !important; box-shadow:none !important;
+}
 /* buildfix23: the sheet owns the only material. Glass applies its own !important surface to
  * inner regions, so these selectors intentionally include :root and the complete sheet class.
  * No nested grey cards survive in ColorOS WebView, light mode or the host's Glass preview. */
@@ -6368,7 +6375,20 @@ html:root .cfg-profile-sheet.live-info-sheet .live-info-pressure {
   -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
 html:root .cfg-profile-sheet.live-info-sheet .live-info-src { font:500 11.5px/1.55 var(--sans); }
 html:root .cfg-profile-sheet.live-info-sheet .live-info-scale { margin:0 0 14px; padding:0 2px; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-disclosure { margin:16px 0 0; padding:0; border:0 !important; border-radius:14px; background:color-mix(in srgb,var(--accent) 7%,transparent); overflow:hidden; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-disclosure summary { padding:11px 13px; color:var(--accent); font:700 12px/1.3 var(--sans); }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-disclosure[open] summary { padding-bottom:5px; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-disclosure .live-info-text { padding:4px 13px 13px; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-disclosure.is-plain { margin-top:12px; background:transparent; }
+html:root .cfg-profile-sheet.live-info-sheet .live-info-disclosure.is-plain .live-info-text { padding:0 2px; }
 html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px; }
+.live-drain-basis, .live-drain-note { margin-top:8px; padding:0; border:0; background:transparent; }
+.profile-details-smart-policy { margin-top:10px; padding:0; border:0; border-radius:12px; background:rgba(120,239,191,.08); overflow:hidden; }
+.profile-details-smart-policy summary { padding:9px 11px; color:#78efbf; font:750 11px/1.3 var(--sans); }
+.profile-details-smart-policy .profile-details-hero-sub { margin:0; padding:0 11px 11px; }
+.zy-auto-card { padding:2px 0 0; }
+.zy-auto-badge { border:1px solid color-mix(in srgb,var(--accent) 24%,transparent); }
+.zy-auto-desc { color:var(--text-secondary); font:500 12px/1.5 var(--sans); }
 /* Categorical history is a tiny proportional strip plus a readable legend, not another prose
  * card. All geometry is plain DOM/CSS; no animation, timer, canvas or additional root read. */
 .lvh-cat-caption { margin:0 0 8px; color:var(--text-tertiary); font:600 10px/1.35 var(--sans);
@@ -7068,10 +7088,18 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
         </div>
         <div class="theme-toggle" role="group" data-theme-toggle="devVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
       </div>
-      <div class="status-row">
+      <div class="status-row has-back">
         <div class="dot"></div>
         <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
         <button class="status-val profile-evidence-link" id="devCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="false">balanced</button>
+        <div class="island-actions">
+          <button class="island-btn" id="devLogsBtn" type="button" onclick="asbToggleLogMenu(event)" aria-haspopup="menu" aria-expanded="false" aria-label="Logs">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            <span data-i18n="nav_logs">Logs</span></button>
+          <a class="island-btn" id="devTgBtn" href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)" aria-label="Telegram">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            <span data-i18n="nav_channel">Channel</span></a>
+        </div>
         <button class="live-chip" id="devBackChip" type="button" onclick="closeDevicePage()" aria-label="Back">
           <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
           <span data-i18n="nav_back">Back</span>
@@ -8543,7 +8571,13 @@ function profileDetailsPaint() {
   const p = _profileDetails.profile, body = _el('profileDetailsBody'); body.replaceChildren();
   const hero = profileDetailsNode('div', 'profile-details-hero');
   hero.appendChild(profileDetailsNode('div', 'profile-details-hero-name', T('prof_' + p, p)));
-  hero.appendChild(profileDetailsNode('div', 'profile-details-hero-sub', T('pd_' + p + '_note', '')));
+  const heroNote = T('pd_' + p + '_note', '');
+  if (p === 'smart' && heroNote) {
+    const fold = profileDetailsNode('details', 'profile-details-smart-policy asb-disclosure');
+    fold.appendChild(profileDetailsNode('summary', '', T('zy_explanation', 'Explanation')));
+    fold.appendChild(profileDetailsNode('div', 'profile-details-hero-sub', heroNote));
+    hero.appendChild(fold);
+  } else if (heroNote) hero.appendChild(profileDetailsNode('div', 'profile-details-hero-sub', heroNote));
   hero.appendChild(profileDetailsNode('div', 'profile-details-epoch', Number(d.epoch) > 0
     ? T('pd_epoch', 'apply epoch').toUpperCase() + ' · ' + String(d.epoch)
     : T('pd_epoch_unavailable', 'CURRENT TRANSACTION NOT EXPOSED · SAVED HISTORY')));
@@ -9326,7 +9360,8 @@ function lvOnFigure(profile) {
   /* The selected WebUI profile owns the phone-wide since-boot view. The meter's "current"
    * line is only a runtime publication and can lag a profile switch; using it here assigned
    * another profile's history to the active card. */
-  return _selectedProfile === profile ? lvBootOnFigure() : lvProfileOnFigure(profile);
+  const own = lvProfileOnFigure(profile);
+  return own || (_selectedProfile === profile ? lvBootOnFigure() : null);
 }
 function lvPrimaryOffFigure(profile) {
   const own = lvProfileNightFigure(profile);
@@ -9469,20 +9504,13 @@ function liveDrainEnsure() {
   _el('liveDrainDone').onclick = liveDrainClose;
   return m;
 }
-function liveDrainExplanation(text, bodyClass, foldKey) {
-  const fold = document.createElement('details');
-  fold.className = 'live-drain-explanation asb-disclosure';
-  fold.setAttribute('data-drain-fold', foldKey);
-  const summary = document.createElement('summary');
-  summary.textContent = T('zy_explanation', 'Explanation');
-  fold.appendChild(summary);
+function liveDrainExplanation(text, bodyClass) {
   const body = document.createElement('div');
   body.className = bodyClass;
   body.textContent = text;
-  fold.appendChild(body);
-  return fold;
+  return body;
 }
-function liveDrainBlock(icon, label, value, basis, left, foldKey) {
+function liveDrainBlock(icon, label, value, basis, left) {
   const b = document.createElement('div');
   b.className = 'live-drain-block';
   const ic = document.createElement('span');
@@ -9498,7 +9526,7 @@ function liveDrainBlock(icon, label, value, basis, left, foldKey) {
     e.textContent = p[1];
     tx.appendChild(e);
   });
-  if (basis) tx.appendChild(liveDrainExplanation(basis, 'live-drain-basis', foldKey));
+  if (basis) tx.appendChild(liveDrainExplanation(basis, 'live-drain-basis'));
   b.appendChild(tx);
   return b;
 }
@@ -9532,32 +9560,23 @@ function liveDrainPaint() {
     if (_et) offBasis += ' \u00b7 ' + _et;
   }
   const left = T('lv_drain_left', 'to 0%: %s');
-  /* A background meter repaint must not close a tab the user is reading. Stable keys also
-   * keep the Right-now block independent when it appears or disappears between paints. */
-  const openFolds = Object.create(null);
-  if (body.querySelectorAll) body.querySelectorAll('details[data-drain-fold]').forEach(function (fold) {
-    if (fold.open) openFolds[fold.getAttribute('data-drain-fold')] = true;
-  });
   body.textContent = '';
   body.appendChild(liveDrainBlock('sun', _lvDrain.onLabel || T('lv_scr_on_boot', 'Screen on · since boot'), onV, onBasis,
-    (etaOn && etaOn !== '\u2014' && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : '', 'on'));
+    (etaOn && etaOn !== '\u2014' && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : ''));
   /* fix279: the live window, labelled as what it is and never in place of the average. */
   if ((_lvDrain.on === 'meter' || _lvDrain.on === 'boot' || _lvDrain.on === 'profile') && _lvDrain.nowX > 0) {
     const nowMin = Math.max(1, Math.round((_lvDrain.nowS || 0) / 60));
     const nowEta = _lvEta.cap > 0 ? lvEtaFmt(Math.floor(_lvEta.cap * 600 / _lvDrain.nowX)) : '';
     body.appendChild(liveDrainBlock('timeout', T('lv_drain_now_lbl', 'Right now'), lvPct(_lvDrain.nowX, 10, 1),
       T('lv_drain_on_now', 'measured over the last %s min with the screen on').replace('%s', String(nowMin)),
-      (nowEta && nowEta !== '\u2014') ? T('lv_drain_left_now', 'at this pace to 0%: %s').replace('%s', nowEta) : '', 'now'));
+      (nowEta && nowEta !== '\u2014') ? T('lv_drain_left_now', 'at this pace to 0%: %s').replace('%s', nowEta) : ''));
   }
   body.appendChild(liveDrainBlock('theme_moon', _lvDrain.offSrc === 'night'
     ? T('lv_scr_off_night', 'Screen off · last night') : T('lv_scr_off', 'Screen off'), offV, offBasis,
-    (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : '', 'off'));
+    (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : ''));
   const cmp = liveDrainCompare();
   if (cmp) body.appendChild(cmp);
-  body.appendChild(liveDrainExplanation(T('lv_drain_note_avg', 'Screen on is the average of this profile - the same figure on the profile cards, in the manager action and on this tile. Right now is only the latest continuous stretch with the screen on and moves with what you are doing. Screen off prefers the latest complete quiet window. The infinite-log report counts only the time of its own recording. All figures come from the battery level, not from the current sensor.'), 'live-drain-note', 'note'));
-  if (body.querySelectorAll) body.querySelectorAll('details[data-drain-fold]').forEach(function (fold) {
-    if (openFolds[fold.getAttribute('data-drain-fold')]) fold.open = true;
-  });
+  body.appendChild(liveDrainExplanation(T('lv_drain_note_avg', 'Screen on is the average of this profile - the same figure on the profile cards, in the manager action and on this tile. Right now is only the latest continuous stretch with the screen on and moves with what you are doing. Screen off prefers the latest complete quiet window. The infinite-log report counts only the time of its own recording. All figures come from the battery level, not from the current sensor.'), 'live-drain-note'));
 }
 function liveDrainCompare() {
   const p = _lvMeter.p || {};
@@ -9964,11 +9983,11 @@ function liveInfoEnsure() {
     + '<div class="live-info-now"><span class="live-drain-lbl" id="liveInfoNowLbl"></span><span class="live-info-val" id="liveInfoVal"></span></div>'
     + '<div class="live-info-scale" id="liveInfoScale" hidden></div>'
     + '<div class="live-info-pressure" id="liveInfoPressure" hidden></div>'
+    + '<div class="live-info-hist" id="liveInfoHist" hidden></div>'
+    + '<div class="live-info-src" id="liveInfoSrc" hidden></div>'
     + '<details class="live-info-disclosure asb-disclosure" id="liveInfoDisclosure">'
     + '<summary id="liveInfoSummary"></summary>'
     + '<div class="live-info-text" id="liveInfoText"></div></details>'
-    + '<div class="live-info-hist" id="liveInfoHist" hidden></div>'
-    + '<div class="live-info-src" id="liveInfoSrc" hidden></div>'
     + '<button class="cfg-profile-primary live-drain-done" id="liveInfoDone" type="button"></button></div>';
   document.body.appendChild(m);
   m.addEventListener('click', function (e) { if (e.target === m) liveInfoClose(); });
@@ -10425,7 +10444,16 @@ function liveInfoOpen(cell) {
   const explanation = lviFill(T(txt[0], txt[1]));
   if (typeof liveInfoExplanationSet === 'function') liveInfoExplanationSet(explanation);
   else _el('liveInfoText').textContent = explanation;
+  const simpleSlot = key === 'slot';
+  const fold = _el('liveInfoDisclosure');
+  if (fold) {
+    fold.classList.toggle('is-plain', simpleSlot);
+    fold.open = simpleSlot;
+    const summary = _el('liveInfoSummary');
+    if (summary) summary.hidden = simpleSlot;
+  }
   lviScaleRender(_el('liveInfoScale'), key, lviScaleValue(key, iv.textContent));
+  if (simpleSlot) { _el('liveInfoScale').hidden = true; _el('liveInfoScale').textContent = ''; }
   if (key === 'trend' || key === 'strend') lviTrendRender(_el('liveInfoHist'), key, iv.style.color);
   else lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));
   const src = _el('liveInfoSrc');
@@ -11121,56 +11149,44 @@ const ZYGISK_FEATURE_KEYS = ZYGISK_CONTROL_KEYS.slice(1);
 const CFG_GROUP_SECTIONS = {
   audio: [
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
-      title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
-      hint:'Optional gain, bass and dynamics processing on the outputs you select.',
+      title:'ASB DSP Engine',
       keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'] },
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
-      title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
-      hint:'Choose the audio path and Bluetooth behaviour.',
+      title:'Playback & Bluetooth',
       keys:['audio_profile','audio_dac_hifi','media_loudness','media_vol_steps','audio_resampler','bt_absvol_mode','bt_a2dp_offload','bt_link_stability'] },
     { id:'safety', icon:'ear_safe', titleKey:'cfg_audio_section_safety',
-      title:'Listening Safety', hintKey:'cfg_audio_section_safety_hint',
-      hint:'The system hearing limit is left untouched unless you explicitly change it.',
+      title:'Listening Safety',
       keys:['audio_remove_volume_limit'] }
   ],
   battery: [
     { id:'smart', icon:'smart', titleKey:'cfg_battery_section_smart',
-      title:'Smart & Auto Profile', hintKey:'cfg_battery_section_smart_hint',
-      hint:'How Smart balances battery against performance and when it switches profile.',
+      title:'Smart & Auto Profile',
       keys:['auto_battery_enable','smart_battery_bias','heavy_prime_escape','prime_escape_burst_s','prime_escape_rest_s','smart_media_guard','smart_lab','smart_lab_mem','profile_class_auto','smart_records_balanced'] },
     { id:'charging', icon:'charge_aware', titleKey:'cfg_battery_section_charging',
-      title:'Charging', hintKey:'cfg_battery_section_charging_hint',
-      hint:'Performance while charging and an optional fixed overnight charge ceiling.',
+      title:'Charging',
       keys:['charge_aware_enable','night_charge_enable','night_charge_start','night_charge_end'] },
     { id:'standby', icon:'doze', titleKey:'cfg_battery_section_standby',
-      title:'Sleep & Background', hintKey:'cfg_battery_section_standby_hint',
-      hint:'What the phone does while the screen is off: doze depth, wakelocks, background GPS.',
+      title:'Sleep & Background',
       keys:['doze_level','doze_trim_whitelist','night_quiet_enable','wakelock_action','wakelock_fitness','gnss_trim'] },
     { id:'thermal', icon:'thermal_point', titleKey:'cfg_battery_section_thermal',
-      title:'Heat & Performance', hintKey:'cfg_battery_section_thermal_hint',
-      hint:'When the phone starts holding back to stay cool, and how far it may go.',
+      title:'Heat & Performance',
       keys:['sustained_temp_mode','sustained_temp_enter','perf_ceiling_pct','cool_gaming','bat_suppress_gaming'] },
     { id:'memory', icon:'cleaner', titleKey:'cfg_battery_section_memory',
-      title:'Memory & Apps', hintKey:'cfg_battery_section_memory_hint',
-      hint:'How long apps stay in memory and how hard background services are limited.',
+      title:'Memory & Apps',
       keys:['BG_TRIM_LEVEL','gms_trim','gms_freeze'] }
   ],
   net: [
     { id:'cellular', icon:'cellular_controls', titleKey:'cfg_net_section_cellular',
-      title:'Mobile Network', hintKey:'cfg_net_section_cellular_hint',
-      hint:'How the modem behaves, including a quieter radio at night.',
+      title:'Mobile Network',
       keys:['radio_policy_enable','night_modem_idle','net_screen_off_lte','net_lte_light'] },
     { id:'wifi', icon:'radar', titleKey:'cfg_net_section_wifi',
-      title:'Wi-Fi', hintKey:'cfg_net_section_wifi_hint',
-      hint:'Scanning, power saving, region and when to give up on a bad network.',
+      title:'Wi-Fi',
       keys:['wifi_scan_throttle','wifi_powersave','net_wifi_leave','wifi_country'] },
     { id:'speed', icon:'congestion', titleKey:'cfg_net_section_speed',
-      title:'Download Speed', hintKey:'cfg_net_section_speed_hint',
-      hint:'How fast downloads ramp up and how packets queue, per network type.',
+      title:'Download Speed',
       keys:['net_congestion_wifi','net_congestion_mobile','net_congestion','net_qdisc_wifi','net_qdisc_mobile','net_qdisc'] },
     { id:'stack', icon:'route', titleKey:'cfg_net_section_stack',
-      title:'Network Stack', hintKey:'cfg_net_section_stack_hint',
-      hint:'Advanced: how network work is spread across cores and buffered.',
+      title:'Network Stack',
       keys:['net_rps','net_txqueue','net_route_tune','net_mtu_probing'] }
   ],
   kernel: [
@@ -11180,64 +11196,52 @@ const CFG_GROUP_SECTIONS = {
   ],
   zygisk: [
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
-      title:'Zygisk', hintKey:'cfg_ui_section_zygisk_hint',
-      hint:'The master and its three feature switches are available here. Features are editable only while ASB Zygisk is connected; modes and app selection live on the ZYGISK page.',
+      title:'Zygisk',
       keys:ZYGISK_CONTROL_KEYS }
   ],
   feel: [
     { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
-      title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
-      hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
+      title:'Display & Haptics',
       keys:['ltpo_force','ltpo_idle_speed','ltpo_peak_force','ltpo_video','haptic_strength','haptic_touch_strength',
         'feel_pointer_speed','feel_gesture_mistouch','feel_game_memc','feel_dc_dimming'] }
   ],
   ui: [
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
-      title:'System Services', hintKey:'cfg_ui_section_services_hint',
-      hint:'Vendor background services and process limits.',
+      title:'System Services',
       keys:['UX_MANAGE_OEM_TOGGLES','athena_service','phantom_procs','mmfeed_off'] },
     { id:'diag', icon:'log_detail', titleKey:'cfg_ui_section_diag',
-      title:'Diagnostics', hintKey:'cfg_ui_section_diag_hint',
-      hint:'How much the module - and LSPosed - write to their logs.',
+      title:'Diagnostics',
       keys:['log_level','lsposed_verbose'] }
   ],
   camera: [
     { id:'processing', icon:'camera_level', titleKey:'cfg_camera_section_processing',
-      title:'Photo Processing', hintKey:'cfg_camera_section_processing_hint',
-      hint:'How strongly the camera processes the image: contrast, grain, portraits, low light.',
+      title:'Photo Processing',
       keys:['CAMERA_LEVEL','CAMERA_CONTRAST','CAMERA_GRAIN','CAMERA_PORTRAIT','CAMERA_LOWLIGHT'] },
     { id:'perf', icon:'camera_hold', titleKey:'cfg_camera_section_perf',
-      title:'Camera Performance', hintKey:'cfg_camera_section_perf_hint',
-      hint:'Keep the phone responsive while the camera is open.',
+      title:'Camera Performance',
       keys:['camera_hold_enable','CAMERA_PREVIEW_TNR'] },
     { id:'tools', icon:'webcam', titleKey:'cfg_camera_section_tools',
-      title:'Camera Tools', hintKey:'cfg_camera_section_tools_hint',
-      hint:'Use the phone as a USB webcam and keep the camera app fully compiled, with measured launch times.',
+      title:'Camera Tools',
       keys:[], card:'camtools' }
   ],
   iface: [
     { id:'speed', icon:'anim_speed', titleKey:'cfg_iface_section_speed',
-      title:'Interface Speed', hintKey:'cfg_iface_section_speed_hint',
-      hint:'Animation speed and touch timings.',
+      title:'Interface Speed',
       keys:['UX_MANAGE_TIMEOUTS','anim_speed','UX_ANIM_FORCE_RESTART'] },
     { id:'effects', icon:'effects', titleKey:'cfg_iface_section_effects',
-      title:'Visual Effects', hintKey:'cfg_iface_section_effects_hint',
-      hint:'Blur and system animation effects.',
+      title:'Visual Effects',
       keys:['disable_blur','ui_effects_level','ui_recents_memory','ui_recents_corner_radius',
         'ui_smooth_corners','ui_nav_handle_autohide'] }
   ],
   infirmary: [
     { id:'cleanup', icon:'cleaner', titleKey:'cfg_inf_section_cleanup',
-      title:'Cleanup', hintKey:'cfg_inf_section_cleanup_hint',
-      hint:'Manual removal of diagnostic residue and files already placed in a trash state.',
+      title:'Cleanup',
       keys:[], card:'junkcleanup' },
     { id:'battery', icon:'battery_cell', titleKey:'cfg_inf_section_battery',
-      title:'Battery', hintKey:'cfg_inf_section_battery_hint',
-      hint:'A one-time reset of Android’s stored battery statistics, offered only at a full charge.',
+      title:'Battery',
       keys:[], card:'batteryfix' },
     { id:'repairs', icon:'wrench', titleKey:'cfg_inf_section_repairs',
-      title:'System Fixes', hintKey:'cfg_inf_section_repairs_hint',
-      hint:'One-tap, reversible repairs for specific OxygenOS/ColorOS problems.',
+      title:'System Fixes',
       keys:['heytap_mcs','documentsui_fix'], card:'systemfixes' }
   ]
 };
@@ -11291,12 +11295,8 @@ function cfgRenderSection(list, section, catKey, groupId) {
   const title = document.createElement('div');
   title.className = 'cfg-section-title';
   title.textContent = T(section.titleKey, section.title);
-  const hint = document.createElement('div');
-  hint.className = 'cfg-section-hint';
-  hint.textContent = T(section.hintKey, section.hint);
   head.appendChild(ico);
   head.appendChild(title);
-  head.appendChild(hint);
   list.appendChild(head);
 }
 
@@ -11482,7 +11482,7 @@ function bfxPaintFrom(f) {
     artState = 'fail';
     const artErr = f.err_text || T('bfx_art_refused_none', 'no reason given');
     artText = /Failed transaction/i.test(artErr)
-      ? bfxT('bfx_art_binder', 'Android repeatedly rejected both package-scoped compile calls. The run stopped early; unprocessed apps were not counted as compiled, and no all-package fallback or ART/Dalvik cleanup was used. The battery reset is still scheduled. Android said: {err}', { err: artErr })
+      ? bfxT('bfx_art_binder', 'Android rejected immediate compilation and background optimisation. No unprocessed app is counted as compiled. The battery reset remains scheduled; retry after Android finishes updating its package services.', { fail: fail, done: done })
       : bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: artErr });
   }
   bfxSetStep('bfxStepArt', artState, artText);
@@ -11889,8 +11889,6 @@ function cfgRenderPackageFixCards(list, sectionItems) {
     if (!card) return;
     card.classList.add('bfx-card', 'package-fix-card');
     card.id = it.key === 'heytap_mcs' ? 'heytapFixCard' : 'documentsuiFixCard';
-    const kicker = bfxEl('div', 'bfx-fix-kicker', T('system_fix_reversible', 'REVERSIBLE SYSTEM FIX'));
-    card.insertBefore(kicker, card.firstChild);
   });
 }
 function cfgRenderSoterFixCard(list) {
@@ -13105,7 +13103,7 @@ function cfgRenderWakeupBlockerCard(list) {
   apply.onclick = function () { kernelWakeupSave(false); };
   const clear = bfxEl('button', 'bfx-btn bfx-secondary kernel-clear', T('kernel_wb_clear', 'Clear saved and live rules')); clear.type = 'button'; clear.disabled = !wb || _wbBusy;
   clear.onclick = function () { kernelWakeupSave(true); };
-  actions.appendChild(apply); actions.appendChild(clear); actions.appendChild(kernelRefreshButton('kernelWakeupRefresh')); card.appendChild(actions);
+  actions.appendChild(apply); actions.appendChild(clear); card.appendChild(actions);
   list.appendChild(card);
 }
 function kernelWakeupAdd(raw, kind) {
@@ -19988,12 +19986,16 @@ function zygiskModeLabel(mode) {
 function zygiskAutoCard(d) {
   const on = deviceVal(d, 'zygisk_observer', 'auto_mode') === '1';
   const current = deviceVal(d, 'zygisk_observer', 'auto_profile');
-  const card = logReportSec(T('zy_auto_title', 'Automatic setup'), 'zygisk_auto');
-  card.classList.add('zy-auto-card');
+  const card = document.createElement('div');
+  card.className = 'zy-auto-card';
   const badge = document.createElement('div'); badge.className = 'zy-auto-badge';
-  badge.textContent = T('zy_auto_managed_by_mode', 'Follows the mode above · no package lists to fill in'); card.appendChild(badge);
+  badge.textContent = on ? T('zy_auto_enabled', 'Automatic Zygisk setup is on') : T('zy_auto_disabled', 'Automatic setup off · previous Zygisk state restored');
+  card.appendChild(badge);
   const desc = document.createElement('div'); desc.className = 'zy-auto-desc';
-  desc.textContent = T('zy_auto_desc_unified', 'The selected mode automatically fills the observation list with user apps and applies its matching switches and guard baseline. ART compilation remains a separate manual choice below.'); card.appendChild(desc);
+  desc.textContent = on
+    ? T('zy_auto_desc_unified', 'The selected mode automatically fills the observation list with user apps and applies its matching switches and guard baseline. ART compilation remains a separate manual choice below.')
+    : T('zy_auto_desc', 'ASB fills the observation list with user apps. ART compilation remains a separate manual choice below.');
+  card.appendChild(desc);
   if (on) {
     const summary = document.createElement('div'); summary.className = 'zy-auto-summary';
     const n = deviceVal(d, 'zygisk_observer', 'enabled_packages');
@@ -20315,7 +20317,7 @@ function zygiskPageRender(d, state) {
   }
   body.appendChild(asbPageJump([
     ['zy-status', T('zy_nav_controls', 'Controls')],
-    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-engine', T('zy_link_nav', 'Unified engine')], ['zy-lsp', T('zy_nav_lsp', 'LSPosed')], ['zy-s7', T('zy_nav_s7', 'Budgets')], ['zy-aot', T('zy_nav_art', 'ART')],
+    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-engine', T('zy_link_nav', 'Unified engine')], ['zy-s7', T('zy_nav_s7', 'Budgets')], ['zy-aot', T('zy_nav_art', 'ART')],
     ['zy-apps', T('zy_nav_apps', 'Apps')]
   ], T('dev_nav_title', 'Jump to'), 'zy-page-nav'));
   const automatic = zygiskAutoCard(d);
@@ -20331,8 +20333,11 @@ function zygiskPageRender(d, state) {
   activity.appendChild(zygiskPageRows(d));
   st.appendChild(activity);
   const guard = zygiskGuardCard(); guard.id = 'zy-guard'; body.appendChild(guard);
-  const engine = zygiskLinkCard(); engine.id = 'zy-engine'; body.appendChild(engine);
-  const lsp = lspLiteCard(); lsp.id = 'zy-lsp'; body.appendChild(lsp);
+  const engine = zygiskLinkCard(); engine.id = 'zy-engine'; engine.classList.add('zy-status-merged');
+  const lspCard = lspLiteCard();
+  const lsp = document.createElement('section'); lsp.id = 'zy-lsp'; lsp.className = 'zy-merged-subsection';
+  while (lspCard.firstChild) lsp.appendChild(lspCard.firstChild);
+  engine.appendChild(lsp); body.appendChild(engine);
   const s7 = smart7Card(); s7.id = 'zy-s7'; body.appendChild(s7);
   const aot = zygiskAotCard(); aot.id = 'zy-aot'; body.appendChild(aot);
   const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'), 'zygisk_apps');
@@ -22861,10 +22866,6 @@ function logReportAppendAnalysis(body, d, analysis) {
   const navItems = [['lgr-summary', T('lr_nav_summary', 'Summary')], ['lgr-actions', T('lr_nav_actions', 'Actions')]];
   if (d.sections.drain || d.sections.cover || d.sections.night || d.sections.idlemax || d.sections.radio || d.sections.chg)
     navItems.push(['lgr-drain', T('lr_nav_drain', 'Battery')]);
-  if (d.sections.jank || d.japps.length) navItems.push(['lgr-smooth', T('lr_nav_smooth', 'Smoothness')]);
-  if (d.sections.thermal || d.sections.throttle || d.sections.heat)
-    navItems.push(['lgr-thermal', T('lr_nav_thermal', 'Thermals')]);
-  if (d.sections.zygisk || d.sections.zygov) navItems.push(['lgr-zygisk', T('lr_nav_zygisk', 'Zygisk')]);
   navItems.push(['lgr-details', T('lr_nav_details', 'Details')]);
   body.appendChild(asbPageJump(navItems, T('dev_nav_title', 'Jump to'), 'report-nav'));
   const brief = logReportBrief(d, analysis);
@@ -24201,8 +24202,17 @@ function asbApplyUiScale() {
  * whole page, which in the bench landed in the very frames the slide had to start in. Calls
  * now coalesce into one pass, and while a page transition is running that pass waits until
  * the layer has settled (the slide is a transform, so the measurement does not change). */
-var _asbNavAnimUntil = 0;
-function asbNavAnimMark() { _asbNavAnimUntil = performance.now() + _pageAnimMs() + 24; }
+var _asbNavAnimUntil = 0, _asbNavAnimTimer = 0;
+function asbNavAnimMark() {
+  _asbNavAnimUntil = performance.now() + _pageAnimMs() + 24;
+  const root = typeof document !== 'undefined' ? document.documentElement : null;
+  if (root && root.classList) root.classList.add('asb-nav-moving');
+  if (_asbNavAnimTimer) clearTimeout(_asbNavAnimTimer);
+  _asbNavAnimTimer = setTimeout(function () {
+    _asbNavAnimTimer = 0;
+    if (root && root.classList) root.classList.remove('asb-nav-moving');
+  }, Math.max(0, _asbNavAnimUntil - performance.now()));
+}
 function asbAfterNavAnim(fn, extra) {
   const wait = Math.max(0, (_asbNavAnimUntil || 0) - performance.now()) + (extra || 0);
   setTimeout(fn, wait);
