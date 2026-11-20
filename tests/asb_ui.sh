@@ -16538,20 +16538,28 @@ from pathlib import Path
 import sys
 h=Path(sys.argv[1]).read_text(encoding='utf-8')
 a=h.index('let _dspEqBand = 0;');b=h.index('\nfunction cfgRenderGroup(',a);s=h[a:b]
-for token in ("card.className='cfg-card cat-audio dsp-eq-console'","className='dsp-eq-outputs'","className='dsp-eq-bands'","className='dsp-eq-editor'",'function cfgEqPlotPaint(',"svg.setAttribute('viewBox','0 0 320 76')",'cfgRenderRow(editor,'):
+for token in ("card.className='cfg-card cat-audio dsp-eq-console'","className='dsp-eq-route'","className='dsp-eq-routes'","className='dsp-eq-bands'","className='dsp-eq-editor'",'function cfgEqPlotPaint(',"svg.setAttribute('viewBox','0 0 320 76')",'cfgRenderRow(editor,',"const targets=['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt']"): 
  assert token in s,token
 assert s.count('cfgRenderRow(editor,')==3
 assert s.count('cfgRenderRow(card,')==0
-assert 'for(let b=0;b<3;b++)' in s and "prefix='dsp_eq_'+target+'_b'+b" in s
+assert 'for(let b=0;b<3;b++)' in s and "prefix='dsp_eq_'+route+'_b'+b" in s
+assert "const b=_dspEqBand, prefix='dsp_eq_'+route+'_b'+b" in s
+assert 'const route=cfgEqPrimary(target);' in s
 assert "await cfgSet('dsp_eq_target',o,btn)" in s
 assert '_dspEqBand=b;render();' in s
-assert 'const preview={};' in s and 'cfgEqPlotPaint(svg,target,preview)' in s
+assert 'const preview={};' in s and 'cfgEqPlotPaint(svg,route,preview)' in s
 assert '_cfgVals[r.closest' not in s
-for css in ('.dsp-eq-console {','.dsp-eq-outputs {','.dsp-eq-plot {','.dsp-eq-bands {','.dsp-eq-editor .cfg-row {','.dsp-eq-details {'):
+for css in ('.dsp-eq-console {','.dsp-eq-route {','.dsp-eq-routes {','.dsp-eq-plot {','.dsp-eq-bands {','.dsp-eq-editor .cfg-row {','.dsp-eq-details {'):
  assert css in h,css
-print('EQ console: one surface, output/band selectors, three reused live controls and draft-only SVG preview')
+assert 'width:100%; margin:0 !important;' in h
+assert '#fb5f4f' not in h[h.index('/* buildfix39:'):h.index('</style>',h.index('/* buildfix39:'))]
+# Combined outputs are editing groups: cfgSet must fan out through the existing atomic writer.
+a=h.index('async function cfgSet(');b=h.index('\nfunction ',a+10);c=h[a:b]
+for token in ("const _eqKey = /^dsp_eq_(speaker|wired|bt)_b([0-2])_([fqg])$/.exec(key)","const _eqRoutes = _eqGroup === 'all' ? ['speaker','wired','bt'] : _eqGroup.split('+')",'_fix.push({key:other,val:val})'):
+ assert token in c,token
+print('EQ console: ASB-native unclipped surface, seven editing outputs, primary-route controls, atomic group fan-out and draft-only SVG preview')
 PY
-echo 'PASS WebUI parametric EQ console buildfix38: compact single-panel editing preserves all 27 independent values and live configuration writes'
+echo 'PASS WebUI parametric EQ console buildfix39: ASB-native unclipped editing, seven outputs and atomic grouped writes preserve all 27 values'
 )
 
 
