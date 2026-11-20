@@ -1509,6 +1509,14 @@ if [ -r "$_state" ]; then
     else
       NOTE "(no rows recorded yet - failures counted but nothing written to /dev/.asb/write_errors)"
     fi
+    if grep -q '^UNSUPPORTED ' /dev/.asb/write_errors 2>/dev/null; then
+      NOTE "Capability-only readbacks (long backoff; not counted as successful writes):"
+      grep '^UNSUPPORTED ' /dev/.asb/write_errors 2>/dev/null |
+        tail -4 |
+        while IFS= read -r _wl; do
+          P "    $_wl"
+        done
+    fi
   fi
 else
   P "  (native state unavailable — start the governor before checking applied telemetry)"

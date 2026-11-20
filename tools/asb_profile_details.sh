@@ -73,12 +73,18 @@ END {
 fi
 printf ',"io":['
 _io_first=1
+# loop/ram/zram/device-mapper nodes repeat capability lists but are not ASB storage rails.
 for _io_q in /sys/block/*/queue/scheduler; do
   [ -r "$_io_q" ] || continue
   _io_dev="${_io_q#*/sys/block/}"; _io_dev="${_io_dev%%/*}"
+  case "$_io_dev" in loop*|ram*|zram*|dm-*) continue ;; esac
+  [ -e "/sys/block/$_io_dev/device" ] || continue
   _io_value="$(cat "$_io_q" 2>/dev/null | tr '\n\r' '  ')"
+  _io_active="$(printf '%s\n' "$_io_value" | sed -n 's/.*\[\([^][]*\)\].*/\1/p' | head -1)"
+  case "$_io_active" in ''|*[!A-Za-z0-9_-]*) _io_active=unknown ;; esac
   [ "$_io_first" = 1 ] || printf ','
   _io_first=0
-  printf '{"device":"%s","scheduler":"%s"}' "$(_json "$_io_dev")" "$(_json "$_io_value")"
+  printf '{"device":"%s","active":"%s","scheduler":"%s"}' \
+    "$(_json "$_io_dev")" "$(_json "$_io_active")" "$(_json "$_io_value")"
 done
 printf ']}\n'
