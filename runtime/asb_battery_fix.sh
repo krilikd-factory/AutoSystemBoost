@@ -67,21 +67,35 @@ _bf_compile_one() {
     _o="$($ASB_BFIX_COMPILE_CMD "$1" 2>&1)"
   else
     _o="$(cmd package compile -m speed-profile -f "$1" 2>&1)"
+    _all="$_o"
     case "$_o" in
       *Success*) ;;
-      *Failed\ transaction*|*[Uu]nknown*option*|*[Uu]sage*|*[Uu]nrecognized*|*[Ii]nvalid*argument*)
+      *)
         if command -v pm >/dev/null 2>&1; then
           _po="$(pm compile -m speed-profile -f "$1" 2>&1)"
-          case "$_po" in
-            *Success*) _o="$_po" ;;
-            *) _o="$(printf '%s\n%s\n' "$_o" "$_po" | grep -m1 .)" ;;
-          esac
+          _all="$(printf '%s\n%s\n' "$_all" "$_po")"
+          case "$_po" in *Success*) _o="$_po" ;; esac
         fi ;;
     esac
+    case "$_o" in
+      *Success*) ;;
+      *)
+        _co="$(cmd package compile -m speed-profile "$1" 2>&1)"
+        _all="$(printf '%s\n%s\n' "$_all" "$_co")"
+        case "$_co" in *Success*) _o="$_co" ;; *)
+          if command -v pm >/dev/null 2>&1; then
+            _po="$(pm compile -m speed-profile "$1" 2>&1)"
+            _all="$(printf '%s\n%s\n' "$_all" "$_po")"
+            case "$_po" in *Success*) _o="$_po" ;; esac
+          fi ;;
+        esac ;;
+    esac
+    case "$_all" in *Success*) return 0 ;; esac
+    _o="$(printf '%s\n' "$_all" | grep -m1 .)"
   fi
-  case "$_o" in *Failed\ transaction*) _bf_binder=1 ;; esac
+  case "$_o${_all:-}" in *Failed\ transaction*) _bf_binder=1 ;; esac
   case "$_o" in *Success*) return 0 ;; esac
-  [ -n "$_bf_err" ] || _bf_err="$(_bf_clean "$(printf '%s\n' "$_o" | grep -m1 . )")"
+  [ -n "$_bf_err" ] || _bf_err="$(_bf_clean "$(printf '%s\n' "${_all:-$_o}" | grep -m1 . )")"
   [ -n "$_bf_err" ] || _bf_err=no_output
   return 1
 }

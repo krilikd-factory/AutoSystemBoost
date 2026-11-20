@@ -36,6 +36,12 @@ _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null \
     | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]'
 }
+_dsp_int() {
+  case "$2" in ''|*[!0-9-]*) printf '%s\n' "$4"; return ;; esac
+  case "$2" in --*|*-*-*) printf '%s\n' "$4"; return ;; esac
+  [ "$2" -ge "$1" ] 2>/dev/null && [ "$2" -le "$3" ] 2>/dev/null && printf '%s\n' "$2" || printf '%s\n' "$4"
+}
+
 # Full modules ship asb_baseline.sh. Retain a direct fallback solely for a deliberately
 # stripped/legacy layout, so an explicit user action never turns into a silent no-op.
 _asb_setting_put() {
@@ -67,6 +73,37 @@ _persist_ctx() {
 # SELinux context which a vendor domain generally cannot read - the vendor namespace is the one
 # vendor code is meant to read.
 _dspp() { _persist "persist.asb.dsp.$1" "$2"; _persist_ctx "persist.vendor.asb.dsp.$1" "$2"; }
+
+# Advanced-v1 requests are derived in every mode, including boot/mirror. Otherwise a
+# restored config would keep stale properties until the user opened the audio editor.
+_asb_dsp_advanced_prop() {
+  [ "$(getprop "persist.asb.dsp.$1" 2>/dev/null)" = "$2" ] || _mwake=1
+  _dspp "$1" "$2"
+}
+_asb_dsp_advanced_publish() {
+  _dv="$(_cfg dsp_true_peak)"; case "$_dv" in 1|on|true) _dv=1 ;; *) _dv=0 ;; esac
+  _asb_dsp_advanced_prop true_peak "$_dv"
+  _dv="$(_cfg dsp_lookahead)"; case "$_dv" in 0|2|5|10) ;; *) _dv=5 ;; esac
+  _asb_dsp_advanced_prop lookahead_ms "$_dv"
+  _dv="$(_cfg dsp_dc_protect)"; case "$_dv" in 0|off|false) _dv=0 ;; *) _dv=1 ;; esac
+  _asb_dsp_advanced_prop dc_protect "$_dv"
+  _eq_route="$(getprop persist.asb.dsp.route 2>/dev/null)"
+  case "$_eq_route" in speaker|wired|bt) ;; *) _eq_route=speaker ;; esac
+  _b=0
+  while [ "$_b" -lt 3 ]; do
+    case "$_b" in 0) _fd=100 ;; 1) _fd=1000 ;; *) _fd=8000 ;; esac
+    _f="$(_cfg "dsp_eq_${_eq_route}_b${_b}_f")"
+    _q="$(_cfg "dsp_eq_${_eq_route}_b${_b}_q")"
+    _g="$(_cfg "dsp_eq_${_eq_route}_b${_b}_g")"
+    _f="$(_dsp_int 40 "$_f" 16000 "$_fd")"
+    _q="$(_dsp_int 3 "$_q" 40 10)"
+    _g="$(_dsp_int -120 "$_g" 120 0)"
+    _asb_dsp_advanced_prop "eq_b${_b}_f" "$_f"
+    _asb_dsp_advanced_prop "eq_b${_b}_q_x100" "$((_q * 10))"
+    _asb_dsp_advanced_prop "eq_b${_b}_gain_mb" "$((_g * 10))"
+    _b=$((_b + 1))
+  done
+}
 
 # "dsp" restricts this run to the DSP values and skips the audioserver restart: the attach
 # daemon hands the new gain to the live effect over binder, so there is no need to tear the
@@ -197,7 +234,8 @@ if [ "$_mode" = "mirror" ]; then
         _persist persist.asb.dsp.ceiling_mb "-$_mhead"; _mwake=1
       fi ;;
   esac
-  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db voice width clarity rumble_hz; do
+  _asb_dsp_advanced_publish
+  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db voice width clarity rumble_hz true_peak lookahead_ms dc_protect eq_b0_f eq_b0_q_x100 eq_b0_gain_mb eq_b1_f eq_b1_q_x100 eq_b1_gain_mb eq_b2_f eq_b2_q_x100 eq_b2_gain_mb; do
     _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
     [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
   done
@@ -445,6 +483,11 @@ else
     _dspp inactive_reason "disabled"
     changed="${changed}dsp=off "
 fi
+
+# ---- advanced-v1 DSP: true peak, look-ahead, DC protection and per-output PEQ --------
+# These properties are requests to a rebuilt advanced-v1 library. The old shipped sample-peak
+# prebuilt ignores them; tools/asb_diag.sh reports that capability boundary explicitly.
+_asb_dsp_advanced_publish
 
 # ---- saturation: permanently off -------------------------------------------------- The tanh
 # saturator is gone from the UI: at every drive it audibly buzzed on real material, which is
