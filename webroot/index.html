@@ -6401,37 +6401,42 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
 .lvh-cat-dot { flex:0 0 auto; width:7px; height:7px; border-radius:50%; }
 .lvh-cat-pct { color:var(--text); font-variant-numeric:tabular-nums; font-weight:700; }
 
-/* buildfix38: one compact EQ console instead of ten ordinary setting cards. The response
- * plot is a static SVG derived from the saved bands; it has no timer, animation or root read. */
-.dsp-eq-console { padding:16px !important; overflow:hidden; background:linear-gradient(145deg,rgba(251,95,79,.075),transparent 42%),var(--card) !important; }
-.dsp-eq-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.dsp-eq-title { min-width:0; color:var(--text); font:800 17px/1.2 var(--sans); letter-spacing:-.015em; }
-.dsp-eq-mark { flex:0 0 auto; padding:5px 8px; border:1px solid rgba(251,95,79,.28); border-radius:7px; color:#fb5f4f; font:800 9px/1 var(--mono); letter-spacing:.12em; }
-.dsp-eq-outputs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; margin:14px 0 12px; padding:4px; border-radius:12px; background:rgba(127,127,127,.075); }
-.dsp-eq-outputs button, .dsp-eq-bands button { min-width:0; min-height:38px; border:0; border-radius:9px; background:transparent; color:var(--text-secondary); font:700 12px/1.15 var(--sans); }
-.dsp-eq-outputs button.on { color:#fff; background:#fb5f4f; box-shadow:0 3px 12px rgba(251,95,79,.18); }
-.dsp-eq-plot { position:relative; height:76px; margin:0 0 10px; border-radius:11px; background:rgba(0,0,0,.16); overflow:hidden; }
+/* buildfix39: the EQ remains one compact tool, but uses ASB's own surface, accent,
+ * segmented controls and spacing. No clipped sub-card or separate colour system. */
+.dsp-eq-console { padding:15px !important; overflow:visible; }
+.dsp-eq-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.dsp-eq-title { min-width:0; color:var(--text); font:750 15px/1.3 var(--sans); }
+.dsp-eq-mark { flex:0 0 auto; color:var(--text-tertiary); font:700 9px/1 var(--mono); letter-spacing:.08em; }
+.dsp-eq-route { position:relative; margin:12px 0; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.dsp-eq-route summary { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:42px; padding:0 12px; color:var(--text); font:700 12px/1.2 var(--sans); cursor:pointer; list-style:none; }
+.dsp-eq-route summary::-webkit-details-marker { display:none; }
+.dsp-eq-route summary::after { content:'⌄'; color:var(--accent); font-size:16px; }
+.dsp-eq-route[open] summary::after { transform:rotate(180deg); }
+.dsp-eq-routes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; padding:5px; border-top:1px solid var(--border); }
+.dsp-eq-routes button { min-width:0; min-height:36px; padding:5px 7px; border:0; border-radius:8px; background:transparent; color:var(--text-secondary); font:650 11px/1.2 var(--sans); }
+.dsp-eq-routes button.on { color:var(--accent); background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.dsp-eq-plot { position:relative; height:66px; margin:0 0 12px; border-radius:10px; background:color-mix(in srgb,var(--text) 3%,transparent); overflow:hidden; }
 .dsp-eq-plot svg { display:block; width:100%; height:100%; }
 .dsp-eq-grid { stroke:var(--border); stroke-width:.7; stroke-dasharray:2 5; }
-.dsp-eq-zero { stroke:var(--text-tertiary); stroke-width:.8; opacity:.5; }
-.dsp-eq-curve { fill:none; stroke:#fb5f4f; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
-.dsp-eq-bands { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin:0 0 8px; }
-.dsp-eq-bands button { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:3px; min-height:49px; padding:7px 10px; text-align:left; border:1px solid var(--border); }
-.dsp-eq-bands button.on { border-color:rgba(251,95,79,.48); color:var(--text); background:rgba(251,95,79,.09); }
+.dsp-eq-zero { stroke:var(--text-tertiary); stroke-width:.8; opacity:.45; }
+.dsp-eq-curve { fill:none; stroke:var(--accent); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.dsp-eq-bands { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin:0 0 10px; padding:4px; border-radius:12px; background:var(--surface); }
+.dsp-eq-bands button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-width:0; min-height:44px; padding:5px 3px; border:0; border-radius:9px; background:transparent; color:var(--text-secondary); font:700 11px/1.15 var(--sans); }
+.dsp-eq-bands button.on { color:var(--accent); background:color-mix(in srgb,var(--accent) 13%,transparent); }
 .dsp-eq-band-hz { color:var(--text-tertiary); font:600 9px/1 var(--mono); font-variant-numeric:tabular-nums; }
-.dsp-eq-bands button.on .dsp-eq-band-hz { color:#fb8b80; }
-.dsp-eq-editor { padding:1px 2px 0; }
-.dsp-eq-editor .cfg-row { margin:0 !important; padding:8px 0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
-.dsp-eq-editor .cfg-row-top { display:grid; grid-template-columns:92px minmax(0,1fr); align-items:center; gap:10px; min-height:38px; }
+.dsp-eq-bands button.on .dsp-eq-band-hz { color:var(--accent); }
+.dsp-eq-editor { min-width:0; padding:0; }
+.dsp-eq-editor .cfg-row { min-width:0; margin:0 !important; padding:9px 0 !important; overflow:visible !important; border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
+.dsp-eq-editor .cfg-row-top { display:grid; grid-template-columns:minmax(82px,.42fr) minmax(0,1fr); align-items:center; gap:10px; width:100%; min-width:0; min-height:38px; padding:0 !important; }
 .dsp-eq-editor .cfg-icon, .dsp-eq-editor .cfg-status-row, .dsp-eq-editor .cfg-caret, .dsp-eq-editor .cfg-row-desc { display:none !important; }
-.dsp-eq-editor .cfg-main { min-width:0; }
+.dsp-eq-editor .cfg-main, .dsp-eq-editor .cfg-range, .dsp-eq-editor .cfg-range input { min-width:0; }
 .dsp-eq-editor .cfg-name { color:var(--text-secondary); font:650 11px/1.25 var(--sans); }
-.dsp-eq-editor .cfg-range { display:grid; grid-template-columns:minmax(0,1fr) 48px; align-items:center; gap:8px; width:100%; }
-.dsp-eq-editor .cfg-range input { width:100%; min-width:0; margin:0; accent-color:#fb5f4f; }
+.dsp-eq-editor .cfg-range { display:grid; grid-template-columns:minmax(0,1fr) 46px; align-items:center; gap:8px; width:100%; margin:0 !important; }
+.dsp-eq-editor .cfg-range input { width:100%; margin:0; accent-color:var(--accent); }
 .dsp-eq-editor .cfg-range-val { position:static; min-width:0; padding:0; color:var(--text); background:transparent; font:700 11px/1 var(--mono); text-align:right; font-variant-numeric:tabular-nums; }
-.dsp-eq-details { margin-top:7px; border-top:1px solid var(--border); }
-.dsp-eq-details summary { padding:9px 1px 0; color:var(--text-tertiary); font:600 10px/1.3 var(--sans); cursor:pointer; }
-.dsp-eq-details .cfg-row-desc { padding:8px 1px 0; font-size:11px; line-height:1.45; }
+.dsp-eq-details { margin-top:7px; }
+.dsp-eq-details summary { padding:7px 0 0; color:var(--text-tertiary); font:600 10px/1.3 var(--sans); cursor:pointer; }
+.dsp-eq-details .cfg-row-desc { padding:7px 0 0; font-size:11px; line-height:1.45; }
 @media (max-width:360px) { .dsp-eq-console { padding:13px !important; } .dsp-eq-editor .cfg-row-top { grid-template-columns:78px minmax(0,1fr); gap:7px; } }
 
 </style>
@@ -12170,6 +12175,10 @@ async function junkCleanupRun() {
 }
 
 let _dspEqBand = 0;
+function cfgEqRoutes(target) {
+  return target==='all'?['speaker','wired','bt']:String(target).split('+').filter(x=>['speaker','wired','bt'].indexOf(x)>=0);
+}
+function cfgEqPrimary(target) { return cfgEqRoutes(target)[0]||'speaker'; }
 function cfgEqPlotPaint(svg, target, preview) {
   if (!svg) return;
   const ns='http://www.w3.org/2000/svg', W=320, H=76, mid=H/2;
@@ -12206,23 +12215,26 @@ function cfgEqPlotPaint(svg, target, preview) {
 function cfgRenderParametricEqCard(list) {
   const card=document.createElement('section');
   card.className='cfg-card cat-audio dsp-eq-console';
-  const targets=['speaker','wired','bt'];
+  const targets=['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'];
   const names=[T('dsp_eq_band_low','Low band'),T('dsp_eq_band_mid','Mid band'),T('dsp_eq_band_high','High band')];
   function render() {
     card.textContent='';
     let target=String(_cfgVals.dsp_eq_target||'speaker');
     if (targets.indexOf(target)<0) target='speaker';
+    const route=cfgEqPrimary(target);
     const head=document.createElement('div');head.className='dsp-eq-head';
     const title=document.createElement('div');title.className='dsp-eq-title';title.textContent=T('dsp_eq_title','Parametric EQ · per output');
     const mark=document.createElement('span');mark.className='dsp-eq-mark';mark.textContent='3 BAND · PEQ';
     head.appendChild(title);head.appendChild(mark);card.appendChild(head);
-    const outputs=document.createElement('div');outputs.className='dsp-eq-outputs';outputs.setAttribute('role','group');outputs.setAttribute('aria-label',T('dsp_eq_output','EQ output'));
+    const outputs=document.createElement('details');outputs.className='dsp-eq-route';
+    const current=document.createElement('summary');current.textContent=T('dsp_eq_output','EQ output')+' · '+Topt(target,'dsp_outputs');outputs.appendChild(current);
+    const menu=document.createElement('div');menu.className='dsp-eq-routes';menu.setAttribute('role','group');menu.setAttribute('aria-label',T('dsp_eq_output','EQ output'));
     targets.forEach(o=>{
-      const btn=document.createElement('button');btn.type='button';btn.textContent=Topt(o,'dsp_eq_target');
+      const btn=document.createElement('button');btn.type='button';btn.textContent=Topt(o,'dsp_outputs');
       if(o===target){btn.className='on';btn.setAttribute('aria-pressed','true');}else btn.setAttribute('aria-pressed','false');
-      btn.onclick=async e=>{e.stopPropagation();if(o===target)return;const ok=await cfgSet('dsp_eq_target',o,btn);if(ok!==false)render();};
-      outputs.appendChild(btn);
-    });card.appendChild(outputs);
+      btn.onclick=async e=>{e.stopPropagation();if(o===target){outputs.open=false;return;}const ok=await cfgSet('dsp_eq_target',o,btn);if(ok!==false)render();};
+      menu.appendChild(btn);
+    });outputs.appendChild(menu);card.appendChild(outputs);
     const plot=document.createElement('div');plot.className='dsp-eq-plot';
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 320 76');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-hidden','true');
     const grid=document.createElementNS('http://www.w3.org/2000/svg','path');grid.setAttribute('class','dsp-eq-grid');grid.setAttribute('d','M0 12H320M0 64H320M80 0V76M160 0V76M240 0V76');
@@ -12231,7 +12243,7 @@ function cfgRenderParametricEqCard(list) {
     svg.appendChild(grid);svg.appendChild(zero);svg.appendChild(curve);plot.appendChild(svg);card.appendChild(plot);
     const bands=document.createElement('div');bands.className='dsp-eq-bands';
     for(let b=0;b<3;b++){
-      const prefix='dsp_eq_'+target+'_b'+b, f=_cfgVals[prefix+'_f']||(b===0?'100':(b===1?'1000':'8000'));
+      const prefix='dsp_eq_'+route+'_b'+b, f=_cfgVals[prefix+'_f']||(b===0?'100':(b===1?'1000':'8000'));
       const btn=document.createElement('button');btn.type='button';
       if(b===_dspEqBand){btn.className='on';btn.setAttribute('aria-pressed','true');}else btn.setAttribute('aria-pressed','false');
       const nm=document.createElement('span');nm.textContent=names[b];
@@ -12239,7 +12251,7 @@ function cfgRenderParametricEqCard(list) {
       btn.appendChild(nm);btn.appendChild(hz);btn.onclick=e=>{e.stopPropagation();_dspEqBand=b;render();};bands.appendChild(btn);
     }card.appendChild(bands);
     const editor=document.createElement('div');editor.className='dsp-eq-editor';
-    const b=_dspEqBand, prefix='dsp_eq_'+target+'_b'+b, fdef=b===0?'100':(b===1?'1000':'8000');
+    const b=_dspEqBand, prefix='dsp_eq_'+route+'_b'+b, fdef=b===0?'100':(b===1?'1000':'8000');
     cfgRenderRow(editor,{key:prefix+'_f',type:'range',def:fdef,min:40,max:16000,step:10,name:T('dsp_eq_frequency','Frequency'),desc:T('dsp_eq_frequency_desc','Band centre in Hz.')},false);
     cfgRenderRow(editor,{key:prefix+'_q',type:'range',def:'10',min:3,max:40,step:1,name:T('dsp_eq_q','Q × 10'),desc:T('dsp_eq_q_desc','Bandwidth: 3 means Q 0.3; 40 means Q 4.0.')},false);
     cfgRenderRow(editor,{key:prefix+'_g',type:'range',def:'0',min:-120,max:120,step:5,name:T('dsp_eq_gain','Gain × 0.1 dB'),desc:T('dsp_eq_gain_desc','Range −12…+12 dB. Zero bypasses this band.')},false);
@@ -12250,9 +12262,9 @@ function cfgRenderParametricEqCard(list) {
     details.appendChild(summary);details.appendChild(note);card.appendChild(details);
     editor.querySelectorAll('input[type="range"]').forEach(r=>r.addEventListener('input',()=>{
       const preview={};editor.querySelectorAll('input[type="range"]').forEach(x=>{preview[x.closest('.cfg-row').getAttribute('data-key')]=x.value;});
-      cfgEqPlotPaint(svg,target,preview);bands.children[b].querySelector('.dsp-eq-band-hz').textContent=editor.querySelector('input').value+' Hz';
+      cfgEqPlotPaint(svg,route,preview);bands.children[b].querySelector('.dsp-eq-band-hz').textContent=editor.querySelector('input').value+' Hz';
     }));
-    cfgEqPlotPaint(svg,target);
+    cfgEqPlotPaint(svg,route);
   }
   render();list.appendChild(card);
 }
@@ -15173,6 +15185,17 @@ async function cfgSet(key, val, ctl) {
   }
   /* Conflicts are settled before the write so the writer commits one coherent set. */
   const _fix = cfgConflictResolve(key, val, cfgCurVal);
+  /* Combined EQ outputs are editing groups, not new DSP routes. The existing atomic writer
+   * stores the same band value in every selected independent profile in one transaction. */
+  const _eqKey = /^dsp_eq_(speaker|wired|bt)_b([0-2])_([fqg])$/.exec(key);
+  if (_eqKey) {
+    const _eqGroup = String(_cfgVals.dsp_eq_target || 'speaker');
+    const _eqRoutes = _eqGroup === 'all' ? ['speaker','wired','bt'] : _eqGroup.split('+');
+    if (_eqRoutes.length > 1) _eqRoutes.forEach(function(route) {
+      const other = 'dsp_eq_' + route + '_b' + _eqKey[2] + '_' + _eqKey[3];
+      if (other !== key && String(_cfgVals[other]) !== String(val)) _fix.push({key:other,val:val});
+    });
+  }
   const _notes = cfgRequireNotes(key, val, cfgCurVal);
   cfgMarkPending(key, val);
   _fix.forEach(function(c) { cfgMarkPending(c.key, c.val); });
