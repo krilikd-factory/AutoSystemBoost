@@ -58,7 +58,6 @@ asb_map_profile_vars() {
   _P_TCP_MTU_PROBING="$NET_TCP_MTU_PROBING"
   _P_TCP_THIN="$NET_TCP_THIN"
   _P_TCP_RTO_MAX="$NET_TCP_RTO_MAX"
-  _P_HAPPY_EYEBALLS="$NET_HAPPY_EYEBALLS"
 }
 
 asb_load_profile() {

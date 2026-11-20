@@ -1130,7 +1130,7 @@ _wl_cmp_status() {
       done
 }
 _wl_cmp_disable() {
-  _sp="${1:-}"; _sc="${2:-}"; _ck="${3:-service}"
+  _sp="${1:-}"; _sc="${2:-}"; _ck="${3:-service}"; _cm="${4:-}"
   _wl_svc_compok "$_sp" "$_sc" || { printf 'result=bad_request\n'; return 1; }
   _wl_cmp_installed "$_sp" || { printf 'result=not_user_app\n'; return 1; }
   _has dumpsys && _has pm || { printf 'result=unavailable\n'; return 1; }
@@ -1145,6 +1145,12 @@ _wl_cmp_disable() {
   [ "$_st" = disabled ] && { printf 'result=external_disabled\neffective=disabled\n'; return 1; }
   if [ "$_st" = enabled ]; then _orig=enabled
   elif [ -z "$_st" ] && _wl_cmp_actionable "$_sp" "$_sc" "$_ck"; then _orig=default
+  elif [ -z "$_st" ] && [ "$_cm" = manual ] && [ "$_ck" = "${_ck#component}" ] \
+       && _wl_cmp_declared "$_sp" "$_sd" | grep -qxF "$_ck|$_sc"; then
+    # buildfix28: an explicit full package/Class may add a declared component even
+    # when it is not running. Package Manager proves both its declaration and default
+    # state; the same exact disable, read-back and restoration ledger remain mandatory.
+    _orig=default
   else printf 'result=not_running\neffective=%s\n' "${_st:-unknown}"; return 1
   fi
   pm disable --user 0 "$_sc" >/dev/null 2>&1 || { printf 'result=not_enforced\neffective=%s\n' "$_orig"; return 1; }
@@ -1159,10 +1165,29 @@ _wl_cmp_disable() {
   }
   printf 'result=disabled\neffective=disabled\n'; return 0
 }
+# All ASB-owned exact component changes, independent of which page opened the manager.
+# This is a read-only projection of the same ledger used by Infinite Log and Restore.
+_wl_cmp_ledger() {
+  printf 'version=1\nscan=ok\n'
+  _sn=0; [ -s "$SVC" ] && _sn="$(awk -F'|' 'NF >= 3 { n++ } END { print n+0 }' "$SVC")"
+  printf 'selected=%s\n' "${_sn:-0}"
+  [ -s "$SVC" ] || return 0
+  awk -F'|' 'NF >= 3 && !seen[$2]++ { print }' "$SVC" | while IFS='|' read -r _lp _lc _lo _lk; do
+    _wl_svc_compok "$_lp" "$_lc" || continue
+    case "$_lk" in activity) : ;; *) _lk=service ;; esac
+    _ls=unknown
+    if _wl_cmp_installed "$_lp" && _has dumpsys; then
+      _ld="$(dumpsys package "$_lp" 2>/dev/null)"
+      [ -n "$_ld" ] && _ls="$(_wl_svc_state "$_ld" "$_lc")" && _ls="${_ls:-default}"
+    fi
+    printf 'component|%s|%s|1|%s|0|saved|1\n' "$_lk" "$_lc" "${_ls:-unknown}"
+  done
+}
+if [ "${1:-}" = component-ledger ]; then _wl_cmp_ledger; exit $?; fi
 if [ "${1:-}" = component-list ]; then _wl_cmp_status "${2:-}"; exit $?; fi
 if [ "${1:-}" = component-set ]; then
   case "${3:-}" in
-    disable) _wl_cmp_disable "${2:-}" "${4:-}" "${5:-service}" ;;
+    disable) _wl_cmp_disable "${2:-}" "${4:-}" "${5:-service}" "${6:-}" ;;
     restore) _wl_svc_restore "${2:-}" "${4:-}" ;;
     *) printf 'result=bad_request\n'; exit 2 ;;
   esac

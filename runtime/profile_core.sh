@@ -438,9 +438,9 @@ asb_apply_net() {
   sysctlw net.ipv4.tcp_fin_timeout "$NET_TCP_FIN" || true
   [ -n "$NET_TCP_MTU_PROBING" ] && sysctlw net.ipv4.tcp_mtu_probing "$NET_TCP_MTU_PROBING" || true
   [ -n "$NET_UDP_MEM" ] && [ -e /proc/sys/net/ipv4/udp_mem ] && sysctlw net.ipv4.udp_mem "$NET_UDP_MEM" || true
-  if [ -n "$NET_HAPPY_EYEBALLS" ] && has settings; then
-    asb_settings_put system cloud_dns_happy_eyeballs_priority_enabled "$NET_HAPPY_EYEBALLS"
-  fi
+  # buildfix28: DNS Happy Eyeballs priority is owned by the ROM. The vendor-private
+  # cloud_dns_happy_eyeballs_priority_enabled key is absent or rejected on supported
+  # ColorOS builds; do not keep writing it on every profile apply.
   # qdisc is deliberately absent here. runtime/asb_net_apply.sh is its sole owner:
   # it resolves a full tc, checks noqueue/support, applies cooldown and verifies read-back.
   # apply_profile.sh invokes that owner after the profile pass; a second raw writer here
