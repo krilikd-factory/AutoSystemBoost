@@ -931,6 +931,18 @@
     "zygisk_ledger": {
       "desc": "Conta, da questo avvio del telefono, quanti processi ogni app normale avvia a schermo spento e acceso. Le app che di notte riavviano lavoro di continuo sono un consumo nascosto frequente; le prime compaiono nella diagnostica del dispositivo e in asbdiag. Solo nomi di pacchetto e contatori, in memoria (tmpfs); nulla viene limitato automaticamente. Costa una breve connessione al companion per ogni avvio di processo di un’app finché è attivo. Richiede l’interruttore «Osservatore processi Zygisk».",
       "name": "Registro avvii processi (Zygisk)"
+    },
+    "dsp_true_peak": {
+      "name": "Limiter DSP True-Peak",
+      "desc": "Rilevamento dei picchi inter-campione con sovracampionamento 4×. Richiede una libreria DSP advanced-v1 ricompilata."
+    },
+    "dsp_lookahead": {
+      "name": "Look-ahead DSP",
+      "desc": "Ritardo PCM in ms; zero non aggiunge latenza. Le frequenze non supportate tornano a zero."
+    },
+    "dsp_dc_protect": {
+      "name": "Protezione DSP da DC e infrasuoni",
+      "desc": "Passa-alto a 20 Hz prima degli stadi di tono. Richiede DSP advanced-v1."
     }
   },
   "cfg_after_reboot": "si applica dopo il riavvio",
@@ -3919,11 +3931,11 @@
   "zy_auto_current": "Interruttori indipendenti attuali: %s",
   "zy_auto_desc": "ASB riempie l’elenco di osservazione con app utente. Scegli sola osservazione, assistenza all’avvio a freddo o guardia in background. Questa scheda non attiva mai ART, che resta una scelta manuale separata qui sotto.",
   "zy_auto_desc_unified": "Il modo selezionato riempie automaticamente l’elenco di osservazione con le app utente e applica gli interruttori e il guard di base corrispondenti. La compilazione ART resta una scelta manuale separata qui sotto.",
-  "zy_auto_disable": "Disattiva la configurazione automatica",
+  "zy_auto_disable": "Disattiva la selezione automatica delle app",
   "zy_auto_disabled": "Configurazione automatica disattivata · stato Zygisk precedente ripristinato",
   "zy_auto_disabling": "Disattivazione…",
   "zy_auto_enable": "Configura automaticamente",
-  "zy_auto_enabled": "Configurazione automatica di Zygisk attiva",
+  "zy_auto_enabled": "Selezione automatica delle app attiva",
   "zy_auto_failed": "Configurazione automatica non completata; controlla lo stato attuale prima di riprovare",
   "zy_auto_managed_by_mode": "Segue il modo sopra · nessun elenco di pacchetti da compilare",
   "zy_auto_managed_label": "App scelte automaticamente da ASB",
@@ -3938,8 +3950,8 @@
   "zy_auto_refreshed": "Selezione automatica aggiornata",
   "zy_auto_refreshing": "Aggiornamento…",
   "zy_auto_safe": "La modalità sicura è attiva. La configurazione automatica non la disattiva; disattivala prima in modo esplicito.",
-  "zy_auto_summary": "Profilo automatico: %1 · %2 app osservate · Guardia in background: %3 · ART (indipendente): %4",
-  "zy_auto_title": "Configurazione automatica",
+  "zy_auto_summary": "Profilo: %1 · app osservate: %2 · Guard in background: %3 · ART (indipendente): %4",
+  "zy_auto_title": "Selezione automatica delle app",
   "zy_auto_working": "Configurazione…",
   "zy_control_failed": "Impostazione Zygisk non modificata; controlla lo stato attuale",
   "zy_controls_hide": "Nascondi interruttori",
@@ -4209,5 +4221,18 @@
   "cmp_add_disable": "Aggiungi e disattiva",
   "cmp_add_note": "Inserisci package/Class completo e dichiarato. Android deve confermare dichiarazione e stato originale; la disattivazione richiede secondo tocco e read-back. Non congela l’app né crea un Service distinto da un Worker.",
   "cmp_add_invalid": "Inserisci package/Class completo valido e scegli Activity o Service",
-  "cmp_not_declared": "Impossibile confermare il componente dichiarato esatto o il suo stato originale; nessuna modifica"
+  "cmp_not_declared": "Impossibile confermare il componente dichiarato esatto o il suo stato originale; nessuna modifica",
+  "dsp_eq_title": "EQ parametrico · per uscita",
+  "dsp_eq_desc": "Tre bande indipendenti per altoparlante, cavo e Bluetooth. Frequenza, Q e guadagno sono salvati separatamente. Zero disattiva una banda.",
+  "dsp_eq_output": "Uscita EQ",
+  "dsp_eq_output_desc": "Seleziona quale EQ indipendente modificare.",
+  "dsp_eq_band_low": "Bassi",
+  "dsp_eq_band_mid": "Medi",
+  "dsp_eq_band_high": "Alti",
+  "dsp_eq_frequency": "Frequenza",
+  "dsp_eq_frequency_desc": "Frequenza centrale della banda in Hz.",
+  "dsp_eq_q": "Q × 10",
+  "dsp_eq_q_desc": "Larghezza: 3 significa Q 0,3; 40 significa Q 4,0.",
+  "dsp_eq_gain": "Guadagno × 0,1 dB",
+  "dsp_eq_gain_desc": "Intervallo −12…+12 dB. Zero esclude questa banda."
 }

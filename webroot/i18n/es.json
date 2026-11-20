@@ -931,6 +931,18 @@
     "zygisk_ledger": {
       "desc": "Cuenta, desde este arranque, cuántos procesos inicia cada app normal con la pantalla apagada y encendida. Las apps que lanzan trabajo una y otra vez de noche son un gasto oculto de batería frecuente; las primeras aparecen en el diagnóstico del dispositivo y en asbdiag. Solo nombres de paquete y contadores, en memoria (tmpfs); no se restringe nada automáticamente. Cuesta una conexión corta al companion por cada inicio de proceso de app mientras está activo. Requiere el interruptor «Observador de procesos Zygisk».",
       "name": "Registro de inicios de procesos (Zygisk)"
+    },
+    "dsp_true_peak": {
+      "name": "Limitador DSP True-Peak",
+      "desc": "Detección de picos entre muestras con sobremuestreo 4×. Requiere una biblioteca DSP advanced-v1 recompilada."
+    },
+    "dsp_lookahead": {
+      "name": "Anticipación DSP",
+      "desc": "Retardo PCM en ms; cero no añade latencia. Las tasas no compatibles vuelven a cero."
+    },
+    "dsp_dc_protect": {
+      "name": "Protección DSP contra CC e infrasonidos",
+      "desc": "Paso alto de 20 Hz antes de las etapas de tono. Requiere DSP advanced-v1."
     }
   },
   "cfg_after_reboot": "se aplica tras reiniciar",
@@ -3919,11 +3931,11 @@
   "zy_auto_current": "Interruptores independientes actuales: %s",
   "zy_auto_desc": "ASB llena la lista de observación con apps de usuario. Elige solo observación, ayuda de arranque en frío o guardia de fondo. Esta tarjeta nunca activa ART; sigue siendo una opción manual independiente abajo.",
   "zy_auto_desc_unified": "El modo seleccionado llena automáticamente la lista de observación con aplicaciones de usuario y aplica sus interruptores y guard base correspondientes. La compilación ART sigue siendo una opción manual independiente abajo.",
-  "zy_auto_disable": "Desactivar la configuración automática",
+  "zy_auto_disable": "Desactivar la selección automática de aplicaciones",
   "zy_auto_disabled": "Configuración automática desactivada · estado anterior de Zygisk restaurado",
   "zy_auto_disabling": "Desactivando…",
   "zy_auto_enable": "Configurar automáticamente",
-  "zy_auto_enabled": "Configuración automática de Zygisk activada",
+  "zy_auto_enabled": "Selección automática de aplicaciones activada",
   "zy_auto_failed": "La configuración automática no terminó; revisa el estado actual antes de reintentar",
   "zy_auto_managed_by_mode": "Sigue el modo superior · no hay listas de paquetes que completar",
   "zy_auto_managed_label": "Apps elegidas automáticamente por ASB",
@@ -3938,8 +3950,8 @@
   "zy_auto_refreshed": "Selección automática actualizada",
   "zy_auto_refreshing": "Actualizando…",
   "zy_auto_safe": "El modo seguro está activo. La configuración automática no lo quita; quítalo antes de forma explícita.",
-  "zy_auto_summary": "Perfil automático: %1 · %2 apps observadas · Guardia de fondo: %3 · ART (independiente): %4",
-  "zy_auto_title": "Configuración automática",
+  "zy_auto_summary": "Perfil: %1 · aplicaciones observadas: %2 · Guard de fondo: %3 · ART (independiente): %4",
+  "zy_auto_title": "Selección automática de aplicaciones",
   "zy_auto_working": "Configurando…",
   "zy_control_failed": "El ajuste de Zygisk no cambió; comprueba el estado actual",
   "zy_controls_hide": "Ocultar interruptores",
@@ -4209,5 +4221,18 @@
   "cmp_add_disable": "Añadir y desactivar",
   "cmp_add_note": "Introduce package/Class completo y declarado. Android debe confirmar su declaración y estado original; desactivar exige segundo toque y read-back. No congela la app ni convierte un Worker en otro Service.",
   "cmp_add_invalid": "Introduce package/Class completo válido y elige Activity o Service",
-  "cmp_not_declared": "No se pudo confirmar el componente declarado exacto o su estado original; no se cambió nada"
+  "cmp_not_declared": "No se pudo confirmar el componente declarado exacto o su estado original; no se cambió nada",
+  "dsp_eq_title": "EQ paramétrico · por salida",
+  "dsp_eq_desc": "Tres bandas independientes para altavoz, cable y Bluetooth. Frecuencia, Q y ganancia se guardan por separado. Cero desactiva una banda.",
+  "dsp_eq_output": "Salida de EQ",
+  "dsp_eq_output_desc": "Selecciona qué EQ independiente estás editando.",
+  "dsp_eq_band_low": "Graves",
+  "dsp_eq_band_mid": "Medios",
+  "dsp_eq_band_high": "Agudos",
+  "dsp_eq_frequency": "Frecuencia",
+  "dsp_eq_frequency_desc": "Frecuencia central de la banda en Hz.",
+  "dsp_eq_q": "Q × 10",
+  "dsp_eq_q_desc": "Ancho: 3 significa Q 0,3; 40 significa Q 4,0.",
+  "dsp_eq_gain": "Ganancia × 0,1 dB",
+  "dsp_eq_gain_desc": "Rango −12…+12 dB. Cero omite esta banda."
 }

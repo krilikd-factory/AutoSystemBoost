@@ -931,6 +931,18 @@
     "zygisk_ledger": {
       "desc": "统计本次开机以来，每个普通应用在熄屏和亮屏时各启动了多少个进程。夜间反复启动任务的应用是常见的隐性耗电来源；排名靠前的会显示在设备诊断和 asbdiag 中。仅记录包名和计数，保存在内存（tmpfs）中，不会自动限制任何应用。开启期间每次应用进程启动需要一次短暂的 companion 连接。需要开启“Zygisk 进程观察器”。",
       "name": "Zygisk 进程启动台账"
+    },
+    "dsp_true_peak": {
+      "name": "DSP 真峰值限制器",
+      "desc": "4× 过采样检测采样点间峰值。需要重新编译 advanced-v1 DSP 库。"
+    },
+    "dsp_lookahead": {
+      "name": "DSP 前瞻",
+      "desc": "PCM 延迟（毫秒）；零表示无额外延迟。不支持的采样率会回退为零。"
+    },
+    "dsp_dc_protect": {
+      "name": "DSP 直流与次声保护",
+      "desc": "音色处理前的 20 Hz 高通滤波器。需要 advanced-v1 DSP。"
     }
   },
   "cfg_after_reboot": "重启后生效",
@@ -3919,11 +3931,11 @@
   "zy_auto_current": "当前独立开关：%s",
   "zy_auto_desc": "ASB 会用用户应用填充观察列表。可选择仅观察、冷启动辅助或后台守护。此卡片绝不会启用 ART；ART 仍是下方独立的手动选项。",
   "zy_auto_desc_unified": "所选模式会自动用用户应用填充观察列表，并应用对应的开关和 guard 基线。ART 编译仍是下方单独的手动选项。",
-  "zy_auto_disable": "关闭自动设置",
+  "zy_auto_disable": "关闭自动选择应用",
   "zy_auto_disabled": "自动设置已关闭 · 已恢复此前的 Zygisk 状态",
   "zy_auto_disabling": "正在关闭…",
   "zy_auto_enable": "自动设置",
-  "zy_auto_enabled": "Zygisk 自动设置已开启",
+  "zy_auto_enabled": "已启用自动选择应用",
   "zy_auto_failed": "自动设置未完成；重试前请检查当前状态",
   "zy_auto_managed_by_mode": "跟随上方模式 · 无需填写软件包列表",
   "zy_auto_managed_label": "由 ASB 自动选择的应用",
@@ -3938,8 +3950,8 @@
   "zy_auto_refreshed": "自动应用选择已刷新",
   "zy_auto_refreshing": "正在刷新…",
   "zy_auto_safe": "安全模式已开启。自动设置不会解除它；请先明确解除安全模式。",
-  "zy_auto_summary": "自动配置文件：%1 · 观察应用：%2 · 后台守护：%3 · ART（独立）：%4",
-  "zy_auto_title": "自动设置",
+  "zy_auto_summary": "配置方案：%1 · 观察的应用：%2 · 后台守护：%3 · ART（独立）：%4",
+  "zy_auto_title": "自动选择应用",
   "zy_auto_working": "正在设置…",
   "zy_control_failed": "Zygisk 设置未更改；请检查当前状态",
   "zy_controls_hide": "隐藏开关",
@@ -4209,5 +4221,18 @@
   "cmp_add_disable": "添加并停用",
   "cmp_add_note": "输入已声明的完整 package/Class。Android 必须证实声明和原始状态；停用仍需二次点击和回读。不会冻结应用，也不会把 Worker 变成独立 Service。",
   "cmp_add_invalid": "输入有效的完整 package/Class，并选择 Activity 或 Service",
-  "cmp_not_declared": "无法证实准确的已声明组件或其原始状态；未做任何更改"
+  "cmp_not_declared": "无法证实准确的已声明组件或其原始状态；未做任何更改",
+  "dsp_eq_title": "参数均衡器 · 按输出",
+  "dsp_eq_desc": "扬声器、有线和蓝牙各有三个独立频段。频率、Q 和增益分别保存。增益为零时停用该频段。",
+  "dsp_eq_output": "EQ 输出",
+  "dsp_eq_output_desc": "选择要编辑的独立 EQ。",
+  "dsp_eq_band_low": "低频段",
+  "dsp_eq_band_mid": "中频段",
+  "dsp_eq_band_high": "高频段",
+  "dsp_eq_frequency": "频率",
+  "dsp_eq_frequency_desc": "频段中心频率（Hz）。",
+  "dsp_eq_q": "Q × 10",
+  "dsp_eq_q_desc": "带宽：3 表示 Q 0.3；40 表示 Q 4.0。",
+  "dsp_eq_gain": "增益 × 0.1 dB",
+  "dsp_eq_gain_desc": "范围 −12…+12 dB。零表示旁通此频段。"
 }

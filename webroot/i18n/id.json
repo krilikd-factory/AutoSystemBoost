@@ -931,6 +931,18 @@
     "zygisk_ledger": {
       "desc": "Menghitung, sejak boot ini, berapa banyak proses yang dimulai setiap aplikasi biasa saat layar mati dan menyala. Aplikasi yang terus memulai pekerjaan di malam hari adalah penguras baterai tersembunyi yang umum; yang teratas tampil di diagnostik perangkat dan asbdiag. Hanya nama paket dan penghitung, disimpan di memori (tmpfs); tidak ada yang dibatasi otomatis. Biayanya satu koneksi singkat ke companion per start proses aplikasi selama aktif. Memerlukan sakelar Pengamat Proses Zygisk.",
       "name": "Catatan Start Proses (Zygisk)"
+    },
+    "dsp_true_peak": {
+      "name": "Limiter DSP True-Peak",
+      "desc": "Deteksi puncak antar-sampel dengan oversampling 4×. Memerlukan pustaka DSP advanced-v1 yang dikompilasi ulang."
+    },
+    "dsp_lookahead": {
+      "name": "Look-ahead DSP",
+      "desc": "Jeda PCM dalam ms; nol tidak menambah latensi. Laju yang tidak didukung kembali ke nol."
+    },
+    "dsp_dc_protect": {
+      "name": "Perlindungan DC/Infrasonik DSP",
+      "desc": "High-pass 20 Hz sebelum tahap nada. Memerlukan DSP advanced-v1."
     }
   },
   "cfg_after_reboot": "berlaku setelah mulai ulang",
@@ -3919,11 +3931,11 @@
   "zy_auto_current": "Sakelar independen saat ini: %s",
   "zy_auto_desc": "ASB mengisi daftar observasi dengan aplikasi pengguna. Pilih observasi saja, bantuan cold start, atau penjaga latar belakang. Kartu ini tidak pernah mengaktifkan ART; itu tetap pilihan manual terpisah di bawah.",
   "zy_auto_desc_unified": "Mode yang dipilih otomatis mengisi daftar observasi dengan aplikasi pengguna dan menerapkan sakelar serta guard dasar yang sesuai. Kompilasi ART tetap menjadi pilihan manual terpisah di bawah.",
-  "zy_auto_disable": "Matikan penyiapan otomatis",
+  "zy_auto_disable": "Nonaktifkan pemilihan aplikasi otomatis",
   "zy_auto_disabled": "Penyiapan otomatis nonaktif · status Zygisk sebelumnya dipulihkan",
   "zy_auto_disabling": "Mematikan…",
   "zy_auto_enable": "Siapkan otomatis",
-  "zy_auto_enabled": "Penyiapan Zygisk otomatis aktif",
+  "zy_auto_enabled": "Pemilihan aplikasi otomatis aktif",
   "zy_auto_failed": "Penyiapan otomatis tidak selesai; periksa status saat ini sebelum mencoba lagi",
   "zy_auto_managed_by_mode": "Mengikuti mode di atas · tidak ada daftar paket untuk diisi",
   "zy_auto_managed_label": "Aplikasi yang dipilih otomatis oleh ASB",
@@ -3938,8 +3950,8 @@
   "zy_auto_refreshed": "Pilihan aplikasi otomatis disegarkan",
   "zy_auto_refreshing": "Menyegarkan…",
   "zy_auto_safe": "Mode aman aktif. Penyiapan otomatis tidak mematikannya; matikan mode aman secara eksplisit lebih dulu.",
-  "zy_auto_summary": "Profil otomatis: %1 · %2 aplikasi diamati · Penjaga latar belakang: %3 · ART (independen): %4",
-  "zy_auto_title": "Penyiapan otomatis",
+  "zy_auto_summary": "Profil: %1 · aplikasi diamati: %2 · Guard latar belakang: %3 · ART (mandiri): %4",
+  "zy_auto_title": "Pemilihan aplikasi otomatis",
   "zy_auto_working": "Menyiapkan…",
   "zy_control_failed": "Setelan Zygisk tidak diubah; periksa status saat ini",
   "zy_controls_hide": "Sembunyikan saklar",
@@ -4209,5 +4221,18 @@
   "cmp_add_disable": "Tambah dan nonaktifkan",
   "cmp_add_note": "Masukkan package/Class lengkap yang dideklarasikan. Android harus membuktikan deklarasi dan status awal; penonaktifan tetap memerlukan ketukan kedua dan read-back. Aplikasi tidak dibekukan dan Worker tidak menjadi Service terpisah.",
   "cmp_add_invalid": "Masukkan package/Class lengkap yang valid dan pilih Activity atau Service",
-  "cmp_not_declared": "Komponen persis yang dideklarasikan atau status awalnya tidak dapat dibuktikan; tidak ada perubahan"
+  "cmp_not_declared": "Komponen persis yang dideklarasikan atau status awalnya tidak dapat dibuktikan; tidak ada perubahan",
+  "dsp_eq_title": "EQ parametrik · per output",
+  "dsp_eq_desc": "Tiga band independen untuk speaker, kabel, dan Bluetooth. Frekuensi, Q, dan gain disimpan terpisah. Nol menonaktifkan band.",
+  "dsp_eq_output": "Output EQ",
+  "dsp_eq_output_desc": "Memilih EQ independen yang sedang diedit.",
+  "dsp_eq_band_low": "Band rendah",
+  "dsp_eq_band_mid": "Band tengah",
+  "dsp_eq_band_high": "Band tinggi",
+  "dsp_eq_frequency": "Frekuensi",
+  "dsp_eq_frequency_desc": "Frekuensi pusat band dalam Hz.",
+  "dsp_eq_q": "Q × 10",
+  "dsp_eq_q_desc": "Lebar: 3 berarti Q 0,3; 40 berarti Q 4,0.",
+  "dsp_eq_gain": "Gain × 0,1 dB",
+  "dsp_eq_gain_desc": "Rentang −12…+12 dB. Nol melewati band ini."
 }

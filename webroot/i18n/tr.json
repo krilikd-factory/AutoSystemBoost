@@ -931,6 +931,18 @@
     "zygisk_ledger": {
       "desc": "Bu açılıştan beri her sıradan uygulamanın ekran kapalı ve açıkken kaç süreç başlattığını sayar. Gece durmadan iş başlatan uygulamalar sık görülen gizli pil tüketicileridir; ilk sıradakiler cihaz tanılamasında ve asbdiag içinde görünür. Yalnızca paket adları ve sayaçlar, bellekte (tmpfs) tutulur; hiçbir şey otomatik kısıtlanmaz. Açıkken uygulama süreci başlatma başına kısa bir companion bağlantısı maliyeti vardır. Zygisk Süreç Gözlemcisi anahtarı gerekir.",
       "name": "Zygisk Süreç Başlatma Kaydı"
+    },
+    "dsp_true_peak": {
+      "name": "DSP True-Peak Sınırlayıcı",
+      "desc": "4× aşırı örnekleme ile örnekler arası tepe algılama. Yeniden derlenmiş advanced-v1 DSP kitaplığı gerektirir."
+    },
+    "dsp_lookahead": {
+      "name": "DSP Öngörülü Sınırlama",
+      "desc": "PCM gecikmesi (ms); sıfır ek gecikme eklemez. Desteklenmeyen hızlarda sıfıra döner."
+    },
+    "dsp_dc_protect": {
+      "name": "DSP DC / İnfrasonik Koruması",
+      "desc": "Ton katmanlarından önce 20 Hz yüksek geçiren filtre. Advanced-v1 DSP gerektirir."
     }
   },
   "cfg_after_reboot": "yeniden başlatmadan sonra uygulanır",
@@ -3919,11 +3931,11 @@
   "zy_auto_current": "Geçerli bağımsız anahtarlar: %s",
   "zy_auto_desc": "ASB gözlem listesini kullanıcı uygulamalarıyla doldurur. Yalnızca gözlem, soğuk başlatma yardımı veya arka plan koruması seçin. Bu kart ART’yi asla etkinleştirmez; ART aşağıda ayrı bir manuel seçimdir.",
   "zy_auto_desc_unified": "Seçilen mod, gözlem listesini kullanıcı uygulamalarıyla otomatik doldurur ve eşleşen anahtarlarla guard tabanını uygular. ART derlemesi aşağıda ayrı bir manuel seçim olarak kalır.",
-  "zy_auto_disable": "Otomatik kurulumu kapat",
+  "zy_auto_disable": "Otomatik uygulama seçimini kapat",
   "zy_auto_disabled": "Otomatik kurulum kapalı · önceki Zygisk durumu geri yüklendi",
   "zy_auto_disabling": "Kapatılıyor…",
   "zy_auto_enable": "Otomatik kur",
-  "zy_auto_enabled": "Otomatik Zygisk kurulumu açık",
+  "zy_auto_enabled": "Otomatik uygulama seçimi açık",
   "zy_auto_failed": "Otomatik kurulum tamamlanmadı; yeniden denemeden önce mevcut durumu kontrol edin",
   "zy_auto_managed_by_mode": "Yukarıdaki modu izler · paket listesi doldurulmaz",
   "zy_auto_managed_label": "ASB'nin otomatik seçtiği uygulamalar",
@@ -3938,8 +3950,8 @@
   "zy_auto_refreshed": "Otomatik uygulama seçimi yenilendi",
   "zy_auto_refreshing": "Yenileniyor…",
   "zy_auto_safe": "Güvenli mod açık. Otomatik kurulum onu kaldırmaz; önce güvenli modu açıkça kaldırın.",
-  "zy_auto_summary": "Otomatik profil: %1 · %2 gözlenen uygulama · Arka plan koruması: %3 · ART (bağımsız): %4",
-  "zy_auto_title": "Otomatik kurulum",
+  "zy_auto_summary": "Profil: %1 · gözlemlenen uygulamalar: %2 · Arka plan koruması: %3 · ART (bağımsız): %4",
+  "zy_auto_title": "Otomatik uygulama seçimi",
   "zy_auto_working": "Kuruluyor…",
   "zy_control_failed": "Zygisk ayarı değiştirilmedi; geçerli durumu kontrol edin",
   "zy_controls_hide": "Anahtarları gizle",
@@ -4209,5 +4221,18 @@
   "cmp_add_disable": "Ekle ve devre dışı bırak",
   "cmp_add_note": "Bildirilmiş tam package/Class girin. Android bildirimi ve başlangıç durumunu doğrulamalıdır; devre dışı bırakma yine ikinci dokunuş ve read-back gerektirir. Uygulama dondurulmaz ve Worker ayrı bir Service olmaz.",
   "cmp_add_invalid": "Geçerli tam package/Class girin ve Activity veya Service seçin",
-  "cmp_not_declared": "Tam bildirilmiş bileşen veya başlangıç durumu doğrulanamadı; hiçbir değişiklik yapılmadı"
+  "cmp_not_declared": "Tam bildirilmiş bileşen veya başlangıç durumu doğrulanamadı; hiçbir değişiklik yapılmadı",
+  "dsp_eq_title": "Parametrik EQ · çıkış başına",
+  "dsp_eq_desc": "Hoparlör, kablolu ve Bluetooth için üç bağımsız bant. Frekans, Q ve kazanç ayrı saklanır. Sıfır bandı devre dışı bırakır.",
+  "dsp_eq_output": "EQ çıkışı",
+  "dsp_eq_output_desc": "Düzenlenen bağımsız EQ profilini seçer.",
+  "dsp_eq_band_low": "Alt bant",
+  "dsp_eq_band_mid": "Orta bant",
+  "dsp_eq_band_high": "Üst bant",
+  "dsp_eq_frequency": "Frekans",
+  "dsp_eq_frequency_desc": "Bandın merkez frekansı (Hz).",
+  "dsp_eq_q": "Q × 10",
+  "dsp_eq_q_desc": "Bant genişliği: 3, Q 0,3; 40, Q 4,0 demektir.",
+  "dsp_eq_gain": "Kazanç × 0,1 dB",
+  "dsp_eq_gain_desc": "Aralık −12…+12 dB. Sıfır bu bandı atlar."
 }

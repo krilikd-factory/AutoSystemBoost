@@ -825,6 +825,18 @@
     "zygisk_ledger": {
       "desc": "Counts, for this boot, how many processes each ordinary app starts with the screen off and on. Apps that keep starting work at night are a common hidden battery drain; the top ones appear in Device diagnostics and asbdiag. Package names and counts only, kept in memory (tmpfs); nothing is restricted automatically. Costs one short companion connection per app process start while on. Needs the Zygisk Process Observer switch.",
       "name": "Zygisk Process-Start Ledger"
+    },
+    "dsp_true_peak": {
+      "name": "DSP True-Peak Limiter",
+      "desc": "4x oversampled inter-sample peak detection. Requires a rebuilt advanced-v1 DSP library."
+    },
+    "dsp_lookahead": {
+      "name": "DSP Look-ahead",
+      "desc": "PCM delay in ms; zero adds no latency. Unsupported rates fall back to zero."
+    },
+    "dsp_dc_protect": {
+      "name": "DSP DC / Infrasonic Protection",
+      "desc": "20 Hz high-pass before tone stages. Requires advanced-v1 DSP."
     }
   },
   "cfg_after_reboot": "applies after reboot",
@@ -3812,11 +3824,11 @@
   "zy_auto_current": "Current independent switches: %s",
   "zy_auto_desc": "ASB fills the observation list with user apps. Choose observation only, cold-start assist, or background guard. ART compilation is never enabled by this card and remains a separate manual choice below.",
   "zy_auto_desc_unified": "The selected mode automatically fills the observation list with user apps and applies its matching switches and guard baseline. ART compilation remains a separate manual choice below.",
-  "zy_auto_disable": "Turn off automatic setup",
+  "zy_auto_disable": "Turn off automatic app selection",
   "zy_auto_disabled": "Automatic setup off · previous Zygisk state restored",
   "zy_auto_disabling": "Turning off…",
   "zy_auto_enable": "Set up automatically",
-  "zy_auto_enabled": "Automatic Zygisk setup is on",
+  "zy_auto_enabled": "Automatic app selection is on",
   "zy_auto_failed": "Automatic setup was not completed; check the current state before retrying",
   "zy_auto_managed_by_mode": "Follows the mode above · no package lists to fill in",
   "zy_auto_managed_label": "Apps selected automatically by ASB",
@@ -3831,8 +3843,8 @@
   "zy_auto_refreshed": "Automatic app selection refreshed",
   "zy_auto_refreshing": "Refreshing…",
   "zy_auto_safe": "Safe mode is on. Automatic setup will not clear it; clear Safe mode explicitly first.",
-  "zy_auto_summary": "Automatic profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4",
-  "zy_auto_title": "Automatic setup",
+  "zy_auto_summary": "Profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4",
+  "zy_auto_title": "Automatic app selection",
   "zy_auto_working": "Setting up…",
   "zy_control_failed": "Zygisk setting was not changed; check the current state",
   "zy_controls_hide": "Hide switches",
@@ -4102,5 +4114,18 @@
   "cmp_add_disable": "Add and disable",
   "cmp_add_note": "Enter a declared full package/Class. Android must prove its declaration and original state; disable still requires a second tap and read-back. This does not freeze the app or create a Worker/Service alias.",
   "cmp_add_invalid": "Enter a valid full package/Class and choose Activity or Service",
-  "cmp_not_declared": "The exact declared component or its original state could not be proven; nothing was changed"
+  "cmp_not_declared": "The exact declared component or its original state could not be proven; nothing was changed",
+  "dsp_eq_title": "Parametric EQ · per output",
+  "dsp_eq_desc": "Three independent parametric bands for Speaker, Wired and Bluetooth. Frequency, Q and gain are stored separately. Zero gain disables a band.",
+  "dsp_eq_output": "EQ output",
+  "dsp_eq_output_desc": "Selects which independently stored EQ you are editing.",
+  "dsp_eq_band_low": "Low band",
+  "dsp_eq_band_mid": "Mid band",
+  "dsp_eq_band_high": "High band",
+  "dsp_eq_frequency": "Frequency",
+  "dsp_eq_frequency_desc": "Band centre in Hz.",
+  "dsp_eq_q": "Q × 10",
+  "dsp_eq_q_desc": "Bandwidth: 3 means Q 0.3; 40 means Q 4.0.",
+  "dsp_eq_gain": "Gain × 0.1 dB",
+  "dsp_eq_gain_desc": "Range −12…+12 dB. Zero bypasses this band."
 }

@@ -931,6 +931,18 @@
     "zygisk_ledger": {
       "desc": "Compte, depuis ce démarrage du téléphone, combien de processus chaque application ordinaire lance écran éteint et allumé. Les applications qui relancent du travail sans cesse la nuit sont une cause fréquente de décharge cachée ; les premières apparaissent dans le diagnostic de l’appareil et dans asbdiag. Uniquement des noms de paquets et des compteurs, gardés en mémoire (tmpfs) ; rien n’est restreint automatiquement. Coût : une courte connexion au companion par démarrage de processus d’application tant que c’est actif. Nécessite l’interrupteur « Observateur de processus Zygisk ».",
       "name": "Registre des démarrages de processus (Zygisk)"
+    },
+    "dsp_true_peak": {
+      "name": "Limiteur DSP True-Peak",
+      "desc": "Détection des pics inter-échantillons par suréchantillonnage 4×. Nécessite une bibliothèque DSP advanced-v1 recompilée."
+    },
+    "dsp_lookahead": {
+      "name": "Anticipation DSP",
+      "desc": "Délai PCM en ms ; zéro ne ajoute aucune latence. Les fréquences non prises en charge retombent à zéro."
+    },
+    "dsp_dc_protect": {
+      "name": "Protection DSP contre DC et infrasons",
+      "desc": "Filtre passe-haut 20 Hz avant les étages de tonalité. Nécessite DSP advanced-v1."
     }
   },
   "cfg_after_reboot": "s’applique après redémarrage",
@@ -3919,11 +3931,11 @@
   "zy_auto_current": "Interrupteurs indépendants actuels : %s",
   "zy_auto_desc": "ASB remplit la liste d’observation avec les applications utilisateur. Choisissez observation seule, aide au démarrage à froid ou garde d’arrière-plan. Cette carte n’active jamais ART, qui reste un choix manuel séparé ci-dessous.",
   "zy_auto_desc_unified": "Le mode sélectionné remplit automatiquement la liste d’observation avec les applications utilisateur et applique les interrupteurs et le guard de base correspondants. La compilation ART reste un choix manuel distinct ci-dessous.",
-  "zy_auto_disable": "Désactiver la configuration automatique",
+  "zy_auto_disable": "Désactiver la sélection automatique des applications",
   "zy_auto_disabled": "Configuration automatique désactivée · état Zygisk précédent restauré",
   "zy_auto_disabling": "Désactivation…",
   "zy_auto_enable": "Configurer automatiquement",
-  "zy_auto_enabled": "Configuration automatique de Zygisk activée",
+  "zy_auto_enabled": "Sélection automatique des applications activée",
   "zy_auto_failed": "Configuration automatique incomplète ; vérifiez l’état actuel avant de réessayer",
   "zy_auto_managed_by_mode": "Suit le mode ci-dessus · aucune liste de paquets à remplir",
   "zy_auto_managed_label": "Applis choisies automatiquement par ASB",
@@ -3938,8 +3950,8 @@
   "zy_auto_refreshed": "Sélection automatique actualisée",
   "zy_auto_refreshing": "Actualisation…",
   "zy_auto_safe": "Le mode sans échec est actif. La configuration automatique ne le lève pas ; levez-le d'abord explicitement.",
-  "zy_auto_summary": "Profil automatique : %1 · %2 applications observées · Garde d’arrière-plan : %3 · ART (indépendant) : %4",
-  "zy_auto_title": "Configuration automatique",
+  "zy_auto_summary": "Profil : %1 · applications observées : %2 · Guard d’arrière-plan : %3 · ART (indépendant) : %4",
+  "zy_auto_title": "Sélection automatique des applications",
   "zy_auto_working": "Configuration…",
   "zy_control_failed": "Le réglage Zygisk n’a pas changé ; vérifiez l’état actuel",
   "zy_controls_hide": "Masquer les commutateurs",
@@ -4209,5 +4221,18 @@
   "cmp_add_disable": "Ajouter et désactiver",
   "cmp_add_note": "Saisissez package/Class complet et déclaré. Android doit confirmer sa déclaration et son état initial ; la désactivation exige un second appui et un read-back. L’application n’est pas gelée et un Worker ne devient pas un Service distinct.",
   "cmp_add_invalid": "Saisissez package/Class complet valide et choisissez Activity ou Service",
-  "cmp_not_declared": "Le composant déclaré exact ou son état initial n’a pas pu être confirmé ; aucune modification"
+  "cmp_not_declared": "Le composant déclaré exact ou son état initial n’a pas pu être confirmé ; aucune modification",
+  "dsp_eq_title": "EQ paramétrique · par sortie",
+  "dsp_eq_desc": "Trois bandes indépendantes pour haut-parleur, filaire et Bluetooth. Fréquence, Q et gain sont stockés séparément. Zéro désactive une bande.",
+  "dsp_eq_output": "Sortie EQ",
+  "dsp_eq_output_desc": "Choisit quel EQ indépendant modifier.",
+  "dsp_eq_band_low": "Graves",
+  "dsp_eq_band_mid": "Médiums",
+  "dsp_eq_band_high": "Aigus",
+  "dsp_eq_frequency": "Fréquence",
+  "dsp_eq_frequency_desc": "Fréquence centrale de la bande en Hz.",
+  "dsp_eq_q": "Q × 10",
+  "dsp_eq_q_desc": "Largeur : 3 signifie Q 0,3 ; 40 signifie Q 4,0.",
+  "dsp_eq_gain": "Gain × 0,1 dB",
+  "dsp_eq_gain_desc": "Plage −12…+12 dB. Zéro contourne cette bande."
 }
