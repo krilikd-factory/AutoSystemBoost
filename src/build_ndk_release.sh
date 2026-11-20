@@ -175,8 +175,8 @@ if [ -n "$DSP_SRC" ]; then
       # until one is available. Without the rebuild these features are simply absent on AIDL
       # phones; asbdiag says so ("voice tone: ... predates it").
       #   " voice=" (fix75): the voice-tone stage
-      #   "gain_cap_mb=3000": +30 dB requires a newly rebuilt library; old prebuilts stay +25 dB.
-      for _lit in " voice=" " stereo_width=" "gain_cap_mb=3000"; do
+      #   "gain_cap_mb=3000" "dsp_advanced_v1=true_peak4x_lookahead_peq3_dc_diag": +30 dB requires a newly rebuilt library; old prebuilts stay +25 dB.
+      for _lit in " voice=" " stereo_width=" "gain_cap_mb=3000" "dsp_advanced_v1=true_peak4x_lookahead_peq3_dc_diag"; do
         grep -q "$_lit" "$_src_fx" 2>/dev/null || continue
         grep -aq "$_lit" "$_dout/libasbdsp.so" 2>/dev/null && continue
         echo "[ASB] WARNING: $_abi prebuilt libasbdsp lacks \"$_lit\" - rebuild it (build-dsp-aidl)"
@@ -221,7 +221,7 @@ if [ -n "$DSP_SRC" ]; then
         "$TOOLCHAIN/llvm-nm" -D --defined-only "$_dout/libasbdsp_legacy.so" | grep -q " AELI$" \
           || { echo "[ASB] ERROR: AELI symbol not exported from $_abi/libasbdsp_legacy.so" >&2; exit 1; }
       fi
-      for _lit in clarity rumble_hz gain_cap_mb=3000; do
+      for _lit in clarity rumble_hz gain_cap_mb=3000 dsp_advanced_v1=true_peak4x_lookahead_peq3_dc_diag; do
         grep -aq "$_lit" "$_dout/libasbdsp_legacy.so"           || { echo "[ASB] ERROR: $_abi legacy DSP lacks $_lit marker" >&2; exit 1; }
       done
       echo "[ASB] DSP: legacy effect for $_abi also built (AELI and tone filters verified) - installer picks one"

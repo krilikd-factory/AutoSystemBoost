@@ -782,7 +782,7 @@ static inline int asb_config_validate(const asb_runtime_config_t *c) {
  * WebUI save - was refused as "rc=-4", so the governor ran its built-in defaults instead of
  * the user's settings. Overflow now has its own code (-16), the bound has room to spare, and
  * a host test loads the shipped governor.conf through this function. */
-#define ASB_CFG_MAX_KEYS 512
+#define ASB_CFG_MAX_KEYS 1024
 #define ASB_CFG_RC_TOO_MANY_KEYS (-16)
 static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c) {
     enum { ASB_CFG_KEY_LEN = 64 };
