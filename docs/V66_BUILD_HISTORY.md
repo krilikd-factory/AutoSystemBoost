@@ -4,6 +4,14 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix32 - smooth UFO hull and larger centred engraving
+
+Input: the owner's enlarged module-icon review identifying the grey horizontal band above the initials and requesting larger, optically centred lettering. Base: the verified buildfix31 source archive.
+
+- **The band is removed at its actual sources:** the old six-stop diagonal hull gradient is replaced by a smooth three-stop vertical metal gradient, and the broad filled white highlight is replaced by a thin curved stroke. There is no rectangular patch or cover-up above the lettering.
+- **Larger, higher and lighter ASB:** the shared initials grow from 7.8 to 11 SVG units and their baseline moves to `y=40`, placing the engraving optically in the hull rather than against the dark rim. The hull is one restrained silver tone darker and the engraved green-steel surface is lighter for legibility, without restoring the bright sticker-like fill. The three stroke-free engraving layers remain intact.
+- **One artwork owner and verification boundary:** all eight static uses, the dynamic flying UFO and the re-rendered 512×512 RGB icon inherit the same symbol. Source contracts and real Chromium rendering cover the smooth hull and large/small/tiny instances. No runtime policy, power/performance behavior or native binary changed; browser/host evidence is not physical ColorOS WebView validation.
+
 ## V66 dev66 buildfix31 - ASB engraved into the shared UFO hull
 
 Input: the owner's visual review rejecting the bright outlined wordmark and grey sticker-like appearance. Base: the verified buildfix30 source archive.
