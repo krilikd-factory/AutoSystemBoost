@@ -2133,6 +2133,19 @@ if [ -f /data/adb/asb/asb_dsp_attach ]; then
     NOTE "  tone-filter live push: support unknown; attacher markers not exposed - rebuild asb_dsp_attach"
   fi
 fi
+NOTE "dsp_true_peak = $(cfg dsp_true_peak)  ·  live: $(gp persist.asb.dsp.true_peak)"
+NOTE "dsp_lookahead = $(cfg dsp_lookahead)ms  ·  live: $(gp persist.asb.dsp.lookahead_ms)ms"
+NOTE "dsp_dc_protect = $(cfg dsp_dc_protect)  ·  live: $(gp persist.asb.dsp.dc_protect)"
+NOTE "DSP EQ route $(gp persist.asb.dsp.route): b0=$(gp persist.asb.dsp.eq_b0_f)Hz/Q$(gp persist.asb.dsp.eq_b0_q_x100)/$(gp persist.asb.dsp.eq_b0_gain_mb)mB; b1=$(gp persist.asb.dsp.eq_b1_f)Hz/Q$(gp persist.asb.dsp.eq_b1_q_x100)/$(gp persist.asb.dsp.eq_b1_gain_mb)mB; b2=$(gp persist.asb.dsp.eq_b2_f)Hz/Q$(gp persist.asb.dsp.eq_b2_q_x100)/$(gp persist.asb.dsp.eq_b2_gain_mb)mB"
+if [ -n "$_tf_lib" ]; then
+  if grep -aq 'dsp_advanced_v1=true_peak4x_lookahead_peq3_dc_diag' "$_tf_lib" 2>/dev/null; then
+    NOTE "  advanced-v1 DSP source/binary marker present: 4x true-peak, look-ahead, PEQ3, DC and counters; runtime activity is proven only by ASB process log lines"
+  else
+    NOTE "  advanced-v1 DSP marker not exposed by $_tf_lib: new controls are saved but this binary predates them; rebuild via Build DSP AIDL / native release"
+  fi
+else
+  NOTE "  advanced-v1 DSP capability unknown: loaded library is not runtime-discoverable"
+fi
 NOTE "dsp_compressor = $(cfg dsp_compressor)  ·  live comp: $(gp persist.asb.dsp.comp)"
 # Output routing needs the rebuilt library to take effect; a config that says bt with a
 # library that predates the feature will process everything and look correct here.

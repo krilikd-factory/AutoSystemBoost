@@ -227,6 +227,14 @@ else
   if [ -f "$MODDIR/webroot/index.html" ] && [ -f "$OWNERSHIP" ]; then
     _own_ui="${TMPDIR:-/tmp}/asb_own_ui.$$"
     sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$MODDIR/webroot/index.html" | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$_own_ui"
+    # The PEQ editor deliberately generates its public rows from output/band axes.
+    if grep -q 'function cfgRenderParametricEqCard(list)' "$MODDIR/webroot/index.html"; then
+      for _eq_o in speaker wired bt; do for _eq_b in 0 1 2; do for _eq_v in f q g; do
+        printf 'dsp_eq_%s_b%s_%s\n' "$_eq_o" "$_eq_b" "$_eq_v"
+      done; done; done >> "$_own_ui"
+      printf 'dsp_eq_target\n' >> "$_own_ui"
+      sort -u -o "$_own_ui" "$_own_ui"
+    fi
     _own_card_bad="$(while IFS= read -r _ok; do
       _oc="$(awk -F'|' -v k="$_ok" '$1==k {print $2; exit}' "$OWNERSHIP")"
       case "$_oc" in user|advanced) : ;; *) printf '%s ' "$_ok" ;; esac
@@ -749,8 +757,11 @@ if [ -f webroot/index.html ] && command -v python3 >/dev/null 2>&1; then
   _snap_miss="$(python3 - <<'PYEOF_SNAP'
 import re
 s = open('webroot/index.html', encoding='utf-8').read()
-m = re.search(r"SNAP_KEYS\s*=\s*\[(.*?)\]", s, re.S)
-snap = set(re.findall(r"'([a-zA-Z_0-9]+)'", m.group(1))) if m else set()
+# The array may contain generated PEQ entries with nested brackets; its canonical
+# terminator is a closing bracket at column zero, not the first inner ']'.
+a = s.find('const SNAP_KEYS = [')
+b = s.find('\n];', a) if a >= 0 else -1
+snap = set(re.findall(r"'([a-zA-Z_0-9]+)'", s[a:b])) if a >= 0 and b > a else set()
 i = s.index('const CFG_ITEMS = [');  j = s.index('\n];', i)
 keys = re.findall(r"\{ key:'([A-Za-z_][A-Za-z_0-9]*)'", s[i:j])
 print(' '.join(k for k in keys if k not in snap))
