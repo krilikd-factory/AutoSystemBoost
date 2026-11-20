@@ -75,7 +75,7 @@ static const effect_descriptor_t g_asb_descriptor = {
              | EFFECT_FLAG_OFFLOAD_SUPPORTED
              | EFFECT_FLAG_OUTPUT_DIRECT | EFFECT_FLAG_INPUT_DIRECT,
     .cpuLoad = 3,        /* 0.1 MIPS units on ARM9E — gain+limiter is very cheap */
-    .memoryUsage = 1,    /* KB, dynamically allocated */
+    .memoryUsage = 80,   /* KB ceiling: fixed look-ahead ring + per-channel filter state */
     .name = ASB_DSP_NAME,
     .implementor = ASB_DSP_IMPLEMENTOR
 };
@@ -148,6 +148,18 @@ static void asb_refresh(asb_ctx_t *c) {
     asb_core_set_voice(&c->core, asb_dsp_prop("voice", 0), rate);
     asb_core_set_clarity(&c->core, asb_dsp_prop("clarity", 0), rate);
     asb_core_set_width(&c->core, asb_dsp_prop("width", 0), rate);
+    asb_core_set_advanced(&c->core, asb_dsp_prop("true_peak", 1),
+                          asb_dsp_prop("lookahead_ms", 5), asb_dsp_prop("dc_protect", 1), rate);
+    for (int b = 0; b < ASB_EQ_BANDS; b++) {
+        char leaf[48];
+        snprintf(leaf, sizeof(leaf), "eq_b%d_f", b);
+        int f = asb_dsp_prop(leaf, b == 0 ? 100 : (b == 1 ? 1000 : 8000));
+        snprintf(leaf, sizeof(leaf), "eq_b%d_q_x100", b);
+        int q = asb_dsp_prop(leaf, 100);
+        snprintf(leaf, sizeof(leaf), "eq_b%d_gain_mb", b);
+        int db = asb_dsp_prop(leaf, 0);
+        asb_core_set_eq(&c->core, b, f, q, db, rate);
+    }
 }
 
 /* Copy or accumulate without touching the samples. */
