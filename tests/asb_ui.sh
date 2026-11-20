@@ -9318,7 +9318,7 @@ assert 'id="asbBootIntroCount"' not in mark
 for forbidden in ('>LIVE<','>CONFIG<','>DEVICE<','>LOG<','asb-boot-stages','0 / 5','1 / 5','1/5'):
     assert forbidden not in mark, forbidden
 assert re.search(r'\.asb-boot-progress \{[^}]*height:11px;',s)
-assert '<text x="48" y="40.1"' in s and '>ASB</text>' in s
+assert '<text id="asbUfoInitials" x="48" y="40"' in s and 'font-size="11"' in s and 'fill="url(#asbUfoEngraving)"' in s and '>ASB</text>' in s
 assert '<button' not in mark
 for token in ('@keyframes asbBootSpin','@keyframes asbBootPulse','@keyframes asbBootScan',
               '@keyframes asbBootArrive','@keyframes asbBootHalo',
@@ -16081,9 +16081,10 @@ for f in locales:
     d=json.loads(f.read_text(encoding='utf-8'))
     assert len(d.get('pd_smart_note',''))>60,f.name
     for k in keys: assert d.get(k),f'{f.name}:{k}'
-# Reusable UFO artwork, including splash/header/Zygisk/dynamic copies, carries ASB.
+# Reusable UFO artwork, including splash/header/Zygisk/dynamic copies, carries the same engraved ASB.
 symbol=h[h.index('<symbol id="asbUfoArt"'):];symbol=symbol[:symbol.index('</symbol>')]
-assert '>ASB</text>' in symbol and h.count('href="#asbUfoArt"')>=6
+assert 'id="asbUfoEngravedInitials"' in symbol and symbol.count('href="#asbUfoInitials"')==3
+assert '<text id="asbUfoInitials"' in h and '>ASB</text>' in h and h.count('href="#asbUfoArt"')==8
 im=Image.open(r/'webroot/icon.png');assert im.size==(512,512) and im.mode=='RGB'
 red,green,blue=im.getpixel((0,0));assert green>red*2 and green>blue,(red,green,blue)
 # These vendor/network-policy writers are retired, not merely hidden from diagnostics.
@@ -16159,6 +16160,62 @@ PY
 echo 'PASS profile evidence epoch: zero is saved history, positive epoch scopes the current transaction'
 )
 
+
+t_webui_buildfix31_engraved_ufo() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+from PIL import Image
+import sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
+assert h.count('id="asbUfoArt"')==1
+assert h.count('id="asbUfoInitials"')==1 and h.count('>ASB</text>')==1
+assert 'asbUfoWordmark' not in h and 'paint-order="stroke fill"' not in h
+assert h.count('href="#asbUfoArt"')==8
+assert "use.setAttribute('href', '#asbUfoArt')" in h
+symbol=h[h.index('<symbol id="asbUfoArt"'):];symbol=symbol[:symbol.index('</symbol>')]
+group=symbol[symbol.index('<g id="asbUfoEngravedInitials">'):]
+group=group[:group.index('</g>')]
+assert group.count('href="#asbUfoInitials"')==3
+assert 'transform="translate(0 -.32)"' in group and 'transform="translate(0 .30)"' in group
+assert group.index('translate(0 -.32)') < group.index('translate(0 .30)') < group.index('fill="url(#asbUfoEngraving)"')
+assert '<text' not in group and 'stroke=' not in group and 'paint-order=' not in group
+assert group.count('<use ')==3
+im=Image.open(r/'webroot/icon.png');assert im.size==(512,512) and im.mode=='RGB'
+print('engraved shared UFO artwork and RGB icon ok')
+PY
+echo 'PASS WebUI buildfix31: ASB is a stroke-free metallic engraving in the one shared UFO symbol and module icon'
+)
+
+t_webui_buildfix32_smooth_hull_centered_initials() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+from PIL import Image
+import re,sys
+r=Path(sys.argv[1]);h=(r/'webroot/index.html').read_text(encoding='utf-8')
+hull=re.search(r'<linearGradient id="asbUfoHull"[^>]*>(.*?)</linearGradient>',h,re.S)
+assert hull and hull.group(1).count('<stop ')==3
+assert 'x1="48" y1="29" x2="48" y2="52"' in hull.group(0)
+for tone in ('#E3E9F1','#BECAD8','#91A3B8'):
+    assert tone in hull.group(0),tone
+for tone in ('#315C50','#669582','#2B5549'):
+    assert tone in h,tone
+for band in ('#9498BC','#E4E3F2','#8C91B0','#555D83'):
+    assert band not in hull.group(0),band
+assert '<path d="M15 36.8C30 30.6 64.8 29.8 81 36.4" fill="none" stroke="white" stroke-opacity=".48" stroke-width="1.1" stroke-linecap="round"/>' in h
+assert 'M12.2 38.2C24.6 30.9 63.5 28.6 81.7 37.1' not in h
+assert '<text id="asbUfoInitials" x="48" y="40" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="11" font-weight="800" letter-spacing=".18">ASB</text>' in h
+assert h.count('href="#asbUfoArt"')==8 and "use.setAttribute('href', '#asbUfoArt')" in h
+symbol=h[h.index('<symbol id="asbUfoArt"'):];symbol=symbol[:symbol.index('</symbol>')]
+assert symbol.count('href="#asbUfoInitials"')==3 and 'fill="url(#asbUfoEngraving)"' in symbol
+im=Image.open(r/'webroot/icon.png');assert im.size==(512,512) and im.mode=='RGB'
+print('smooth hull and larger optically centred engraving ok')
+PY
+echo 'PASS WebUI buildfix32: band-free smooth hull, thin highlight and larger ASB engraving centred above the rim'
+)
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
