@@ -1683,9 +1683,9 @@ _selectedProfile='smart';_lvMeter.p.battery.nightLastS=0;lvMeterPaint('battery')
 chk(els.bnDrainOff.textContent==='0.80%/h'&&els.bnDrainOffLabel.textContent==='Screen off','inactive aggregate fallback is labelled');
 chk(els.bnDrainOff.textContent!=='0.25%/h','inactive borrowed active global night');
 _lvMeter.cur='';_lvMeter.p.smart.on=0;_lvMeter.p.smart.onLastS=0;_lvMeter.boot=lvBootParse('abc 3600 10000 0 0 0 0');lvMeterPaint('smart');
-chk(els.bnDrain.textContent==='<10.0%/h','zero-step since-boot must be an upper bound even with empty meter current: '+els.bnDrain.textContent);
+chk(els.bnDrain.textContent==='measuring…','zero-step since-boot must wait instead of inventing a rate: '+els.bnDrain.textContent);
 homeMeterPaint();
-chk(boxes[0].textContent==='<10.0%/h0.25%/h','active Home keeps boot ownership with empty meter current: '+boxes[0].textContent);
+chk(boxes[0].textContent==='0.25%/h','active Home omits an unmeasured boot rate with empty meter current: '+boxes[0].textContent);
 _lvMeter.p.battery.on=0;_lvMeter.p.battery.onLast=0;lvMeterPaint('battery');
 chk(els.bnDrain.textContent==='<10.0%/h','zero-step profile latest must be an upper bound: '+els.bnDrain.textContent);
 if(bad)process.exit(1);console.log('ok');
@@ -16429,20 +16429,19 @@ command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI DSP advanced renderer: no 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cat > "$T/t.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
-function grab(sig){const a=h.indexOf(sig);if(a<0)throw Error(sig);const b=h.indexOf('\n}\n',a);return h.slice(a,b+2);}
-global.T=(k,d)=>d;global._cfgVals={dsp_eq_target:'speaker'};let rows=[];
-global.document={createElement:()=>({children:[],className:'',textContent:'',appendChild(x){this.children.push(x);return x;}})};
-global.cfgRenderRow=(card,it)=>{rows.push(it);card.appendChild(it);};
-eval(grab('function cfgRenderParametricEqCard(list)'));
-let list=document.createElement('section');cfgRenderParametricEqCard(list);
-if(rows.length!==10||rows[0].key!=='dsp_eq_target')throw Error('speaker row count/target');
-for(const o of ['speaker','wired','bt']){
- _cfgVals.dsp_eq_target=o;rows=[];list=document.createElement('section');cfgRenderParametricEqCard(list);
- for(let b=0;b<3;b++)for(const v of ['f','q','g'])if(!rows.some(x=>x.key===`dsp_eq_${o}_b${b}_${v}`))throw Error(`${o} band ${b} ${v}`);
- const f=rows.find(x=>x.key===`dsp_eq_${o}_b0_f`),q=rows.find(x=>x.key===`dsp_eq_${o}_b0_q`),g=rows.find(x=>x.key===`dsp_eq_${o}_b0_g`);
+global.T=(k,d)=>d;global.Topt=o=>o;global._cfgVals={dsp_eq_target:'speaker'};let rows=[];
+function mk(){return {children:[],className:'',textContent:'',setAttribute(k,v){this[k]=String(v);if(k==='class')this.className=String(v)},appendChild(x){this.children.push(x);return x},querySelector(sel){return this.children.find(x=>'.'+x.className===sel)||null},querySelectorAll(){return []}};}
+global.document={createElement:mk,createElementNS:mk};
+global.cfgRenderRow=(card,it)=>{rows.push(it);card.appendChild(it);};global.cfgSet=async()=>true;
+const eqStart=h.indexOf('let _dspEqBand = 0;'),eqEnd=h.indexOf('\nfunction cfgRenderGroup(',eqStart);eval(h.slice(eqStart,eqEnd).replace('let _dspEqBand = 0;','global._dspEqBand = 0;'));
+for(const o of ['speaker','wired','bt'])for(let band=0;band<3;band++){
+ _cfgVals.dsp_eq_target=o;_dspEqBand=band;rows=[];cfgRenderParametricEqCard(mk());
+ if(rows.length!==3)throw Error(`${o} band ${band}: ${rows.length} rows`);
+ for(const v of ['f','q','g'])if(!rows.some(x=>x.key===`dsp_eq_${o}_b${band}_${v}`))throw Error(`${o} band ${band} ${v}`);
+ const f=rows.find(x=>x.key===`dsp_eq_${o}_b${band}_f`),q=rows.find(x=>x.key===`dsp_eq_${o}_b${band}_q`),g=rows.find(x=>x.key===`dsp_eq_${o}_b${band}_g`);
  if(f.min!==40||f.max!==16000||q.min!==3||q.max!==40||g.min!==-120||g.max!==120)throw Error('range contract');
 }
-_cfgVals.dsp_eq_target='invalid';rows=[];cfgRenderParametricEqCard(document.createElement('section'));
+_cfgVals.dsp_eq_target='invalid';_dspEqBand=0;rows=[];cfgRenderParametricEqCard(mk());
 if(!rows.some(x=>x.key==='dsp_eq_speaker_b0_f'))throw Error('invalid target fallback');
 const a=h.indexOf('const SNAP_KEYS = ['),b=h.indexOf('\n];',a)+3;
 eval(h.slice(a,b).replace('const SNAP_KEYS','global.SNAP_KEYS'));
@@ -16499,6 +16498,60 @@ console.log('ok');
 JS
 out="$(node "$T/t.js" "$H" "$ROOT/webroot/i18n/ru.json" 2>&1)" || fail "$out"; [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI Zygisk app selection buildfix37: Battery remains the selected profile while automatic app selection is named independently in HTML and 13 locales'
+)
+
+
+t_webui_boot_drain_guard_buildfix38() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"; H="$ROOT/webroot/index.html"
+python3 - "$H" <<'PY'
+from pathlib import Path
+import sys
+h=Path(sys.argv[1]).read_text(encoding='utf-8')
+assert 'if (!b || b.on < 60 || !(b.onX > 0)) return null;' in h
+assert 'n[0] + n[1] > up + 90' in h
+assert "echo ---; cut -d\" \" -f1 /proc/uptime" in h
+assert "lvBootParse(parts[2] || '', parts[4] || '')" in h
+PY
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function fn(name){const a=h.indexOf('function '+name+'('),b=h.indexOf('\n}',a);if(a<0||b<0)throw Error(name);global[name]=eval('('+h.slice(a,b+2)+')');}
+fn('lvBootParse');fn('lvBootOnFigure');global._lvMeter={boot:null};
+if(lvBootParse('abc 2580 1200 0 0 0 0','300')!==null)throw Error('stale 43-minute boot window survived five-minute uptime');
+const fresh=lvBootParse('abc 240 20 0 0 0 0','300');if(!fresh||fresh.on!==240)throw Error('fresh boot rejected');
+_lvMeter.boot=fresh;if(lvBootOnFigure()!==null)throw Error('zero battery steps invented a rate');
+_lvMeter.boot=lvBootParse('abc 600 0 100 0 0 0','700');const measured=lvBootOnFigure();
+if(!measured||measured.x!==60||measured.upper)throw Error('measured one-percent step was not retained');
+console.log('ok');
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || { echo "$out" >&2; exit 1; }; [ "$out" = ok ]
+echo 'PASS WebUI boot drain guard buildfix38: no-drop 100%/h forecasts removed and boot duration bounded by kernel uptime'
+)
+
+
+t_webui_parametric_eq_console_buildfix38() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT/webroot/index.html" <<'PY'
+from pathlib import Path
+import sys
+h=Path(sys.argv[1]).read_text(encoding='utf-8')
+a=h.index('let _dspEqBand = 0;');b=h.index('\nfunction cfgRenderGroup(',a);s=h[a:b]
+for token in ("card.className='cfg-card cat-audio dsp-eq-console'","className='dsp-eq-outputs'","className='dsp-eq-bands'","className='dsp-eq-editor'",'function cfgEqPlotPaint(',"svg.setAttribute('viewBox','0 0 320 76')",'cfgRenderRow(editor,'):
+ assert token in s,token
+assert s.count('cfgRenderRow(editor,')==3
+assert s.count('cfgRenderRow(card,')==0
+assert 'for(let b=0;b<3;b++)' in s and "prefix='dsp_eq_'+target+'_b'+b" in s
+assert "await cfgSet('dsp_eq_target',o,btn)" in s
+assert '_dspEqBand=b;render();' in s
+assert 'const preview={};' in s and 'cfgEqPlotPaint(svg,target,preview)' in s
+assert '_cfgVals[r.closest' not in s
+for css in ('.dsp-eq-console {','.dsp-eq-outputs {','.dsp-eq-plot {','.dsp-eq-bands {','.dsp-eq-editor .cfg-row {','.dsp-eq-details {'):
+ assert css in h,css
+print('EQ console: one surface, output/band selectors, three reused live controls and draft-only SVG preview')
+PY
+echo 'PASS WebUI parametric EQ console buildfix38: compact single-panel editing preserves all 27 independent values and live configuration writes'
 )
 
 
