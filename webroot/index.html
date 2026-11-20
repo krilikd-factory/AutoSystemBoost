@@ -1925,7 +1925,7 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .dev-snapshot .lgr-hero-sub { line-height: 1.4; overflow-wrap: anywhere; }
 .device-page .dev-snapshot .dev-snapshot-good { border-color: color-mix(in srgb,var(--bat) 34%,var(--border)); }
 .device-page .dev-snapshot .dev-snapshot-warn { border-color: color-mix(in srgb,var(--bal) 42%,var(--border)); }
-.device-page .dev-section-guide { margin: -3px 0 8px; padding: 0 0 7px; border-bottom: 1px solid var(--border); }
+.device-page .dev-section-guide { margin: -3px 0 10px; padding: 0; border-bottom: 0; }
 .device-page .lgr-v.dev-unknown { color: var(--text-tertiary); font-weight: 550; }
 /* fix278: the Zygisk page. One mode control spans the card; the description under it is the
  * selected mode's own text, so what is on and what it costs is read next to the choice. */
@@ -2127,7 +2127,7 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
 .live-info-pressure .lvp-wait { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
 .live-info-pressure .lvp-note { margin-top: 10px; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
 .live-info-pressure .dev-pressure { margin: 0; padding: 0; border: 0; background: none; }
-.live-info-pressure .lvp-parts { display: grid; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.live-info-pressure .lvp-parts { display: grid; gap: 7px; margin-top: 12px; padding-top: 0; border-top: 0; }
 .live-info-pressure .lvp-row { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr) auto; align-items: center; gap: 9px; font-size: 11.5px; }
 .live-info-pressure .lvp-lbl { min-width: 0; overflow: hidden; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
 .live-info-pressure .lvp-bar { position: relative; height: 6px; overflow: hidden; border-radius: 4px; background: var(--border); }
@@ -2157,7 +2157,7 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
 .device-page .dev-zygisk-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
 .device-page .dev-zygisk-btn { min-height: 36px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: 650 11px var(--sans); }
 .device-page .dev-zygisk-btn:disabled { opacity: .5; }
-.zy-ghost { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-top: 1px solid var(--border); }
+.zy-ghost { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 0; border-top: 0; }
 .zy-ghost .dev-zygisk-btn, .zy-ghost-all { align-self: flex-end; }
 .zy-ghost-all { display: block; margin: 6px 0 2px auto; }
 .zy-lsp-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
@@ -6361,8 +6361,8 @@ html.asb-nav-moving .pbtn, html.asb-nav-moving .cfg-tile, html.asb-nav-moving .h
  * No nested grey cards survive in ColorOS WebView, light mode or the host's Glass preview. */
 html:root .cfg-profile-sheet.live-info-sheet { min-height:0; max-height:min(86vh,760px); padding:18px 18px 16px; }
 html:root .cfg-profile-sheet.live-info-sheet .cfg-profile-head { margin-bottom:4px; }
-html:root .cfg-profile-sheet.live-info-sheet .live-info-now { margin:0 0 14px; padding:13px 2px 14px; gap:5px;
-  border:0 !important; border-bottom:1px solid var(--border) !important; border-radius:0 !important;
+html:root .cfg-profile-sheet.live-info-sheet .live-info-now { margin:0 0 14px; padding:13px 2px 0; gap:5px;
+  border:0 !important; border-bottom:0 !important; border-radius:0 !important;
   background:transparent !important; box-shadow:none !important; outline:0 !important;
   -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
 html:root .cfg-profile-sheet.live-info-sheet .live-info-val { font-size:26px; line-height:1.18; overflow-wrap:anywhere; word-break:normal; }
@@ -6370,7 +6370,7 @@ html:root .cfg-profile-sheet.live-info-sheet .live-info-text { padding:0 2px; fo
 html:root .cfg-profile-sheet.live-info-sheet .live-info-hist,
 html:root .cfg-profile-sheet.live-info-sheet .live-info-src,
 html:root .cfg-profile-sheet.live-info-sheet .live-info-pressure {
-  margin:14px 0 0; padding:12px 2px 0; border:0 !important; border-top:1px solid var(--border) !important;
+  margin:14px 0 0; padding:0 2px; border:0 !important; border-top:0 !important;
   border-radius:0 !important; background:transparent !important; box-shadow:none !important; outline:0 !important;
   -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
 html:root .cfg-profile-sheet.live-info-sheet .live-info-src { font:500 11.5px/1.55 var(--sans); }
@@ -7254,8 +7254,8 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
 // Cards whose value goes straight into the live audio path. The click would be played
 // through the very output being reconfigured - amplified by whatever gain was just set,
 // or cut mid-sample by the parameter push - so these change silently. Haptic stays.
-const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble'];
-const DSP_CFG_KEYS = ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'];
+const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_true_peak','dsp_lookahead','dsp_dc_protect'];
+const DSP_CFG_KEYS = ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect'];
 function dspEngineActive() {
   return _cfgVals['dsp_outputs'] !== 'off' && _cfgVals['audio_profile'] !== 'eq_compat' && Number(_cfgVals['dsp_loudness'] || 0) > 0;
 }
@@ -7371,6 +7371,9 @@ const TECH_ICON_PATHS = {
   voice: '<path d="M5 5.8h14v9.4h-6.6L8.2 18.6v-3.4H5z"/><path d="M8.3 10.6c.8-1.5 1.3-1.5 2 0s1.3 1.5 2 0 1.3-1.5 2 0"/>',
   bass: '<path d="M4.5 9.6v4.8h3L12 18.4V5.6L7.5 9.6z"/><path d="M15 14.6c.9-1.8 1.5-1.8 2.3 0s1.5 1.8 2.3 0"/><path d="M15.2 9.2h5.4"/>',
   compressor: '<path d="M9.2 12c.9-2.4 1.9-2.4 2.8 0s1.9 2.4 2.8 0"/><path d="M3.6 12h2.8M17.6 12h2.8M3.6 12l1.8-1.8M3.6 12l1.8 1.8M20.4 12l-1.8-1.8M20.4 12l-1.8 1.8"/>',
+  true_peak: '<path d="M3 16h3l2-9 3 13 3-16 3 12h4"/><path d="M3 3h18M3 21h18"/>',
+  lookahead_delay: '<circle cx="9" cy="12" r="6"/><path d="M9 8v4l3 2M15 5h6M18 2v6M16 19h5"/>',
+  dc_protect: '<path d="M4 3v18M20 3v18M4 12h16"/><path d="M7 8c2-3 4 3 6 0s4 3 6 0M9 16h6"/>',
   audio_route: '<path d="M12 2.5v4.5"/><path d="M9.8 5.2h4.4M9.8 7.5h4.4"/><path d="M9 9h6v3.5l1.3 1.6v4.4a2.3 2.3 0 0 1-4.6 0v-.9"/><path d="M9 12.5h6"/>',
   camera_level: '<path d="M4.5 19.5v-5M9.5 19.5v-9M14.5 19.5v-6M19.5 19.5v-11"/>',
   contrast: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>',
@@ -10625,6 +10628,8 @@ const SNAP_KEYS = [
   'haptic_touch_strength',
   'media_loudness',
   'dsp_loudness',
+  'dsp_true_peak', 'dsp_lookahead', 'dsp_dc_protect', 'dsp_eq_target',
+  ...Array.from({length:3}, (_,b) => ['speaker','wired','bt'].map(o => ['dsp_eq_'+o+'_b'+b+'_f','dsp_eq_'+o+'_b'+b+'_q','dsp_eq_'+o+'_b'+b+'_g'])).flat(2),
   'dsp_bass',
   'dsp_voice',
   'dsp_width',
@@ -10695,6 +10700,12 @@ const CFG_ITEMS = [
     desc:'Needs DSP Loudness above. A 24 dB/octave high-pass filter reduces sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive. Runs first in the chain and applies live.' },
   { key:'dsp_headroom', type:'seg', def:'15', opts:['15','30','50','100'], name:'DSP Output Headroom',
     desc:'Final sample-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves margin for DAC/codec reconstruction; this is not an oversampled true-peak detector. Applies live through the existing DSP engine.' },
+  { key:'dsp_true_peak', type:'bool', def:'1', stock:'1', name:'DSP True-Peak Limiter',
+    desc:'Uses 4x oversampled detection to catch inter-sample peaks before the output. Requires the advanced-v1 DSP library; older prebuilts ignore this setting.' },
+  { key:'dsp_lookahead', type:'seg', def:'5', stock:'5', opts:['0','2','5','10'], name:'DSP Look-ahead',
+    desc:'Delays PCM equally on every channel so the limiter can react before a transient. The value is milliseconds; zero adds no latency. Unsupported rates fall back to zero look-ahead.' },
+  { key:'dsp_dc_protect', type:'bool', def:'1', stock:'1', name:'DSP DC / Infrasonic Protection',
+    desc:'A 20 Hz high-pass stage removes DC and inaudible subsonic energy before the other tone stages. Requires the advanced-v1 DSP library.' },
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The sample-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   // --- Audio ---,
@@ -11036,7 +11047,7 @@ const CFG_CAT = {
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', dsp_true_peak:'audio', dsp_lookahead:'audio', dsp_dc_protect:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_PREVIEW_TNR:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
   smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
@@ -11125,7 +11136,7 @@ const CFG_GROUP_OF = {
   camera_hold_enable:'camera', CAMERA_PREVIEW_TNR:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', lsposed_verbose:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', dsp_true_peak:'audio', dsp_lookahead:'audio', dsp_dc_protect:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
   bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera', CAMERA_PREVIEW_TNR:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
@@ -11138,7 +11149,7 @@ const CFG_GROUP_OF = {
   ui_recents_memory:'iface', ui_recents_corner_radius:'iface', ui_smooth_corners:'iface', ui_nav_handle_autohide:'iface',
   feel_pointer_speed:'feel', feel_gesture_mistouch:'feel', feel_game_memc:'feel', feel_dc_dimming:'feel'
 };
-function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
+function cfgGroupOf(key){ return key.indexOf('dsp_eq_') === 0 ? 'audio' : (CFG_GROUP_OF[key] || 'ui'); }
 
 /* Audio stays one top-level group. Output routing is the first DSP decision: it defines
  * where the whole chain runs before the user adjusts gain or tone. Playback/Bluetooth follows
@@ -11150,7 +11161,7 @@ const CFG_GROUP_SECTIONS = {
   audio: [
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
       title:'ASB DSP Engine',
-      keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'] },
+      keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect'], card:'dspeq' },
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth',
       keys:['audio_profile','audio_dac_hifi','media_loudness','media_vol_steps','audio_resampler','bt_absvol_mode','bt_a2dp_offload','bt_link_stability'] },
@@ -11482,7 +11493,7 @@ function bfxPaintFrom(f) {
     artState = 'fail';
     const artErr = f.err_text || T('bfx_art_refused_none', 'no reason given');
     artText = /Failed transaction/i.test(artErr)
-      ? bfxT('bfx_art_binder', 'Android rejected immediate compilation and background optimisation. No unprocessed app is counted as compiled. The battery reset remains scheduled; retry after Android finishes updating its package services.', { fail: fail, done: done })
+      ? bfxT('bfx_art_binder', 'Android repeatedly rejected both package-scoped compile calls. The run stopped early; unprocessed apps were not counted as compiled, and no all-package fallback or ART/Dalvik cleanup was used. The battery reset is still scheduled. Android said: {err}', { fail: fail, done: done, err: artErr })
       : bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: artErr });
   }
   bfxSetStep('bfxStepArt', artState, artText);
@@ -12120,6 +12131,34 @@ async function junkCleanupRun() {
   else { uiSound('success'); toast(bfxT('junk_done', 'Removed: {count} · freed {size}', { count:junkNum(parsed.head.removed_count), size:junkBytes(parsed.head.freed_bytes) }), 'ok'); }
 }
 
+function cfgRenderParametricEqCard(list) {
+  const card = document.createElement('section');
+  card.className = 'cfg-card cat-audio dsp-eq-card';
+  const title = document.createElement('div'); title.className = 'cfg-section-title';
+  title.textContent = T('dsp_eq_title', 'Parametric EQ · per output'); card.appendChild(title);
+  const note = document.createElement('div'); note.className = 'cfg-row-desc';
+  note.textContent = T('dsp_eq_desc', 'Three independent parametric bands for Speaker, Wired and Bluetooth. Frequency, Q and gain are stored separately for each output. Zero gain disables a band.');
+  card.appendChild(note);
+  const targets = ['speaker','wired','bt'];
+  let target = String(_cfgVals.dsp_eq_target || 'speaker');
+  if (targets.indexOf(target) < 0) target = 'speaker';
+  cfgRenderRow(card, {key:'dsp_eq_target',type:'seg',def:'speaker',opts:targets,
+    name:T('dsp_eq_output','EQ output'),desc:T('dsp_eq_output_desc','Selects which independently stored EQ you are editing.')}, false);
+  const names = [T('dsp_eq_band_low','Low band'),T('dsp_eq_band_mid','Mid band'),T('dsp_eq_band_high','High band')];
+  for (let b=0;b<3;b++) {
+    const h=document.createElement('div');h.className='cfg-section-title';h.textContent=names[b];card.appendChild(h);
+    const prefix='dsp_eq_'+target+'_b'+b;
+    const fdef=b===0?'100':(b===1?'1000':'8000');
+    cfgRenderRow(card,{key:prefix+'_f',type:'range',def:fdef,min:40,max:16000,step:10,
+      name:T('dsp_eq_frequency','Frequency'),desc:T('dsp_eq_frequency_desc','Band centre in Hz.')},false);
+    cfgRenderRow(card,{key:prefix+'_q',type:'range',def:'10',min:3,max:40,step:1,
+      name:T('dsp_eq_q','Q × 10'),desc:T('dsp_eq_q_desc','Bandwidth: 3 means Q 0.3; 40 means Q 4.0.')},false);
+    cfgRenderRow(card,{key:prefix+'_g',type:'range',def:'0',min:-120,max:120,step:5,
+      name:T('dsp_eq_gain','Gain × 0.1 dB'),desc:T('dsp_eq_gain_desc','Range −12…+12 dB. Zero bypasses this band.')},false);
+  }
+  list.appendChild(card);
+}
+
 function cfgRenderGroup(list, groupId) {
   if (groupId === 'kernel') kernelPanelEnsure();
   const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === groupId);
@@ -12148,6 +12187,10 @@ function cfgRenderGroup(list, groupId) {
     }
     else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
     else if (section.card === 'camtools') cfgRenderCameraToolsCards(list);
+    else if (section.card === 'dspeq') {
+      sectionItems.forEach(it => cfgRenderRow(list, it, false));
+      cfgRenderParametricEqCard(list);
+    }
     else if (section.card === 'wakeup') {
       // Kernel management is one reading flow: ordinary bounded controls first,
       // then their optional wakeup-list companion, without a second page section.
@@ -13288,7 +13331,7 @@ const CFG_ICONS = {
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
   kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend', kernel_rt_boost:'rt_boost', kernel_bore:'bore_scheduler',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
-  dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
+  dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', dsp_true_peak:'true_peak', dsp_lookahead:'lookahead_delay', dsp_dc_protect:'dc_protect', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', CAMERA_PREVIEW_TNR:'camera_preview', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   ui_recents_memory:'recents_memory', ui_recents_corner_radius:'recents_radius', ui_smooth_corners:'smooth_corners', ui_nav_handle_autohide:'nav_handle_hide',
@@ -13817,7 +13860,7 @@ function cfgStatus(it, cur) {
   // dsp_outputs only means anything while the DSP is actually processing. Showing it in
   // the same active state as a working setting invites the reading that routing is on
   // when nothing is being routed.
-  if (DSP_CFG_KEYS.indexOf(it.key) >= 0 && !dspEngineActive()) {
+  if ((DSP_CFG_KEYS.indexOf(it.key) >= 0 || it.key.indexOf('dsp_eq_') === 0) && !dspEngineActive()) {
     return { cls: _cfgVals['audio_profile'] === 'eq_compat' ? 'warn' : 'neutral', text: _cfgVals['audio_profile'] === 'eq_compat' ? T('dsp_eq_idle', 'EQ mode · DSP off') : T('dsp_idle', 'DSP off') };
   }
   if (it.key === 'dsp_outputs') {
@@ -13886,7 +13929,7 @@ function cfgIsActive(it, cur) {
     const n = parseInt(cur, 10);
     return !(n === -1 || n === 6);
   }
-  if (DSP_CFG_KEYS.indexOf(it.key) >= 0 && !dspEngineActive()) return false;
+  if ((DSP_CFG_KEYS.indexOf(it.key) >= 0 || it.key.indexOf('dsp_eq_') === 0) && !dspEngineActive()) return false;
   if (it.key === 'dsp_outputs') {
     return dspEngineActive();
   }
@@ -14046,7 +14089,7 @@ const APPLY_MODE = {
   kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE, kernel_rt_boost: APPLY_LIVE, kernel_bore: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE, dsp_clarity:APPLY_LIVE, dsp_rumble:APPLY_LIVE,
-  dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
+  dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, dsp_true_peak:APPLY_LIVE, dsp_lookahead:APPLY_LIVE, dsp_dc_protect:APPLY_LIVE, dsp_eq_target:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
@@ -14103,7 +14146,7 @@ const APPLY_MODE = {
   phantom_procs:APPLY_NEXT
 };
 
-function applyModeOf(key) { return APPLY_MODE[key] || APPLY_REBOOT; }
+function applyModeOf(key) { return APPLY_MODE[key] || (key.indexOf('dsp_eq_') === 0 ? APPLY_LIVE : APPLY_REBOOT); }
 function applyModeLabel(key) {
   switch (applyModeOf(key)) {
     case APPLY_LIVE:   return T('am_live',   '\u26A1 applies immediately');
@@ -15085,16 +15128,16 @@ async function cfgSet(key, val, ctl) {
     haptic();
     // DSP gain/bass move the same audio path that would reproduce the cue, so they remain
     // deliberately silent. Every other setting gets a cue matched to its control type.
-    if (CFG_SILENT_KEYS.indexOf(key) < 0) uiSound(cfgSoundKind(key, val));
+    if (CFG_SILENT_KEYS.indexOf(key) < 0 && key.indexOf('dsp_eq_') !== 0) uiSound(cfgSoundKind(key, val));
     // Audio settings apply live (ViperFX-style): changing an audio card fires the same apply
     // script the old "Apply audio now" button used, so there is no separate button and no
     // reboot for these.
     // audioserver restarts briefly (a short audio gap), which is why it runs in the background
     // and the toast says "applying" rather than "reboot".
-    var AUDIO_LIVE_KEYS = ['dsp_outputs','audio_profile','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','bt_absvol_mode'];
+    var AUDIO_LIVE_KEYS = ['dsp_outputs','audio_profile','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect','dsp_eq_target','bt_absvol_mode'];
     // DSP-only changes go through the daemon, which hands the value to the live effect -
     // no audioserver restart, so the audio never drops out while the slider moves.
-    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'];
+    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect','dsp_eq_target'];
     // Overlay keys: media_loudness (volume curves) and audio_dac_hifi (mixer) are baked
     // into the mounted overlay and only read at boot - a restart cannot pick them up, so
     // be honest and say reboot.
@@ -15486,11 +15529,11 @@ async function cfgSet(key, val, ctl) {
        * reboot while their card said "applies immediately" - two answers to the same
        * question, and the wrong one is the one the user sees after tapping. */'bt_link_stability'];
     var HAPTIC_KEYS = ['haptic_strength','haptic_touch_strength'];
-    if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
+    if (AUDIO_LIVE_KEYS.indexOf(key) >= 0 || key.indexOf('dsp_eq_') === 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
       /* The DSP-only fast path skips the profile half; a resolved audio_profile conflict
        * needs the full pass. */
-      var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0 && !_fix.length) ? ' dsp' : '';
+      var _m = ((AUDIO_DSP_KEYS.indexOf(key) >= 0 || key.indexOf('dsp_eq_') === 0) && !_fix.length) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
     } else if (NET_KEYS.indexOf(key) >= 0) {
       // Handled INSIDE this chain instead of returning early above it: the tail of the chain
@@ -19989,7 +20032,7 @@ function zygiskAutoCard(d) {
   const card = document.createElement('div');
   card.className = 'zy-auto-card';
   const badge = document.createElement('div'); badge.className = 'zy-auto-badge';
-  badge.textContent = on ? T('zy_auto_enabled', 'Automatic Zygisk setup is on') : T('zy_auto_disabled', 'Automatic setup off · previous Zygisk state restored');
+  badge.textContent = on ? T('zy_auto_enabled', 'Automatic app selection is on') : T('zy_auto_disabled', 'Automatic setup off · previous Zygisk state restored');
   card.appendChild(badge);
   const desc = document.createElement('div'); desc.className = 'zy-auto-desc';
   desc.textContent = on
@@ -20003,7 +20046,7 @@ function zygiskAutoCard(d) {
     const profile = T(profileKey, current);
     const guard = _zyGuard && _zyGuard.enabled ? (_zyGuard.level === 'wakers' ? T('zy_guard_wakers', 'Loops + night wakers') : T('zy_guard_on', 'Restrain loops')) : T('zy_guard_off', 'Off');
     const aot = _zyAot && _zyAot.enabled ? T('zy_aot_on', 'On') : T('zy_aot_off', 'Off');
-    summary.textContent = T('zy_auto_summary', 'Automatic profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4').replace('%1', profile).replace('%2', n).replace('%3', guard).replace('%4', aot);
+    summary.textContent = T('zy_auto_summary', 'Profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4').replace('%1', profile).replace('%2', n).replace('%3', guard).replace('%4', aot);
     card.appendChild(summary);
     const currentLine = document.createElement('div'); currentLine.className = 'zy-auto-current';
     const featureState = function (key, label, fallback) {
@@ -20026,7 +20069,7 @@ function zygiskAutoCard(d) {
     zygiskButtonIcon(primary, 'zygisk_refresh');
     primary.onclick = function () { zygiskAutoSet('refresh'); }; actions.appendChild(primary);
     const off = document.createElement('button'); off.type = 'button'; off.className = 'zy-auto-btn';
-    off.textContent = _zygiskAutoBusy === 'disable' ? T('zy_auto_disabling', 'Turning off…') : T('zy_auto_disable', 'Turn off automatic setup');
+    off.textContent = _zygiskAutoBusy === 'disable' ? T('zy_auto_disabling', 'Turning off…') : T('zy_auto_disable', 'Turn off automatic app selection');
     off.disabled = _zygiskModeBusy;
     if (_zygiskAutoBusy === 'disable') off.classList.add('is-busy');
     off.onclick = function () { zygiskAutoSet('disable'); }; actions.appendChild(off);
@@ -20323,7 +20366,7 @@ function zygiskPageRender(d, state) {
   const automatic = zygiskAutoCard(d);
   const auto = document.createElement('section'); auto.id = 'zy-auto'; auto.className = 'zy-merged-subsection';
   const autoTitle = document.createElement('h3'); autoTitle.className = 'zy-merged-title';
-  autoTitle.textContent = T('zy_auto_title', 'Automatic setup'); auto.appendChild(autoTitle);
+  autoTitle.textContent = T('zy_auto_title', 'Automatic app selection'); auto.appendChild(autoTitle);
   while (automatic.firstChild) auto.appendChild(automatic.firstChild);
   st.appendChild(auto);
   const activity = document.createElement('section'); activity.id = 'zy-activity'; activity.className = 'zy-merged-subsection';
