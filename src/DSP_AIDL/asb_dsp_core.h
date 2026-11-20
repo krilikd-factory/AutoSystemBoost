@@ -2,7 +2,9 @@
  * asb_dsp_core.h — AutoSystemBoost loudness DSP, interface-agnostic core.
  *
  * The processing math (soft-knee compressor + auto make-up + sample-peak limiter +
- * make-up gain) is lifted verbatim from src/DSP/asb_dsp.c. It is deliberately free
+ * make-up gain) originated in src/DSP/asb_dsp.c. Optional 4x true-peak detection,
+ * bounded look-ahead, three parametric bands and DC protection use the same realtime
+ * contract. The core is deliberately free
  * of any HAL / AIDL type so the same object serves both the legacy effect and the
  * new AIDL wrapper. Everything the realtime path needs is precomputed in
  * asb_core_configure(); asb_core_process_*() is realtime-safe (no alloc, no lock,
@@ -27,8 +29,15 @@
 #define ASB_GAIN_MB_MAX    3000
 /* Embedded in both wrappers so build/diagnostic code can distinguish a rebuilt +30 dB
  * binary from an older prebuilt. A requested property value alone is not capability proof. */
-#define ASB_GAIN_CAP_MARKER "gain_cap_mb=3000"
+#define ASB_GAIN_CAP_MARKER "gain_cap_mb=3000;dsp_advanced_v1=true_peak4x_lookahead_peq3_dc_diag"
 #define ASB_MAX_CH         8
+#define ASB_TP_OS          4
+#define ASB_TP_TAPS        8
+#define ASB_EQ_BANDS       3
+#define ASB_LA_MAX_MS      10
+/* 10 ms at the highest commonly exposed 192 kHz PCM rate. No realtime allocation. */
+#define ASB_LA_MAX_FRAMES  1920
+#define ASB_DC_FREQ_HZ     20.0f
 #define ASB_BASS_DB_MAX    10
 #define ASB_BASS_FREQ_HZ   90.0f   /* shelf corner: body of the bass, not sub rumble */
 #define ASB_BASS_SLOPE     0.9f    /* gentle slope; 1.0 is the steepest without a bump */
@@ -134,6 +143,29 @@ typedef struct {
     float    wside;                                 /* extra side gain, 0.1 .. 1.0 */
     float    whp_a;                                 /* one-pole high-pass on the side */
     float    whp_x1, whp_y1;
+    /* Advanced chain. All storage is fixed and all coefficients are prepared outside
+     * process(): no allocation, locks, properties or syscalls on the audio thread. */
+    int      tp_on;
+    int      dc_on;
+    int      eq_mask;
+    float    tp_h[ASB_MAX_CH][ASB_TP_TAPS];
+    float    tp_coef[ASB_TP_OS][ASB_TP_TAPS];
+    float    dc_coef[5];
+    float    dc_x1[ASB_MAX_CH], dc_x2[ASB_MAX_CH];
+    float    dc_y1[ASB_MAX_CH], dc_y2[ASB_MAX_CH];
+    float    eq_coef[ASB_EQ_BANDS][5];
+    float    eq_x1[ASB_EQ_BANDS][ASB_MAX_CH], eq_x2[ASB_EQ_BANDS][ASB_MAX_CH];
+    float    eq_y1[ASB_EQ_BANDS][ASB_MAX_CH], eq_y2[ASB_EQ_BANDS][ASB_MAX_CH];
+    /* A zero look-ahead keeps the legacy zero-added-latency path. Rates for which the
+     * requested delay exceeds the fixed ring fail open to zero look-ahead and are
+     * reported through la_fallback; true-peak and the other stages remain available. */
+    int      la_frames;
+    int      la_pos;
+    int      la_fallback;
+    float    la_ring[ASB_LA_MAX_FRAMES * ASB_MAX_CH];
+    uint64_t frames;
+    uint64_t limited_frames;
+    float    max_detected_peak;
 } asb_core_t;
 
 static inline int  asb_core_clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -387,8 +419,108 @@ static inline void asb_core_width_step(asb_core_t *c, float *l, float *r) {
     *r = m - s;
 }
 
+
+/* 4x, eight-tap windowed-sinc interpolation. Unlike a sample-peak detector this sees
+ * reconstructed inter-sample excursions. It is intentionally bounded to four phases:
+ * the detector is an estimate of the bandlimited PCM waveform, not a promise about a
+ * downstream lossy codec, Bluetooth offload path or analogue amplifier. */
+static inline void asb_core_set_advanced(asb_core_t *c, int true_peak, int lookahead_ms,
+                                         int dc_protect, uint32_t rate) {
+    c->tp_on = true_peak ? 1 : 0;
+    c->la_pos = 0; c->la_fallback = 0;
+    for (int i = 0; i < ASB_LA_MAX_FRAMES * ASB_MAX_CH; i++) c->la_ring[i] = 0.0f;
+    for (int k = 0; k < ASB_MAX_CH; k++) {
+        for (int n = 0; n < ASB_TP_TAPS; n++) c->tp_h[k][n] = 0.0f;
+        c->dc_x1[k]=c->dc_x2[k]=c->dc_y1[k]=c->dc_y2[k]=0.0f;
+    }
+    for (int ph = 0; ph < ASB_TP_OS; ph++) {
+        float t = (float)ph / (float)ASB_TP_OS, sum = 0.0f;
+        for (int n = 0; n < ASB_TP_TAPS; n++) {
+            float x = t - (float)(n - 3);
+            float v = fabsf(x) < 1e-7f ? 1.0f : sinf(3.14159265358979f*x)/(3.14159265358979f*x);
+            float w = 0.5f + 0.5f*cosf(3.14159265358979f*x/4.0f);
+            if (fabsf(x) >= 4.0f) w = 0.0f;
+            c->tp_coef[ph][n] = v*w; sum += c->tp_coef[ph][n];
+        }
+        if (sum != 0.0f) for (int n = 0; n < ASB_TP_TAPS; n++) c->tp_coef[ph][n] /= sum;
+    }
+    if (rate == 0) rate = 48000u;
+    if (lookahead_ms < 0) lookahead_ms = 0;
+    if (lookahead_ms > ASB_LA_MAX_MS) lookahead_ms = ASB_LA_MAX_MS;
+    uint64_t want = (uint64_t)rate * (uint64_t)lookahead_ms / 1000u;
+    if (want > ASB_LA_MAX_FRAMES) { c->la_frames = 0; c->la_fallback = 1; }
+    else c->la_frames = (int)want;
+    c->dc_on = 0;
+    if (dc_protect && c->channels <= ASB_MAX_CH && ASB_DC_FREQ_HZ < 0.45f*(float)rate) {
+        float w0=2.0f*3.14159265358979f*ASB_DC_FREQ_HZ/(float)rate;
+        float cs=cosf(w0),sn=sinf(w0),alpha=sn/(2.0f*0.70710678f),a0=1.0f+alpha;
+        c->dc_coef[0]=((1.0f+cs)*0.5f)/a0;c->dc_coef[1]=(-(1.0f+cs))/a0;
+        c->dc_coef[2]=c->dc_coef[0];c->dc_coef[3]=(-2.0f*cs)/a0;
+        c->dc_coef[4]=(1.0f-alpha)/a0;c->dc_on=1;
+    }
+}
+static inline float asb_core_dc_step(asb_core_t *c, int k, float x) {
+    float y=c->dc_coef[0]*x+c->dc_coef[1]*c->dc_x1[k]+c->dc_coef[2]*c->dc_x2[k]
+            -c->dc_coef[3]*c->dc_y1[k]-c->dc_coef[4]*c->dc_y2[k];
+    c->dc_x2[k]=c->dc_x1[k];c->dc_x1[k]=x;c->dc_y2[k]=c->dc_y1[k];c->dc_y1[k]=y;
+    return y;
+}
+static inline void asb_core_set_eq(asb_core_t *c, int band, int freq_hz,
+                                   int q_x100, int gain_mb, uint32_t rate) {
+    if (band < 0 || band >= ASB_EQ_BANDS) return;
+    c->eq_mask &= ~(1 << band);
+    for (int k=0;k<ASB_MAX_CH;k++) c->eq_x1[band][k]=c->eq_x2[band][k]=
+        c->eq_y1[band][k]=c->eq_y2[band][k]=0.0f;
+    freq_hz=asb_core_clamp(freq_hz,40,16000);q_x100=asb_core_clamp(q_x100,30,400);
+    gain_mb=asb_core_clamp(gain_mb,-1200,1200);
+    if (gain_mb != 0 && c->channels <= ASB_MAX_CH &&
+        asb_core_peak_coefs(c->eq_coef[band],(float)freq_hz,(float)q_x100/100.0f,
+                            (float)gain_mb/100.0f,rate)) c->eq_mask |= 1 << band;
+}
+static inline float asb_core_eq_step(asb_core_t *c, int band, int k, float x) {
+    const float *q=c->eq_coef[band];
+    float y=q[0]*x+q[1]*c->eq_x1[band][k]+q[2]*c->eq_x2[band][k]
+            -q[3]*c->eq_y1[band][k]-q[4]*c->eq_y2[band][k];
+    c->eq_x2[band][k]=c->eq_x1[band][k];c->eq_x1[band][k]=x;
+    c->eq_y2[band][k]=c->eq_y1[band][k];c->eq_y1[band][k]=y;return y;
+}
+static inline float asb_core_tp_step(asb_core_t *c, int k, float x) {
+    for (int n=ASB_TP_TAPS-1;n>0;n--) c->tp_h[k][n]=c->tp_h[k][n-1];
+    c->tp_h[k][0]=x;float peak=fabsf(x);
+    if (!c->tp_on) return peak;
+    for (int ph=1;ph<ASB_TP_OS;ph++) {
+        float y=0.0f;for (int n=0;n<ASB_TP_TAPS;n++) y+=c->tp_coef[ph][n]*c->tp_h[k][n];
+        float a=fabsf(y);if (a>peak) peak=a;
+    }
+    return peak;
+}
+static inline float asb_core_step_gr(asb_core_t *c, float peak);
+/* Shared final limiter path for float and s16. Look-ahead delays all channels equally;
+ * gain reduction from the arriving signal is therefore already present when its delayed
+ * samples leave the ring. The final sample clamp remains a last-resort format guard. */
+static inline void asb_core_limit_frame(asb_core_t *c, float *v, int accumulate,
+                                        float *dst, int16_t *dst16) {
+    float peak=0.0f;
+    for (int k=0;k<c->channels;k++) {
+        float a=c->tp_on?asb_core_tp_step(c,k,v[k]):fabsf(v[k]);if(a>peak)peak=a;
+    }
+    if (peak>c->max_detected_peak)c->max_detected_peak=peak;
+    float gr=asb_core_step_gr(c,peak);if(gr<0.999999f)c->limited_frames++;
+    for (int k=0;k<c->channels;k++) {
+        float outv=v[k];
+        if(c->la_frames>0){int pos=c->la_pos*c->channels+k;outv=c->la_ring[pos];c->la_ring[pos]=v[k];}
+        outv*=gr;if(outv>1.0f)outv=1.0f;else if(outv<-1.0f)outv=-1.0f;
+        if(dst){if(accumulate)dst[k]+=outv;else dst[k]=outv;}
+        else {int32_t q=(int32_t)lrintf(outv*32767.0f);if(accumulate)q+=(int32_t)dst16[k];
+            dst16[k]=(int16_t)(q>32767?32767:(q<-32768?-32768:q));}
+    }
+    if(c->la_frames>0){c->la_pos++;if(c->la_pos>=c->la_frames)c->la_pos=0;}
+}
+
 static inline void asb_core_reset(asb_core_t *c) {
     c->env = 0.0f; c->cenv = 0.0f; c->cg_hold = c->cmakeup; c->cg_count = 0;
+    c->la_pos = 0; c->frames = 0; c->limited_frames = 0; c->max_detected_peak = 0.0f;
+    for (int i = 0; i < ASB_LA_MAX_FRAMES * ASB_MAX_CH; i++) c->la_ring[i] = 0.0f;
 }
 
 
@@ -452,12 +584,15 @@ static inline void asb_core_process_f32(asb_core_t *c, const float *in, float *o
         float *dst = out + f * ch;
         /* Tone stages all precede the detector and sample-peak limiter. */
         float bs[ASB_MAX_CH];
-        if (c->rumble_on || c->bass_on || c->voice_on || c->clarity_on || c->width_on) {
+        if (c->dc_on || c->rumble_on || c->bass_on || c->voice_on || c->clarity_on || c->eq_mask || c->width_on) {
             for (int k = 0; k < ch; k++) {
-                float x = c->rumble_on ? asb_core_rumble_step(c, k, src[k]) : src[k];
+                float x = c->dc_on ? asb_core_dc_step(c, k, src[k]) : src[k];
+                if (c->rumble_on) x = asb_core_rumble_step(c, k, x);
                 if (c->bass_on) x = asb_core_bass_step(c, k, x);
                 if (c->voice_on) x = asb_core_voice_step(c, k, x);
-                bs[k] = c->clarity_on ? asb_core_clarity_step(c, k, x) : x;
+                if (c->clarity_on) x = asb_core_clarity_step(c, k, x);
+                for (int b = 0; b < ASB_EQ_BANDS; b++) if (c->eq_mask & (1 << b)) x = asb_core_eq_step(c, b, k, x);
+                bs[k] = x;
             }
             if (c->width_on) asb_core_width_step(c, &bs[0], &bs[1]);
             src = bs;
@@ -466,22 +601,21 @@ static inline void asb_core_process_f32(asb_core_t *c, const float *in, float *o
         for (int k = 0; k < ch; k++) { float a = fabsf(src[k]); if (a > peak) peak = a; }
         float cg = asb_core_comp_step(c, peak);
         if (c->softclip) {
-            /* Saturation path: no gain reduction at all, tanh rounds the peaks. Bounded
-             * by design (|tanh| < 1), so the clamp below can only ever catch the
-             * post-gain overshoot, not the signal itself. */
-            for (int k = 0; k < ch; k++) {
-                float v = tanhf(src[k] * cg * g * c->postgain) * c->ceiling;
-                if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
-                if (accumulate) dst[k] += v; else dst[k] = v;
-            }
+            /* Saturation is bounded by tanh, then uses the same advanced detector,
+             * look-ahead ring, final limiter, format conversion and diagnostics as the
+             * brick-wall path. With zero look-ahead/sample-peak mode this is the legacy
+             * softclip output; advanced settings no longer disappear on this branch. */
+            float drive[ASB_MAX_CH];
+            for (int k = 0; k < ch; k++)
+                drive[k] = tanhf(src[k] * cg * g * c->postgain) * c->ceiling;
+            asb_core_limit_frame(c, drive, accumulate, dst, NULL);
+            c->frames++;
             continue;
         }
-        float gr = asb_core_step_gr(c, peak * cg * g);
-        for (int k = 0; k < ch; k++) {
-            float v = src[k] * cg * g * gr;
-            if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
-            if (accumulate) dst[k] += v; else dst[k] = v;
-        }
+        float drive[ASB_MAX_CH];
+        for (int k = 0; k < ch; k++) drive[k] = src[k] * cg * g;
+        asb_core_limit_frame(c, drive, accumulate, dst, NULL);
+        c->frames++;
     }
 }
 
@@ -506,10 +640,12 @@ static inline void asb_core_process_s16(asb_core_t *c, const int16_t *in, int16_
         float bs[ASB_MAX_CH];
         for (int k = 0; k < ch; k++) {
             float x = (float)src[k] / 32768.0f;
+            if (c->dc_on) x = asb_core_dc_step(c, k, x);
             if (c->rumble_on) x = asb_core_rumble_step(c, k, x);
             if (c->bass_on)  x = asb_core_bass_step(c, k, x);
             if (c->voice_on) x = asb_core_voice_step(c, k, x);
             if (c->clarity_on) x = asb_core_clarity_step(c, k, x);
+            for (int b = 0; b < ASB_EQ_BANDS; b++) if (c->eq_mask & (1 << b)) x = asb_core_eq_step(c, b, k, x);
             bs[k] = x;
         }
         if (c->width_on) asb_core_width_step(c, &bs[0], &bs[1]);
@@ -517,25 +653,18 @@ static inline void asb_core_process_s16(asb_core_t *c, const int16_t *in, int16_
         for (int k = 0; k < ch; k++) { float a = fabsf(bs[k]); if (a > peak) peak = a; }
         float cg = asb_core_comp_step(c, peak);
         if (c->softclip) {
-            for (int k = 0; k < ch; k++) {
-                float v = tanhf(bs[k] * cg * g * c->postgain) * c->ceiling;
-                if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
-                /* Honour accumulate here too: the legacy effect runs this path with the
-                 * framework's ACCUMULATE access mode, and overwriting there drops the mix. */
-                int32_t s = (int32_t)lrintf(v * 32767.0f);
-                if (accumulate) s += (int32_t)dst[k];
-                dst[k] = (int16_t)(s > 32767 ? 32767 : (s < -32768 ? -32768 : s));
-            }
+            float drive[ASB_MAX_CH];
+            for (int k = 0; k < ch; k++)
+                drive[k] = tanhf(bs[k] * cg * g * c->postgain) * c->ceiling;
+            /* The shared final stage also preserves ACCUMULATE semantics and counters. */
+            asb_core_limit_frame(c, drive, accumulate, NULL, dst);
+            c->frames++;
             continue;
         }
-        float gr = asb_core_step_gr(c, peak * cg * g);
-        for (int k = 0; k < ch; k++) {
-            float v = bs[k] * cg * g * gr;
-            if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
-            int32_t s = (int32_t)lrintf(v * 32767.0f);
-            if (accumulate) s += (int32_t)dst[k];
-            dst[k] = (int16_t)(s > 32767 ? 32767 : (s < -32768 ? -32768 : s));
-        }
+        float drive[ASB_MAX_CH];
+        for (int k = 0; k < ch; k++) drive[k] = bs[k] * cg * g;
+        asb_core_limit_frame(c, drive, accumulate, NULL, dst);
+        c->frames++;
     }
 }
 

@@ -142,6 +142,9 @@ class AsbLoudnessContext final : public EffectContext {
         int width  = asb_dsp_prop("width", 0);
         int clarity = asb_dsp_prop("clarity", 0);
         int rumble = asb_dsp_prop("rumble_hz", 0);
+        int true_peak = asb_dsp_prop("true_peak", 1);
+        int lookahead = asb_dsp_prop("lookahead_ms", 5);
+        int dc_protect = asb_dsp_prop("dc_protect", 1);
         if (gainOverrideMb >= 0) {
             gain = gainOverrideMb;
             if (gain > 0) enable = 1;
@@ -152,7 +155,8 @@ class AsbLoudnessContext final : public EffectContext {
                      << " postgain_x100=" << post << " bass_db=" << bass
                      << " voice=" << voice << " stereo_width=" << width
                      << " clarity=" << clarity << " rumble_hz=" << rumble
-                     << " rate=" << rate << " ch=" << ch
+                     << " true_peak=" << true_peak << " lookahead_ms=" << lookahead
+                     << " dc_protect=" << dc_protect << " rate=" << rate << " ch=" << ch
                      << (gainOverrideMb >= 0 ? " (gain from parameter)" : " (gain from property)");
         asb_core_configure_ex(&mCore, enable, gain, ceil, comp, ratio, thresh, ch,
                               (uint32_t)rate, /*fmt_ok=*/1, soft, post);
@@ -162,6 +166,17 @@ class AsbLoudnessContext final : public EffectContext {
         asb_core_set_voice(&mCore, voice, (uint32_t)rate);
         asb_core_set_clarity(&mCore, clarity, (uint32_t)rate);
         asb_core_set_width(&mCore, width, (uint32_t)rate);
+        asb_core_set_advanced(&mCore, true_peak, lookahead, dc_protect, (uint32_t)rate);
+        for (int b = 0; b < ASB_EQ_BANDS; b++) {
+            char leaf[48];
+            snprintf(leaf, sizeof(leaf), "eq_b%d_f", b);
+            int f = asb_dsp_prop(leaf, b == 0 ? 100 : (b == 1 ? 1000 : 8000));
+            snprintf(leaf, sizeof(leaf), "eq_b%d_q_x100", b);
+            int q = asb_dsp_prop(leaf, 100);
+            snprintf(leaf, sizeof(leaf), "eq_b%d_gain_mb", b);
+            int db = asb_dsp_prop(leaf, 0);
+            asb_core_set_eq(&mCore, b, f, q, db, (uint32_t)rate);
+        }
         mGainMb = gain;
     }
 
@@ -241,7 +256,11 @@ class AsbLoudnessContext final : public EffectContext {
             for (int i = 0; i < samples; i++) { float a = fabsf(out[i]); if (a > outPeak) outPeak = a; }
             LOG(WARNING) << "ASB process: n=" << mCalls << " samples=" << samples << " ch=" << ch
                          << " bypass=" << mCore.bypass << " gain=" << mCore.gain
-                         << " inPeak=" << inPeak << " outPeak=" << outPeak;
+                         << " inPeak=" << inPeak << " outPeak=" << outPeak
+                         << " tp=" << mCore.tp_on << " la_frames=" << mCore.la_frames
+                         << " la_fallback=" << mCore.la_fallback << " eq_mask=" << mCore.eq_mask
+                         << " dc=" << mCore.dc_on << " limited_frames=" << mCore.limited_frames
+                         << " max_detected_peak=" << mCore.max_detected_peak;
         }
         s.status = STATUS_OK;
         s.fmqConsumed = samples;
