@@ -5,6 +5,16 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 dev66 buildfix39 - native ASB EQ styling and seven editing outputs
+
+Input: the owner's screenshot review rejecting the separate coral EQ appearance and clipped controls, and requesting the same output choice as the DSP routing selector. Base: the verified buildfix38 source archive.
+
+- **Back inside the ASB design system:** the compact console now uses the active `--accent`, ordinary ASB surfaces, borders, radii and spacing. The coral colour and visually separate sub-card treatment are removed; the response preview and selected-band editor remain in one surface.
+- **Clipping fixed at its owner:** the generic range row's 57 px left margin was still applied inside the EQ grid. It is now reset only for `.dsp-eq-editor .cfg-range`, leaving ordinary settings untouched. The editor remains `overflow: visible`; the fix does not conceal excess content with a clipping rule.
+- **Seven editing outputs:** All, Speaker, Wired, BT, Speaker+Wired, Speaker+BT and Wired+BT use the existing `dsp_outputs` labels in a compact disclosure selector. `off` is deliberately absent because it is a DSP routing state, not an EQ profile. Combined outputs are editing groups, not new audio routes; the three physical Speaker/Wired/BT profiles remain independent and runtime routing still follows `persist.asb.dsp.route`.
+- **Atomic grouped edits:** when a combined output is selected, changing frequency, Q or gain adds the corresponding keys for every selected physical profile to the existing `set-many --snapshot` transaction. The editor and preview show the group's first physical profile; no new writer, polling worker or sequential partial-write path was added.
+- **Verification:** source contracts require the seven-target list, primary-route controls, atomic group fan-out, native styling and the scoped zero margin. Real Chromium exercised all seven outputs and all three bands at 320, 392 and 440 CSS px, plus All, Speaker+Wired, Wired+BT and Speaker+BT grouped gain writes. Every grouped write used one atomic command and changed only its selected profiles; no descendant/page overflow or JavaScript errors remained. Open and closed states were screenshot-reviewed. Browser/host evidence is not physical ColorOS WebView validation.
+
 ## V66 dev66 buildfix38 - compact parametric EQ console
 
 Input: the owner's device screenshot showing the new per-output EQ split into a long stack of ordinary setting cards. Base: the verified buildfix37 source archive.
