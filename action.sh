@@ -2889,6 +2889,13 @@ else
   # Use each key's latest ledger result, exactly as asbdiag's REFUSED verdict does;
   # an earlier refusal corrected by a later write must not poison this summary.
   _act_ref_rows="$(awk -F'|' '$2 != "reconcile" {
+      # buildfix27/28 retired optional vendor/private settings at their active writers.
+      # Historical rows remain read-only evidence; an unmanaged key is not an outstanding
+      # Action failure. Supported, actively managed keys still use latest-result reporting.
+      if ($2 == "settings" && ($3 == "network_recommendations_enabled" ||
+          $3 == "cloud_dns_happy_eyeballs_priority_enabled" ||
+          $3 == "assisted_gps_enabled" || $3 ~ /^gps_xtra_server(_[12])?$/ ||
+          $3 ~ /^ntp_server(_[234])?$/)) next
       k = $2 "/" $3; last[k] = $7
     }
     END {
