@@ -4,6 +4,29 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev66 buildfix31 - ASB engraved into the shared UFO hull
+
+Input: the owner's visual review rejecting the bright outlined wordmark and grey sticker-like appearance. Base: the verified buildfix30 source archive.
+
+- **Engraving rather than an applied label:** one reusable `ASB` text definition is rendered as a dark upper recess, a restrained lower metallic glint and a muted green-steel inner surface. The bright mint fill, separate stroke and `paint-order` outline are removed; no overlay plate or additional background shape is added.
+- **One artwork owner:** all eight static SVG uses and the dynamically created flying UFO still reference `#asbUfoArt`. The 512×512 RGB module icon is re-rendered from that exact symbol at 2048×2048 and downsampled, not edited independently.
+- **Verification boundary:** focused source contracts require one shared initials definition, three stroke-free engraving layers, eight static shared-symbol uses and the dynamic UFO reference. Real Chromium rendering was visually checked at large, small and tiny sizes. No runtime policy, power/performance behavior or native binary changed; browser/host evidence is not physical ColorOS WebView validation.
+
+## V66 dev66 buildfix30 - bright green ASB wordmark across every UFO
+
+Input: the owner's follow-up on the shared UFO artwork. Base: the verified buildfix29 source archive.
+
+- **The dark cross-line above the wordmark is removed** from the shared `#asbUfoArt` symbol, not covered by an icon-only bitmap edit.
+- **ASB is larger and brighter:** a light-mint-to-emerald gradient, 7.6-unit heavier lettering and a thin dark-green readability outline replace the small dark text. Every SVG `<use>` and dynamically created UFO inherits the same artwork, including the module icon, header, splash, Zygisk/loading and animated scenes.
+- **The clean buildfix29 background remains:** deep-green vertical gradient, one restrained glow, no orbit rings, clipped rectangles or transparency mask. No runtime policy or native binary changed.
+
+## V66 dev66 buildfix29 - cleaner UFO lettering and artifact-free module icon
+
+Input: the owner's visual review of the buildfix28 module icon. Base: the verified buildfix28 source archive.
+
+- **Optically calmer branding:** the shared UFO `ASB` lettering is smaller, lighter and slightly raised, with tighter tracking and a less harsh ink colour. Header, splash, Zygisk/loading and dynamic instances inherit the same adjustment through `#asbUfoArt`.
+- **Clean icon background:** `webroot/icon.png` is re-rendered at 512×512 RGB from the shared artwork. The previous orbit rings and clipped rectangular background shapes are removed. A plain deep-green vertical gradient and one restrained radial glow remain behind the unmodified saucer geometry; there is no transparent mask.
+
 ## V66 dev66 buildfix28 - retired ROM-owned Settings, shared component restoration and ASB artwork
 
 Input: the owner's eight-point follow-up covering the remaining rejected Android Settings, evidence/Smart/Soter presentation, a cross-page Activity/Service manager, UFO branding and splash composition, plus another source audit. Base: the verified buildfix27 source archive.
