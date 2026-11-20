@@ -4548,6 +4548,7 @@ asb_diag.sh
 asb_doctor.sh
 asb_audit_state.sh
 asb_effective_policy.sh
+asb_profile_details.sh
 asb_verify_device.sh
 asb_recents_probe.sh
 asb_sysui_watch.sh
@@ -4692,6 +4693,9 @@ EOF
 	fi
 	if [ -f "$MODPATH/tools/asb_effective_policy.sh" ]; then
 	  chmod 0755 "$MODPATH/tools/asb_effective_policy.sh"
+	fi
+	if [ -f "$MODPATH/tools/asb_profile_details.sh" ]; then
+	  chmod 0755 "$MODPATH/tools/asb_profile_details.sh"
 	fi
 	if [ -f "$MODPATH/tools/asb_verify_device.sh" ]; then
 	  chmod 0755 "$MODPATH/tools/asb_verify_device.sh"
