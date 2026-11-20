@@ -734,6 +734,7 @@ jobs:
             "tools/asb_kernel_uv_coexist.sh" \
             "tools/asb_device_info.sh" \
             "tools/asb_effective_policy.sh" \
+            "tools/asb_profile_details.sh" \
             "tools/asb_intent.sh" \
             "tools/asb_config_backup.sh" \
             "tools/asb_doctor.sh" \
