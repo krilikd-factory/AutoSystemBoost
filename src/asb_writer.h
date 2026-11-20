@@ -168,7 +168,9 @@ static int writer_node_is_cpu(asb_write_node_t node) {
 
 /* uclamp tier nodes report percent with decimals, or the word "max". */
 static int writer_node_is_uclamp(asb_write_node_t n) {
-    return n == ASB_WRITE_UCL_TOP || n == ASB_WRITE_UCL_BG;
+    return n == ASB_WRITE_UCL_TOP ||
+           n == ASB_WRITE_UCL_BG ||
+           n == ASB_WRITE_UCL_SYBG;
 }
 
 static int writer_node_is_cpu_max(asb_write_node_t node) {
@@ -462,6 +464,16 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
 
     h->failures++;
     h->consecutive_failures++;
+    /* Three successful writes with a persistent zero uclamp readback describe a
+     * capability-only node, not an applied policy. Stop retrying it for a day and
+     * retain explicit unsupported evidence instead of a hot mismatch loop. */
+    if (rc == 0 && writer_node_is_uclamp(node) && h->observed == 0 &&
+        h->consecutive_failures >= 3) {
+        h->retry_at = now + 86400;
+        snprintf(h->status, sizeof(h->status), "%s", "unsupported_readback");
+        writer_write_unsupported_event(node, path, requested, h->observed, h->retry_at);
+        return -1;
+    }
     /* If CPU policy repeatedly disagrees after a successful write, a vendor
      * PowerHAL/thermal owner is active. Back off for fifteen minutes instead
      * of entering a reassert fight that costs energy and can worsen heat. */
