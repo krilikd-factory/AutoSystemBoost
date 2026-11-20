@@ -15792,6 +15792,91 @@ grep -q '/^verdict: / { print "      " $0 }' "$FD" || fail "report does not prin
 echo "PASS logkit sysui verdict: native, Java, other-process, low-memory, injected-code and shell settings-write cases"
 )
 
+t_webui_profile_details_buildfix25() (
+# buildfix25: active profile cards open a detailed, read-only evidence dialog; inactive
+# cards retain profile switching. Run the production functions with a small DOM/root bridge.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI profile details buildfix25: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'accessibility/navigation source contract'
+import re,sys
+h=open(sys.argv[1],encoding='utf-8').read()
+for p in ('smart','performance','balanced','battery'):
+    assert f'onclick="profileCardTap(\'{p}\')"' in h,p
+    assert f'onkeydown="profileCardKey(event,\'{p}\')"' in h,p
+assert '{ id: \'profileDetailsModal\', close: function () { profileDetailsClose(); } }' in h
+block=h[h.index('function profileDetailsNode('):h.index('\nasync function go(p)')]
+assert 'innerHTML' not in block[block.index('async function profileDetailsRefresh()'):], 'dynamic evidence uses HTML interpolation'
+assert "body.replaceChildren(profileDetailsNode('div', 'profile-details-empty'" in block
+assert 'ticket !== _profileDetails.request' in block
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI profile details buildfix25 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const chk=(c,m)=>{if(!c)throw Error(m)};
+const nodes={};
+class Classes{constructor(el){this.el=el;this.s=new Set()}add(...x){x.forEach(v=>this.s.add(v));this.sync()}remove(...x){x.forEach(v=>this.s.delete(v));this.sync()}contains(x){return this.s.has(x)}toggle(x,on){if(on===undefined)on=!this.s.has(x);on?this.s.add(x):this.s.delete(x);this.sync()}sync(){this.el._class=[...this.s].join(' ')}}
+class E{
+ constructor(tag,cls,text){this.tag=tag;this.children=[];this.attrs={};this.dataset={};this.style={};this.hidden=false;this._text=text||'';this._class='';this.classList=new Classes(this);if(cls)this.className=cls;if(text!==undefined)this.textContent=text;}
+ set className(v){this._class=v||'';this.classList.s=new Set(this._class.split(/\s+/).filter(Boolean))}get className(){return this._class}
+ set id(v){this._id=v;nodes[v]=this}get id(){return this._id||''}
+ set textContent(v){this._text=String(v);this.children=[]}get textContent(){return this.children.length?this.children.map(x=>x.textContent).join(''):this._text}
+ set innerHTML(v){this._html=v;for(const m of v.matchAll(/id="([^"]+)"/g)){const n=new E(m[1].includes('Body')?'div':'div');n.id=m[1];}}
+ appendChild(x){this.children.push(x);if(x.id)nodes[x.id]=x;return x}
+ replaceChildren(...x){this.children=x}
+ setAttribute(k,v){this.attrs[k]=String(v)}
+ addEventListener(k,f){this['on'+k]=f}
+ focus(){this.focused=true}
+}
+const cards={};
+for(const p of ['smart','performance','balanced','battery']){const e=new E('div','pbtn');e.dataset.p=p;cards[p]=e;}
+cards.smart.classList.add('on');
+global.document={createElement:t=>new E(t),body:new E('body'),querySelector:s=>{const m=s.match(/^\[data-p="([^"]+)"\]$/);return m?cards[m[1]]:null;}};
+global._el=id=>nodes[id]||null;global.T=(k,f)=>f||k;global.MD='/module';global.navSync=()=>{};
+global.setTimeout=f=>{f();return 1};
+let switched=[],opened=0;global.go=p=>switched.push(p);
+const originalOpen=()=>{};
+const start=h.indexOf('let switching = false;\nconst _profileDetails'),end=h.indexOf('\nasync function go(p)',start);
+chk(start>=0&&end>start,'production dialog block missing');eval(h.slice(start,end));
+const details={schema:1,profile:'smart',intent_base:'balanced',epoch:410,intent:[{key:'CPU_MIN_LITTLE',value:'300000'},{key:'WALT_IDLE',value:'1'}],io:[{device:'sda',scheduler:'none [mq-deadline] adios'}],ledger:{scope:'current_profile_transaction',shown:3,summary:{applied:1,already_set:1,unsupported:1,not_writable:0,readback_mismatch:0,lease_denied:0,safety_veto:0,deferred:0},entries:[{ts:'201',domain:'cpu',key:'<img src=x onerror=alert(1)>',requested:'<b>300000</b>',previous:'0',readback:'<b>300000</b>',result:'applied',reason:'epoch=410'},{ts:'202',domain:'vm',key:'VM_SWAPPINESS',requested:'120',previous:'120',readback:'120',result:'already_set',reason:'same'},{ts:'203',domain:'gpu',key:'GPU_MIN_FREQ',requested:'0',previous:'0',readback:'',result:'unsupported',reason:'not exposed'}]}};
+const effective={profile:{cap_owner:'smart governor'},cpu_min_policy:{strategy:'bounds',fsm_state:'LIGHT_IDLE'},thermal:{runtime_floor:'vendor'},energy_policy:{thermal_budget_stage:'normal',thermal_budget_reason:'within envelope'},writer_health:{applied:3,failures:0},config_health:'ok',network:{congestion_live:'bbr',qdisc_live:'fq'}};
+let commands=[],mode='ok',deferred=[];
+global.run=cmd=>{commands.push(cmd);if(mode==='defer')return new Promise(resolve=>deferred.push(()=>resolve({errno:0,stdout:cmd.includes('asb_profile_details')?JSON.stringify(details):JSON.stringify(effective),stderr:''})));if(mode==='error'&&cmd.includes('asb_profile_details'))return Promise.resolve({errno:1,stdout:'',stderr:'missing'});return Promise.resolve({errno:0,stdout:cmd.includes('asb_profile_details')?JSON.stringify(details):JSON.stringify(effective),stderr:''});};
+const flush=()=>new Promise(r=>setImmediate(()=>setImmediate(r)));
+function all(root,pred,out=[]){if(pred(root))out.push(root);for(const c of root.children||[])all(c,pred,out);return out}
+(async()=>{
+ profileCardTap('smart');await flush();opened++;
+ chk(!nodes.profileDetailsModal.hidden&&nodes.profileDetailsModal.attrs['aria-hidden']==='false','active card did not open dialog');
+ chk(commands.length===2&&commands[0]==='sh /module/tools/asb_profile_details.sh smart'&&commands[1]==='sh /module/tools/asb_effective_policy.sh','dialog issued a non-read-only or unexpected root command: '+commands);
+ chk(nodes.profileDetailsClose.focused,'close control did not receive initial focus');
+ let entries=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry'));
+ chk(entries.length===3,'all ledger rows not rendered');
+ chk(nodes.profileDetailsBody.textContent.includes('<img src=x onerror=alert(1)>')&&nodes.profileDetailsBody.textContent.includes('<b>300000</b>'),'untrusted evidence text lost');
+ chk(all(nodes.profileDetailsBody,n=>n.tag==='img').length===0,'device evidence became an HTML element');
+ const filters=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-filter'));
+ chk(filters.length===3,'ledger filters missing');filters[1].onclick();entries=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry'));chk(entries.length===2,'confirmed filter');
+ filters[2].onclick();entries=all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry'));chk(entries.length===1&&entries[0].textContent.includes('unsupported'),'attention filter');
+ profileDetailsClose();chk(nodes.profileDetailsModal.hidden&&cards.smart.focused,'close/navigation focus restore');
+ profileCardTap('performance');chk(switched.length===1&&switched[0]==='performance','inactive card stopped switching profiles');
+ let prevented=0;profileCardKey({key:'Enter',preventDefault(){prevented++}},'performance');chk(prevented===1&&switched.length===2,'Enter key behavior');
+ profileCardKey({key:' ',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===3,'Space key behavior');
+ profileCardKey({key:'Escape',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===3,'unrelated key activated profile');
+ cards.balanced.classList.add('ld');profileCardTap('balanced');chk(switched.length===3,'loading card allowed duplicate action');cards.balanced.classList.remove('ld');
+ mode='error';profileDetailsOpen('smart');await flush();chk(nodes.profileDetailsBody.textContent.includes('No setting was changed'),'collector error path not honest');profileDetailsClose();
+ // A response belonging to a closed dialog must not repaint or reopen it.
+ mode='defer';profileDetailsOpen('smart');profileDetailsClose();deferred.shift()();await flush();deferred.shift()();await flush();
+ chk(nodes.profileDetailsModal.hidden&&all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry')).length===0,'stale async response repainted closed dialog');
+ chk(commands.every(c=>c==='sh /module/tools/asb_effective_policy.sh'||/^sh \/module\/tools\/asb_profile_details\.sh (smart|performance|balanced|battery)$/.test(c)),'write command leaked into open/refresh');
+ console.log('ok');
+})().catch(e=>{console.error(e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI profile details buildfix25: active/inactive cards, Enter/Space, two read-only collectors, safe text rendering, ledger filters, error/stale-response and close/focus behavior'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

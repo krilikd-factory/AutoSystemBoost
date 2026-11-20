@@ -787,6 +787,8 @@ int main(){
   snprintf(la.sun_path,sizeof(la.sun_path),"%s",g_comp_path.c_str());
   assert(bind(lfd,reinterpret_cast<sockaddr*>(&la),sizeof(la))==0 && listen(lfd,4)==0);
   s=state(); const long ev0=zval(s,"events_total"), ret0=zval(s,"observe_retained"), dup0=zval(s,"events_dropped_duplicate"), peer0=zval(s,"exits_peer");
+  const long policy_reads0=zval(s,"policy_reads"), policy_hits0=zval(s,"policy_cache_hits");
+  assert(policy_reads0>=1 && policy_hits0>=0);
   assert(zval(s,"observe_pidfd")==0 && zval(s,"observe_watching")==0 && zval(s,"exits_pidfd")==0);
   App a=start_app("com.example.watch",false);
   { int c=accept(lfd,nullptr,nullptr); assert(c>=0); std::thread t(zygisk_companion_entry,c); t.join(); }
@@ -818,6 +820,8 @@ int main(){
   s=state(); assert(!has_proc(s,b.pid) && zval(s,"events_total")==ev0+8 && zval(s,"events_dropped_duplicate")==dup0);
   assert(zval(s,"exits_pidfd")+zval(s,"exits_peer")-peer0==4 && zval(s,"observe_untracked")==0);
   close(lfd); unlink(g_comp_path.c_str());
+  // The long-lived companion parsed one unchanged inode once, not once per frame/exit.
+  assert(zval(s,"policy_reads")==policy_reads0+1 && zval(s,"policy_cache_hits")>=policy_hits0+10);
   // No policy: the companion ignores late one-shot frames instead of acting on stale state.
   unlink(ASB_ZYGISK_POLICY_ABS); companion_send(g); s=state();
   assert(s.find("Z\tevents_policy_absent\t1\n")!=std::string::npos);
@@ -976,6 +980,12 @@ t_zygisk_policy_sync_runtime() (
   grep -qx 'v=2' "$P" && grep -qx 'launch=1' "$P" && grep -qx 'observer=0' "$P" || fail "policy content: $(cat "$P")"
   [ "$(stat -c %a "$P")" = 600 ] || fail "policy is not root-only: $(stat -c %a "$P")"
   ! grep -q '^pkg=' "$P" || fail 'launch-only policy names packages'
+  _policy_before="$(stat -c '%i:%Y:%s' "$P")"
+  _gen_before="$(sed -n 's/^gen=//p' "$P")"
+  sleep 1
+  run sync | grep "^policy=unchanged gen=$_gen_before " >/dev/null || fail 'unchanged sync rewrote policy generation'
+  [ "$(stat -c '%i:%Y:%s' "$P")" = "$_policy_before" ] || fail 'unchanged sync replaced the policy inode/mtime'
+  find "$T" -name 'policy.payload.*.tmp' -print | grep . >/dev/null && fail 'policy payload temporary file survived sync'
   run set-packages com.example.app org.example.game
   grep -qx 'pkg=com.example.app' "$P" && grep -qx 'pkg=org.example.game' "$P" && grep -qx 'observer=1' "$P" \
     || fail 'allowlist change did not reach the policy'

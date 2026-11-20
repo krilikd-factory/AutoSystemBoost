@@ -10570,6 +10570,74 @@ PY
 echo 'PASS Smart manual ownership: MGLRU remains explicit; scenario I/O runs only for active Smart + Auto + non-manual and receives HINT/SCREEN through the registered helper'
 )
 
+t_profile_details_collector_buildfix25() (
+# buildfix25: the active-profile explanation is a read-only projection of trusted profile
+# intent plus the apply ledger. Exercise current, legacy and absent-ledger JSON, including
+# the per-device I/O readback trailer; never require Android sysfs on the host.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_profile_details.sh"
+fail() { echo "FAIL profile details collector buildfix25: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/mod/profiles" "$T/state"
+cp "$ROOT/profiles/balanced.sh" "$ROOT/profiles/battery.sh" "$T/mod/profiles/"
+printf 'smart\n' > "$T/mod/current_profile"
+printf '410\n' > "$T/epoch"
+cat > "$T/ledger" <<'EOF'
+100|profile|apply_begin|balanced|||deferred|old transaction
+101|cpu|old_key|1|0|1|applied|old row
+200|profile|apply_begin|smart|||deferred|epoch=410
+201|cpu|CPU_MIN_LITTLE|300000|0|300000|applied|epoch=410
+202|gpu|GPU_MIN_FREQ|0|0||unsupported|not exposed
+203|profile|apply_end|smart|||applied|epoch=410 rc=0
+204|vm|VM_SWAPPINESS|120|120|120|already_set|dynamic evidence
+EOF
+run_collector() {
+  MODDIR="$T/mod" ASB_CONFIG_STATE="$T/state" ASB_PROFILE_EPOCH_FILE="$T/epoch" \
+    ASB_LEDGER="$T/ledger" sh "$D" "$1"
+}
+run_collector smart > "$T/current.json"
+python3 - "$T/current.json" <<'PY' || fail 'current transaction JSON'
+import json,sys
+p=json.load(open(sys.argv[1]))
+assert p['schema']==1 and p['profile']=='smart' and p['intent_base']=='balanced'
+assert p['epoch']==410 and len(p['intent'])==76
+assert len({x['key'] for x in p['intent']})==76
+l=p['ledger']; assert l['scope']=='current_profile_transaction' and l['shown']==3,l
+assert [x['key'] for x in l['entries']]==['CPU_MIN_LITTLE','GPU_MIN_FREQ','VM_SWAPPINESS']
+assert l['summary']['applied']==1 and l['summary']['already_set']==1 and l['summary']['unsupported']==1
+assert all(x['key']!='old_key' for x in l['entries'])
+assert isinstance(p['io'],list)
+assert all(set(x)=={'device','scheduler'} for x in p['io'])
+PY
+# With no transaction marker the tool explicitly labels the bounded recent history legacy.
+grep -v '|profile|apply_begin|' "$T/ledger" > "$T/legacy"
+ASB_LEDGER="$T/legacy" MODDIR="$T/mod" ASB_PROFILE_EPOCH_FILE="$T/epoch" sh "$D" balanced > "$T/legacy.json"
+python3 - "$T/legacy.json" <<'PY' || fail 'legacy JSON'
+import json,sys
+p=json.load(open(sys.argv[1])); assert p['profile']=='balanced' and p['intent_base']=='balanced'
+assert p['ledger']['scope']=='legacy_recent' and p['ledger']['shown']==4
+PY
+# A missing ledger is honest unavailable evidence, not a truncated/invalid document.
+MODDIR="$T/mod" ASB_CONFIG_STATE="$T/state" ASB_PROFILE_EPOCH_FILE="$T/epoch" \
+  ASB_LEDGER="$T/does-not-exist" sh "$D" battery > "$T/missing.json"
+python3 - "$T/missing.json" <<'PY' || fail 'absent ledger JSON'
+import json,sys
+p=json.load(open(sys.argv[1])); l=p['ledger']
+assert l['scope']=='unavailable' and l['shown']==0 and l['entries']==[]
+assert sum(l['summary'].values())==0 and len(p['intent'])==76 and isinstance(p['io'],list)
+PY
+if MODDIR="$T/mod" ASB_LEDGER="$T/ledger" sh "$D" stock > "$T/bad" 2>/dev/null; then
+  fail 'unsupported profile returned success'
+fi
+[ "$(cat "$T/bad")" = '{"error":"unsupported_profile"}' ] || fail 'unsupported profile payload'
+# Opening the collector must not create state, workers or profile changes.
+find "$T/state" -mindepth 1 -print | grep . >/dev/null && fail 'collector created state'
+[ "$(cat "$T/mod/current_profile")" = smart ] || fail 'collector changed selected profile'
+grep -Eq '(^|[[:space:]])(apply_profile|asb_intent|asb_ledger_note)([[:space:]]|$)' "$D" && fail 'collector gained a writer call'
+echo 'PASS profile details collector buildfix25: valid 76-value Smart/Balanced/Battery JSON, exact transaction and legacy scopes, absent-ledger fallback, per-device I/O trailer and read-only behavior'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
