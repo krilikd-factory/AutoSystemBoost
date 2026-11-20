@@ -126,7 +126,7 @@ asb_wb_apply() {
   return 1
 }
 
-asb_wb_set() {
+asb_wb_set_locked() {
   _wb_always_new="${ASB_WB_POLICY}.new.$$"
   _wb_sleep_new="${ASB_WB_SLEEP_POLICY}.new.$$"
   _wb_dir="${ASB_WB_POLICY%/*}"; [ "$_wb_dir" != "$ASB_WB_POLICY" ] || _wb_dir='.'
@@ -163,6 +163,36 @@ asb_wb_set() {
   }
   rm -f "$ASB_WB_MODE_STATE" 2>/dev/null || true
   asb_wb_apply auto
+}
+
+asb_wb_set() {
+  # Serialize policy replacement and kernel application. A live owner returns busy;
+  # a stale PID from an interrupted save is recovered without hiding real errors.
+  _wb_lock="${ASB_WB_POLICY}.lock"
+  if ! mkdir "$_wb_lock" 2>/dev/null; then
+    _wb_owner="$(cat "$_wb_lock/pid" 2>/dev/null)"
+    case "$_wb_owner" in ''|*[!0-9]*) _wb_owner=0 ;; esac
+    if [ "$_wb_owner" -gt 1 ] && kill -0 "$_wb_owner" 2>/dev/null; then
+      printf 'wakeup_blocker|busy||\n'
+      return 75
+    fi
+    rm -f "$_wb_lock/pid" 2>/dev/null || true
+    rmdir "$_wb_lock" 2>/dev/null || true
+    mkdir "$_wb_lock" 2>/dev/null || {
+      printf 'wakeup_blocker|busy||\n'
+      return 75
+    }
+  fi
+  printf '%s\n' "$$" > "$_wb_lock/pid" 2>/dev/null || {
+    rmdir "$_wb_lock" 2>/dev/null || true
+    printf 'wakeup_blocker|policy_error||\n'
+    return 1
+  }
+  asb_wb_set_locked "$@"
+  _wb_rc=$?
+  rm -f "$_wb_lock/pid" 2>/dev/null || true
+  rmdir "$_wb_lock" 2>/dev/null || true
+  return "$_wb_rc"
 }
 
 asb_wb_mono_ms() {
