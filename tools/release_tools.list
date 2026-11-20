@@ -29,6 +29,7 @@ asb_diag.sh
 asb_doctor.sh
 asb_audit_state.sh
 asb_effective_policy.sh
+asb_profile_details.sh
 asb_verify_device.sh
 asb_recents_probe.sh
 asb_sysui_watch.sh
