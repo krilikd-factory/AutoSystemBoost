@@ -5,6 +5,16 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 dev66 buildfix38 - compact parametric EQ console
+
+Input: the owner's device screenshot showing the new per-output EQ split into a long stack of ordinary setting cards. Base: the verified buildfix37 source archive.
+
+- **One working surface:** the output selector, static response preview, Low/Mid/High selector and the three controls of the selected band now share one compact console. The other bands remain independently stored and reachable through the band tabs instead of consuming nine separate cards.
+- **Live response preview:** a static SVG curve is calculated from the three RBJ peaking filters of the selected output. During a drag it uses an explicit draft-only value map; it never mutates the saved configuration before the existing safe writer succeeds. There is no animation, timer, canvas, polling worker or additional root read.
+- **Existing control ownership retained:** frequency, Q and gain still use the common drag-only slider and `cfgSet()` live-write path. Output changes immediately rebuild the console for that output. All 27 output/band values, snapshots, localization and DSP runtime behavior remain unchanged.
+- **Post-reboot drain truth:** a since-boot screen-on figure now requires at least one observed battery-level step. The former no-drop upper bound could become a misleading 100%/h and a false time-to-empty forecast; both now wait for evidence. The meter's accumulated on/off duration is additionally rejected when it exceeds kernel `/proc/uptime` plus the sampling tolerance.
+- **Verification:** dedicated contracts require the single console, both selectors, exactly three reused controls and draft-only plotting, reject a stale 43-minute boot file at five-minute uptime, retain a real one-percent measurement and reject the synthetic no-drop rate. Real Chromium at 392 CSS px exercised Speaker to Wired, High-band selection and a `dsp_eq_wired_b2_g` write, with one panel, no horizontal overflow and no JavaScript errors; both visual states were screenshot-reviewed. Browser/host evidence is not physical ColorOS WebView validation.
+
 ## V66 dev66 buildfix37 - advanced DSP, scheduler A/B evidence and clearer Zygisk wording
 
 Input: the owner's request for the five proposed DSP improvements, one-shot I/O scheduler A/B, the recommended CPU-scheduler path, and clarification of the independent Zygisk profile and automatic-app-selection state. Base: the verified buildfix36 source archive.
