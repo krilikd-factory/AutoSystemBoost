@@ -1981,7 +1981,7 @@ body.config-category-active #configPage.cfg-short-fit .cfg-list { padding-bottom
 .zygisk-page .zy-evidence { margin: 4px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; }
 .zygisk-page .zy-evidence summary { cursor: pointer; color: var(--text-secondary); font-size: 12.5px; font-weight: 600; }
 .zygisk-page .zy-evidence[open] summary { margin-bottom: 8px; }
-.zygisk-page .zy-evidence .lgr-row-long { flex-direction:column; align-items:stretch; gap:4px; padding:8px 0; border-top:1px solid var(--border); }
+.zygisk-page .zy-evidence .lgr-row-long { flex-direction:column; align-items:stretch; gap:4px; padding:8px 0; }
 .zygisk-page .zy-evidence .lgr-row-long .lgr-v { max-width:100%; text-align:start; font:11px/1.5 var(--mono); overflow-wrap:anywhere; word-break:break-word; }
 .zygisk-page .dev-zygisk-input { min-height:84px; resize:vertical; white-space:pre-wrap; overflow-wrap:anywhere; }
 
@@ -2347,15 +2347,17 @@ body.config-category-active #configPage .cfg-list {
 #devicePage .dev-group[id], #configPage .cfg-section[id] {
   scroll-margin-top: calc(var(--status-scrim-top) + 20px); }
 #reportPage .lgr-sec > .lgr-sec-t, #zygiskPage .lgr-sec > .lgr-sec-t {
-  margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  margin-bottom: 10px; padding-bottom: 8px;
   font-size: 11.5px; line-height: 1.35; letter-spacing: .065em; }
+#reportPage .lgr-sec > .lgr-sec-t { border-bottom: 1px solid var(--border); }
+/* buildfix33: cards, spacing and subsection titles already separate Zygisk content. */
 #reportPage .lgr-hero, #zygiskPage .lgr-hero { min-width: 0; gap: 5px; padding: 12px; }
 #reportPage .lgr-hero-val, #zygiskPage .lgr-hero-val { font: 700 23px/1.15 var(--sans);
   letter-spacing: normal; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 #reportPage .lgr-hero-lbl, #zygiskPage .lgr-hero-lbl { line-height: 1.35; letter-spacing: .045em; }
 #reportPage .lgr-hero-sub, #zygiskPage .lgr-hero-sub { line-height: 1.45; overflow-wrap: anywhere; }
 #reportPage .lgr-row, #zygiskPage .lgr-row { padding: 6px 0; gap: 12px; line-height: 1.45; }
-#reportPage .lgr-row + .lgr-row, #zygiskPage .lgr-row + .lgr-row { border-top: 1px solid var(--border); }
+#reportPage .lgr-row + .lgr-row { border-top: 1px solid var(--border); }
 #reportPage .lgr-k, #zygiskPage .lgr-k { line-height: 1.45; }
 #reportPage .lgr-row:not(.lgr-row-long) .lgr-v, #zygiskPage .lgr-row:not(.lgr-row-long) .lgr-v {
   font-family: var(--mono); font-size: 12px; line-height: 1.45; }
@@ -2373,7 +2375,6 @@ body.config-category-active #configPage .cfg-list {
  * a hairline separates "what the link is doing" from "what you can switch". */
 #zygiskPage .zy-status-card > .zy-controls-embedded {
   margin: 12px 0 0; padding: 12px 0 0;
-  border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
   scroll-margin-top: calc(var(--status-scrim-top) + 20px);
 }
 #zygiskPage .zy-status-card > .zy-controls-embedded .zy-controls-reveal { margin-top: 0; }
@@ -6251,7 +6252,7 @@ html:root[data-asb-glass="1"] .cfg-reset-dialog {
 .profile-details-hero-name { color:#78efbf; font:850 24px/1.15 var(--sans); }
 .profile-details-hero-sub { margin-top:7px; color:var(--text-secondary); font:500 12px/1.5 var(--sans); }
 .package-fix-card .bfx-fix-kicker { margin:0 0 8px; color:var(--cat-ink,var(--accent)); font:700 10px/1.2 var(--mono); letter-spacing:.09em; }
-.zy-merged-subsection { margin-top:12px; padding-top:11px; border-top:1px solid var(--border); }
+.zy-merged-subsection { margin-top:12px; padding-top:11px; }
 .zy-merged-title { margin:0 0 9px; color:var(--text); font:700 12px/1.3 var(--sans); }
 #zy-status .zy-merged-subsection .zy-auto-badge { margin-top:0; }
 .kernel-controls-help { padding:11px 12px; }
@@ -6403,9 +6404,9 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
       <stop stop-color="#E3E9F1"/><stop offset=".48" stop-color="#BECAD8"/><stop offset="1" stop-color="#91A3B8"/>
     </linearGradient>
     <linearGradient id="asbUfoEngraving" x1="48" y1="30" x2="48" y2="42" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#315C50"/><stop offset=".5" stop-color="#669582"/><stop offset="1" stop-color="#2B5549"/>
+      <stop stop-color="#173B32"/><stop offset=".5" stop-color="#3F6B5A"/><stop offset="1" stop-color="#12342C"/>
     </linearGradient>
-    <text id="asbUfoInitials" x="48" y="40" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="11" font-weight="800" letter-spacing=".18">ASB</text>
+    <text id="asbUfoInitials" x="48" y="40" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="800" letter-spacing=".12">ASB</text>
     <linearGradient id="asbUfoRim" x1="48" y1="37" x2="48" y2="53" gradientUnits="userSpaceOnUse">
       <stop stop-color="#AEB4D2"/><stop offset=".38" stop-color="#656D98"/><stop offset=".55" stop-color="#353E66"/><stop offset="1" stop-color="#202844"/>
     </linearGradient>
@@ -8841,8 +8842,20 @@ let _deviceOpen = false;
 let _deviceLoadSeq = 0;
 let _zygiskOpen = false;
 
+/* AudioContext creation is synchronous in some WebViews. Do not let the first navigation
+ * sound hold the tap task that prepares and starts a page slide. One bounded timer coalesces
+ * rapid tab changes; there is no worker, polling loop or delayed page-state mutation. */
+let _asbNavSoundTimer = 0;
+function asbNavSound() {
+  if (_asbNavSoundTimer) clearTimeout(_asbNavSoundTimer);
+  _asbNavSoundTimer = setTimeout(function () {
+    _asbNavSoundTimer = 0;
+    if (!document.hidden) uiSound('nav');
+  }, 32);
+}
+
 function openLivePage() {
-  uiSound('nav');
+  asbNavSound();
   const p = _el('livePage');
   if (!p) return;
   /* Reset scroll before any class change. Restore the last complete display snapshot while
@@ -8881,7 +8894,7 @@ function liveOpenRefreshDelay() {
 }
 
 function closeLivePage() {
-  uiSound('nav');
+  asbNavSound();
   const p = _el('livePage');
   if (!p) return;
   asbNavAnimMark();
@@ -9456,7 +9469,20 @@ function liveDrainEnsure() {
   _el('liveDrainDone').onclick = liveDrainClose;
   return m;
 }
-function liveDrainBlock(icon, label, value, basis, left) {
+function liveDrainExplanation(text, bodyClass, foldKey) {
+  const fold = document.createElement('details');
+  fold.className = 'live-drain-explanation asb-disclosure';
+  fold.setAttribute('data-drain-fold', foldKey);
+  const summary = document.createElement('summary');
+  summary.textContent = T('zy_explanation', 'Explanation');
+  fold.appendChild(summary);
+  const body = document.createElement('div');
+  body.className = bodyClass;
+  body.textContent = text;
+  fold.appendChild(body);
+  return fold;
+}
+function liveDrainBlock(icon, label, value, basis, left, foldKey) {
   const b = document.createElement('div');
   b.className = 'live-drain-block';
   const ic = document.createElement('span');
@@ -9465,13 +9491,14 @@ function liveDrainBlock(icon, label, value, basis, left) {
   b.appendChild(ic);
   const tx = document.createElement('div');
   tx.className = 'live-drain-txt';
-  [['live-drain-lbl', label], ['live-drain-val', value], ['live-drain-basis', basis], ['live-drain-left', left]].forEach(function (p) {
+  [['live-drain-lbl', label], ['live-drain-val', value], ['live-drain-left', left]].forEach(function (p) {
     if (!p[1]) return;
     const e = document.createElement('div');
     e.className = p[0];
     e.textContent = p[1];
     tx.appendChild(e);
   });
+  if (basis) tx.appendChild(liveDrainExplanation(basis, 'live-drain-basis', foldKey));
   b.appendChild(tx);
   return b;
 }
@@ -9505,26 +9532,32 @@ function liveDrainPaint() {
     if (_et) offBasis += ' \u00b7 ' + _et;
   }
   const left = T('lv_drain_left', 'to 0%: %s');
+  /* A background meter repaint must not close a tab the user is reading. Stable keys also
+   * keep the Right-now block independent when it appears or disappears between paints. */
+  const openFolds = Object.create(null);
+  if (body.querySelectorAll) body.querySelectorAll('details[data-drain-fold]').forEach(function (fold) {
+    if (fold.open) openFolds[fold.getAttribute('data-drain-fold')] = true;
+  });
   body.textContent = '';
   body.appendChild(liveDrainBlock('sun', _lvDrain.onLabel || T('lv_scr_on_boot', 'Screen on · since boot'), onV, onBasis,
-    (etaOn && etaOn !== '\u2014' && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : ''));
+    (etaOn && etaOn !== '\u2014' && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : '', 'on'));
   /* fix279: the live window, labelled as what it is and never in place of the average. */
   if ((_lvDrain.on === 'meter' || _lvDrain.on === 'boot' || _lvDrain.on === 'profile') && _lvDrain.nowX > 0) {
     const nowMin = Math.max(1, Math.round((_lvDrain.nowS || 0) / 60));
     const nowEta = _lvEta.cap > 0 ? lvEtaFmt(Math.floor(_lvEta.cap * 600 / _lvDrain.nowX)) : '';
     body.appendChild(liveDrainBlock('timeout', T('lv_drain_now_lbl', 'Right now'), lvPct(_lvDrain.nowX, 10, 1),
       T('lv_drain_on_now', 'measured over the last %s min with the screen on').replace('%s', String(nowMin)),
-      (nowEta && nowEta !== '\u2014') ? T('lv_drain_left_now', 'at this pace to 0%: %s').replace('%s', nowEta) : ''));
+      (nowEta && nowEta !== '\u2014') ? T('lv_drain_left_now', 'at this pace to 0%: %s').replace('%s', nowEta) : '', 'now'));
   }
   body.appendChild(liveDrainBlock('theme_moon', _lvDrain.offSrc === 'night'
     ? T('lv_scr_off_night', 'Screen off · last night') : T('lv_scr_off', 'Screen off'), offV, offBasis,
-    (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : ''));
+    (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : '', 'off'));
   const cmp = liveDrainCompare();
   if (cmp) body.appendChild(cmp);
-  const note = document.createElement('div');
-  note.className = 'live-drain-note';
-  note.textContent = T('lv_drain_note_avg', 'Screen on is the average of this profile - the same figure on the profile cards, in the manager action and on this tile. Right now is only the latest continuous stretch with the screen on and moves with what you are doing. Screen off prefers the latest complete quiet window. The infinite-log report counts only the time of its own recording. All figures come from the battery level, not from the current sensor.');
-  body.appendChild(note);
+  body.appendChild(liveDrainExplanation(T('lv_drain_note_avg', 'Screen on is the average of this profile - the same figure on the profile cards, in the manager action and on this tile. Right now is only the latest continuous stretch with the screen on and moves with what you are doing. Screen off prefers the latest complete quiet window. The infinite-log report counts only the time of its own recording. All figures come from the battery level, not from the current sensor.'), 'live-drain-note', 'note'));
+  if (body.querySelectorAll) body.querySelectorAll('details[data-drain-fold]').forEach(function (fold) {
+    if (openFolds[fold.getAttribute('data-drain-fold')]) fold.open = true;
+  });
 }
 function liveDrainCompare() {
   const p = _lvMeter.p || {};
@@ -9931,7 +9964,9 @@ function liveInfoEnsure() {
     + '<div class="live-info-now"><span class="live-drain-lbl" id="liveInfoNowLbl"></span><span class="live-info-val" id="liveInfoVal"></span></div>'
     + '<div class="live-info-scale" id="liveInfoScale" hidden></div>'
     + '<div class="live-info-pressure" id="liveInfoPressure" hidden></div>'
-    + '<div class="live-info-text" id="liveInfoText"></div>'
+    + '<details class="live-info-disclosure asb-disclosure" id="liveInfoDisclosure">'
+    + '<summary id="liveInfoSummary"></summary>'
+    + '<div class="live-info-text" id="liveInfoText"></div></details>'
     + '<div class="live-info-hist" id="liveInfoHist" hidden></div>'
     + '<div class="live-info-src" id="liveInfoSrc" hidden></div>'
     + '<button class="cfg-profile-primary live-drain-done" id="liveInfoDone" type="button"></button></div>';
@@ -9940,6 +9975,20 @@ function liveInfoEnsure() {
   _el('liveInfoX').onclick = liveInfoClose;
   _el('liveInfoDone').onclick = liveInfoClose;
   return m;
+}
+/* Long prose is secondary evidence, not part of the reading itself. Every tile and
+ * data-driven variant uses this same native, keyboard-operable disclosure. Opening another
+ * tile starts collapsed again; values, scales, charts, pressure and sources stay visible. */
+function liveInfoExplanationSet(text) {
+  const value = String(text || '');
+  const fold = _el('liveInfoDisclosure');
+  if (fold) {
+    fold.open = false;
+    fold.hidden = !value.trim();
+    const summary = _el('liveInfoSummary');
+    if (summary) summary.textContent = T('zy_explanation', 'Explanation');
+  }
+  _el('liveInfoText').textContent = value;
 }
 function liveInfoSource(key, cell) {
   const lines = [];
@@ -10373,7 +10422,9 @@ function liveInfoOpen(cell) {
    * seventeen sheets in the tile's colour, in both themes. */
   iv.style.color = '';
   try { if (val && typeof getComputedStyle === 'function') iv.style.color = getComputedStyle(val).color || ''; } catch (e) {}
-  _el('liveInfoText').textContent = lviFill(T(txt[0], txt[1]));
+  const explanation = lviFill(T(txt[0], txt[1]));
+  if (typeof liveInfoExplanationSet === 'function') liveInfoExplanationSet(explanation);
+  else _el('liveInfoText').textContent = explanation;
   lviScaleRender(_el('liveInfoScale'), key, lviScaleValue(key, iv.textContent));
   if (key === 'trend' || key === 'strend') lviTrendRender(_el('liveInfoHist'), key, iv.style.color);
   else lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));
@@ -10398,7 +10449,8 @@ function liveInfoOpenData(detail) {
   _el('liveInfoNowLbl').textContent = detail.nowLabel || T('lvi_now', 'Now');
   const iv = _el('liveInfoVal'); iv.textContent = String(detail.value === undefined ? '—' : detail.value);
   iv.className = 'live-info-val'; iv.style.color = '';
-  _el('liveInfoText').textContent = String(detail.text || '');
+  if (typeof liveInfoExplanationSet === 'function') liveInfoExplanationSet(detail.text);
+  else _el('liveInfoText').textContent = String(detail.text || '');
   _el('liveInfoScale').hidden = true; _el('liveInfoScale').textContent = '';
   const lip = _el('liveInfoPressure'); if (lip) { lip.hidden = true; lip.textContent = ''; }
   _el('liveInfoHist').hidden = true; _el('liveInfoHist').textContent = '';
@@ -10860,7 +10912,17 @@ function cfgLoadParts() {
   return parts;
 }
 function cfgLoadFresh() { return _cfgLoadedAt > 0 && Date.now() - _cfgLoadedAt < CFG_FRESH_MS; }
+/* The ordinary startup/intro already owns this Config transaction. Prime its static hub in
+ * the hidden page before the first root read, so an early tap usually reuses finished DOM
+ * instead of constructing every tile in the navigation task. No extra shell or timer is added. */
+function cfgPrimeHub() {
+  if (_cfgOpen || _cfgGroup || _cfgSearch) return;
+  const list = _el('cfgList');
+  if (!list || (list.firstChild && _cfgHubSig && _cfgHubSig === cfgHubSig())) return;
+  cfgRender();
+}
 function cfgLoad(force) {
+  cfgPrimeHub();
   if (!force && cfgLoadFresh()) return Promise.resolve(false);
   if (_cfgLoadRun) return _cfgLoadRun.then(function () { return force ? cfgLoadNow() : false; });
   _cfgLoadRun = cfgLoadNow().then(function (v) { _cfgLoadRun = null; return v; }, function (e) { _cfgLoadRun = null; throw e; });
@@ -12080,12 +12142,11 @@ function cfgRenderGroup(list, groupId) {
       cfgRenderInfirmaryAdvice(list);
       cfgRenderBatteryFixCard(list);
       cfgRenderComponentManagerCard(list);
-      /* SOTER belongs to the same repair flow, directly after Battery Fix rather than
-       * below the unrelated package repairs. Both cards keep their own status owner. */
+      /* Keep the two package repairs as the final cards on the Infirmary page. */
+      cfgRenderSoterFixCard(list);
     }
     else if (section.card === 'systemfixes') {
       cfgRenderPackageFixCards(list, sectionItems);
-      cfgRenderSoterFixCard(list);
     }
     else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
     else if (section.card === 'camtools') cfgRenderCameraToolsCards(list);
@@ -20145,11 +20206,11 @@ function zygiskModeCard(d) {
   card.appendChild(seg);
   const shown = ZYGISK_MODES.filter(function (m) { return m.id === mode; })[0];
   const desc = document.createElement('div'); desc.className = 'zy-mode-desc';
-  if (shown) desc.textContent = T(shown.key + '_desc', shown.desc);
+  if (shown && shown.id !== 'auto') desc.textContent = T(shown.key + '_desc', shown.desc);
   else if (mode === 'custom') desc.textContent = T('zy_mode_custom_unified', 'Custom: switches or the guard differ from the preset. ASB will not silently undo your manual choice. Choose a mode above to reapply its complete set.');
   else if (mode === 'off') desc.textContent = T('zy_mode_off_desc', 'Nothing runs in app processes: no connection, no request, no ledger. Zero cost.');
-  else desc.textContent = T('zy_mode_unknown', 'The current mode could not be read; choosing one writes all four settings.');
-  card.appendChild(desc);
+  else if (mode !== 'auto') desc.textContent = T('zy_mode_unknown', 'The current mode could not be read; choosing one writes all four settings.');
+  if (desc.textContent) card.appendChild(desc);
   if (mode === 'custom') {
     const custom = logReportNote(T('zy_mode_custom_warning', 'Manual override active. In particular, cold-start or lifecycle requests added to Battery can increase activity; the interface will not keep calling that set Battery.'), true);
     custom.classList.add('zy-custom-note'); card.appendChild(custom);
@@ -20157,8 +20218,6 @@ function zygiskModeCard(d) {
   if (deviceVal(d, 'zygisk_observer', 'safe_mode') === 'on' && mode !== 'off') {
     card.appendChild(logReportNote(T('zy_mode_safe_note', 'Safe mode is on: the mode is saved, but nothing runs in app processes until safe mode is cleared below.'), true));
   }
-  const note = logReportNote(T('zy_mode_note', 'A change applies to app processes started after it; apps already running keep their state until they restart.'));
-  note.classList.add('dev-evidence'); card.appendChild(note);
   return card;
 }
 async function zygiskModeSet(id) {
@@ -20241,6 +20300,9 @@ function zygiskPageRender(d, state) {
     st.classList.add('zy-status-merged'); st.appendChild(controls);
   }
   body.appendChild(st);
+  if (zyOn) {
+    const mode = zygiskModeCard(d); mode.id = 'zy-mode'; body.appendChild(mode);
+  }
   if (!zyOn) {
     body.appendChild(zygiskOffCard());
     const lspOff = lspLiteCard(); lspOff.id = 'zy-lsp'; body.appendChild(lspOff);
@@ -20255,7 +20317,6 @@ function zygiskPageRender(d, state) {
     ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-engine', T('zy_link_nav', 'Unified engine')], ['zy-lsp', T('zy_nav_lsp', 'LSPosed')], ['zy-s7', T('zy_nav_s7', 'Budgets')], ['zy-aot', T('zy_nav_art', 'ART')],
     ['zy-apps', T('zy_nav_apps', 'Apps')]
   ], T('dev_nav_title', 'Jump to'), 'zy-page-nav'));
-  const mode = zygiskModeCard(d); mode.id = 'zy-mode'; body.appendChild(mode);
   const automatic = zygiskAutoCard(d);
   const auto = document.createElement('section'); auto.id = 'zy-auto'; auto.className = 'zy-merged-subsection';
   const autoTitle = document.createElement('h3'); autoTitle.className = 'zy-merged-title';
@@ -24421,6 +24482,9 @@ window.addEventListener('orientationchange', function () { asbUiFrame.request(as
 function asbStartupWarmCaches() {
   const warm = function (introShown) {
     if (introShown || document.hidden) return;
+    /* DOM-only priming need not wait for the root queue's input-quiet gap. It runs once after
+     * the first frame, so even an early Settings tap can reuse the finished localized hub. */
+    if (typeof cfgPrimeHub === 'function') cfgPrimeHub();
     /* Warm one shared Config transaction immediately after the first frame. An immediate
      * tap joins this exact promise instead of queuing a second ten-part read behind Live.
      * There is no timer/worker after the transaction and no repeat eager Config batch. */
@@ -24655,7 +24719,7 @@ window.addEventListener('resize', function () { _pageAnimMs._v = 0; });
 let _cfgAnimUntil = 0;
 
 function openConfigPage() {
-  uiSound('nav');
+  asbNavSound();
   const p = _el('configPage');
   if (!p) return;
   _cfgGroup = null;   // always open on the hub, never mid-drill from last time
