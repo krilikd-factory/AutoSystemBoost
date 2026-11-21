@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in ASB does not work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please do not paste serial numbers, IMEI, account data or network identifiers.
+  - type: input
+    id: version
+    attributes:
+      label: ASB version
+      description: Shown on the module card in your root manager, for example V65.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone model and firmware
+      description: For example OnePlus 15 (CPH2745), ColorOS 17.0.
+    validations:
+      required: true
+  - type: dropdown
+    id: root
+    attributes:
+      label: Root manager
+      options: [KernelSU-Next, KernelSU, APatch, Magisk, Other]
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel
+      description: Stock, KRILIKD or another custom kernel (name and version).
+  - type: input
+    id: zygisk
+    attributes:
+      label: Zygisk provider
+      description: None, Magisk built-in, or the provider name and version.
+  - type: input
+    id: profile
+    attributes:
+      label: Active profile
+      description: Smart, Performance, Balanced, Battery or Stock.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw instead. Steps to reproduce help most.
+    validations:
+      required: true
+  - type: textarea
+    id: diag
+    attributes:
+      label: Diagnostic report
+      description: Attach the file from `su -c asbdiag` or WebUI → Reports. Drag the file here.
+    validations:
+      required: true

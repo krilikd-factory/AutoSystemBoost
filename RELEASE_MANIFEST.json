@@ -4,7 +4,7 @@
   "base": "AutoSystemBoost-V66-test13-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
-  "file_count_excluding_manifest": 276,
+  "file_count_excluding_manifest": 279,
   "inventory_vs_base": {
     "changed": [
       ".github/workflows/build-release.yml",
@@ -205,6 +205,24 @@
   ],
   "files": [
     {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "bytes": 1690,
+      "mode": "0644",
+      "sha256": "6c53a63e66f55d2cae9a9568f1037fee4a450a7f156b68c1d6d478c72a71dbac"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "bytes": 331,
+      "mode": "0644",
+      "sha256": "5c12ff5183eeab229881812926b57388980dccfda8325068db82aa552cbff0db"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "bytes": 608,
+      "mode": "0644",
+      "sha256": "5096f1cbf101e03e254e99d909bd42201134cf2472af33b400bec46b5b910289"
+    },
+    {
       "path": ".github/workflows/build-dsp-aidl.yml",
       "bytes": 62757,
       "mode": "0644",
@@ -254,15 +272,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 32626,
+      "bytes": 30701,
       "mode": "0644",
-      "sha256": "4cb0bab95fd5be59f10d1cf26df2b8eb20a817ffae0d5368bc806b5ea1568ad8"
+      "sha256": "360360bde27d095b0ccbc79dde124f79565a20423e1f3f5cb161ac5badf5de5f"
     },
     {
       "path": "README.ru.md",
-      "bytes": 55083,
+      "bytes": 52194,
       "mode": "0644",
-      "sha256": "8b3b771319264430ba7dfb99496f16f795cda1d0af16d5b2131987d2c13048d2"
+      "sha256": "de7ceb1d3f3253139796953ed0a19dc948aa874a0a4082806caa8c9c533627c1"
     },
     {
       "path": "action.sh",
@@ -1630,7 +1648,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24329,
       "mode": "0644",
-      "sha256": "13d42a93ca0259e02b3177ecee153d2fb6ed2b09e3131b7b68927ba3abe14047"
+      "sha256": "d7a08bbcee2032042efe238eeda04d745e611d7073386e90ba0e8167da2bf52b"
     },
     {
       "path": "tools/asb_tree_check.sh",

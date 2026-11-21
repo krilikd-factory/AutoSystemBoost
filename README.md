@@ -27,10 +27,10 @@
 </p>
 
 <p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/🚀_Quick_Start-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Quick start"></a>
+  <a href="https://github.com/krilikd-factory/AutoSystemBoost/releases/latest"><img src="https://img.shields.io/badge/⬇️_Download-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Download"></a>
   <a href="README.advanced.md"><img src="https://img.shields.io/badge/🧠_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Advanced guide"></a>
-  <a href="README.ru.md"><img src="https://img.shields.io/badge/🇷🇺_Быстрый_старт-1f2937?style=for-the-badge&logo=github&logoColor=white" alt="Быстрый старт"></a>
-  <a href="README.advanced.ru.md"><img src="https://img.shields.io/badge/🇷🇺_Подробное_руководство-334155?style=for-the-badge&logo=github&logoColor=white" alt="Подробное руководство"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/📝_Changelog-334155?style=for-the-badge&logo=github&logoColor=white" alt="Changelog"></a>
+  <a href="https://t.me/DKomsomol"><img src="https://img.shields.io/badge/Telegram-229ED9?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"></a>
 </p>
 
 ## ⚡ What is ASB?
@@ -226,39 +226,25 @@ The **Interface** and **System** sections cover details that are easy to overloo
 
 Availability depends on the device. A visible setting is a request, while diagnostics and effective values show what the system actually accepted.
 
-## 🛰 Zygisk observer, lifecycle refresh and system pressure
+## 🧩 Zygisk observer (optional)
 
-**Observation and lifecycle hints are separate opt-in switches, both disabled by default.** The allowlist is empty, so no app process is selected until you explicitly add ordinary application packages and enable the observer. Selection affects newly started processes only; ASB does not kill or restart existing apps. Protected system, root-manager, LSPosed-manager and vendor processes are excluded.
+ASB works fully without Zygisk. With Magisk's built-in Zygisk or a standalone Zygisk provider, the **Zygisk** page adds an optional observer for app starts and exits.
 
-The observer reports process start and exit derived from peer-socket disconnect. It does **not** install JNI/PLT hooks or claim foreground, media, camera, audio or navigation tracking: those events are `not exposed`. It does not manage apps, Zygisk, LSPosed or modules, and it has no frequency writer or application-policy opcode. Broker failure leaves the app and governor unaffected.
+- **Off by default.** The app list is empty until you choose apps. Only newly started processes are affected; running apps are never killed or restarted. System, root-manager, LSPosed-manager and vendor processes are always excluded.
+- **One-tap setup.** Pick **Observe** (start ledger only), **Launch** (cold-start assist) or **Battery** (adds the background guard). ASB selects up to 64 of your most-used apps. Turning it off restores your previous settings.
+- **Lifecycle refresh.** An accepted start or exit can ask the existing governor to re-evaluate while the screen is on: at least 2 seconds apart and at most 8 times a minute. No package name or frequency target is sent, and thermal and vendor gates still decide.
+- **Background guard.** It first writes a dry-run proposal. It acts only after matching evidence in two separate screen sessions and your confirmation for each app.
+- **ART compilation** stays a separate manual choice. Automatic setup never turns it on.
+- **Boundaries.** The observer installs no JNI or PLT hooks and never hides, freezes or throttles LSPosed or modules.
 
-**Zygisk Lifecycle Refresh** gives those events a bounded performance/efficiency role without creating a second governor. An accepted start/exit can send the fixed `zygisk-refresh` request to the existing governor while the screen is on. The governor invalidates stale foreground evidence and re-evaluates the current profile; all dwell, thermal and vendor gates still decide the result. Requests are at least 2 seconds apart and capped at 8 per minute **per active companion**. No package name or frequency target is sent. This can reduce stale-input delay at lifecycle edges, but a hint acknowledgement is not a boost or proof of energy savings. LSPosed is never secretly killed, frozen, hidden or throttled; any saving requires comparable on-device A/B measurements.
-
-For a non-expert setup, open the **Zygisk** page and choose one automatic profile: **Observe** (ledger only), **Launch** (cold-start assist plus ledger), or **Battery** (observer, ledger and Background guard). ASB selects up to 64 user-installed apps, frequently opened ones first. ART compilation is never enabled by automatic setup and remains a separate manual choice. Turning automatic setup off restores the previous package list, observer settings, guard and ART state. Safe mode is never cleared automatically. Observation alone does not restrict apps; the guard first creates a dry-run proposal and requires matching evidence in two separate screen sessions plus your per-package confirmation. No performance or battery saving is promised without an on-device A/B measurement.
-
-You can manage it from **Device → Zygisk Observer**, or with these commands:
+On the reference OnePlus 15, the companion used 184 ms of CPU in about 13 hours with 145 watched starts (one V65 capture, see the [release notes](CHANGELOG.md)).
 
 ```bash
-su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh set-packages com.example.app'
-su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh enable'
 su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'
 su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh safe-mode on'
 ```
 
-Use `safe-mode off` only to clear the emergency disable file; it does not re-enable the observer automatically. `disable` turns selection off for new processes, `list` shows the allowlist, and `set-packages` with no package names clears it.
-
-**Device → System Pressure** shows a coloured 0–100 scale together with the actual measurements, formula, coverage and limitations:
-
-| Component | Base weight | Measured component before weighting |
-|:---|:---:|:---|
-| Load average per online CPU | 35 | `clamp((loadavg_1m / online_cpus) × 50, 0, 100)` |
-| Memory use | 30 | `memory_used = clamp((MemTotal − MemAvailable) × 100 / MemTotal, 0, 100)`; `clamp((memory_used − 40) × 2, 0, 100)` |
-| CPU busy | 25 | Busy delta from two `/proc/stat` reads around a 0.20-second on-demand sample |
-| GPU busy | 10 | A valid percentage or numerator/denominator from a supported readable `gpu_busy` interface |
-
-The final score is `sum(component × available_weight) / sum(available_weights)`. Missing components receive zero weight rather than an invented value; coverage is the sum of available base weights. Below **40% coverage**, the score and band are `unknown`. Bands are **0–24 light**, **25–49 moderate**, **50–74 high**, and **75–100 very high**. Load average includes running/runnable and uninterruptible wait, so it is not CPU usage. Swap/zRAM occupancy is shown only as a supporting signal and is not scored.
-
-This is a **single-snapshot pressure heuristic**, not a device-health score, trend or estimated battery/performance saving. Observer RSS is current application RSS for validated live PIDs, not pure observer overhead; `ipc_cpu_ms` covers companion receive/validation/state-write/hint-round-trip work, not whole-app CPU. Hint counters distinguish attempted, acknowledged, vetoed, unavailable and rate-limited requests. Crash and ANR counts remain `unknown` because attribution evidence is not exposed. Host regression tests validate the implementation contracts, but real Zygisk injection still requires testing on the target device and root implementation.
+**Device → System Pressure** shows a 0–100 load score from load average, memory, CPU and GPU busy, with its coverage and formula. It is a single-snapshot heuristic, not a health score. The formula and weights are in the [advanced guide](README.advanced.md#-12-device-information-privacy-and-evidence-quality).
 
 ## 📊 WebUI: your control centre
 
@@ -297,11 +283,28 @@ ASB does not blame an app because of one coincidence or promise a battery-saving
 - **Device discovery is read-only and on demand.** It does not create a persistent device-inventory collector.
 - **Unnecessary identifiers stay out.** Serial numbers, IMEI, account data and network identifiers are not read for reports.
 
-## 📱 Compatibility
+## 📱 Requirements and compatibility
 
-ASB is designed for **OnePlus, including Ace models**, with root access and a compatible module manager: **Magisk, KernelSU, APatch** and supported derivatives.
+| | |
+|:---|:---|
+| 📱 **Devices** | OnePlus, including Ace models. Device bounds cover Snapdragon 8 Gen 2, 8 Gen 3, 8 Elite and 8 Elite Gen 5 platforms (SM8550, SM8650, SM8750, SM8850). |
+| 🧪 **Reference device** | OnePlus 15 (SM8850) on ColorOS 17 / Android 17: development, measurements and diagnostics are done here first. |
+| 👑 **Root** | Magisk, KernelSU, KernelSU-Next, APatch and compatible derivatives. |
+| 🐧 **Kernel** | Stock or custom. Kernel controls appear only when the running kernel exposes the interface. |
+| 🧩 **Zygisk** | Optional. Needed only for the Zygisk page. |
 
-Recent OnePlus devices have the most field validation. On other models, feature availability depends on firmware, kernel, exposed interfaces and the current route or service. If evidence is not exposed, ASB should say **unknown**, **not exposed** or **not runtime-discoverable** — that is not proof that the hardware itself is unsupported.
+On other models, feature availability depends on firmware, kernel, exposed interfaces and the current route or service. If evidence is not exposed, ASB says **unknown**, **not exposed** or **not runtime-discoverable**. That is not proof that the hardware is unsupported.
+
+### 🐧 With the KRILIKD kernel
+
+[KRILIKD](https://github.com/krilikd-factory/GKI_KernelSU_SUSFS) is a companion GKI kernel for the OnePlus 15. ASB discovers its extra standard Linux controls at runtime, captures the stock value first, reads every write back and restores the baseline in Stock mode or on uninstall. On a stock kernel the same cards stay hidden or report the control as not exposed.
+
+### 🗺 Project status
+
+| Channel | Version | Where |
+|:---|:---|:---|
+| ✅ **Stable** | V65 | [Releases](https://github.com/krilikd-factory/AutoSystemBoost/releases/latest), and in-app updates through your root manager |
+| 🧪 **Testing** | V66 | Test builds in [Telegram](https://t.me/DKomsomol) |
 
 ## 📦 Installation and first steps
 

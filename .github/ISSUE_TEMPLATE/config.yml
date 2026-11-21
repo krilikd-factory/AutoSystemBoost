@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Telegram
+    url: https://t.me/DKomsomol
+    about: Questions, test builds and quick help.
+  - name: Advanced guide
+    url: https://github.com/krilikd-factory/AutoSystemBoost/blob/main/README.advanced.md
+    about: How each subsystem works, settings index and troubleshooting.
