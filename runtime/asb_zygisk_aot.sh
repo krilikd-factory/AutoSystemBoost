@@ -120,8 +120,7 @@ _count_update() {
 _launch_scan() {
   _since="$(sed -n 's/^scan=//p' "$SCAN" 2>/dev/null)"
   case "$_since" in ''|*[!0-9]*) _since=0 ;; esac
-  _ev="$(logcat -b events -d -v epoch -s wm_activity_launch_time:I am_proc_start:I 2>/dev/null)"
-  _new="$(printf '%s\n' "$_ev" | awk -v since="$_since" '
+  _new="$(logcat -b events -d -v epoch -s wm_activity_launch_time:I am_proc_start:I 2>/dev/null | awk -v since="$_since" '
     {
       t = int($1 + 0); if (t <= since) next
       if (index($0, "am_proc_start: [")) {
@@ -137,7 +136,12 @@ _launch_scan() {
         if (cold) delete ps[p]
         if (p ~ /^[A-Za-z0-9_.]+$/ && ms > 0 && ms < 60000) printf "%d|%s|%d|%d\n", t, p, ms, cold
       }
-    }')"
+    }
+    END { if (NR > 0) print "#ev" }')"
+  _ev=""
+  case "$_new" in '#ev'|*'
+#ev') _ev=1; _new="${_new%#ev}"; _new="${_new%
+}" ;; esac
   if [ -z "$_ev" ]; then
     _new="$(logcat -d -v epoch -s ActivityTaskManager:I ActivityManager:I 2>/dev/null | awk -v since="$_since" '
       {

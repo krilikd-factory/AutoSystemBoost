@@ -92,9 +92,13 @@ _asb_lsposed_info() {
   _ls_found=0
   _ls_detail=''
   _ls_map="$(_asb_lsp_uidmap)"
-  _ls_logs="$(_asb_lsp_logs "$_ls_dir")"
-  if [ -n "$_ls_logs" ]; then
-    _ls_lstat="$(printf '%s\n' "$_ls_logs" | awk -v mods="$_ls_modl" '
+  _ls_haslog=0
+  for _lg_kind in modules verbose; do
+    _lg_f="$(ls -t "$_ls_dir"/log/"${_lg_kind}"_*.log 2>/dev/null | head -n 1)"
+    [ -n "$_lg_f" ] && [ -s "$_lg_f" ] && _ls_haslog=1
+  done
+  if [ "$_ls_haslog" = 1 ]; then
+    _ls_lstat="$(_asb_lsp_logs "$_ls_dir" | awk -v mods="$_ls_modl" '
       function days(y, m, d) { if (m <= 2) { y--; m += 12 } return 365 * y + int(y / 4) - int(y / 100) + int(y / 400) + int((153 * (m - 3) + 2) / 5) + d }
       function secs(t) {
         if (t !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/) return -1

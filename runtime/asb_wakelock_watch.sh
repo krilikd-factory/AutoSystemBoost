@@ -35,7 +35,10 @@ _wl_bs_read() {
   _br="$(dumpsys batterystats --charged 2>/dev/null)"
   case "$_br" in
     ''|*'Unknown option'*) dumpsys batterystats 2>/dev/null ;;
-    *) printf '%s\n' "$_br" ;;
+    *) cat <<EOF_WL_BR
+$_br
+EOF_WL_BR
+       ;;
   esac
 }
 _WL_BSRAW=""
@@ -47,7 +50,9 @@ _wl_bs_fetch() {
 }
 _wl_bs_dump() {
   if [ -n "$_WL_BSRAW_SET" ]; then
-    [ -n "$_WL_BSRAW" ] && printf '%s\n' "$_WL_BSRAW"
+    [ -n "$_WL_BSRAW" ] && cat <<EOF_WL_BSRAW
+$_WL_BSRAW
+EOF_WL_BSRAW
     return 0
   fi
   _wl_bs_read
@@ -574,7 +579,11 @@ FIT_UID="$D/wakelock_fitness_uidmode"
 FIT_REF="$D/wakelock_fitness_refused"
 FIT_RA="$D/wakelock_fitness_reapply"
 _wl_fit_note() {
-  _fn_raw="$(asb_appops get "$1" WAKE_LOCK 2>/dev/null | grep -m1 . | tr -d '|\r' | cut -c1-80)" || _fn_raw="appops transport unavailable"
+  if _fn_raw="$(asb_appops get "$1" WAKE_LOCK 2>/dev/null)"; then
+    _fn_raw="$(printf '%s\n' "$_fn_raw" | grep -m1 . | tr -d '|\r' | cut -c1-80)"
+  else
+    _fn_raw="appops transport unavailable"
+  fi
   { grep -v "^$1|" "$FIT_RA" 2>/dev/null; printf '%s|%s|%s|%s\n' "$1" "$(date +%s 2>/dev/null || echo 0)" "$2" "${_fn_raw:--}"; } > "$FIT_RA.tmp" 2>/dev/null \
     && mv -f "$FIT_RA.tmp" "$FIT_RA" 2>/dev/null
   rm -f "$FIT_RA.tmp" 2>/dev/null
@@ -807,6 +816,19 @@ _wl_man_installed() {
 # Component windows can also be opened from a system-package report row. This broader
 # installed-package check is deliberately local to explicit component management: the
 # package-wide WAKE_LOCK controls above remain restricted to third-party packages.
+_wl_cmp_core() {
+  case "$1" in
+    android|com.android.systemui|com.android.phone|com.android.server.telecom|com.android.shell|\
+    com.android.providers.settings|com.android.providers.telephony|com.android.providers.media.module|\
+    com.android.permissioncontroller|com.google.android.permissioncontroller|\
+    com.android.packageinstaller|com.google.android.packageinstaller|\
+    com.android.networkstack|com.google.android.networkstack|com.android.networkstack.tethering|\
+    com.google.android.networkstack.tethering|com.android.bluetooth|com.android.se|com.android.nfc|\
+    com.android.inputdevices|com.android.externalstorage|com.android.wifi.resources|com.google.android.wifi.resources|\
+    me.weishu.kernelsu|com.rifsxd.ksunext|com.topjohnwu.magisk|me.bmax.apatch) return 0 ;;
+  esac
+  return 1
+}
 _wl_cmp_installed() {
   _wl_man_pkgok "$1" || return 1
   _has pm || return 1
@@ -966,11 +988,13 @@ _wl_svc_state() {
   # $1 is a package dump, $2 the fully qualified package/Class component. An empty
   # result means Android's default state, not a proven manifest-enabled flag; only a
   # service seen running may be newly disabled with that original state recorded.
-  printf '%s\n' "${1:-}" | awk -v c="${2:-}" '
+  awk -v c="${2:-}" '
     /^[ \t]*disabledComponents:/ { m="disabled"; next }
     /^[ \t]*enabledComponents:/ { m="enabled"; next }
     /^[ \t]*[A-Za-z][A-Za-z ]*:/ { m="" }
-    m != "" { n=split($0,a,/[ \t,]+/); for(i=1;i<=n;i++) if(a[i]==c) { print m; exit } }'
+    m != "" { n=split($0,a,/[ \t,]+/); for(i=1;i<=n;i++) if(a[i]==c) { print m; exit } }' <<EOF_WL_PKG
+${1:-}
+EOF_WL_PKG
 }
 _wl_svc_running() {
   _has dumpsys || return 1
@@ -1084,7 +1108,7 @@ _wl_cmp_jobs() {
 }
 _wl_cmp_declared() {
   _cp="${1:-}"
-  printf '%s\n' "${2:-}" | awk -v p="$_cp" '
+  awk -v p="$_cp" '
     /^[ \t]*Service Resolver( Table)?:/ { k="service"; next }
     /^[ \t]*Activity Resolver( Table)?:/ { k="activity"; next }
     /^[ \t]*[A-Z][A-Za-z ]*:/ { k="" }
@@ -1093,7 +1117,9 @@ _wl_cmp_declared() {
         c=substr(s,RSTART,RLENGTH); if(index(c,p "/")==1) print k "|" c
         s=substr(s,RSTART+RLENGTH)
       }
-    }' | sort -u
+    }' <<EOF_WL_DECL | sort -u
+${2:-}
+EOF_WL_DECL
 }
 _wl_cmp_actionable() {
   _cp="${1:-}"; _cc="${2:-}"; _ck="${3:-service}"
@@ -1132,6 +1158,7 @@ _wl_cmp_status() {
 _wl_cmp_disable() {
   _sp="${1:-}"; _sc="${2:-}"; _ck="${3:-service}"; _cm="${4:-}"
   _wl_svc_compok "$_sp" "$_sc" || { printf 'result=bad_request\n'; return 1; }
+  _wl_cmp_core "$_sp" && { printf 'result=protected\neffective=unchanged\n'; return 1; }
   _wl_cmp_installed "$_sp" || { printf 'result=not_user_app\n'; return 1; }
   _has dumpsys && _has pm || { printf 'result=unavailable\n'; return 1; }
   _sd="$(dumpsys package "$_sp" 2>/dev/null)"; [ -n "$_sd" ] || { printf 'result=unavailable\n'; return 1; }
