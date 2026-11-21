@@ -391,7 +391,16 @@ _status() {
 
 case "${1:-status}" in
   status) _status ;;
-  enable) mkdir -p "$D" 2>/dev/null; true > "$ON" && { _launch_scan; _count_update; _refresh; echo 'result=enabled'; } ;;
+  enable)
+    mkdir -p "$D" 2>/dev/null
+    true > "$ON" 2>/dev/null || { echo 'result=failed'; exit 1; }
+    if [ "${ASB_ZA_SYNC:-0}" = 1 ]; then
+      _launch_scan; _count_update; _refresh
+    else
+      MODDIR="$MODDIR" sh "$0" refresh </dev/null >/dev/null 2>&1 &
+    fi
+    echo 'result=enabled' ;;
+  refresh) [ -f "$ON" ] || exit 0; _launch_scan; _count_update; _refresh ;;
   disable) rm -f "$ON" 2>/dev/null; echo 'result=disabled' ;;
   tick) _tick ;;
   scan) _launch_scan ;;

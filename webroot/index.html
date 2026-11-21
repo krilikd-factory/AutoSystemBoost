@@ -21336,9 +21336,22 @@ async function zygiskAotSet(on) {
     b = await runBatch([['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + (on ? ' enable' : ' disable')],
       ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']]);
   } catch (e) { b = null; }
-  _zygiskModeBusy = false;
-  const ok = !!(b && b.set && /result=(enabled|disabled)/.test(b.set.stdout || ''));
+  let ok = !!(b && b.set && (on ? /result=enabled/ : /result=disabled/).test(b.set.stdout || ''));
   if (b && b.aot && b.aot.errno === 0) _zyAot = zygiskAotParse(b.aot.stdout);
+  /* buildfix45: "enable" used to scan Android's launch log and read the ART state of up to
+   * eight apps before it answered, so on a phone with a long log the call could end without
+   * its result line and the switch reported a failure. The script now answers at once and
+   * fills the list in the background; when the answer is still missing, the saved switch
+   * state read back from status decides. */
+  if (!ok) {
+    let v = null;
+    try { v = await runBatch([['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']]); } catch (e) { v = null; }
+    if (v && v.aot && v.aot.errno === 0) {
+      const g = zygiskAotParse(v.aot.stdout);
+      if (g.ok) { _zyAot = g; ok = g.enabled === !!on; }
+    }
+  }
+  _zygiskModeBusy = false;
   toast(ok ? (on ? T('zy_aot_set_on', 'Compiling while charging: on') : T('zy_aot_set_off', 'Compiling while charging: off'))
            : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
   if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);

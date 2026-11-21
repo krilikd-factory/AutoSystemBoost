@@ -11498,6 +11498,23 @@ row com.ig.app | grep '^com.ig.app|3|verify|install|' >/dev/null || fail "ART st
 row com.yt.app | grep '^com.yt.app|3|speed-profile|bg-dexopt|' >/dev/null || fail "primary-ABI state not preferred: $(row com.yt.app)"
 out="$(run status)"
 printf '%s\n' "$out" | grep -x 'enabled=1' >/dev/null && printf '%s\n' "$out" | grep -x 'ledger=1' >/dev/null && printf '%s\n' "$out" | grep -x 'launches=4' >/dev/null || fail "status head: $out"
+# buildfix45: without ASB_ZA_SYNC the switch answers before the launch scan and ART reads,
+# which run detached and still fill the list.
+mkdir -p "$T/async/d"; cp "$T/bootid" "$T/async/bootid"
+cat > "$T/bin/slowlogcat" <<'X'
+#!/bin/sh
+sleep 3; exec "$ZA_T/bin/logcat" "$@"
+X
+chmod +x "$T/bin/slowlogcat"; mkdir -p "$T/async/bin"; ln -s "$T/bin/slowlogcat" "$T/async/bin/logcat"
+for f in dumpsys pm; do ln -s "$T/bin/$f" "$T/async/bin/$f"; done
+_t0=$(date +%s)
+aout="$(PATH="$T/async/bin:$T/bin:$PATH" ZA_T="$T" MODDIR="$T/mod" ASB_ZA_DIR="$T/async/d" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZA_POWER="$T/pw" ASB_ZA_BOOTID="$T/async/bootid" ASB_ZA_STATE="$T/state" ASB_ZA_GOVPID="$T/govpid" sh "$S" enable)"
+_t1=$(date +%s)
+[ "$aout" = result=enabled ] && [ -f "$T/async/d/zygisk_aot" ] || fail "async enable: $aout"
+[ $((_t1 - _t0)) -le 2 ] || fail "async enable waited for the launch scan ($((_t1 - _t0)) s)"
+i=0; while [ $i -lt 40 ] && [ ! -s "$T/async/d/zygisk_aot_apps" ]; do sleep 0.25; i=$((i+1)); done
+[ -s "$T/async/d/zygisk_aot_apps" ] || fail "the detached refresh did not fill the list"
+grep -q '^com.ig.app|' "$T/async/d/zygisk_aot_apps" || fail "detached refresh list: $(cat "$T/async/d/zygisk_aot_apps")"
 printf '%s\n' "$out" | grep -x 'app|com.ig.app|3|verify|install|0|-|0|-|2|800|0|0|0|0' >/dev/null || fail "status app row: $out"
 run tick; [ "$(pmn)" = 0 ] || fail "compiled with the screen on and no charger"
 echo screen=0 > "$T/state"; run tick; [ "$(pmn)" = 0 ] || fail "compiled without a charger"

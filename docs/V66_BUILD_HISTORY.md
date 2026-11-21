@@ -5,6 +5,32 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 dev66 buildfix45 - the ART switch answers at once
+
+Input: a user report, "cannot turn on faster app starts": the Zygisk page's Faster app starts
+(ART) switch showed "Could not change the mode" and the card stayed at "The compile state has
+not been read yet." Base: buildfix44 (`e8f3a02`). No native code changed; no CI rebuild of
+native parts is needed.
+
+- **Cause:** `asb_zygisk_aot.sh enable` printed `result=enabled` only after a full pass:
+  Android's launch log (`logcat -d` of the events buffer, the main buffer as a fallback),
+  the start-ledger count and an ART state read (`dumpsys package`, then `pm art dump`) for up
+  to eight apps. All of it ran inside the one `ksu.exec` call that holds the page, and the
+  page read the result and the status from the same shell; when that shell ended without
+  its marker lines, both came back empty, so the switch reported a failure and the card
+  stayed unread even though the flag file may already have been written. Not reproduced on
+  the owner's phone; the long synchronous pass is the only slow step on this path.
+- **Fix:** `enable` writes the flag and answers at once; the launch scan, ledger count and ART
+  reads run in a detached `refresh` (also reached by the five-minute service tick if a
+  manager ends background jobs with its shell). `ASB_ZA_SYNC=1` keeps the old synchronous
+  order for the host tests. A failed flag write now answers `result=failed`.
+- **WebUI:** when the switch result is missing, the page reads the status once more and
+  accepts the change if the saved state matches the request; only then does it report a
+  failure. The success check now matches the requested direction (`enabled` for on,
+  `disabled` for off).
+- **Tests:** host regression for the detached enable (answers within 2 s while the launch log
+  takes 3 s; the detached pass still fills the list).
+
 ## V66 dev66 buildfix44 - detached status reads, drain with charging, DSP console, docks
 
 Input: owner review of buildfix43 on the phone (eight items plus the screen-on drain figure,
