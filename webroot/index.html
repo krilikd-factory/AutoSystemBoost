@@ -2067,9 +2067,13 @@ body.config-category-active #configPage.cfg-short-fit .cfg-list { padding-bottom
 .asb-cosmic-star:nth-child(4) { left:77%; top:62%; animation-delay:2s; }
 .asb-cosmic-star:nth-child(5) { left:36%; top:9%; animation-delay:1s; }
 .asb-cosmic-star:nth-child(6) { left:65%; top:42%; animation-delay:1.8s; }
-.asb-cosmic-scan { position:absolute; z-index:-1; left:12%; right:12%; top:54px; height:58px; pointer-events:none;
-  background:linear-gradient(180deg,transparent,rgba(75,243,200,.065) 62%,rgba(75,243,200,.32) 78%,transparent 80%);
-  filter:blur(.2px); opacity:0; animation:asbCosmicScan 3.4s ease-in-out infinite; }
+/* buildfix43: the beam had a hard bottom edge (.32 alpha dropping to 0 over 2%) and square
+ * sides, so it read as a green slab sliding over the card. It now fades out on every side. */
+.asb-cosmic-scan { position:absolute; z-index:-1; left:6%; right:6%; top:54px; height:64px; pointer-events:none;
+  background:linear-gradient(180deg,transparent 0%,rgba(75,243,200,.035) 45%,rgba(75,243,200,.13) 78%,rgba(75,243,200,.18) 86%,rgba(75,243,200,.06) 94%,transparent 100%);
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 26%,#000 74%,transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0%,#000 26%,#000 74%,transparent 100%);
+  opacity:0; animation:asbCosmicScan 3.4s ease-in-out infinite; }
 .asb-cosmic-scene { position:relative; width:156px; height:156px; margin:0 auto 18px; }
 .asb-cosmic-scene::before { content:''; position:absolute; inset:42px; border-radius:50%;
   background:radial-gradient(circle,rgba(75,243,200,.13),rgba(50,69,255,.055) 48%,transparent 72%);
@@ -2104,7 +2108,7 @@ html[data-asb-theme="light"] .asb-cosmic-ufo { color:#167c70; filter:drop-shadow
 @keyframes asbCosmicReverse { to { transform:rotate(-360deg); } }
 @keyframes asbCosmicHover { 0%,100% { transform:translate(-50%,-50%); } 50% { transform:translate(-50%,calc(-50% - 5px)); } }
 @keyframes asbCosmicStar { 0%,100% { opacity:.22; } 50% { opacity:.85; } }
-@keyframes asbCosmicScan { 0% { opacity:0; transform:translateY(-12px); } 18% { opacity:.8; } 72% { opacity:.45; } 100% { opacity:0; transform:translateY(116px); } }
+@keyframes asbCosmicScan { 0% { opacity:0; transform:translateY(-12px); } 22% { opacity:.85; } 70% { opacity:.5; } 100% { opacity:0; transform:translateY(116px); } }
 @media (prefers-reduced-motion:reduce) { .asb-cosmic-ring,.asb-cosmic-ufo,.asb-cosmic-star,.asb-cosmic-scan { animation:none; }
   .asb-cosmic-scan { opacity:.2; transform:translateY(42px); } .asb-cosmic-star { opacity:.48; } }
 .device-page .dev-pressure { margin: 2px 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
@@ -9239,6 +9243,7 @@ function lvMeterApply(text, cached) {
   _lvMeter.cur = m.cur; _lvMeter.p = m.p;
   _lvGovOff.by = lvGovOffParse(parts[1] || '');
   _lvMeter.boot = lvBootParse(parts[2] || '', parts[4] || '');
+  { const up = parseFloat(parts[4]); _lvMeter.bootAt = Number.isFinite(up) && up > 0 ? Math.floor(Date.now() / 1000 - up) : 0; }
   _lvMeter.night = lvNightParse(parts[3] || '');
   if (!cached) { _lvMonCache.meter = String(text || ''); lvMonCacheSave(); }
   if (document.body && !document.body.classList.contains('live-active')) homeMeterPaint();
@@ -9450,7 +9455,7 @@ function lvProfileOnFigure(profile) {
    * Dividing that total by 10 printed a 5% session as 50.0%/h. Convert the complete
    * session with the same x10 units used by the aggregate and since-boot figures. */
   if (e.onLastS >= 600) return { x:e.onLast > 0 ? Math.round(e.onLast * 360 / e.onLastS) : Math.max(1, Math.ceil(360000 / e.onLastS)),
-    upper:!(e.onLast > 0), s:e.onLastS, src:'latest' };
+    upper:!(e.onLast > 0), s:e.onLastS, src:'latest', at:e.onLastAt || 0 };
   return e.on > 0 ? { x:e.on, upper:false, s:e.onMin * 60, src:'history' } : null;
 }
 /* buildfix42: the label follows where the figure came from. A mature profile sample wins over
@@ -9469,12 +9474,29 @@ function lvOnTip(fig) {
   if (kind === 'meter') return T('lv_drain_on_avg_tip', 'Average screen-on drain of this profile: %s min measured.').replace('%s', mins);
   return T('lv_drain_on_profile_tip', 'Latest recorded screen-on drain for this profile: %s min.').replace('%s', mins);
 }
+/* buildfix43: a mature since-boot figure for the active profile wins over a stored sample that
+ * predates this boot (or over the all-time average). buildfix32 put the profile's sample first
+ * so the first minutes after a boot do not show a one-step guess; but that "latest session"
+ * could be the 123-minute session from before the reboot, and it stayed on the card and the
+ * Monitor an hour later while this boot had long been measured. A session recorded during this
+ * boot still wins: the boot meter is phone-wide and may include another profile's time.
+ * Mature = 15 min with the screen on and 2 % of drop since boot. */
+function lvBootMature() {
+  const b = _lvMeter.boot;
+  return !!(b && b.on >= 900 && b.onX >= 200);
+}
 function lvOnFigure(profile) {
   /* The selected WebUI profile owns the phone-wide since-boot view. The meter's "current"
    * line is only a runtime publication and can lag a profile switch; using it here assigned
    * another profile's history to the active card. */
   const own = lvProfileOnFigure(profile);
-  return own || (_selectedProfile === profile ? lvBootOnFigure() : null);
+  const boot = _selectedProfile === profile ? lvBootOnFigure() : null;
+  if (boot && lvBootMature()) {
+    const bootAt = Number(_lvMeter.bootAt) || 0;
+    const stale = !own || own.src === 'history' || (own.src === 'latest' && own.at > 0 && bootAt > 0 && own.at < bootAt);
+    if (stale) return boot;
+  }
+  return own || boot;
 }
 function lvPrimaryOffFigure(profile) {
   const own = lvProfileNightFigure(profile);
