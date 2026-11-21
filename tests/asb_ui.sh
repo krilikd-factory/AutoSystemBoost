@@ -1657,11 +1657,11 @@ _lvMeter.p=parsed.p;_lvMeter.cur='battery';_lvMeter.boot=lvBootParse('abc 7200 1
 const nightNow=testNow;_lvMeter.night=lvNightParse('25 14400 '+(nightNow-3600));
 _lvMeter.p.battery={on:100,onMin:60,off:80,offN:2,offS:20000,offLast:0,offLastS:0,offLastAt:0,onLast:120,onLastS:3600,onLastAt:20,nightLast:40,nightLastS:18000,nightLastAt:nightNow-1800};
 homeMeterPaint();
-chk(boxes[0].textContent==='50.0%/h0.25%/h','active Home uses the mature latest profile sample and last night: '+boxes[0].textContent);
-chk(boxes[1].textContent==='12.0%/h0.40%/h','inactive Home uses only its own latest session and night: '+boxes[1].textContent);
+chk(boxes[0].textContent==='5.0%/h0.25%/h','active Home uses the mature latest profile sample and last night: '+boxes[0].textContent);
+chk(boxes[1].textContent==='1.2%/h0.40%/h','inactive Home uses only its own latest session and night: '+boxes[1].textContent);
 chk(boxes.every(b=>!b.children.some(c=>c.className==='pmeta-scope')),'Home cards do not create visible scope labels');
 _lvEta.cap=60;lvMeterPaint('smart');
-chk(els.bnDrain.textContent==='50.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on','selected active prefers its mature profile sample: '+els.bnDrain.textContent);
+chk(els.bnDrain.textContent==='5.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on','selected active prefers its mature profile sample: '+els.bnDrain.textContent);
 chk(els.bnDrainOff.textContent==='0.25%/h'&&els.bnDrainOffLabel.textContent==='Screen off','active last night');
 /* Field regression: a stale shared 2.83 %/h record must not hide the active profile's
  * newer 0.20 %/h night. An older-than-latest-morning record is not "last night" at all. */
@@ -1670,15 +1670,15 @@ _lvMeter.p.smart.nightLast=20;_lvMeter.p.smart.nightLastS=18000;_lvMeter.p.smart
 lvMeterPaint('smart');
 chk(els.bnDrainOff.textContent==='0.20%/h','newer profile night replaces stale shared 2.83: '+els.bnDrainOff.textContent);
 homeMeterPaint();
-chk(boxes[0].textContent==='50.0%/h0.20%/h','Home also chooses the newer 0.20 profile night: '+boxes[0].textContent);
+chk(boxes[0].textContent==='5.0%/h0.20%/h','Home also chooses the newer 0.20 profile night: '+boxes[0].textContent);
 chk(lvNightFresh(nightNow-1800,nightNow*1000)&&!lvNightFresh(1,nightNow*1000),'calendar freshness rejects an old saved night');
 _lvMeter.night=lvNightParse('25 14400 '+(nightNow-3600));_lvMeter.p.smart.nightLastAt=10;
 lvMeterPaint('battery');
-chk(els.bnDrain.textContent==='12.0%/h'&&els.bnDrainOnLabel.textContent==='Screen on','inactive own latest: '+els.bnDrain.textContent);
+chk(els.bnDrain.textContent==='1.2%/h'&&els.bnDrainOnLabel.textContent==='Screen on','inactive own latest: '+els.bnDrain.textContent);
 chk(els.bnDrainOff.textContent==='0.40%/h'&&els.bnDrainOffLabel.textContent==='Screen off','inactive own night');
-chk(els.liveEtaOn.textContent==='1h 12m','ETA stays bound to the selected active profile while an inactive comparison is painted: '+els.liveEtaOn.textContent);
+chk(els.liveEtaOn.textContent==='12h 00m','ETA stays bound to the selected active profile while an inactive comparison is painted: '+els.liveEtaOn.textContent);
 _selectedProfile='battery';lvMeterPaint('battery');
-chk(els.bnDrain.textContent==='12.0%/h'&&els.liveEtaOn.textContent==='5h 00m','newly selected profile keeps its own mature sample: '+els.bnDrain.textContent+' '+els.liveEtaOn.textContent);
+chk(els.bnDrain.textContent==='1.2%/h'&&els.liveEtaOn.textContent==='50h 00m','newly selected profile keeps its own mature sample: '+els.bnDrain.textContent+' '+els.liveEtaOn.textContent);
 _selectedProfile='smart';_lvMeter.p.battery.nightLastS=0;lvMeterPaint('battery');
 chk(els.bnDrainOff.textContent==='0.80%/h'&&els.bnDrainOffLabel.textContent==='Screen off','inactive aggregate fallback is labelled');
 chk(els.bnDrainOff.textContent!=='0.25%/h','inactive borrowed active global night');
@@ -4648,11 +4648,30 @@ printf 'Cmdline: old.crash\n' > "$T/tomb/tombstone_03"; touch -d "@$((NOW-200000
 # A library in maps is not proof that its code is in the crashing thread.
 printf 'Cmdline: com.maps.only\nmemory map:\n7a00000000-7a00010000 r-xp /vendor/lib64/soundfx/libasbdsp.so\n' > "$T/tomb/tombstone_04"; touch -d "@$((NOW-5000))" "$T/tomb/tombstone_04"
 
+# Activity context is projected only for closed, sufficiently long/high-drain screen-on
+# phases. Malformed components become unknown and never enter markup as raw text.
+cat > "$CAP/phase_activity.tsv" <<'EOF_ACT'
+active	1000	1900	900	2	8.0	com.example.app/.MainActivity	com.example.app/.MainActivity
+post_wake	2000	2600	600	1	10.0	bad component	bad/component/with/extra
+active	3000	3100	100	1	36.0	com.too.short/.Phase	com.too.short/.Phase
+active	4000	4600	600	1	7.9	com.too.cheap/.Phase	com.too.cheap/.Phase
+sleep	5000	5600	600	1	10.0	com.wrong.phase/.Phase	com.wrong.phase/.Phase
+active	6000	6600	600	1	9.0	com.example.two/.Second	com.example.two/.Second
+active	7000	7600	600	1	9.0	com.example.three/.Third	com.example.three/.Third
+active	8000	8600	600	1	9.0	com.example.four/.Fourth	com.example.four/.Fourth
+active	9000	9600	600	1	9.0	com.example.five/.Fifth	com.example.five/.Fifth
+active	10000	10600	600	1	9.0	com.example.six/.Sixth	com.example.six/.Sixth
+EOF_ACT
+
 out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit"
 printf '%s\n' "$out" | grep -E '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' >/dev/null || fail "meta line: $(printf '%s' "$out" | head -1)"
 printf '%s\n' "$out" | grep -F "capture	dir=$CAP"  >/dev/null || fail "capture path for report.json export"
 printf '%s\n' "$out" | grep '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99	segments=2	latest_drop=8	latest_hours=2.0	latest_pctph=4.0$'  >/dev/null || fail "drain line with off-charger segments: $(printf '%s\n' "$out" | grep '^drain')"
 printf '%s\n' "$out" | grep '^night	dur_min=469	drop=8	pctph=1.0	awake=8$'  >/dev/null || fail "night chain"
+[ "$(printf '%s\n' "$out" | grep -c '^appact	')" -eq 5 ] || fail "activity rows must be valid and capped at five"
+printf '%s\n' "$out" | grep -F $'appact	phase=active	min=15	drop=2	pctph=8.0	start=com.example.app/.MainActivity	end=com.example.app/.MainActivity' >/dev/null || fail "valid activity boundary context missing"
+printf '%s\n' "$out" | grep -F $'appact	phase=post_wake	min=10	drop=1	pctph=10.0	start=unknown	end=unknown' >/dev/null || fail "malformed activity components were not normalized"
+printf '%s\n' "$out" | grep '^appact	' | grep -E 'too\.short|too\.cheap|wrong\.phase|example\.six' >/dev/null && fail "activity threshold/phase/cap filter leaked a row"
 # fix338: 181% can be a valid SUM over separate off-charger windows, never one battery
 # cycle. The latest window is projected separately; charging gains are not netted against it.
 CYC="$T/multi-cycle"; mkdir -p "$CYC"
@@ -5056,7 +5075,7 @@ EOF
     logReportSysuiSteady logReportWakeBad logReportVendorHeld logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportRecorderGap logReportAnalyze logReportHighRefresh logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportTweakEvidence logReportZygiskGovernor logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
-    logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
+    logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportFinalizeLayout logReportRender asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -5116,6 +5135,9 @@ const txt = [
   'capcheck\ttotal=9\tok=4\tvendor=4\tother=1',
   'wifileave\treleases=2\treturned=2\trecovered=3',
   'asbcost\tcpu_msh=1851\twrites_h=176\twakes_h=491',
+  'appact\tphase=active\tmin=12\tdrop=2\tpctph=10.0\tstart=com.example.app/.MainActivity\tend=com.example.app/.HeavyActivity',
+  'appact\tphase=active\tmin=4\tdrop=9\tpctph=90.0\tstart=com.excluded/.Short\tend=com.excluded/.Short',
+  'appact\tphase=active\tmin=8\tdrop=1\tpctph=8.0\tstart=<img src=x>\tend=bad/component/path',
   'audio\tspk_min=72\tpctph=8.31\tma=362',
   'charge\ttypes=Fast(17) N/A(197)',
   'smart\twatching=3\ttesting=0\thelped=0\tnothelped=0\tctxlearn=2',
@@ -5157,6 +5179,8 @@ chk(d.sections.aod.lit === '11' && d.sections.aod.of === '520', 'aod line parses
 /* fix207: the screen split, the phase table and the kernel charger holders parse. */
 chk(d.sections.scr.on_pctph === '5.7' && d.sections.scr.off_pctph === '1.8' && d.sections.scr.off_min === '478', 'screen split parses');
 chk(d.phases.length === 2 && d.phases[0].name === 'sleep' && d.phases[0].drop === 8 && d.phases[1].drop === -62, 'phase rows keep the signed drop: ' + JSON.stringify(d.phases));
+chk(d.activities.length === 2 && d.activities[0].start === 'com.example.app/.MainActivity' && d.activities[0].end === 'com.example.app/.HeavyActivity', 'valid activity context parses without threshold leaks');
+chk(d.activities[1].start === 'unknown' && d.activities[1].end === 'unknown', 'unsafe/unknown activity names are not invented or retained');
 chk(d.kwk.length === 1 && d.kwk[0].tag === 'rx_wake_lock' && d.kwk[0].min === 343, 'kernel charger holder parses');
 /* fix210: the occurrence-counted causes parse too. */
 chk(d.wlt.length === 2 && d.wlt[0].tag === '*alarm*' && d.wlt[0].n === 54 && d.wlt[1].n === 28, 'holder rows: ' + JSON.stringify(d.wlt));
@@ -5481,10 +5505,13 @@ chk(!logReportHistoryComparable(histBase, histBaseA, Object.assign({}, sameHisto
 /* Real DOM-building functions over a small DOM stub: summary precedes details, five
    verdicts are visible, incompatible history never prints a numeric improvement. */
 ASB_LANG = 'ru';
-function domEl(tag) { return { tag:tag, children:[], _text:'', className:'', disabled:false, attrs:{},
+function domEl(tag) { const e = { tag:tag, children:[], _text:'', className:'', disabled:false, attrs:{},
   get textContent() { return this._text; }, set textContent(v) { this._text = String(v); this.children = []; },
   setAttribute(k,v) { this.attrs[k]=String(v); }, removeAttribute(k) { delete this.attrs[k]; },
-  appendChild(c) { this.children.push(c); return c; }, classList:{ add() {}, remove() {}, contains() { return false; } } }; }
+  appendChild(c) { const old=this.children.indexOf(c); if(old>=0)this.children.splice(old,1); this.children.push(c); return c; },
+  insertBefore(c, ref) { const old=this.children.indexOf(c); if(old>=0)this.children.splice(old,1); const i=this.children.indexOf(ref); if(i<0)this.children.push(c);else this.children.splice(i,0,c); return c; },
+  classList:{ add() {}, remove() {} } };
+  e.classList.contains = function(name) { return String(e.className).split(/\s+/).indexOf(name) >= 0; }; return e; }
 const reportBody = domEl('div'), reportStatus = domEl('div'), jsonButton = domEl('button');
 function findReportId(e, id) { if (e.id === id) return e; for (const c of e.children) { const hit = findReportId(c, id); if (hit) return hit; } return null; }
 function _el(id) { return id === 'reportBody' ? reportBody : id === 'reportStatus' ? reportStatus : id === 'rpSave' ? jsonButton : findReportId(reportBody, id); }
@@ -5524,6 +5551,12 @@ chk(countClass(reportBody, 'lgr-verdict-unknown') === 5 && allText(reportBody).i
 chk(allText(reportBody).indexOf(I18N.ru.lr_summary_legend) >= 0 && countClass(reportBody, 'report-nav') === 1 && countClass(reportBody, 'lgr-details-anchor') === 1, 'fix255: report legend, working navigation model and technical-evidence anchor render');
 chk(reportBody.children.filter(c => c.children[0] && String(c.className).split(/\s+/).indexOf('report-nav') < 0 && c.children[0].textContent !== I18N.ru.lr_sec_brief && c.children[0].textContent !== I18N.ru.lr_sec_dx)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief and the causes');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
+logReportRender(d);
+const activityText = allText(reportBody);
+chk(activityText.indexOf('com.example.app/.MainActivity → com.example.app/.HeavyActivity') >= 0 && activityText.indexOf(I18N.ru.lr_activity_note) >= 0, 'activity correlation and noncausal warning render');
+chk(activityText.indexOf('<img src=x>') < 0 && activityText.indexOf('com.excluded/.Short') < 0, 'activity renderer keeps malformed and short samples out');
+const reportOrder = reportBody.children.map(c => c.id).filter(Boolean);
+chk(reportOrder.indexOf('lgr-drain') < reportOrder.indexOf('lgr-night') && reportOrder.indexOf('lgr-night') < reportOrder.indexOf('lgr-wake') && reportOrder.indexOf('lgr-wake') < reportOrder.indexOf('lgr-profiles') && reportOrder.indexOf('lgr-profiles') < reportOrder.indexOf('lgr-phases') && reportOrder.indexOf('lgr-phases') < reportOrder.indexOf('lgr-thermal') && reportOrder.indexOf('lgr-thermal') < reportOrder.indexOf('lgr-smooth'), 'report sections follow the semantic evidence order: '+reportOrder.join(','));
 const zyDay = parseLogReport('meta\telapsed_min=120\tprofile=smart\nzygisk\tstate=confirmed\tstart_state=waiting\tcoverage=start_latest\tenabled=1\tsafe_mode=off\tfreshness=current\tloaded=0\tpolicy_generation=42\tpolicy_seen_generation=42\tpackages=2\tabis=arm64-v8a\tlifecycle_hints=1\tlaunch_hints=1\tspawn_ledger=0\tevents_total_start=10\tevents_total_latest=15\tevents_total_delta=5\tlaunch_events_delta=2\tlaunch_accepted_delta=1\tlaunch_screen_off_delta=1\tpolicy_hints_delta=3\thints_accepted_delta=2\thints_vetoed_delta=1\tipc_cpu_ms_delta=4\tipc_wakeups_delta=7\tdeltas=available\nzygov\tcoverage=start_latest\tzygisk_launch_accepted_delta=1\tzygisk_launch_vetoed_delta=0\tzygisk_refresh_accepted_delta=2\tzygisk_refresh_vetoed_delta=1\tunlock_cold_lifts_delta=1\tunlock_cold_extends_delta=0\tunlock_cold_long_delta=1\tunlock_cold_trims_delta=0\tdeltas=available\n');
 const zyImpact = asbPageText(logReportTweakEvidence(zyDay));
 chk(zyImpact.indexOf('1') >= 0 && zyImpact.indexOf('A/B') >= 0, 'Zygisk evidence shows actions without claiming a benefit');
@@ -8801,7 +8834,7 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 132, len(new)
+assert len(new) == 138, len(new)
 assert 'kernel_wb_saved_toast' in new
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
@@ -9333,11 +9366,13 @@ assert 'asbBootIntroSeen(boot)' in js and 'asbBootIntroRemember(boot);' in js
 assert js.index('asbBootIntroRemember(boot);') < js.index('const jobs = [')
 assert 'Promise.race([' in js and '} finally {' in js and 'window._asbBootIntroActive = false;' in js
 assert 'setInterval(' not in js and 'setTimeout(() => pollLive' not in js
-for token in ('Promise.resolve(pollLive(true, true))','return cfgLoad();',
-              'Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)])',
-              'return asbLogReportLoad(true);','return zygiskPageLoad(false);','asbBootIntroPaint(done, jobs.length)',
+for token in ('Promise.resolve(pollLive(true, true))','asbBootIntroPaint(done, jobs.length)',
               "T('boot_intro_warm'","T('boot_intro_ready'"):
     assert token in js, token
+# The first Home frame owns only Live. Other pages retain their ordinary lazy/warm loaders.
+for forbidden in ('return cfgLoad();','Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)])',
+                  'return asbLogReportLoad(true);','return zygiskPageLoad(false);','.then(homeMeterPaint)'):
+    assert forbidden not in js, forbidden
 for forbidden in ('serial','imei','account','android_id','setInterval('):
     assert forbidden not in js.lower(), forbidden
 assert 'window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart);' in s
@@ -9366,7 +9401,7 @@ const local={},session={};global.localStorage={getItem:k=>local[k]||null,setItem
 let boot='11111111-1111-4111-8111-111111111111',failBoot=false,hang=false,calls=[];
 global.run=async c=>{calls.push('boot-id');return{errno:failBoot?1:0,stdout:failBoot?'':boot,stderr:''}};
 global.asbStartupSnapshot=async()=>({boot:await run('boot-id')});
-global.pollLive=async(v,prefetch)=>{calls.push('live:'+v+':'+!!prefetch)};global.homeMeterPaint=()=>calls.push('home-paint');global.cfgLoad=()=>{calls.push('config');return hang?new Promise(()=>{}):Promise.resolve()};
+global.pollLive=async(v,prefetch)=>{calls.push('live:'+v+':'+!!prefetch);if(hang)return new Promise(()=>{})};global.homeMeterPaint=()=>calls.push('home-paint');global.cfgLoad=()=>{calls.push('config');return Promise.resolve()};
 global.loadDeviceInfo=async()=>{calls.push('device-info')};global.asbDeviceInfoLoad=async bg=>{calls.push('device:'+bg)};
 global.asbLogReportLoad=async bg=>{calls.push('log:'+bg)};global.zygiskPageLoad=async user=>{calls.push('zygisk:'+user)};
 let src=h.slice(h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'"),h.indexOf('let _asbHomeRevealed = false;',h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'")));
@@ -9376,7 +9411,8 @@ eval(src+`\n(async()=>{
  let p=asbBootIntroStart();await sleep(2);
  if(overlay.hidden||!window._asbBootIntroActive||body.attrs['aria-busy']!=='true')throw Error('first boot did not paint');
  if(!await p||!overlay.hidden||window._asbBootIntroActive||body.getAttribute('aria-busy')!==null)throw Error('first boot did not clean up');
- for(const x of ['live:true:true','config','device-info','device:true','log:true','zygisk:false','home-paint'])if(!calls.includes(x))throw Error('missing warmer '+x);
+ if(!calls.includes('live:true:true'))throw Error('missing Home Live warmer');
+ for(const x of ['config','device-info','device:true','log:true','zygisk:false','home-paint'])if(calls.includes(x))throw Error('unrelated eager work '+x);
  if(progress.attrs['aria-valuenow']!=='100'||local[ASB_BOOT_INTRO_KEY]!==boot)throw Error('progress/marker failed');
  const n=calls.length;if(await asbBootIntroStart()||calls.length!==n+1||!overlay.hidden)throw Error('same boot replayed or started a warmer');
  boot='22222222-2222-4222-8222-222222222222';if(!await asbBootIntroStart())throw Error('new boot skipped');
@@ -9467,7 +9503,9 @@ for token in ('if (_livePollRun) {','if (!visible || (_livePollVisible && _liveP
               '_livePollRun = null;','if (releasePoll) releasePoll();',
               'else await pollStockTelemetry(false);'):
     assert token in poll, token
-assert 'if (_lb.meter && !visible) homeMeterPaint();' in poll
+assert 'if (visible) lvMeterPaint(_selectedProfile); else if (!_lb.meter) homeMeterPaint();' in poll
+assert 'if (!_lb.meter && !visible) homeMeterPaint();' in poll
+assert 'if (_lb.meter && !visible) homeMeterPaint();' not in poll
 assert poll.count('runBatch(liveBatchParts(visible, prime))')==1
 open_dev=body('function openDevicePage() {')
 assert 'if (!deviceInfoPresentSnapshot()) asbDeviceInfoLoad();' in open_dev
@@ -10243,7 +10281,7 @@ paint_src = '\n'.join([
     fn('lvMeterPaint'),
     "_lvMeter.cur='smart';_lvMeter.p={battery:{on:330,onMin:88,off:126,offN:3,offS:30000,offLast:138,offLastS:18000,offLastAt:1,onLast:330,onLastS:5280,onLastAt:1}};",
     "lvMeterPaint('battery');",
-    "if(els.bnDrain.textContent!=='33.0%/h'||els.bnDrainOff.textContent!=='1.38%/h') throw Error('wrong drain values '+JSON.stringify(els));",
+    "if(els.bnDrain.textContent!=='2.3%/h'||els.bnDrainOff.textContent!=='1.38%/h') throw Error('wrong drain values '+JSON.stringify(els));",
     "if(els.bnDrainOnLabel.textContent!=='Screen on'||els.bnDrainOffLabel.textContent!=='Screen off') throw Error('short labels missing');",
     "if(!/Latest recorded screen-on drain/.test(els.bnDrain.title)||!/88 min/.test(els.bnDrain.title)) throw Error('profile tooltip missing');",
     "_lvMeter.p.battery.offLastS=0; lvMeterPaint('battery');",
@@ -10744,9 +10782,11 @@ for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display
 for token in ('#reportPage .logo-c', '#zygiskPage .logo-c', 'zoom: calc(1 / var(--asb-ui-scale))'):
     assert token not in h, 'drill-in header has independent scaling: ' + token
 report=body('function logReportAppendAnalysis(body, d, analysis) {')
-assert report.index('body.appendChild(asbPageJump(') < report.index('const brief = logReportBrief')
-for token in ("d.sections.drain || d.sections.cover || d.sections.night", "['lgr-summary'", "['lgr-actions'", "['lgr-details'"):
-    assert token in report, token
+assert 'body.appendChild(asbPageJump(' not in report
+final=body('function logReportFinalizeLayout(body) {')
+assert "body.insertBefore(asbPageJump(items" in final
+for token in ("['lgr-summary'", "['lgr-actions'", "['lgr-details'", "'lgr-drain'", "'lgr-observations'"):
+    assert token in final, token
 link=body('function zygiskLinkCard() {')
 assert "document.createElement('details')" in link and 'box.open' not in link
 guard=body('function zygiskGuardCard() {')
@@ -11138,7 +11178,8 @@ assert warm.count('asbStartupLater(function () { return cfgLoad(); }, 0, 0);') =
 assert 'openConfigPage() on demand' not in warm
 assert 'asbStartupLater(zygiskHeaderRefresh, 150, 1);' in warm
 intro=s[s.index('async function asbBootIntroStart()'):s.index('let _asbHomeRevealed',s.index('async function asbBootIntroStart()'))]
-assert "return cfgLoad();" in intro  # the real once-per-boot preview retains its useful work
+assert 'Promise.resolve(pollLive(true, true))' in intro  # preview warms only Home Live data
+assert 'return cfgLoad();' not in intro
 for forbidden in ('serial','imei','account','android_id'):
     assert forbidden not in art.lower(), forbidden
 PY
@@ -16354,8 +16395,10 @@ assert "kernelRefreshButton('kernelWakeupRefresh')" not in h
 assert "T('system_fix_reversible', 'REVERSIBLE SYSTEM FIX')" not in fn('function cfgRenderPackageFixCards(list, sectionItems) {')
 for token in ('id="devLogsBtn"','id="devTgBtn"','id="devBackChip"','class="status-row has-back"'): assert token in h,token
 report=fn('function logReportAppendAnalysis(body, d, analysis) {')
-for target in ('lgr-summary','lgr-actions','lgr-drain','lgr-details'): assert target in report,target
-for target in ('lgr-smooth','lgr-thermal','lgr-zygisk'): assert target not in report,target
+for target in ('lgr-summary','lgr-actions'): assert target in report,target
+assert 'asbPageJump(' not in report
+final=fn('function logReportFinalizeLayout(body) {')
+for target in ('lgr-drain','lgr-smooth','lgr-thermal','lgr-zygisk','lgr-observations'): assert target in final,target
 profile=fn('function profileDetailsPaint() {')
 assert "p === 'smart'" in profile and 'profile-details-smart-policy' in profile
 on=fn('function lvOnFigure(profile) {')
@@ -16538,7 +16581,7 @@ from pathlib import Path
 import sys
 h=Path(sys.argv[1]).read_text(encoding='utf-8')
 a=h.index('let _dspEqBand = 0;');b=h.index('\nfunction cfgRenderGroup(',a);s=h[a:b]
-for token in ("card.className='cfg-card cat-audio dsp-eq-console'","className='dsp-eq-route'","className='dsp-eq-routes'","className='dsp-eq-bands'","className='dsp-eq-editor'",'function cfgEqPlotPaint(',"svg.setAttribute('viewBox','0 0 320 76')",'cfgRenderRow(editor,',"const targets=['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt']"): 
+for token in ("card.className='cfg-row cat-audio dsp-eq-console'","className='dsp-eq-route'","className='dsp-eq-routes'","className='dsp-eq-bands'","className='dsp-eq-editor'",'function cfgEqPlotPaint(',"svg.setAttribute('viewBox','0 0 320 76')",'cfgRenderRow(editor,',"const targets=['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt']"): 
  assert token in s,token
 assert s.count('cfgRenderRow(editor,')==3
 assert s.count('cfgRenderRow(card,')==0
@@ -16552,6 +16595,8 @@ assert '_cfgVals[r.closest' not in s
 for css in ('.dsp-eq-console {','.dsp-eq-route {','.dsp-eq-routes {','.dsp-eq-plot {','.dsp-eq-bands {','.dsp-eq-editor .cfg-row {','.dsp-eq-details {'):
  assert css in h,css
 assert 'width:100%; margin:0 !important;' in h
+assert '.dsp-eq-console { box-sizing:border-box; width:100%; min-width:0; max-width:100%; margin:0; padding:15px !important; overflow:visible; }' in h
+assert '.dsp-eq-console > * { min-width:0; max-width:100%; box-sizing:border-box; }' in h
 assert '#fb5f4f' not in h[h.index('/* buildfix39:'):h.index('</style>',h.index('/* buildfix39:'))]
 # Combined outputs are editing groups: cfgSet must fan out through the existing atomic writer.
 a=h.index('async function cfgSet(');b=h.index('\nfunction ',a+10);c=h[a:b]
@@ -16584,6 +16629,73 @@ for semantic in ('.lgr-chain { padding: 8px 0; border-top: 1px solid var(--borde
 print('separator harmony: decorative action/modal rules removed; semantic list boundaries retained')
 PY
 echo 'PASS WebUI separator harmony buildfix37: Zygisk actions, Device guides and metric sheets use spacing instead of stacked grey lines'
+)
+
+t_webui_buildfix40_evidence_navigation_home() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"; H="$ROOT/webroot/index.html"
+python3 - "$H" <<'PY'
+from pathlib import Path
+import sys
+h=Path(sys.argv[1]).read_text(encoding='utf-8')
+for token in (
+ '.lgr-context { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:10px 0 0; padding:0; }',
+ '.lgr-context > .lgr-chip { margin:0; }',
+ 'Raw kernel counters: +{events} events',
+ 'Rule active now · blocked by this rule: {n}',
+ 'Saved for screen-off only · inactive while the screen is on or its state is unknown',
+ 'Saved, but absent from the current kernel readback',
+ 'Math.round(e.onLast * 360 / e.onLastS)',
+ "const early = { ru:'%/ч'"):
+ assert token in h, token
+# Both navigation helpers must prevent a reference click from opening its evidence row.
+for name in ('asbPageJump','asbPageReference'):
+ a=h.index('function '+name+'('); b=h.index('\n}',a); body=h[a:b]
+ assert 'event.preventDefault(); event.stopPropagation();' in body, name
+ assert 'page.scrollTo({ top: Math.max(0, top), behavior:' in body, name
+PY
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const a=h.indexOf('function '+name+'('),b=h.indexOf('\n}',a);if(a<0||b<0)throw Error(name);return h.slice(a,b+2)}
+const chk=(v,m)=>{if(!v)throw Error(m)};
+let ASB_LANG='ru';function T(k,d){return d}
+eval(grab('lvPct'));chk(lvPct(37,100,2)==='0.37%/ч','Russian first-frame unit');
+eval(grab('lvProfileOnFigure'));global._lvMeter={p:{smart:{onLast:500,onLastS:3600,on:0}}};
+let f=lvProfileOnFigure('smart');chk(f.x===50&&!f.upper,'5% over one hour must be 5.0%/h, not 50.0%/h');
+_lvMeter.p.smart.onLastS=600;f=lvProfileOnFigure('smart');chk(f.x===300,'session total/duration conversion');
+_lvMeter.p.smart.onLast=0;f=lvProfileOnFigure('smart');chk(f.upper&&f.x===600,'zero-drop upper bound retained');
+// Reference buttons: scaled in-page scroll, dock sync, and no bubbling into detail rows.
+const target={id:'lgr-wake',getBoundingClientRect(){return{top:400}},closest(){return page}};
+const nav={};let scrolled=null,active=null,prevented=0,stopped=0;
+const page={scrollTop:20,getBoundingClientRect(){return{top:100}},scrollTo(o){scrolled=o},querySelector(s){return s==='.report-nav'?nav:null}};
+global._el=id=>id==='lgr-wake'?target:null;global.window={_asbUiScale:2};global.getComputedStyle=()=>({scrollMarginTop:'10px'});global.asbPageJumpActive=(n,id,pin)=>{active=[n,id,pin]};
+const button={textContent:''};global.document={createElement:()=>({children:[],appendChild(c){this.children.push(c);return c},setAttribute(){}})};
+eval(grab('asbPageReference'));const ref=asbPageReference(['missing','lgr-wake'],'Wake');
+chk(ref.children[0].onclick({preventDefault(){prevented++},stopPropagation(){stopped++}})===true,'reference did not navigate');
+chk(scrolled.top===160&&scrolled.behavior==='auto','scaled destination: '+JSON.stringify(scrolled));
+chk(active&&active[0]===nav&&active[1]==='lgr-wake'&&active[2]===true,'dock state not synchronized');
+chk(prevented===1&&stopped===1,'reference click bubbled');
+// Raw source attempts remain distinct from active-rule blocked counters and readback state.
+global._kernelPanel={wakeup:{sources:[
+ {name:'active_counted',events:12,active:3,time:1000,shared:1},
+ {name:'active_unknown',events:4,active:1,time:0,shared:1},
+ {name:'sleep_saved',events:8,active:2,time:0,shared:1},
+ {name:'readback_missing',events:2,active:1,time:0,shared:1}],savedAlways:['active_counted','active_unknown','readback_missing'],savedSleep:['sleep_saved'],current:['active_counted','active_unknown'],blocked:{active_counted:7},screen:'on'}};
+global._wbSourceView={query:'',filter:'all',sort:'events'};global._wbBusy=false;global._wbConfirm='';
+global.kernelWakeupDrafts=()=>({always:[],sleep:[]});global.kernelWakeupDuration=()=> '1s';global.kernelWakeupInfo=()=>({key:'unknown',risk:'unknown'});global.kernelWakeupRisk=()=>({shared:1,critical:false});
+function E(tag,cls,text){return{tag,className:cls||'',textContent:text||'',children:[],appendChild(c){this.children.push(c);return c},setAttribute(){}}}
+global.bfxEl=(tag,cls,text)=>E(tag,cls,text);const list=E('div','kernel-sources-scroll');const modal={querySelector:s=>s==='.kernel-sources-scroll'?list:null,querySelectorAll:()=>[]};
+eval(grab('kernelWakeupSelectSources')+grab('kernelWakeupSourcesDrawList'));kernelWakeupSourcesDrawList(modal);
+const text={};list.children.forEach(r=>{const parts=r.children[0].children.map(x=>x.textContent);text[parts[0]]=parts.join('|')});
+chk(text.active_counted.includes('Raw kernel counters')&&text.active_counted.includes('blocked by this rule: 7'),'raw/blocked distinction missing: '+text.active_counted);
+chk(text.active_unknown.includes('per-rule blocked counter not exposed'),'unknown per-rule evidence invented');
+chk(text.sleep_saved.includes('inactive while the screen is on'),'sleep-only rule presented as active');
+chk(text.readback_missing.includes('absent from the current kernel readback'),'readback mismatch hidden');
+console.log('ok');
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || { echo "$out" >&2; exit 1; }; [ "$out" = ok ] || { echo "$out" >&2; exit 1; }
+echo 'PASS WebUI buildfix40: raw-vs-blocked wakeup evidence, reference navigation, semantic report support, Russian first-frame units and correct latest-session drain'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -6718,8 +6718,9 @@ mkdir -p "$T/bin" "$T/out" "$T/wk/wakeup0" "$T/wk/wakeup1" "$T/wk/wakeup2"
 
 cat > "$T/bin/dumpsys" <<'EOF'
 #!/bin/sh
-echo x >> "$FAKE_DIR/dumpsys_calls"
+echo "$*" >> "$FAKE_DIR/dumpsys_calls"
 [ "$1" = batterystats ] && cat "$FAKE_DIR/bs"
+[ "$1" = activity ] && printf 'topResumedActivity=ActivityRecord{u0 com.example.app/.MainActivity t1}\n'
 exit 0
 EOF
 chmod +x "$T/bin/dumpsys"
@@ -6766,13 +6767,13 @@ out="$(PATH="$T/bin:$PATH" FAKE_DIR="$T" LK_OUT_DIR="$T/out" LK_WAKEUP_CLASS="$T
   cl 1060 1040
   # 2. a screen-on phase: no batterystats read at its close
   ph active 1060 1040; cl 2000 1980
-  echo "calls after active: $(wc -l < "$T/dumpsys_calls")"
+  echo "calls after active: $(grep -c '^batterystats' "$T/dumpsys_calls")"
   # 3. a screen-off stretch that turns out longer than a gap
   wk 2000000 400000 20000
   ph gap 2000 1980
   echo 2030 > "$T/up"; echo 2010 > "$T/mono"
   lk_phase_ledger_snapshot_open      # the interim report: no block, no dumpsys
-  echo "calls after snapshot: $(wc -l < "$T/dumpsys_calls")"
+  echo "calls after snapshot: $(grep -c '^batterystats' "$T/dumpsys_calls")"
   LK_PH_START=$(( $(date +%s) - 200 ))
   bs "7m 46s 533ms" "13s 0ms"; wk 2130000 440000 90000
   cl 2200 2100
