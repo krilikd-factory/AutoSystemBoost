@@ -1687,7 +1687,15 @@ chk(els.bnDrain.textContent==='measuring…','zero-step since-boot must wait ins
 homeMeterPaint();
 chk(boxes[0].textContent==='0.25%/h','active Home omits an unmeasured boot rate with empty meter current: '+boxes[0].textContent);
 _lvMeter.p.battery.on=0;_lvMeter.p.battery.onLast=0;lvMeterPaint('battery');
-chk(els.bnDrain.textContent==='<10.0%/h','zero-step profile latest must be an upper bound: '+els.bnDrain.textContent);
+chk(els.bnDrain.textContent==='measuring…','a zero-step session is no rate and no upper bound: '+els.bnDrain.textContent);
+_lvMeter.p.battery.on=70;_lvMeter.p.battery.onMin=180;lvMeterPaint('battery');
+chk(els.bnDrain.textContent==='7.0%/h','a zero-step session falls back to the profile average: '+els.bnDrain.textContent);
+_lvMeter.p.battery.onLast=100;_lvMeter.p.battery.onLastS=600;lvMeterPaint('battery');
+chk(els.bnDrain.textContent==='7.0%/h','one step in ten minutes is too coarse to replace the average: '+els.bnDrain.textContent);
+_lvMeter.p.battery.onLast=200;lvMeterPaint('battery');
+chk(els.bnDrain.textContent==='12.0%/h','two steps make a short session a measurement: '+els.bnDrain.textContent);
+_lvMeter.p.battery.onLast=100;_lvMeter.p.battery.onLastS=1800;lvMeterPaint('battery');
+chk(els.bnDrain.textContent==='2.0%/h','one step over half an hour is a measurement: '+els.bnDrain.textContent);
 if(bad)process.exit(1);console.log('ok');
 """])
 open(sys.argv[2],'w',encoding='utf-8').write(src)
@@ -1695,7 +1703,7 @@ PY
 out="$(node "$T/t.js" 2>&1 || true)"; [ "$out" = ok ] || { echo "FAIL webui drain: $out" >&2; exit 1; }
 grep -Fq "lvMeterPaint('smart');" "$H"
 grep -Fq "const _of = lvPrimaryOffFigure(_selectedProfile);" "$H"
-echo 'PASS webui drain: active since-boot/night and inactive per-profile latest/night stay separate, with honest upper bounds'
+echo 'PASS webui drain: active since-boot/night and inactive per-profile latest/night stay separate; a screen-on session without a battery-level step is never shown as a rate'
 )
 
 t_webui_back_nav_runtime() (
@@ -2571,7 +2579,7 @@ import sys
 s = open(sys.argv[1], encoding='utf-8').read()
 reveal = s[s.index('function asbHomeReveal() {'):s.index('// ── localized boot:')]
 assert 'asbFirstFrameMark();' in reveal and 'run(' not in reveal
-for token in ('asbStartupLater(zygiskHeaderRefresh, 150, 1);', 'if (!shown) asbStartupLater(asbStartupLive, 0, 0);',
+for token in ('asbStartupLater(zygiskHeaderRefresh, 150, 0);', 'if (!shown) asbStartupLater(asbStartupLive, 0, 0);',
               'function asbStartupLive() { if (!_liveOpen) return pollLive(false); }', 'if (job.prio > 0 && asbPageBusy())',
               'function uiOtherAudioLater() { asbStartupLater(uiOtherAudioLook, 150, 2); }', 'if (_uiSoundOn) uiOtherAudioLater();',
               "asbStartupLater(asbStartupLive, 300, 0);"):
@@ -9476,7 +9484,7 @@ warm=body('function asbStartupWarmCaches() {')
 assert 'probe.then(warm' in warm and 'if (introShown || document.hidden) return;' in warm
 assert warm.count('asbStartupLater(function () { return cfgLoad(); }, 0, 0);') == 1
 assert 'openConfigPage() on demand' not in warm
-assert 'asbStartupLater(zygiskHeaderRefresh, 150, 1);' in warm and 'setTimeout(' not in warm
+assert 'asbStartupLater(zygiskHeaderRefresh, 150, 0);' in warm and 'setTimeout(' not in warm
 assert 'setTimeout(zygiskHeaderRefresh, 2500)' not in s
 load=s[s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches')):s.index('function asbNavCurrent')]
 assert 'homeMeterRefresh(true)' not in load
@@ -10639,6 +10647,7 @@ const wordmark = zygiskHeaderWordmark();
 if ((wordmark.match(/<path /g) || []).length !== 6 || !wordmark.includes('viewBox="0 0 68 10"') || !wordmark.includes('>ZYGISK</span>')) throw new Error('the six-letter angular wordmark regressed');
 function openZygiskPage() {}
 function zygiskHeaderPaint() {}
+function zygiskHeaderCacheLoad() { return false; }
 function el(tag, cls) {
   const node = { tag, className: cls || '', textContent: '', innerHTML: '', children: [], attrs: {}, firstChild: null,
     setAttribute(k, v) { this.attrs[k] = v; },
@@ -11083,6 +11092,7 @@ eval(between('const ZYGISK_CONTROL_KEYS =','const CFG_GROUP_SECTIONS =').replace
 eval(between('const CFG_GROUP_SECTIONS = {','function cfgRenderSection').replace(/^const /gm,'var '));
 cfgEnsureCaps=function(){};ASB_GRADE={};cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
 cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));cfgRenderNotifCard=()=>{};
+global._cfgVals={};global.cfgIsActive=()=>false;eval(between('const CAM_CONSOLE_GROUPS = [','function cfgRenderConsole').replace(/^const /gm,'var '));eval(grab('cfgRenderConsole'));eval(grab('cfgConsoleNonDefault'));
 eval(grab('cfgGroupCatClass'));eval(grab('cfgCatClass'));eval(grab('cfgRenderSection'));eval(grab('cfgRenderGroup'));
 for(const n of ['asbPageJumpIsDock','asbPageJumpIndicator','asbPageJumpActive','asbPageJumpClear','asbPageJumpWatch','asbPageJumpIcon','asbPageJump'])eval(grab(n));
 function find(n,id){if(n.id===id)return n;for(const c of n.children){const x=find(c,id);if(x)return x}return null;}
@@ -11178,7 +11188,7 @@ assert '.ufo-cosmos {' in s and 'pointer-events:none' in s[s.index('.ufo-cosmos 
 warm=s[s.index('function asbStartupWarmCaches()'):s.index('/* fix328:',s.index('function asbStartupWarmCaches()'))]
 assert warm.count('asbStartupLater(function () { return cfgLoad(); }, 0, 0);') == 1
 assert 'openConfigPage() on demand' not in warm
-assert 'asbStartupLater(zygiskHeaderRefresh, 150, 1);' in warm
+assert 'asbStartupLater(zygiskHeaderRefresh, 150, 0);' in warm
 intro=s[s.index('async function asbBootIntroStart()'):s.index('let _asbHomeRevealed',s.index('async function asbBootIntroStart()'))]
 assert 'Promise.resolve(pollLive(true, true))' in intro  # preview warms only Home Live data
 assert 'return cfgLoad();' not in intro
@@ -16675,7 +16685,8 @@ eval(grab('lvPct'));chk(lvPct(37,100,2)==='0.37%/ч','Russian first-frame unit')
 eval(grab('lvProfileOnFigure'));global._lvMeter={p:{smart:{onLast:500,onLastS:3600,on:0}}};
 let f=lvProfileOnFigure('smart');chk(f.x===50&&!f.upper,'5% over one hour must be 5.0%/h, not 50.0%/h');
 _lvMeter.p.smart.onLastS=600;f=lvProfileOnFigure('smart');chk(f.x===300,'session total/duration conversion');
-_lvMeter.p.smart.onLast=0;f=lvProfileOnFigure('smart');chk(f.upper&&f.x===600,'zero-drop upper bound retained');
+_lvMeter.p.smart.onLast=0;f=lvProfileOnFigure('smart');chk(f===null,'zero-drop session is no figure (no upper bound) without an average');
+_lvMeter.p.smart.on=95;_lvMeter.p.smart.onMin=214;f=lvProfileOnFigure('smart');chk(f.x===95&&f.src==='history'&&!f.upper,'zero-drop session falls back to the average');
 // Reference buttons: scaled in-page scroll, dock sync, and no bubbling into detail rows.
 const target={id:'lgr-wake',getBoundingClientRect(){return{top:400}},closest(){return page}};
 const nav={};let scrolled=null,active=null,prevented=0,stopped=0;

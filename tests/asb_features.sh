@@ -1622,6 +1622,20 @@ grep -q '_aa_prev=""' "$A/probe.sh" || f "the loop does not restart the audio pr
   printf 'cc11dd220000 10 0 0 0 0 0\n' > "$ASB_DM_BOOT"; dm_boot_load
   [ "$dm_b_on" = 10 ] && [ "$dm_b_don" = 0 ] && [ "$dm_bp_prof" = - ] || { echo "seven-field file misread" >&2; exit 1; }
 ) || f "since-boot charging and profile scope"
+# A screen-on session that saw no battery-level step (unplugged at a held 100 %, or a short quiet
+# one) is no measurement: it must not replace the last session that had one.
+( D="$T/nostep"; mkdir -p "$D"; ASB_DM_DIR="$D"; ASB_DM_LIVE="$D/live"; export ASB_DM_DIR ASB_DM_LIVE
+  . "$M"; dm_load
+  t=5000; dm_step $t 90 0 1 smart 0
+  i=0; while [ $i -lt 40 ]; do i=$((i + 1)); t=$((t + 30)); p=90; [ $i -ge 20 ] && p=89; [ $i -ge 40 ] && p=88; dm_step $t $p 0 1 smart 0; done
+  t=$((t + 30)); dm_step $t 88 0 0 smart 0
+  [ "$(dm_get smart on_last)" = 200 ] && [ "$(dm_get smart on_last_s)" = 1200 ] || { echo "measured session: $(dm_get smart on_last) $(dm_get smart on_last_s)" >&2; exit 1; }
+  t=$((t + 30)); dm_step $t 100 1 1 smart 0
+  t=$((t + 30)); dm_step $t 100 0 1 smart 0
+  i=0; while [ $i -lt 22 ]; do i=$((i + 1)); t=$((t + 30)); dm_step $t 100 0 1 smart 0; done
+  t=$((t + 30)); dm_step $t 100 0 0 smart 0
+  [ "$(dm_get smart on_last)" = 200 ] && [ "$(dm_get smart on_last_s)" = 1200 ] || { echo "a zero-step session replaced the measured one: $(dm_get smart on_last) $(dm_get smart on_last_s)" >&2; exit 1; }
+) || f "zero-step screen-on session kept out of on_last"
 grep -q '"lvi_scr_on_time"' "$ROOT/webroot/i18n/en.json" || f "the Uptime popup does not name the screen-on time"
 H="$ROOT/webroot/index.html"
 grep -q "function lvMeterParse(text)" "$H" || f "the Monitor does not read the meter"

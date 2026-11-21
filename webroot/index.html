@@ -541,6 +541,9 @@ button.badge:active { color: var(--accent); }
   background: var(--zygisk-header-color);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--zygisk-header-color) 14%, transparent);
 }
+/* V66-test13: a verdict painted from this viewer's cache until the fresh read lands. */
+.zygisk-header-link.zygisk-header-cached .zygisk-header-dot { opacity: .55; animation: none; }
+.zygisk-header-link.zygisk-header-cached .zygisk-header-dot::after { animation: none; opacity: 0; }
 .zygisk-header-label { display: inline-flex; align-items: center; flex: 0 0 auto; white-space: nowrap; line-height: 0; }
 .zygisk-header-wordmark { display: block; width: 42px; height: 8px; overflow: visible; }
 /* A local vector wordmark, not a platform font: its angular cuts stay identical in the
@@ -2223,6 +2226,35 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
 #zygiskPage .zy-note-fold-body > :first-child { margin-top:0; }
 #zygiskPage .zy-note-fold-body > :last-child { margin-bottom:0; }
 .zy-ghost .zy-lsp-actions .dev-zygisk-btn { align-self: auto; }
+/* V66-test13: LSPosed module panels (lspLiteCard). */
+#zygiskPage .zy-lsp-summary { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 4px; }
+#zygiskPage .zy-lsp-mod { margin:10px 0 0; padding:12px 12px 10px; border:1px solid var(--border); border-radius:16px;
+  background:color-mix(in srgb, var(--surface) 70%, transparent); }
+#zygiskPage .zy-lsp-mod-heavy { border-color:color-mix(in srgb, var(--perf) 45%, var(--border)); }
+#zygiskPage .zy-lsp-mod-off { opacity:.72; }
+#zygiskPage .zy-lsp-head { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+#zygiskPage .zy-lsp-name { min-width:0; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font:700 14.5px/1.3 var(--sans); color:var(--text); }
+.zy-lsp-badge { flex:0 0 auto; display:inline-flex; align-items:center; min-height:22px; padding:2px 9px; border-radius:11px;
+  font:700 10.5px/1.2 var(--sans); letter-spacing:.02em; white-space:nowrap;
+  color:var(--zy-lsp-c, var(--text-secondary)); background:color-mix(in srgb, var(--zy-lsp-c, var(--text-secondary)) 14%, transparent);
+  border:1px solid color-mix(in srgb, var(--zy-lsp-c, var(--text-secondary)) 35%, transparent); }
+.zy-lsp-badge-heavy { --zy-lsp-c: var(--perf); }
+.zy-lsp-badge-watch { --zy-lsp-c: var(--bal); }
+.zy-lsp-badge-light { --zy-lsp-c: var(--bat); }
+.zy-lsp-badge-off { --zy-lsp-c: var(--text-tertiary); }
+#zygiskPage .zy-lsp-chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
+#zygiskPage .zy-lsp-chip { display:inline-flex; align-items:center; min-height:22px; padding:2px 8px; border-radius:8px;
+  background:var(--surface); border:1px solid var(--border); color:var(--text-secondary);
+  font:600 11px/1.25 var(--sans); font-variant-numeric:tabular-nums; }
+#zygiskPage .zy-lsp-chip-reach { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 35%, var(--border)); }
+#zygiskPage .zy-lsp-chip-warn { color:var(--perf); border-color:color-mix(in srgb, var(--perf) 40%, var(--border)); }
+#zygiskPage .zy-lsp-mod .zy-lsp-why { margin-top:6px; }
+#zygiskPage .zy-lsp-mod .zy-lsp-why > summary { font-size:12px; }
+#zygiskPage .zy-lsp-mod .zy-lsp-actions { display:grid; grid-template-columns:repeat(var(--zy-lsp-n, 3), minmax(0, 1fr));
+  gap:8px; margin-top:10px; justify-content:stretch; }
+#zygiskPage .zy-lsp-mod .zy-lsp-actions .dev-zygisk-btn { width:100%; min-height:38px; padding:7px 6px;
+  border-radius:12px; font-size:12px; text-align:center; }
 html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
 @media (max-width: 400px) {
   .lgr-quality { padding: 10px; }
@@ -2380,14 +2412,17 @@ body.config-category-active #configPage .cfg-list {
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ico { flex: 0 0 28px; }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-label { width:100%; max-width:none; overflow:visible; text-align:center; white-space:normal; text-overflow:clip; overflow-wrap:break-word; word-break:normal; line-height:11px; letter-spacing:0; }
 /* buildfix44: cards scrolled under the floating dock showed through and around it and read
- * as overlapping text. A fixed fade below the dock (under it, above the page) hides them. */
+ * as overlapping text. A fixed fade below the dock (under it, above the page) hides them.
+ * V66-test13: the fade rose 20 px above the dock and took a band of every page with it. It
+ * now ends level with the dock's top edge (10 px lift + 60 px targets) and is solid only in
+ * the strip below the dock and around its rounded ends. */
 .dock-scrim { display:none; position:fixed; left:0; right:0; bottom:0; z-index:150; pointer-events:none;
-  height:calc(env(safe-area-inset-bottom, 0px) + 92px);
-  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--bg) 82%,transparent) 38%,var(--bg) 66%); }
+  height:calc(env(safe-area-inset-bottom, 0px) + 66px);
+  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--bg) 70%,transparent) 30%,var(--bg) 58%); }
 body.report-active .dock-scrim, body.zygisk-active .dock-scrim, body.device-active .dock-scrim,
 body.config-active.config-category-active .dock-scrim { display:block; }
 html:root[data-asb-glass="1"] .dock-scrim {
-  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--glass-scrim) 82%,transparent) 38%,var(--glass-scrim) 66%); }
+  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--glass-scrim) 70%,transparent) 30%,var(--glass-scrim) 58%); }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ind::before { top:4px; height:28px; border-radius:14px; }
 .lgr-jump-track.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
 #reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor,
@@ -6487,6 +6522,21 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row +
 .dsp-console-panel .cfg-sel-wrap, .dsp-console-panel .cfg-seg, .dsp-console-panel .cfg-switch { justify-self:end; margin:0; }
 .dsp-console-panel .cfg-sel-btn { max-width:100%; }
 .dsp-console-panel .cfg-row-desc { padding:4px 0 2px; font-size:11px; line-height:1.45; }
+/* V66-test13: console polish, shared by DSP, camera grading, per-link transport and screen &
+ * touch. The category colour draws a thin top rule, tints the panel labels and the state mark,
+ * and the panels sit a step closer together. */
+.dsp-console { position:relative; border-radius:20px !important; }
+.dsp-console::before { content:''; position:absolute; left:18px; right:18px; top:0; height:2px; border-radius:0 0 2px 2px;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 70%,transparent),transparent); pointer-events:none; }
+.dsp-console-head { min-height:28px; }
+.dsp-console-mark.on { color:var(--cat-ink,var(--accent)); background:color-mix(in srgb,var(--cat-ink,var(--accent)) 14%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cat-ink,var(--accent)) 30%,transparent); }
+.dsp-console-label { display:flex; align-items:center; gap:7px; margin:14px 4px 7px; color:color-mix(in srgb,var(--cat-ink,var(--text-tertiary)) 75%,var(--text-tertiary)); }
+.dsp-console-label::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--cat-ink,var(--accent)); opacity:.85; }
+.dsp-console-panel { border-radius:14px; background:color-mix(in srgb,var(--surface) 82%,transparent); }
+.dsp-console-panel .cfg-row-top { min-height:42px; }
+.dsp-console-panel .cfg-name { font-size:12px; overflow-wrap:normal; word-break:normal; hyphens:auto; }
+.dsp-console-panel .cfg-range-val { color:var(--cat-ink,var(--text)); }
 .dsp-eq-console { box-sizing:border-box; width:100%; min-width:0; max-width:100%; margin:0; padding:15px !important; overflow:visible; }
 .dsp-eq-console > * { min-width:0; max-width:100%; box-sizing:border-box; }
 .dsp-eq-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -9604,8 +9654,14 @@ function lvProfileOnFigure(profile) {
   /* on_last is the session's accumulated hundredths of a percent, not its rate.
    * Dividing that total by 10 printed a 5% session as 50.0%/h. Convert the complete
    * session with the same x10 units used by the aggregate and since-boot figures. */
-  if (e.onLastS >= 600) return { x:e.onLast > 0 ? Math.round(e.onLast * 360 / e.onLastS) : Math.max(1, Math.ceil(360000 / e.onLastS)),
-    upper:!(e.onLast > 0), s:e.onLastS, src:'latest', at:e.onLastAt || 0 };
+  /* A screen-on session is a rate only when the battery level moved. A 10-minute session
+   * with no step (right after the charger, while Android still holds 100 %, or any short
+   * quiet one) used to print "<59.9 %/h", an upper bound that is almost never close to the
+   * truth and stuck on the card until the next session. Such a session is skipped; two steps
+   * are needed for a short one and one step for one of half an hour or more, otherwise the
+   * profile's long average stands in. */
+  const latestOk = e.onLastS >= 600 && e.onLast > 0 && (e.onLast >= 200 || e.onLastS >= 1800);
+  if (latestOk) return { x:Math.round(e.onLast * 360 / e.onLastS), upper:false, s:e.onLastS, src:'latest', at:e.onLastAt || 0 };
   return e.on > 0 ? { x:e.on, upper:false, s:e.onMin * 60, src:'history' } : null;
 }
 /* buildfix42: the label follows where the figure came from. A mature profile sample wins over
@@ -9875,7 +9931,7 @@ function liveDrainPaint() {
     (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : ''));
   const cmp = liveDrainCompare();
   if (cmp) body.appendChild(cmp);
-  body.appendChild(liveDrainExplanation(T('lv_drain_note_src', 'Screen on: the active profile’s drain in this boot (since boot, or since the profile was selected) once it covers at least as much screen-on time as its latest session, otherwise the latest complete session (10 min or more), otherwise the profile average; the heading names which one. Charging time is left out. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor.'), 'live-drain-note'));
+  body.appendChild(liveDrainExplanation(T('lv_drain_note_src', 'Screen on: the active profile’s drain in this boot (since boot, or since the profile was selected) once it covers at least as much screen-on time as its latest session, otherwise the latest complete session (two battery-level steps, or 30 min with one), otherwise the profile average; the heading names which one. Charging time is left out. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor.'), 'live-drain-note'));
 }
 function liveDrainCompare() {
   const p = _lvMeter.p || {};
@@ -12476,18 +12532,47 @@ const DSP_CONSOLE_GROUPS = [
   ['dsp_grp_dynamics', 'Dynamics & protection', ['dsp_compressor', 'dsp_headroom', 'dsp_lookahead', 'dsp_rumble', 'dsp_true_peak', 'dsp_dc_protect']]
 ];
 function cfgRenderDspConsole(list, sectionItems) {
+  cfgRenderConsole(list, sectionItems, {
+    cat: 'audio', title: T('dsp_console_title', 'Engine controls'), groups: DSP_CONSOLE_GROUPS,
+    active: typeof dspEngineActive === 'function' && dspEngineActive(),
+    on: T('dsp_console_on', 'ACTIVE'), off: T('dsp_console_off', 'BYPASSED'), strip: /^DSP[\s-]+/
+  });
+}
+/* V66-test13: the DSP console's layout for other sections whose controls belong together -
+ * camera grading (sliders), download speed per link (Wi-Fi / mobile / other) and the display
+ * and haptics group. One card, a state mark, labelled inner panels of compact rows; each row
+ * is still the ordinary control with the same write path and its description on tap.
+ * Kernel management keeps its own rows: they carry live kernel evidence beside each value. */
+const CAM_CONSOLE_GROUPS = [
+  ['cam_grp_level', 'Overall grade', ['CAMERA_LEVEL']],
+  ['cam_grp_tone', 'Colour & texture', ['CAMERA_CONTRAST', 'CAMERA_GRAIN']],
+  ['cam_grp_scenes', 'Scenes', ['CAMERA_PORTRAIT', 'CAMERA_LOWLIGHT']]
+];
+const NET_CONSOLE_GROUPS = [
+  ['net_grp_wifi', 'Wi-Fi', ['net_congestion_wifi', 'net_qdisc_wifi']],
+  ['net_grp_mobile', 'Mobile data', ['net_congestion_mobile', 'net_qdisc_mobile']],
+  ['net_grp_other', 'Other links', ['net_congestion', 'net_qdisc']]
+];
+const FEEL_CONSOLE_GROUPS = [
+  ['feel_grp_refresh', 'Refresh rate (LTPO)', ['ltpo_force', 'ltpo_idle_speed', 'ltpo_peak_force', 'ltpo_video']],
+  ['feel_grp_haptics', 'Haptics', ['haptic_strength', 'haptic_touch_strength']],
+  ['feel_grp_input', 'Input & display', ['feel_pointer_speed', 'feel_gesture_mistouch', 'feel_game_memc', 'feel_dc_dimming']]
+];
+function cfgConsoleNonDefault(items) {
+  return items.some(function (it) { return cfgIsActive(it, _cfgVals[it.key] !== undefined ? _cfgVals[it.key] : it.def); });
+}
+function cfgRenderConsole(list, sectionItems, o) {
   const by = Object.create(null);
   sectionItems.forEach(function (it) { by[it.key] = it; });
   const used = Object.create(null);
   const card = document.createElement('section');
-  card.className = 'cfg-row cat-audio dsp-console';
+  card.className = 'cfg-row cat-' + o.cat + ' dsp-console asb-console';
   const head = document.createElement('div'); head.className = 'dsp-console-head';
-  const title = document.createElement('div'); title.className = 'dsp-console-title'; title.textContent = T('dsp_console_title', 'Engine controls');
-  const active = typeof dspEngineActive === 'function' && dspEngineActive();
-  const mark = document.createElement('span'); mark.className = 'dsp-console-mark' + (active ? ' on' : '');
-  mark.textContent = active ? T('dsp_console_on', 'ACTIVE') : T('dsp_console_off', 'BYPASSED');
+  const title = document.createElement('div'); title.className = 'dsp-console-title'; title.textContent = o.title;
+  const mark = document.createElement('span'); mark.className = 'dsp-console-mark' + (o.active ? ' on' : '');
+  mark.textContent = o.active ? o.on : o.off;
   head.appendChild(title); head.appendChild(mark); card.appendChild(head);
-  DSP_CONSOLE_GROUPS.concat([['', '', sectionItems.map(function (it) { return it.key; })]]).forEach(function (g) {
+  o.groups.concat([['', '', sectionItems.map(function (it) { return it.key; })]]).forEach(function (g) {
     const items = g[2].map(function (k) { return used[k] ? null : by[k]; }).filter(Boolean);
     if (!items.length) return;
     if (g[0]) {
@@ -12498,9 +12583,10 @@ function cfgRenderDspConsole(list, sectionItems) {
     items.forEach(function (it) {
       used[it.key] = true;
       cfgRenderRow(panel, it, false);
+      if (!o.strip) return;
       const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
       const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
-      if (tx) tx.nodeValue = String(tx.nodeValue).replace(/^DSP[\s-]+/, '');
+      if (tx) tx.nodeValue = String(tx.nodeValue).replace(o.strip, '');
     });
     card.appendChild(panel);
   });
@@ -12606,6 +12692,15 @@ function cfgRenderGroup(list, groupId) {
       cfgRenderWakeupBlockerCard(list);
     }
     else if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
+    else if (groupId === 'camera' && section.id === 'processing' && sectionItems.length > 1)
+      cfgRenderConsole(list, sectionItems, { cat: 'camera', title: T('cam_console_title', 'Photo grading'), groups: CAM_CONSOLE_GROUPS,
+        active: Number(_cfgVals.CAMERA_LEVEL || 0) > 0, on: T('console_on_graded', 'GRADED'), off: T('console_off_stock', 'STOCK') });
+    else if (groupId === 'net' && section.id === 'speed' && sectionItems.length > 1)
+      cfgRenderConsole(list, sectionItems, { cat: 'net', title: T('net_console_title', 'Per-link transport'), groups: NET_CONSOLE_GROUPS,
+        active: cfgConsoleNonDefault(sectionItems), on: T('console_on_tuned', 'TUNED'), off: T('console_off_auto', 'AUTO') });
+    else if (groupId === 'feel' && section.id === 'feel' && sectionItems.length > 1)
+      cfgRenderConsole(list, sectionItems, { cat: 'feel', title: T('feel_console_title', 'Screen & touch'), groups: FEEL_CONSOLE_GROUPS,
+        active: cfgConsoleNonDefault(sectionItems), on: T('console_on_tuned', 'TUNED'), off: T('console_off_stock', 'STOCK') });
     else sectionItems.forEach(it => {
       cfgRenderRow(list, it, false);
       if (ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0) kernelDecorateControlRow(list.lastChild, it.key);
@@ -20419,7 +20514,7 @@ function zygiskHeaderRefreshLazy() {
 function zygiskHeaderPaint() {
   const verdict = deviceZygiskLinkVerdict(window._asbZygiskLinkData || {});
   document.querySelectorAll('.zygisk-header-link').forEach(function (btn) {
-    btn.className = 'zygisk-header-link zygisk-header-' + verdict.state;
+    btn.className = 'zygisk-header-link zygisk-header-' + verdict.state + (window._asbZygiskLinkCached ? ' zygisk-header-cached' : '');
     btn.setAttribute('data-state', verdict.state);
     btn.setAttribute('title', 'ASB ↔ Zygisk: ' + verdict.status + '. ' + verdict.detail);
     btn.setAttribute('aria-label', 'ASB ↔ Zygisk: ' + verdict.status + '. ' + verdict.detail);
@@ -20436,6 +20531,25 @@ function zygiskHeaderWordmark() {
     + '<path d="M58 1H60.4V4.1L64.3 1H67L62.6 4.9 67.2 9H64.4L60.4 5.6V9H58Z"/>'
     + '</svg><span class="zygisk-header-text">ZYGISK</span>';
 }
+/* V66-test13: the last link verdict, kept for this viewer only (6 hours at most), paints the
+ * header dot on the first frame; a fresh read replaces it. A cached dot is drawn dimmed. */
+const ZYGISK_HEADER_CACHE_KEY = 'asb_zygisk_header';
+const ZYGISK_HEADER_CACHE_MAX_MS = 21600000;
+function zygiskHeaderCacheSave(text) {
+  try { localStorage.setItem(ZYGISK_HEADER_CACHE_KEY, JSON.stringify({ t: Date.now(), x: String(text || '').slice(0, 65536) })); } catch (e) {}
+}
+function zygiskHeaderCacheLoad() {
+  if (window._asbZygiskLinkData) return false;
+  let c = null;
+  try { c = JSON.parse(localStorage.getItem(ZYGISK_HEADER_CACHE_KEY) || 'null'); } catch (e) { c = null; }
+  if (!c || typeof c.x !== 'string' || !(Date.now() - Number(c.t) < ZYGISK_HEADER_CACHE_MAX_MS)) return false;
+  const d = parseDeviceInfo(c.x);
+  if (!d || !d.count) return false;
+  window._asbZygiskLinkData = d;
+  window._asbZygiskLinkCached = true;
+  zygiskHeaderPaint();
+  return true;
+}
 function zygiskHeaderInit() {
   document.querySelectorAll('.hdr-info').forEach(function (host) {
     if (host.querySelector('.zygisk-header-link')) return;
@@ -20446,11 +20560,12 @@ function zygiskHeaderInit() {
     const label = document.createElement('span'); label.className = 'zygisk-header-label'; label.innerHTML = zygiskHeaderWordmark();
     btn.appendChild(dot); btn.appendChild(label); host.appendChild(btn);
   });
-  zygiskHeaderPaint();
+  if (!zygiskHeaderCacheLoad()) zygiskHeaderPaint();
 }
 function zygiskHeaderPublish(d) {
   if (!d || !d.sections) return;
   window._asbZygiskLinkData = d;
+  window._asbZygiskLinkCached = false;
   zygiskHeaderPaint();
   const card = _el('cfgZygiskCard');
   const old = card ? card.querySelector('.dev-zygisk-link') : null;
@@ -20463,8 +20578,9 @@ async function zygiskHeaderRefresh() {
   _zygiskHeaderRunning = true;
   _zygiskHeaderAt = Date.now();
   try {
-    const r = await run('sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status 2>/dev/null');
+    const r = await asbRunDetached('zyhdr', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status 2>/dev/null', 20000);
     const d = parseDeviceInfo(r ? runText(r) : '');
+    if (seq === _zygiskHeaderSeq && r && r.errno === 0 && d.count) zygiskHeaderCacheSave(runText(r));
     /* A failed read is not negative evidence. Keep the last validated snapshot; before the
      * first successful read the header remains honestly unknown. Sequence checking prevents
      * an older response from replacing evidence requested by a newer page/setting action. */
@@ -21522,7 +21638,10 @@ function lspLiteCard() {
     return card;
   }
   if (g.db !== 'ok') { card.appendChild(logReportNote(T('lsp_db', 'LSPosed\'s database could not be read (%s); nothing is changed.').replace('%s', g.db), true)); return card; }
-  card.appendChild(logReportNote(T('lsp_desc', 'Which modules are on, what they hook and what that costs: from LSPosed\'s own database, Android\'s usage history, the Zygisk start ledger and crash records that pass through a module. LSPosed reports no energy per hook, so a verdict is a reasoned estimate; the A/B test measures one module directly.')));
+  const howTo = document.createElement('details'); howTo.className = 'asb-disclosure zy-lsp-how';
+  const howSum = document.createElement('summary'); howSum.textContent = T('lsp_how', 'How the verdicts are made');
+  howTo.appendChild(howSum);
+  howTo.appendChild(logReportNote(T('lsp_desc', 'Which modules are on, what they hook and what that costs: from LSPosed\'s own database, Android\'s usage history, the Zygisk start ledger and crash records that pass through a module. LSPosed reports no energy per hook, so a verdict is a reasoned estimate; the A/B test measures one module directly.')));
   const names = dozeKeepLabels(g.mods.map(function (m) { return m.pkg; }).concat(g.cands.map(function (c) { return c.app; }), g.journal.map(function (j) { return j.app; }).filter(Boolean)));
   const nm = function (p) { return names[p] || p; };
   if (g.refreshing) card.appendChild(logReportNote(T('lsp_refreshing', 'Reading the evidence in the background…')));
@@ -21541,19 +21660,43 @@ function lspLiteCard() {
     seg.appendChild(b);
   });
   card.appendChild(seg);
-  card.appendChild(logReportNote(g.auto ? T('lsp_auto_desc', 'Once a day ASB removes a module\'s scope from apps you have not opened for %d days that still start in the background, and from apps its hooks keep crashing. Messengers, mail, authenticators, wearables, alarms, navigation, your Doze keep list and notification-fixed apps are never touched, and no module is switched off. Every change is listed below with Undo.').replace('%d', String(g.unusedDays))
+  howTo.appendChild(logReportNote(g.auto ? T('lsp_auto_desc', 'Once a day ASB removes a module\'s scope from apps you have not opened for %d days that still start in the background, and from apps its hooks keep crashing. Messengers, mail, authenticators, wearables, alarms, navigation, your Doze keep list and notification-fixed apps are never touched, and no module is switched off. Every change is listed below with Undo.').replace('%d', String(g.unusedDays))
     : T('lsp_manual_desc', 'Nothing changes until you confirm it. Lighten removes a module\'s scope only from apps listed under it; the framework, SystemUI and the module itself are never touched.')));
+  card.appendChild(howTo);
   const ab = lspLiteAbBlock(g, nm);
   if (ab) card.appendChild(ab);
   const abBusy = /^(a|b_wait|b)$/.test(g.ab.phase || '');
   if (!g.mods.length) card.appendChild(logReportNote(T('lsp_no_mods', 'No LSPosed modules are installed.')));
+  /* V66-test13: each module is its own small panel - name and a coloured verdict badge on
+   * one line, then plain chips for scope count, reach and background starts, then a fold
+   * with the reasons and the affected apps, then evenly sized actions. The old layout put
+   * the verdict and every figure into one right-aligned monospace string beside the name. */
+  if (g.mods.length) {
+    const tally = { heavy: 0, watch: 0, light: 0, off: 0 };
+    g.mods.forEach(function (m) { tally[m.verdict]++; });
+    const sum = document.createElement('div'); sum.className = 'zy-lsp-summary';
+    [['heavy', tally.heavy], ['watch', tally.watch], ['light', tally.light], ['off', tally.off]].forEach(function (t) {
+      if (!t[1]) return;
+      const c = document.createElement('span'); c.className = 'zy-lsp-badge zy-lsp-badge-' + t[0];
+      c.textContent = lspLiteVerdictText({ verdict: t[0] }) + ' · ' + t[1];
+      sum.appendChild(c);
+    });
+    card.appendChild(sum);
+  }
   g.mods.forEach(function (m) {
-    const parts = [lspLiteVerdictText(m), T('lsp_apps', '%s scope(s)').replace('%s', String(m.apps))];
-    if (m.reach === 'framework') parts.push(T('lsp_reach_framework', 'framework'));
-    else if (m.reach === 'systemui') parts.push(T('lsp_reach_systemui', 'SystemUI'));
-    if (m.bg > 0) parts.push(T('lsp_bg', '%s background starts/day').replace('%s', String(m.bg)));
-    const w = document.createElement('div'); w.className = 'zy-ghost';
-    w.appendChild(logReportRow(nm(m.pkg), parts.join(' · '), m.verdict === 'heavy'));
+    const w = document.createElement('div'); w.className = 'zy-lsp-mod zy-lsp-mod-' + m.verdict;
+    const head = document.createElement('div'); head.className = 'zy-lsp-head';
+    const name = document.createElement('span'); name.className = 'zy-lsp-name'; name.textContent = nm(m.pkg);
+    const badge = document.createElement('span'); badge.className = 'zy-lsp-badge zy-lsp-badge-' + m.verdict; badge.textContent = lspLiteVerdictText(m);
+    head.appendChild(name); head.appendChild(badge); w.appendChild(head);
+    const chips = document.createElement('div'); chips.className = 'zy-lsp-chips';
+    const chip = function (txt, cls) { const c = document.createElement('span'); c.className = 'zy-lsp-chip' + (cls ? ' ' + cls : ''); c.textContent = txt; chips.appendChild(c); };
+    chip(T('lsp_apps', '%s scope(s)').replace('%s', String(m.apps)));
+    if (m.reach === 'framework') chip(T('lsp_reach_framework', 'framework'), 'zy-lsp-chip-reach');
+    else if (m.reach === 'systemui') chip(T('lsp_reach_systemui', 'SystemUI'), 'zy-lsp-chip-reach');
+    if (m.bg > 0) chip(T('lsp_bg', '%s background starts/day').replace('%s', String(m.bg)));
+    if (m.crash > 0) chip(T('lsp_chip_crash', 'hook crashes: %s').replace('%s', String(m.crash)), 'zy-lsp-chip-warn');
+    w.appendChild(chips);
     const mc = g.cands.filter(function (c) { return c.mod === m.pkg; });
     const why = document.createElement('details'); why.className = 'zy-lsp-why';
     const ws = document.createElement('summary');
@@ -21567,14 +21710,14 @@ function lspLiteCard() {
       why.appendChild(logReportNote(txt.replace('%a', nm(c.app))));
     });
     if (m.reasons.length + mc.length) w.appendChild(why);
-    const n = g.cands.filter(function (c) { return c.mod === m.pkg; }).length;
+    const n = mc.length;
     const acts = document.createElement('div'); acts.className = 'zy-lsp-actions';
     if (!abBusy || g.ab.module !== m.pkg) {
       if (m.on && n) acts.appendChild(lspLiteButton(T('lsp_lighten', 'Lighten (%s)').replace('%s', String(n)), 'trim:' + m.pkg, function () { lspLiteAct('trim', m.pkg); }, T('lsp_confirm', 'Tap again to confirm')));
       acts.appendChild(lspLiteButton(m.on ? T('lsp_disable', 'Switch off') : T('lsp_enable', 'Switch on'), 'mod:' + m.pkg, function () { lspLiteAct(m.on ? 'disable' : 'enable', m.pkg); }, T('lsp_confirm', 'Tap again to confirm')));
       if (m.on && !abBusy) acts.appendChild(lspLiteButton(T('lsp_ab_start', 'A/B test'), 'ab:' + m.pkg, function () { lspLiteAct('ab-start', m.pkg); }, T('lsp_ab_confirm', 'Tap again: 2 days, 2 reboots')));
     }
-    if (acts.childNodes.length) w.appendChild(acts);
+    if (acts.childNodes.length) { acts.style.setProperty('--zy-lsp-n', String(acts.childNodes.length)); w.appendChild(acts); }
     card.appendChild(w);
   });
   const active = g.journal.filter(function (j) { return j.active && j.kind !== 'ab'; });
@@ -25105,7 +25248,12 @@ function asbStartupWarmCaches() {
      * tap joins this exact promise instead of queuing a second ten-part read behind Live.
      * There is no timer/worker after the transaction and no repeat eager Config batch. */
     asbStartupLater(function () { return cfgLoad(); }, 0, 0);
-    asbStartupLater(zygiskHeaderRefresh, 150, 1);
+    /* V66-test13: the header dot stayed grey for minutes. A priority-1 job waits while any
+     * page is open (asbPageBusy), and Monitor or Settings are open right after the start, so
+     * the link read waited until the user left them. It now runs at priority 0, detached
+     * (the page is not held), and the last verdict is painted at once from this viewer's
+     * cache until the fresh one arrives. */
+    asbStartupLater(zygiskHeaderRefresh, 150, 0);
   };
   const probe = window._asbBootIntroProbe;
   if (probe && typeof probe.then === 'function') probe.then(warm, function () { warm(false); });

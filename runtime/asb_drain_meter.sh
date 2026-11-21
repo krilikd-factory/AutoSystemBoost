@@ -126,7 +126,7 @@ dm_flush() {
 }
 
 dm_on_finish() {
-  [ "${dm_on_s:-0}" -ge 600 ] && [ -n "$dm_prof" ] || { dm_on_s=0; dm_on_x=0; dm_on_at=0; return 0; }
+  [ "${dm_on_s:-0}" -ge 600 ] && [ "${dm_on_x:-0}" -gt 0 ] && [ -n "$dm_prof" ] || { dm_on_s=0; dm_on_x=0; dm_on_at=0; return 0; }
   dm_set "$dm_prof" on_last "$dm_on_x"; dm_set "$dm_prof" on_last_s "$dm_on_s"; dm_set "$dm_prof" on_last_at "${dm_on_at:-0}"
   dm_on_s=0; dm_on_x=0; dm_on_at=0; dm_dirty=1
 }

@@ -5,6 +5,30 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test13 - honest screen drain, quick Zygisk header, LSPosed card, tweak consoles
+
+Input: V66-test12 on the owner's OnePlus 15 and a user's asbdiag (V66-test11, Magisk,
+CPH2769). Base: V66-test12 (`86686aa`). No native code changed; no CI rebuild of native
+parts is needed.
+
+- **Screen drain stuck at "<59.9%/h":** after charging, a 10-minute screen session with no
+  battery-level step was shown as an upper bound and kept winning. The meter no longer
+  stores a session without a step (`dm_on_finish` needs one), and the WebUI uses the latest
+  session only with two steps, or one step over at least 30 minutes; otherwise it falls back
+  to the history average or "measuring". Note text updated in 13 locales.
+- **Zygisk header dot grey for long:** its probe ran at a priority that waits while any page
+  is open. It now runs at priority 0, detached, and the last answer (up to 6 h old) is
+  painted at once, dimmed until the fresh one arrives.
+- **Bottom shadow:** the dock scrim is 66 px instead of 92 px with a shorter gradient.
+- **LSPosed: modules and their cost:** rebuilt as per-module panels with a coloured verdict,
+  chips for scopes, reach, background starts and crashes, and an actions row; the how-it-works
+  text folds away (keys `lsp_how`, `lsp_chip_crash`).
+- **Consoles:** the DSP console became a generic `cfgRenderConsole`; new consoles for camera
+  processing, network channels and screen/touch, with a category-coloured rule and tinted
+  group labels (16 new keys, 13 locales).
+- **ART for the other user:** that asbdiag is V66-test11, the build with the parse problem
+  fixed in V66-test12; updating is the fix.
+
 ## V66 dev66 buildfix46 - the ART script runs on the phone's shell
 
 Input: buildfix45 (V66-test11) on the owner's OnePlus 15 and a user's phone: the Faster app
