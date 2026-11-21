@@ -1,35 +1,24 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-660-dev66-buildfix42-source",
-  "base": "AutoSystemBoost-V66-660-dev66-buildfix41-source.zip",
+  "release": "AutoSystemBoost-V66-660-dev66-buildfix43-source",
+  "base": "AutoSystemBoost-V66-660-dev66-buildfix42-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 275,
   "inventory_vs_base": {
     "changed": [
       "docs/V66_BUILD_HISTORY.md",
+      "tests/asb_system.sh",
       "tests/asb_ui.sh",
+      "tools/asb_io_scheduler_ab.sh",
       "tools/asb_tree.sha256",
-      "webroot/i18n/ar.json",
-      "webroot/i18n/de.json",
-      "webroot/i18n/en.json",
-      "webroot/i18n/es.json",
-      "webroot/i18n/fr.json",
-      "webroot/i18n/hy.json",
-      "webroot/i18n/id.json",
-      "webroot/i18n/it.json",
-      "webroot/i18n/pt.json",
-      "webroot/i18n/ru.json",
-      "webroot/i18n/tr.json",
-      "webroot/i18n/uk.json",
-      "webroot/i18n/zh.json",
       "webroot/index.html"
     ],
     "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 17,
+      "changed": 6,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -445,9 +434,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 281029,
+      "bytes": 283214,
       "mode": "0644",
-      "sha256": "ef6d905f6b623a2b9903bf01025406205d9fff2e82963c0efad5cd905a7d8688"
+      "sha256": "d3df844e28ad08381678e8db6997ee60f0c86a824da7dfdbad41cdc9b5ddb5d9"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -1375,15 +1364,15 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 676355,
+      "bytes": 676718,
       "mode": "0755",
-      "sha256": "e2f180ca413cdd3c0c5cf9e494151c7b151cf2961d1758a14c9537c7406b7226"
+      "sha256": "e5edc2085f07d179af9284923efa6c7c099afa5a6159101513e28b43c2942e80"
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1275706,
+      "bytes": 1277509,
       "mode": "0755",
-      "sha256": "5cac63fc624ad85a5394881f01a0e313307bfc754a5fd6dd220f0108ca8ef58f"
+      "sha256": "5771142593b40966a7bc105cde76af241879a27e0dc5889a8e38d580c6b90500"
     },
     {
       "path": "tests/asb_zygisk.sh",
@@ -1507,9 +1496,9 @@
     },
     {
       "path": "tools/asb_io_scheduler_ab.sh",
-      "bytes": 5944,
+      "bytes": 6099,
       "mode": "0755",
-      "sha256": "9c2fb734eea4360b4b26e727c99db66badbd42d2825ca18f124091262a811005"
+      "sha256": "911ba5b0d35ee5104f37b885e15e37e6c01173e291d6a874a2afa67536ab3002"
     },
     {
       "path": "tools/asb_kernel_uv_coexist.sh",
@@ -1611,7 +1600,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24410,
       "mode": "0644",
-      "sha256": "d50dd2ca5b22163ba4bfa074edeefd0d035f787171ba6c7c639182b041a6b78e"
+      "sha256": "7ac1d84d7c7ec0088c0d74e6502544446a329a5565382d947b06b2e691239c86"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1825,9 +1814,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1747916,
+      "bytes": 1749455,
       "mode": "0644",
-      "sha256": "39f09f7f7c08a3c76ed33c5827a3494b48006d96bc84584b1cacc266d565dd87"
+      "sha256": "6a837f42d95327eae4ac1dbd11f1a57c212bda01651eec23a03417011b69c719"
     },
     {
       "path": "zygisk/arm64-v8a.so",
