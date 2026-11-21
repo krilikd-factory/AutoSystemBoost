@@ -4234,5 +4234,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "Bant genişliği: 3, Q 0,3; 40, Q 4,0 demektir.",
   "dsp_eq_gain": "Kazanç × 0,1 dB",
-  "dsp_eq_gain_desc": "Aralık −12…+12 dB. Sıfır bu bandı atlar."
+  "dsp_eq_gain_desc": "Aralık −12…+12 dB. Sıfır bu bandı atlar.",
+  "kernel_wb_dialog_hint_raw": "Ham sayaçlar etkin bir kuralla da artabilir: kaynak girişimlerini gösterir, başarılı uyandırmaları değil. Engellemeyi yalnızca etkin kernel kuralı ve blocked sayacı kanıtlar. Ekran kapalı kuralı ekran açıkken etkin değildir. Bunlar enerji ölçümü değildir.",
+  "kernel_wb_source_metrics_raw": "Ham kernel sayaçları: +{events} olay · +{active} etkinleştirme · +{time} etkin",
+  "kernel_wb_rule_active_blocked": "Kural şu anda etkin · bu kuralla engellenen: {n}",
+  "kernel_wb_rule_active_stats_unknown": "Kural şu anda etkin · kernel ayrı blocked sayacı sunmuyor",
+  "kernel_wb_rule_waiting_screen_off": "Yalnızca ekran kapalıyken için kaydedildi · ekran açıkken veya durumu bilinmiyorken etkin değil",
+  "kernel_wb_rule_readback_missing": "Kaydedildi ancak geçerli kernel readback çıktısında yok",
+  "lr_activity_head": "Yüksek tüketimli ekran açık aşamalarında activity bağlamı (en az %8/sa ve 5 dk):",
+  "lr_activity_note": "Bileşenler aşamanın başında ve sonunda gözlendi. Bu ilişki nedeni kanıtlamaz; activity dondurmak uygulamayı bozabilir. Sunulmayan activity uydurulmaz."
 }

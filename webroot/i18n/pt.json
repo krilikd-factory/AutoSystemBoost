@@ -4234,5 +4234,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "Largura: 3 significa Q 0,3; 40 significa Q 4,0.",
   "dsp_eq_gain": "Ganho × 0,1 dB",
-  "dsp_eq_gain_desc": "Intervalo −12…+12 dB. Zero ignora esta banda."
+  "dsp_eq_gain_desc": "Intervalo −12…+12 dB. Zero ignora esta banda.",
+  "kernel_wb_dialog_hint_raw": "Os contadores brutos podem aumentar com uma regra ativa: mostram tentativas, não ativações bem-sucedidas. Apenas a regra ativa do kernel e o contador blocked comprovam o bloqueio. A regra de ecrã desligado fica inativa com o ecrã ligado. Não são medições de energia.",
+  "kernel_wb_source_metrics_raw": "Contadores brutos do kernel: +{events} eventos · +{active} ativações · +{time} ativo",
+  "kernel_wb_rule_active_blocked": "Regra ativa agora · bloqueados por esta regra: {n}",
+  "kernel_wb_rule_active_stats_unknown": "Regra ativa agora · o kernel não expõe contador blocked separado",
+  "kernel_wb_rule_waiting_screen_off": "Guardada apenas para ecrã desligado · inativa com ecrã ligado ou estado desconhecido",
+  "kernel_wb_rule_readback_missing": "Guardada, mas ausente na leitura atual do kernel",
+  "lr_activity_head": "Contexto da activity em fases com ecrã ligado e consumo elevado (a partir de 8 %/h e 5 min):",
+  "lr_activity_note": "Os componentes foram observados no início e no fim da fase. A correlação não prova a causa; congelar a activity pode danificar a app. Activities não expostas não são inventadas."
 }

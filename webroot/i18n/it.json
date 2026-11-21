@@ -4234,5 +4234,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "Larghezza: 3 significa Q 0,3; 40 significa Q 4,0.",
   "dsp_eq_gain": "Guadagno × 0,1 dB",
-  "dsp_eq_gain_desc": "Intervallo −12…+12 dB. Zero esclude questa banda."
+  "dsp_eq_gain_desc": "Intervallo −12…+12 dB. Zero esclude questa banda.",
+  "kernel_wb_dialog_hint_raw": "I contatori grezzi possono aumentare con una regola attiva: mostrano tentativi, non risvegli riusciti. Solo la regola kernel attiva e il contatore blocked dimostrano il blocco. La regola per schermo spento è inattiva con schermo acceso. Non sono misurazioni energetiche.",
+  "kernel_wb_source_metrics_raw": "Contatori grezzi del kernel: +{events} eventi · +{active} attivazioni · +{time} attivo",
+  "kernel_wb_rule_active_blocked": "Regola attiva ora · bloccati da questa regola: {n}",
+  "kernel_wb_rule_active_stats_unknown": "Regola attiva ora · il kernel non espone un contatore blocked separato",
+  "kernel_wb_rule_waiting_screen_off": "Salvata solo per schermo spento · inattiva con schermo acceso o stato sconosciuto",
+  "kernel_wb_rule_readback_missing": "Salvata, ma assente nel readback attuale del kernel",
+  "lr_activity_head": "Contesto activity nelle fasi a schermo acceso con consumo elevato (da 8 %/h e 5 min):",
+  "lr_activity_note": "I componenti sono stati osservati all'inizio e alla fine della fase. La correlazione non prova la causa; congelare l'activity può danneggiare l'app. Nessuna activity non esposta viene inventata."
 }

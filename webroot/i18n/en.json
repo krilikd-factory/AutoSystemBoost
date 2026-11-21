@@ -4127,5 +4127,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "Bandwidth: 3 means Q 0.3; 40 means Q 4.0.",
   "dsp_eq_gain": "Gain × 0.1 dB",
-  "dsp_eq_gain_desc": "Range −12…+12 dB. Zero bypasses this band."
+  "dsp_eq_gain_desc": "Range −12…+12 dB. Zero bypasses this band.",
+  "kernel_wb_dialog_hint_raw": "Raw event/activation counters can keep increasing while a rule works: they describe source attempts, not successful wakeups. Only the active kernel rule and its blocked counter prove blocking. A screen-off rule is inactive while the screen is on. These are not energy measurements.",
+  "kernel_wb_source_metrics_raw": "Raw kernel counters: +{events} events · +{active} activations · +{time} active",
+  "kernel_wb_rule_active_blocked": "Rule active now · blocked by this rule: {n}",
+  "kernel_wb_rule_active_stats_unknown": "Rule active now · per-rule blocked counter not exposed",
+  "kernel_wb_rule_waiting_screen_off": "Saved for screen-off only · inactive while the screen is on or its state is unknown",
+  "kernel_wb_rule_readback_missing": "Saved, but absent from the current kernel readback",
+  "lr_activity_head": "Activity context in high-drain screen-on phases (8%/h or more, at least 5 min):",
+  "lr_activity_note": "Components were observed at the start/end of the phase. This correlation does not prove that an activity caused the drain; freezing it can break the app. No activity is named when Android did not expose one."
 }

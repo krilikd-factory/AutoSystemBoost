@@ -4234,5 +4234,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "Largeur : 3 signifie Q 0,3 ; 40 signifie Q 4,0.",
   "dsp_eq_gain": "Gain × 0,1 dB",
-  "dsp_eq_gain_desc": "Plage −12…+12 dB. Zéro contourne cette bande."
+  "dsp_eq_gain_desc": "Plage −12…+12 dB. Zéro contourne cette bande.",
+  "kernel_wb_dialog_hint_raw": "Les compteurs bruts peuvent augmenter avec une règle active : ils montrent les tentatives, pas les réveils aboutis. Seuls la règle kernel active et son compteur blocked prouvent le blocage. La règle « écran éteint » est inactive écran allumé. Ce ne sont pas des mesures d’énergie.",
+  "kernel_wb_source_metrics_raw": "Compteurs bruts du kernel : +{events} événements · +{active} activations · +{time} actif",
+  "kernel_wb_rule_active_blocked": "Règle active maintenant · bloqués par cette règle : {n}",
+  "kernel_wb_rule_active_stats_unknown": "Règle active maintenant · le kernel n’expose pas de compteur blocked distinct",
+  "kernel_wb_rule_waiting_screen_off": "Enregistrée uniquement pour écran éteint · inactive écran allumé ou état inconnu",
+  "kernel_wb_rule_readback_missing": "Enregistrée, mais absente du readback actuel du kernel",
+  "lr_activity_head": "Contexte d’activity dans les phases écran allumé à forte consommation (dès 8 %/h et 5 min) :",
+  "lr_activity_note": "Les composants ont été observés au début et à la fin de la phase. Cette corrélation ne prouve pas la cause ; geler l’activity peut endommager l’app. Aucune activity non exposée n’est inventée."
 }

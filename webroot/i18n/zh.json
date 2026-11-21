@@ -4234,5 +4234,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "带宽：3 表示 Q 0.3；40 表示 Q 4.0。",
   "dsp_eq_gain": "增益 × 0.1 dB",
-  "dsp_eq_gain_desc": "范围 −12…+12 dB。零表示旁通此频段。"
+  "dsp_eq_gain_desc": "范围 −12…+12 dB。零表示旁通此频段。",
+  "kernel_wb_dialog_hint_raw": "即使规则生效，原始事件和激活计数仍可能增加：它们表示源尝试，而非成功唤醒。只有当前内核规则及其 blocked 计数才能证明拦截。息屏规则在亮屏时不生效。这些不是能耗测量。",
+  "kernel_wb_source_metrics_raw": "内核原始计数：+{events} 事件 · +{active} 次激活 · +{time} 活跃",
+  "kernel_wb_rule_active_blocked": "规则当前生效 · 由此规则拦截：{n}",
+  "kernel_wb_rule_active_stats_unknown": "规则当前生效 · 内核未提供独立的 blocked 计数",
+  "kernel_wb_rule_waiting_screen_off": "仅保存为息屏时生效 · 亮屏或屏幕状态未知时不生效",
+  "kernel_wb_rule_readback_missing": "已保存，但不在当前内核 readback 中",
+  "lr_activity_head": "高耗电亮屏阶段的 activity 上下文（至少 8 %/小时且持续 5 分钟）：",
+  "lr_activity_note": "组件仅在阶段开始和结束时被观察到。此相关性不能证明耗电原因；冻结 activity 可能破坏应用。不会编造未提供的 activity。"
 }

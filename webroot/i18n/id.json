@@ -4234,5 +4234,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "Lebar: 3 berarti Q 0,3; 40 berarti Q 4,0.",
   "dsp_eq_gain": "Gain × 0,1 dB",
-  "dsp_eq_gain_desc": "Rentang −12…+12 dB. Nol melewati band ini."
+  "dsp_eq_gain_desc": "Rentang −12…+12 dB. Nol melewati band ini.",
+  "kernel_wb_dialog_hint_raw": "Penghitung mentah dapat terus naik saat aturan bekerja: penghitung menunjukkan percobaan sumber, bukan keberhasilan membangunkan. Hanya aturan kernel aktif dan penghitung blocked yang membuktikan pemblokiran. Aturan layar mati tidak aktif saat layar hidup. Ini bukan pengukuran energi.",
+  "kernel_wb_source_metrics_raw": "Penghitung mentah kernel: +{events} peristiwa · +{active} aktivasi · +{time} aktif",
+  "kernel_wb_rule_active_blocked": "Aturan aktif sekarang · diblokir oleh aturan ini: {n}",
+  "kernel_wb_rule_active_stats_unknown": "Aturan aktif sekarang · kernel tidak menyediakan penghitung blocked terpisah",
+  "kernel_wb_rule_waiting_screen_off": "Disimpan hanya untuk layar mati · tidak aktif saat layar hidup atau statusnya tidak diketahui",
+  "kernel_wb_rule_readback_missing": "Disimpan, tetapi tidak ada dalam readback kernel saat ini",
+  "lr_activity_head": "Konteks activity pada fase layar hidup dengan konsumsi tinggi (mulai 8 %/j dan 5 mnt):",
+  "lr_activity_note": "Komponen diamati pada awal dan akhir fase. Korelasi ini tidak membuktikan penyebab; membekukan activity dapat merusak aplikasi. Activity yang tidak tersedia tidak direkayasa."
 }

@@ -4234,5 +4234,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "Ancho: 3 significa Q 0,3; 40 significa Q 4,0.",
   "dsp_eq_gain": "Ganancia × 0,1 dB",
-  "dsp_eq_gain_desc": "Rango −12…+12 dB. Cero omite esta banda."
+  "dsp_eq_gain_desc": "Rango −12…+12 dB. Cero omite esta banda.",
+  "kernel_wb_dialog_hint_raw": "Los contadores sin procesar pueden aumentar con una regla activa: muestran intentos, no activaciones logradas. Solo la regla activa del kernel y su contador blocked demuestran el bloqueo. La regla de pantalla apagada está inactiva con la pantalla encendida. No son mediciones de energía.",
+  "kernel_wb_source_metrics_raw": "Contadores sin procesar del kernel: +{events} eventos · +{active} activaciones · +{time} activo",
+  "kernel_wb_rule_active_blocked": "Regla activa ahora · bloqueados por esta regla: {n}",
+  "kernel_wb_rule_active_stats_unknown": "Regla activa ahora · el kernel no expone un contador blocked independiente",
+  "kernel_wb_rule_waiting_screen_off": "Guardada solo para pantalla apagada · inactiva con pantalla encendida o estado desconocido",
+  "kernel_wb_rule_readback_missing": "Guardada, pero ausente en la lectura actual del kernel",
+  "lr_activity_head": "Contexto de activity en fases con pantalla encendida y consumo elevado (desde 8 %/h y 5 min):",
+  "lr_activity_note": "Los componentes se observaron al inicio y al final de la fase. La correlación no demuestra la causa; congelar una activity puede dañar la app. No se inventan activities no expuestas."
 }

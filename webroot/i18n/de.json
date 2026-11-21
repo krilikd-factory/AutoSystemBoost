@@ -4234,5 +4234,13 @@
   "dsp_eq_q": "Q × 10",
   "dsp_eq_q_desc": "Bandbreite: 3 bedeutet Q 0,3; 40 bedeutet Q 4,0.",
   "dsp_eq_gain": "Verstärkung × 0,1 dB",
-  "dsp_eq_gain_desc": "Bereich −12…+12 dB. Null umgeht dieses Band."
+  "dsp_eq_gain_desc": "Bereich −12…+12 dB. Null umgeht dieses Band.",
+  "kernel_wb_dialog_hint_raw": "Rohe Ereigniszähler können trotz aktiver Regel steigen: Sie zählen Versuche, keine erfolgreichen Aufweckvorgänge. Nur die aktive Kernelregel und ihr blocked-Zähler belegen die Blockierung. Die Regel „Bildschirm aus“ ist bei eingeschaltetem Bildschirm inaktiv. Dies ist keine Energiemessung.",
+  "kernel_wb_source_metrics_raw": "Rohe Kernelzähler: +{events} Ereignisse · +{active} Aktivierungen · +{time} aktiv",
+  "kernel_wb_rule_active_blocked": "Regel jetzt aktiv · durch diese Regel blockiert: {n}",
+  "kernel_wb_rule_active_stats_unknown": "Regel jetzt aktiv · kein separater blocked-Zähler vom Kernel bereitgestellt",
+  "kernel_wb_rule_waiting_screen_off": "Nur für ausgeschalteten Bildschirm gespeichert · bei eingeschaltetem oder unbekanntem Bildschirmzustand inaktiv",
+  "kernel_wb_rule_readback_missing": "Gespeichert, aber im aktuellen Kernel-Readback nicht vorhanden",
+  "lr_activity_head": "Activity-Kontext in Screen-on-Phasen mit hohem Verbrauch (ab 8 %/h und 5 min):",
+  "lr_activity_note": "Komponenten wurden am Anfang und Ende der Phase beobachtet. Diese Korrelation beweist keine Ursache; das Einfrieren kann die App beschädigen. Nicht bereitgestellte Activities werden nicht erfunden."
 }
