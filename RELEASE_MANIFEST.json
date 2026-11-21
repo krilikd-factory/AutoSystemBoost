@@ -1,29 +1,35 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-660-dev66-buildfix41-source",
-  "base": "AutoSystemBoost-V66-660-dev66-buildfix40-source.zip",
+  "release": "AutoSystemBoost-V66-660-dev66-buildfix42-source",
+  "base": "AutoSystemBoost-V66-660-dev66-buildfix41-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 275,
   "inventory_vs_base": {
     "changed": [
       "docs/V66_BUILD_HISTORY.md",
-      "runtime/asb_lsposed_info.sh",
-      "runtime/asb_wakelock_watch.sh",
-      "runtime/asb_zygisk_aot.sh",
-      "service.sh",
-      "system/bin/asbdiag",
-      "tests/asb_features.sh",
       "tests/asb_ui.sh",
-      "tools/asb_diag.sh",
       "tools/asb_tree.sha256",
-      "tools/logkit/_asb_logkit_common.sh"
+      "webroot/i18n/ar.json",
+      "webroot/i18n/de.json",
+      "webroot/i18n/en.json",
+      "webroot/i18n/es.json",
+      "webroot/i18n/fr.json",
+      "webroot/i18n/hy.json",
+      "webroot/i18n/id.json",
+      "webroot/i18n/it.json",
+      "webroot/i18n/pt.json",
+      "webroot/i18n/ru.json",
+      "webroot/i18n/tr.json",
+      "webroot/i18n/uk.json",
+      "webroot/i18n/zh.json",
+      "webroot/index.html"
     ],
     "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 11,
+      "changed": 17,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -439,9 +445,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 277473,
+      "bytes": 281029,
       "mode": "0644",
-      "sha256": "c1b7de5dc42d02c6ab390e04ae314e6ebbf52099c9b49a7991ff3ed8366764d2"
+      "sha256": "ef6d905f6b623a2b9903bf01025406205d9fff2e82963c0efad5cd905a7d8688"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -1375,9 +1381,9 @@
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1268405,
+      "bytes": 1275706,
       "mode": "0755",
-      "sha256": "e2e31b49fe10b10cda1214941f834323ccc1ace440e774855c6e71bc29aa3aff"
+      "sha256": "5cac63fc624ad85a5394881f01a0e313307bfc754a5fd6dd220f0108ca8ef58f"
     },
     {
       "path": "tests/asb_zygisk.sh",
@@ -1605,7 +1611,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24410,
       "mode": "0644",
-      "sha256": "02b767596364297ddfc7f5b9693328934adfe30bfb980e69e0a1371da7eea678"
+      "sha256": "d50dd2ca5b22163ba4bfa074edeefd0d035f787171ba6c7c639182b041a6b78e"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1735,81 +1741,81 @@
     },
     {
       "path": "webroot/i18n/ar.json",
-      "bytes": 422905,
+      "bytes": 423967,
       "mode": "0644",
-      "sha256": "9eb65fb6e17b309f24aecf5fd9cc5e5b90b46c7f4e79127c7e78834a2c731d3d"
+      "sha256": "30f2f7e1b0117e185d9cdb96cf37585fa74d2e517d1dc63c101d43830a3dac37"
     },
     {
       "path": "webroot/i18n/de.json",
-      "bytes": 339993,
+      "bytes": 340926,
       "mode": "0644",
-      "sha256": "28d39d343ada248246bb353e386f0a95dbd914c5f5cad0c599e0f85213dbb9cb"
+      "sha256": "2c0dcdc3bed8a4416379d35b806c708b175e7a07159142fbcda7c5877192a5cf"
     },
     {
       "path": "webroot/i18n/en.json",
-      "bytes": 307185,
+      "bytes": 307986,
       "mode": "0644",
-      "sha256": "23be184fec81dbd5d9cad0bb5dcf0d57eb1c7ca275183c3776dcf91906a4c64c"
+      "sha256": "dfb826611c811e25a53028dd6a9bcd8f399ee8da1de33214e00f6da079969baa"
     },
     {
       "path": "webroot/i18n/es.json",
-      "bytes": 341268,
+      "bytes": 342146,
       "mode": "0644",
-      "sha256": "73b046b8fec5531268d5538dc8c902da4dfe90e8e9c9d06b95a434eaabc6e882"
+      "sha256": "ca093d09d69b2e71ccf847a007086ec78b20eeca4ca38f8d82e352c282fe3c99"
     },
     {
       "path": "webroot/i18n/fr.json",
-      "bytes": 355675,
+      "bytes": 356564,
       "mode": "0644",
-      "sha256": "a12ebc4eac88f7011d9a93f94348d51bb56013d57a0c3faf30055d876afb240c"
+      "sha256": "bcba349e22866f1892a472386a2cb80d88edcc13b3c248ffd358290d54622cd3"
     },
     {
       "path": "webroot/i18n/hy.json",
-      "bytes": 514232,
+      "bytes": 515511,
       "mode": "0644",
-      "sha256": "364846e7a588634428414da4f5f8bd9a01c1f8589269980c41a7d46bde8b5ceb"
+      "sha256": "ab3e872707a3426b76bcc1bcf3f9afad1483f7ca4ccf542a1f81be0404dbf3d8"
     },
     {
       "path": "webroot/i18n/id.json",
-      "bytes": 327074,
+      "bytes": 327882,
       "mode": "0644",
-      "sha256": "cc806cbe1bdab3c43158c2e3630359f39c14571b67cd5631fd5cb4f433613caf"
+      "sha256": "81b911e0acd1c126aa53f26bfaca9029bc043cc44090d8bf4fb62b8e85ba7aa0"
     },
     {
       "path": "webroot/i18n/it.json",
-      "bytes": 336892,
+      "bytes": 337752,
       "mode": "0644",
-      "sha256": "0924a4b841932800f22c514f281ec9010b2da89563e036286f0db4a942e64cd9"
+      "sha256": "0d199b37f1333c728f81c09f75b7de7fa3c21ca0243fe16465c929670d84d8ad"
     },
     {
       "path": "webroot/i18n/pt.json",
-      "bytes": 336843,
+      "bytes": 337665,
       "mode": "0644",
-      "sha256": "5c0aab319efaa341acedc9c5b77235b2842e4e804c92d25b43a68c5e629e2c75"
+      "sha256": "566dd3f2c7ae84810c23da4b39e2affff3aa490689568a71f7d0ac4decb9de56"
     },
     {
       "path": "webroot/i18n/ru.json",
-      "bytes": 502884,
+      "bytes": 504176,
       "mode": "0644",
-      "sha256": "4b91b3447e4551af810e8f477fc78848fb5d911f5a443905578f04053a411611"
+      "sha256": "3478f9b7f956431eab1b3aeed03ad94139293eb6d2ddaa7e3175858e840087d7"
     },
     {
       "path": "webroot/i18n/tr.json",
-      "bytes": 338068,
+      "bytes": 338915,
       "mode": "0644",
-      "sha256": "37f714328603862ad6ac871a75d19503b8eecb99bd0b4983ad0af072b4f978b9"
+      "sha256": "d8e0ef511028c42951ec2c86ee23321f24f7626274b53b11c1aa0345eb4dbbb1"
     },
     {
       "path": "webroot/i18n/uk.json",
-      "bytes": 486657,
+      "bytes": 487953,
       "mode": "0644",
-      "sha256": "3000ffb365f4ddb71f61b746c213968341893fef63f91eaddc2695b432da776f"
+      "sha256": "b34028c6e57171037641100ca00693550879b336392599df44662ab27bc26ae8"
     },
     {
       "path": "webroot/i18n/zh.json",
-      "bytes": 300414,
+      "bytes": 301186,
       "mode": "0644",
-      "sha256": "27c5ec69714e76ddd2aca1069317ff0b84dffbd2407935a0c2b9dba5156f03b4"
+      "sha256": "11c6dc20ba6d1258f2fbdd8de145119cfcb76f4796bcf317cb5035702ee0d3ed"
     },
     {
       "path": "webroot/icon.png",
@@ -1819,9 +1825,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1741937,
+      "bytes": 1747916,
       "mode": "0644",
-      "sha256": "cb62433f6ef4aa71b98df9444aed03bd46f4d885149755ecfa6fda8ee6d2ffa9"
+      "sha256": "39f09f7f7c08a3c76ed33c5827a3494b48006d96bc84584b1cacc266d565dd87"
     },
     {
       "path": "zygisk/arm64-v8a.so",
