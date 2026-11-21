@@ -1648,7 +1648,7 @@ let _selectedProfile='smart';
 """
 src='\n'.join([body,const('_lvMeter'),const('_lvGovOff'),const('_lvDrain'),const('_lvEta'),
  fn('lvBootParse'),fn('lvBootOnFigure'),fn('lvNightParse'),fn('lvMeterParse'),fn('lvDurDHM'),fn('lvPct'),fn('lvOffFigure'),
- fn('lvNightFresh'),fn('lvNightFigure'),fn('lvProfileNightFigure'),fn('lvProfileOnFigure'),fn('lvOnFigure'),fn('lvPrimaryOffFigure'),fn('lvMeterHasOn'),fn('lvMeterPaint'),fn('lvEtaFmt'),fn('lvEtaPaint'),fn('homeOffFigure'),fn('homeMeterPaint'),r"""
+ fn('lvNightFresh'),fn('lvNightFigure'),fn('lvProfileNightFigure'),fn('lvProfileOnFigure'),fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'),fn('lvPrimaryOffFigure'),fn('lvMeterHasOn'),fn('lvMeterPaint'),fn('lvEtaFmt'),fn('lvEtaPaint'),fn('homeOffFigure'),fn('homeMeterPaint'),r"""
 let bad=0;function chk(c,m){if(!c){bad=1;console.log('FAIL '+m)}}
 const testNowDate=new Date();testNowDate.setHours(12,0,0,0);const testNow=Math.floor(testNowDate.getTime()/1000);Date.now=()=>testNow*1000;
 const parsed=lvMeterParse('smart 3600 500 14400 200 1 50 14400 1 500 3600 10 50 14400 10\ncurrent smart\n');
@@ -2229,7 +2229,7 @@ const _lvMeter = { at: 0, cur: '', p: {} };
 function liveDrainIsOpen() { return false; }
 function liveDrainPaint() {}
 EOF
-  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure lvBootOnFigure lvNightFresh lvNightFigure lvProfileNightFigure lvProfileOnFigure lvOnFigure lvPrimaryOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure lvBootOnFigure lvNightFresh lvNightFigure lvProfileNightFigure lvProfileOnFigure lvOnFigure lvOnKind lvOnTip lvPrimaryOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   sed -n "/^const _lvEta = /p; /^const _lvDrain = /p; /^const _lvGovOff = /p; /^const METRIC_STEPS = /p" "$H"
   sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   cat <<'EOF'
@@ -2502,10 +2502,12 @@ for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'ld .pchk',
     assert spinner not in sel, 'a progress indicator would stop: ' + spinner
 # Automatic ui-jank may remove blur, but must not destroy the UFO/orbit/wordmark animation
 # timelines. Only the real OS reduced-motion media query is allowed to stop those clocks.
-auto = re.search(r'html\[data-asb-effects="reduced"\] :is\(([^)]*)\) \{\s*animation:none', s)
-assert auto, 'automatic reduced-effects animation rule not found'
-for header in ('.logo-sphere-a','.logo-sphere-b','.logo-inner','.app-name','.dot'):
-    assert header not in auto.group(1), 'ui-jank still freezes ' + header
+# buildfix42: the rule is a plain selector list now (asb_css_bucket rewrote the :is()).
+_ai = s.index('html[data-asb-effects="reduced"] .zygisk-header-dot:not(asb-spec-pad),')
+auto_sel = s[_ai:s.index('{', _ai)]
+assert 'animation:none' in s[_ai:s.index('}', _ai)], 'automatic reduced-effects animation rule not found'
+for header in ('.logo-sphere-a','.logo-sphere-b','.logo-inner','.app-name','.dot ', '.dot,', '.ai-glow'):
+    assert header not in auto_sel, 'ui-jank still freezes ' + header
 osrm = re.search(r'@media \(prefers-reduced-motion:\s*reduce\) \{([\s\S]*?)\n\}', s)
 assert osrm and '.logo-sphere-a' in osrm.group(1) and '.app-name' in osrm.group(1), 'OS reduced-motion ownership was lost'
 # every decorative loop named above still exists as an endless animation the rule can reach
@@ -9989,7 +9991,7 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',kernel:'Scheduler, MGLRU, wakeups',feel:'LTPO, vibration, touch',zygisk:'Master switch and status',ui:'Services, processes, diagnostics'};
   global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
   global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.cfgLoadFresh=()=>{throw Error('hub totals must not wait for Config freshness')};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};global.asbUiFrame={request:()=>{}};
-  global.setTimeout=()=>0;
+  global.setTimeout=()=>0;global.asbStartupLater=()=>{};
   eval(grab('function cfgGroupHiddenKeys(groupId) {','// Settings whose effect lands in a file').replace(/^let /gm,'var ')+';globalThis.renderHub=cfgRenderHub;');
   const list=new E('div');renderHub(list);const hub=list.children[0];
   chk(hub.className==='cfg-hub'&&hub.children.length===9,'nine-category hub was not rendered');
@@ -10276,7 +10278,7 @@ paint_src = '\n'.join([
     "function T(k,d){return d} function _el(id){return els[id]||null}",
     "const els={}; ['bnDrain','bnDrainOff','bnDrainOnLabel','bnDrainOffLabel'].forEach(x=>els[x]={textContent:'',title:''});",
     const('_lvMeter'), const('_lvGovOff'), "const _lvDrain={}; let _selectedProfile='smart';",
-    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvBootOnFigure'), fn('lvNightFresh'), fn('lvNightFigure'), fn('lvProfileNightFigure'), fn('lvProfileOnFigure'), fn('lvOnFigure'), fn('lvPrimaryOffFigure'),
+    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvBootOnFigure'), fn('lvNightFresh'), fn('lvNightFigure'), fn('lvProfileNightFigure'), fn('lvProfileOnFigure'), fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'), fn('lvPrimaryOffFigure'),
     "function asbMetricPaint(){} function lvEtaPaint(){} function liveDrainIsOpen(){return false}",
     fn('lvMeterPaint'),
     "_lvMeter.cur='smart';_lvMeter.p={battery:{on:330,onMin:88,off:126,offN:3,offS:30000,offLast:138,offLastS:18000,offLastAt:1,onLast:330,onLastS:5280,onLastAt:1}};",
@@ -13278,8 +13280,13 @@ root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(en
 i = h.index('/* dev66/buildfix3: calm never changes any visible header')
 blk = h[i:h.index('}', i) + 1]
 blk = blk[blk.index('*/') + 2:]
-assert 'html.asb-calm .pico-smart .ai-glow' in blk
-assert 'animation-play-state: paused !important;' in blk
+blk = blk.split('/* dev61: the GPU tile')[0]
+# buildfix42: the Smart halo no longer calms - paused, it looked like a frozen profile icon.
+assert 'html.asb-calm .pico-smart .ai-glow' not in h and 'html.asb-calm .ai-glow' not in h
+_a42 = h.index('html[data-asb-effects="reduced"] .zygisk-header-dot:not(asb-spec-pad),')
+assert 'ai-glow' not in h[_a42:h.index('{', _a42)], 'ui-jank still freezes the Smart halo'
+assert '.pico-smart .ai-glow { animation: none !important; }' in h, 'OS reduced motion no longer owns the halo'
+assert 'body.live-active .page:not(.live-page) .ai-glow' in h, 'the halo keeps running behind another page'
 assert 'html.asb-calm .app-name' not in h, 'calm still removes the wordmark animation'
 for header in ('.app-name', '.logo-sphere-a', '.logo-sphere-b', '.logo-inner', '.dot',
                '.zygisk-header-dot', '.dev-zygisk-link-dot'):
@@ -15965,6 +15972,7 @@ global.document={createElement:t=>new E(t),body:new E('body'),querySelector:()=>
 header.isConnected=true;global.shQuote=s=>"'"+s+"'";
 global._el=id=>nodes[id]||null;global.T=(k,f)=>f||k;global.MD='/module';global.navSync=()=>{};
 global.setTimeout=f=>{f();return 1};
+global.asbCosmicLoading=(b,o)=>{b.replaceChildren();const n=new E('div');n.className='asb-cosmic-loading';n.textContent=o.sub;b.appendChild(n);};global.asbPaintYield=()=>Promise.resolve();
 let switched=[];global.go=p=>switched.push(p);
 const start=h.indexOf('let switching = false;\nconst _profileDetails'),end=h.indexOf('\nasync function go(p)',start);
 chk(start>=0&&end>start,'production dialog block missing');eval(h.slice(start,end));
@@ -16009,7 +16017,8 @@ function disclosure(text){return all(nodes.profileDetailsBody,n=>n.tag==='detail
  profileCardKey({key:' ',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===2,'Space key behavior');
  profileCardKey({key:'Escape',preventDefault(){prevented++}},'performance');chk(prevented===2&&switched.length===2,'unrelated key activated profile');
  mode='error';profileDetailsOpen('smart');await flush();chk(nodes.profileDetailsBody.textContent.includes('No setting was changed'),'collector error path not honest');profileDetailsClose();
- mode='defer';profileDetailsOpen('smart');profileDetailsClose();deferred.shift()();await flush();
+ mode='defer';profileDetailsOpen('smart');profileDetailsClose();await flush();chk(deferred.length===0,'buildfix42: a sheet closed before its loader painted still started the root read');
+ profileDetailsOpen('smart');await flush();chk(deferred.length===1,'buildfix42: the read did not start after the loader frame');profileDetailsClose();deferred.shift()();await flush();
  chk(nodes.profileDetailsModal.hidden&&all(nodes.profileDetailsBody,n=>n.classList.contains('profile-details-entry')).length===0,'stale async response repainted closed dialog');
  chk(commands.every(c=>c.includes('asb_profile_details.sh')&&c.includes('asb_effective_policy.sh')&&!/settings put|echo .*sys|printf .*sys/.test(c)),'write command leaked into open/refresh');
  chk(!h.includes("T('pd_evidence_note'"),'removed read-only footer returned');
@@ -16296,7 +16305,7 @@ fold=body('function liveDrainExplanation(text, bodyClass) {')
 assert "document.createElement('details')" not in fold and "document.createElement('summary')" not in fold
 assert 'body.textContent = text;' in fold
 paint=body('function liveDrainPaint() {')
-assert "liveDrainExplanation(T('lv_drain_note_avg'" in paint
+assert "liveDrainExplanation(T('lv_drain_note_src'" in paint
 assert 'data-drain-fold' not in paint and 'openFolds' not in paint
 # Existing startup/intro work primes hidden static DOM; no new shell, worker or polling owner.
 load=body('function cfgLoad(force) {')
@@ -16696,6 +16705,86 @@ console.log('ok');
 JS
 out="$(node "$T/t.js" "$H" 2>&1)" || { echo "$out" >&2; exit 1; }; [ "$out" = ok ] || { echo "$out" >&2; exit 1; }
 echo 'PASS WebUI buildfix40: raw-vs-blocked wakeup evidence, reference navigation, semantic report support, Russian first-frame units and correct latest-session drain'
+)
+
+t_webui_buildfix42_owner_review() (
+# buildfix42, from the owner's screenshots: (1) the Kernel category's summary and "Hidden: N"
+# line move behind Details; (2) under Liquid Glass the theme's row material repainted the EQ
+# slider rows edge to edge, so names and values touched the card; (3) the Active profile sheet
+# opened only after its root read finished; (4) its "current transaction not exposed" pill read
+# as an error; (5) tab taps waited behind Home's background reads; (6) the Monitor drain sheet
+# called a 123-minute profile session "since boot" half an hour after a reboot, next to a table
+# of averages headed "the same measurement"; (7) the Smart halo froze after ten idle seconds.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui buildfix42: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'P' || fail 'static contract and locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+def fn(sig):
+    i = h.index(sig); return h[i:h.index('\n}\n', i) + 2]
+k = fn('function cfgRenderKernelControlsHelp(list) {')
+assert "card.appendChild(bfxEl('div', 'kernel-note', T('kernel_controls_summary'" not in k
+assert "const more = [bfxEl('div', 'kernel-note', T('kernel_controls_summary'" in k
+assert "more.push(bfxEl('div', 'kernel-why kernel-absent-note', bfxT('kernel_hidden_count'" in k
+assert k.index("T('kernel_controls_summary'") < k.index("kernelMoreBlock(card, 'help', more)")
+assert 'html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row:is(.is-on,:not(.is-on))' in h
+assert '.dsp-eq-console .dsp-eq-editor { margin:0 0 2px; padding:2px 12px;' in h
+o = fn('function profileDetailsOpen(p) {')
+assert o.index("m.hidden = false;") < o.index("profileDetailsRefresh();")
+r = fn('async function profileDetailsRefresh() {')
+assert r.index("asbCosmicLoading(body, { kind:'profile'") < r.index('await asbPaintYield();') < r.index("await run(")
+assert "T('pd_epoch_unavailable', 'FROM THE APPLY LOG')" in h and 'NOT EXPOSED' not in h
+e = fn('function cfgHubExtrasEnsure() {')
+assert 'setTimeout(' not in e and '}, 600, 3);' in e and '_hubExtrasCache' in e
+assert "hubExtrasSave({ hidden: kernelHiddenAbsent()" in h and "hubExtrasSave({ ct: _ctFlags })" in h
+pump = fn('function asbLaterPump() {')
+assert 'job.prio > 0 ? ASB_LATER_IDLE_MS : ASB_LATER_QUIET_MS' in pump and 'const ASB_LATER_IDLE_MS = 1500;' in h
+assert 'asbTouchReadDelay(ASB_POLL_TOUCH_GAP_MS)' in fn('function liveMonitorSchedule(delay) {')
+assert 'asbTouchReadDelay(ASB_LATER_IDLE_MS)' in fn('function liveBackgroundSchedule(delay) {')
+paint = fn('function liveDrainPaint() {')
+assert "T('lv_scr_on_avg', 'Screen on · profile average')" in paint and "T('lv_drain_note_src'" in paint
+assert "T('lv_drain_cmp_avg', 'By profile - average of each')" in h
+assert "_lvDrain.on = lvOnKind(bootOn);" in h and "onEl.title = lvOnTip(bootOn);" in h
+assert "const onTip = on ? lvOnTip(on) : '';" in h
+assert 'html.asb-calm .pico-smart .ai-glow' not in h
+L = 'en ru uk de fr es it pt tr id zh ar hy'.split()
+D = {l: json.loads((root / f'webroot/i18n/{l}.json').read_text(encoding='utf-8')) for l in L}
+keys = ['lv_drain_on_avg_tip', 'pd_loading_title', 'pd_stage_intent', 'pd_stage_owner', 'pd_stage_readback',
+        'pd_epoch_unavailable', 'lv_scr_on_avg', 'lv_drain_cmp_avg', 'lv_drain_note_src']
+for l in L:
+    for key in keys:
+        assert D[l].get(key), (l, key)
+        if l != 'en': assert D[l][key] != D['en'][key], (l, key)
+    assert '%s' in D[l]['lv_drain_on_avg_tip'], l
+    assert 'с момента загрузки' not in D[l]['lv_drain_note_src'] or 'иначе' in D[l]['lv_drain_note_src'], l
+for key in ('lv_drain_on_avg_tip', 'pd_epoch_unavailable', 'lv_scr_on_avg', 'lv_drain_cmp_avg', 'lv_drain_note_src'):
+    m = re.search(r"T\('" + key + r"', '((?:[^'\\]|\\.)*)'\)", h)
+    assert m and m.group(1) == D['en'][key], 'fallback differs: ' + key
+for key, pair in (('pd_loading_title', "titleKey:'pd_loading_title', title:'"), ('pd_loading', "subKey:'pd_loading', sub:'")):
+    i = h.index(pair) + len(pair); assert h[i:h.index("'", i)] == D['en'][key], 'loader fallback differs: ' + key
+for key in ('pd_stage_intent', 'pd_stage_owner', 'pd_stage_readback'):
+    m = re.search(r"\['" + key + r"','([^']*)'\]", h); assert m and m.group(1) == D['en'][key], 'step fallback differs: ' + key
+P
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui buildfix42: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+const T = (k, f) => f;
+function fn(name) { const a = h.indexOf('function ' + name + '('), b = h.indexOf('\n}', a); if (a < 0) throw Error(name); return h.slice(a, b + 2); }
+eval(fn('lvOnKind') + fn('lvOnTip'));
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+chk(lvOnKind(null) === 'meter_wait', 'no figure');
+chk(lvOnKind({ src: 'boot', s: 1800 }) === 'boot' && /since this device boot: 30 min/.test(lvOnTip({ src: 'boot', s: 1800 })), 'boot');
+chk(lvOnKind({ src: 'latest', s: 7380 }) === 'profile' && /Latest recorded screen-on drain for this profile: 123 min/.test(lvOnTip({ src: 'latest', s: 7380 })), 'a profile session is not since boot');
+chk(!/boot/.test(lvOnTip({ src: 'latest', s: 7380 })), 'a profile session still says boot');
+chk(lvOnKind({ src: 'history', s: 600 }) === 'meter' && /Average screen-on drain of this profile: 10 min/.test(lvOnTip({ src: 'history', s: 600 })), 'history average');
+console.log(bad ? 'bad' : 'ok');
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS webui buildfix42: kernel notes behind Details, EQ panel padded in both themes, instant profile sheet with UFO loader and no error-like pill, hub reads idle-only with a remembered answer, polls yield to touches, drain labels follow the figure source, Smart halo keeps turning, 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
