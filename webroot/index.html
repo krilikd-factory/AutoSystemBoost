@@ -540,10 +540,29 @@ button.badge:active { color: var(--accent); }
   border-radius: 50%;
   background: var(--zygisk-header-color);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--zygisk-header-color) 14%, transparent);
+  position: relative;
+  animation: zyLivePulse 3.6s ease-in-out infinite paused;
 }
-/* A verdict painted from this viewer's cache until the fresh read lands. */
-.zygisk-header-link.zygisk-header-cached .zygisk-header-dot { opacity: .55; animation: none; }
-.zygisk-header-link.zygisk-header-cached .zygisk-header-dot::after { animation: none; opacity: 0; }
+/* The header dot keeps one animation for its whole life and a state change only pauses or
+ * resumes it. Creating the animation when the first verdict arrived, during the startup
+ * slide, sometimes left WebView on a frozen frame until the WebUI was opened again; the
+ * same fix the logo and status dots use. A paused dot rests on its first keyframe and the
+ * ring is hidden. */
+.zygisk-header-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  color: var(--bat);
+  opacity: 0;
+  visibility: hidden;
+  animation: zyLiveRing 3.6s ease-in-out infinite paused;
+  pointer-events: none;
+}
+/* A verdict painted from this viewer's cache until the fresh read lands: the colour is
+ * dimmed, the animation itself is left alone. */
+.zygisk-header-link.zygisk-header-cached .zygisk-header-dot { background: color-mix(in srgb, var(--zygisk-header-color) 50%, transparent); }
 .zygisk-header-label { display: inline-flex; align-items: center; flex: 0 0 auto; white-space: nowrap; line-height: 0; }
 .zygisk-header-wordmark { display: block; width: 42px; height: 8px; overflow: visible; }
 /* A local vector wordmark, not a platform font: its angular cuts stay identical in the
@@ -569,6 +588,7 @@ button.badge:active { color: var(--accent); }
   border: 1px solid currentColor;
   color: var(--bat);
   opacity: 0;
+  visibility: visible;
   animation: zyLiveRing 3.6s ease-in-out infinite;
   pointer-events: none;
 }
@@ -2226,14 +2246,15 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
 #zygiskPage .zy-note-fold-body > :first-child { margin-top:0; }
 #zygiskPage .zy-note-fold-body > :last-child { margin-bottom:0; }
 .zy-ghost .zy-lsp-actions .dev-zygisk-btn { align-self: auto; }
-/* LSPosed module panels (lspLiteCard). */
-#zygiskPage .zy-lsp-summary { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 4px; }
-#zygiskPage .zy-lsp-mod { margin:10px 0 0; padding:12px 12px 10px; border:1px solid var(--border); border-radius:16px;
+/* Item panels: LSPosed modules, guard, ART and engine apps on the Zygisk page, and the
+ * report's priority actions and wake holders use the same frame. */
+.zy-lsp-summary { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 4px; }
+.zy-lsp-mod { margin:10px 0 0; padding:12px 12px 10px; border:1px solid var(--border); border-radius:16px;
   background:color-mix(in srgb, var(--surface) 70%, transparent); }
-#zygiskPage .zy-lsp-mod-heavy { border-color:color-mix(in srgb, var(--perf) 45%, var(--border)); }
-#zygiskPage .zy-lsp-mod-off { opacity:.72; }
-#zygiskPage .zy-lsp-head { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
-#zygiskPage .zy-lsp-name { min-width:0; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+.zy-lsp-mod-heavy { border-color:color-mix(in srgb, var(--perf) 45%, var(--border)); }
+.zy-lsp-mod-off { opacity:.72; }
+.zy-lsp-head { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+.zy-lsp-name { min-width:0; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   font:700 14.5px/1.3 var(--sans); color:var(--text); }
 .zy-lsp-badge { flex:0 0 auto; display:inline-flex; align-items:center; min-height:22px; padding:2px 9px; border-radius:11px;
   font:700 10.5px/1.2 var(--sans); letter-spacing:.02em; white-space:nowrap;
@@ -2243,17 +2264,17 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
 .zy-lsp-badge-watch { --zy-lsp-c: var(--bal); }
 .zy-lsp-badge-light { --zy-lsp-c: var(--bat); }
 .zy-lsp-badge-off { --zy-lsp-c: var(--text-tertiary); }
-#zygiskPage .zy-lsp-chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
-#zygiskPage .zy-lsp-chip { display:inline-flex; align-items:center; min-height:22px; padding:2px 8px; border-radius:8px;
+.zy-lsp-chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
+.zy-lsp-chip { display:inline-flex; align-items:center; min-height:22px; padding:2px 8px; border-radius:8px;
   background:var(--surface); border:1px solid var(--border); color:var(--text-secondary);
   font:600 11px/1.25 var(--sans); font-variant-numeric:tabular-nums; }
-#zygiskPage .zy-lsp-chip-reach { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 35%, var(--border)); }
-#zygiskPage .zy-lsp-chip-warn { color:var(--perf); border-color:color-mix(in srgb, var(--perf) 40%, var(--border)); }
-#zygiskPage .zy-lsp-mod .zy-lsp-why { margin-top:6px; }
-#zygiskPage .zy-lsp-mod .zy-lsp-why > summary { font-size:12px; }
-#zygiskPage .zy-lsp-mod .zy-lsp-actions { display:grid; grid-template-columns:repeat(var(--zy-lsp-n, 3), minmax(0, 1fr));
+.zy-lsp-chip-reach { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.zy-lsp-chip-warn { color:var(--perf); border-color:color-mix(in srgb, var(--perf) 40%, var(--border)); }
+.zy-lsp-mod .zy-lsp-why { margin-top:6px; }
+.zy-lsp-mod .zy-lsp-why > summary { font-size:12px; }
+.zy-lsp-mod .zy-lsp-actions { display:grid; grid-template-columns:repeat(var(--zy-lsp-n, 3), minmax(0, 1fr));
   gap:8px; margin-top:10px; justify-content:stretch; }
-#zygiskPage .zy-lsp-mod .zy-lsp-actions .dev-zygisk-btn { width:100%; min-height:38px; padding:7px 6px;
+.zy-lsp-mod .zy-lsp-actions .dev-zygisk-btn { width:100%; min-height:38px; padding:7px 6px;
   border-radius:12px; font-size:12px; text-align:center; }
 html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
 @media (max-width: 400px) {
@@ -2372,6 +2393,17 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-tip > span:nth-child(2) { flex: 1 1 0; min-width: 0; }
 .lgr-recommend-value { flex: 1 0 100%; padding-inline-start: 22px; color: var(--accent); font-size: 12px; font-weight: 700; }
 .lgr-action .lgr-recommend-value { grid-column: 2; padding-inline-start: 0; }
+/* Priority actions and wake holders as framed panels, like the Zygisk item panels: a numbered
+ * badge, the advice, the recommended value and the reference link inside one frame. */
+#reportPage .lgr-action-card { margin:10px 0 0; padding:12px 12px 10px; border:1px solid var(--border); border-radius:16px;
+  background:color-mix(in srgb, var(--surface) 70%, transparent); align-items:start; }
+#reportPage .lgr-action-card .lgr-action-n { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
+  border-radius:11px; color:var(--accent); background:color-mix(in srgb, var(--accent) 14%, transparent);
+  border:1px solid color-mix(in srgb, var(--accent) 35%, transparent); font-size:11px; }
+#reportPage .lgr-action-card .lgr-ref { grid-column: 2; }
+#reportPage #lgr-wake > .lgr-package-row { margin:8px 0 0; padding:10px 12px; border:1px solid var(--border); border-radius:14px;
+  background:color-mix(in srgb, var(--surface) 70%, transparent); }
+#reportPage #lgr-wake > .lgr-package-row + .lgr-row { border-top:0; }
 .inf-advice-rows { display: grid; gap: 7px; }
 .inf-advice-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:4px 12px; }
 .inf-advice-row .junk-cat-meta { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
@@ -2414,15 +2446,15 @@ body.config-category-active #configPage .cfg-list {
 /* buildfix44: cards scrolled under the floating dock showed through and around it and read
  * as overlapping text. A fixed fade below the dock (under it, above the page) hides them.
  * The fade rose 20 px above the dock and took a band of every page with it. It
- * now ends level with the dock's top edge (10 px lift + 60 px targets) and is solid only in
- * the strip below the dock and around its rounded ends. */
+ * now stays in the lower half of the dock, so it is hidden behind it and only fills the
+ * strip below the dock and around its rounded ends. */
 .dock-scrim { display:none; position:fixed; left:0; right:0; bottom:0; z-index:150; pointer-events:none;
-  height:calc(env(safe-area-inset-bottom, 0px) + 66px);
-  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--bg) 70%,transparent) 30%,var(--bg) 58%); }
+  height:calc(env(safe-area-inset-bottom, 0px) + 36px);
+  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--bg) 55%,transparent) 45%,var(--bg) 85%); }
 body.report-active .dock-scrim, body.zygisk-active .dock-scrim, body.device-active .dock-scrim,
 body.config-active.config-category-active .dock-scrim { display:block; }
 html:root[data-asb-glass="1"] .dock-scrim {
-  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--glass-scrim) 70%,transparent) 30%,var(--glass-scrim) 58%); }
+  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--glass-scrim) 55%,transparent) 45%,var(--glass-scrim) 85%); }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ind::before { top:4px; height:28px; border-radius:14px; }
 .lgr-jump-track.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
 #reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor,
@@ -3680,6 +3712,12 @@ html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) .cfg-stat
 html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) :is(.cfg-seg button.on,.cfg-range-val,.cfg-sel-pop button.active,.cfg-desc-opt.is-cur .cfg-desc-opt-k,.cfg-apply-live),
 html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) .cfg-sel-btn::after { color:var(--cat-ink) !important; }
 html:not([data-asb-theme="light"]) .kernel-card.cat-kernel .bfx-secondary:not(.kernel-clear):not(:disabled) { color:var(--cat-ink); }
+/* Settings -> Zygisk as a console: the link verdict sits inside the console frame and the
+ * ZYGISK button spans the width under the two panels. */
+.cfg-zygisk-card.dsp-console > .dev-zygisk-link { margin:0 0 10px; padding:10px 12px; border:1px solid var(--border);
+  border-radius:14px; }
+.cfg-zygisk-card.dsp-console > .cfg-zygisk-open { display:flex; justify-content:center; width:100%; max-width:none;
+  margin:12px 0 2px; min-height:42px; box-sizing:border-box; }
 .cfg-zygisk-card .cfg-zygisk-open {
   --tech-icon:var(--cat);
   color:var(--cat) !important;
@@ -6541,7 +6579,7 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row +
 .dsp-console-label::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--cat-ink,var(--accent)); opacity:.85; }
 .dsp-console-panel { border-radius:14px; background:color-mix(in srgb,var(--surface) 82%,transparent); }
 .dsp-console-panel .cfg-row-top { min-height:42px; }
-.dsp-console-panel .cfg-name { font-size:12px; overflow-wrap:normal; word-break:normal; hyphens:auto; }
+.dsp-console-panel .cfg-name { font-size:12px; overflow-wrap:normal; word-break:normal; hyphens:manual; }
 .dsp-console-panel .cfg-range-val { color:var(--cat-ink,var(--text)); }
 .dsp-eq-console { box-sizing:border-box; width:100%; min-width:0; max-width:100%; margin:0; padding:15px !important; overflow:visible; }
 .dsp-eq-console > * { min-width:0; max-width:100%; box-sizing:border-box; }
@@ -11670,15 +11708,38 @@ function cfgRenderSection(list, section, catKey, groupId) {
 }
 
 function cfgRenderZygiskCard(list, items) {
+  /* Console layout, like the DSP and camera consoles: a header with the master state, the
+   * link verdict, the master switch in its own panel, the three features in a second panel
+   * and a full-width way into the ZYGISK page. */
   const card = document.createElement('section');
-  card.className = 'cfg-zygisk-card cat-zygisk';
+  card.className = 'cfg-zygisk-card cat-zygisk dsp-console asb-console';
   card.id = 'cfgZygiskCard';
   card.setAttribute('aria-label', T('cfg_ui_section_zygisk', 'Zygisk'));
   const evidence = window._asbZygiskLinkData || window._asbDeviceInfoData || null;
-  card.appendChild(deviceZygiskLink(evidence || {}));
   const evidenceEnabled = evidence ? deviceVal(evidence, 'zygisk_observer', 'enabled') : '—';
   if (evidenceEnabled === '0' || evidenceEnabled === '1') _cfgVals.zygisk_enabled = evidenceEnabled;
-  items.forEach(function (it) { cfgRenderRow(card, it, false); });
+  const masterOn = String(_cfgVals.zygisk_enabled !== undefined ? _cfgVals.zygisk_enabled : '0') === '1';
+  const head = document.createElement('div'); head.className = 'dsp-console-head';
+  const title = document.createElement('div'); title.className = 'dsp-console-title'; title.textContent = 'Zygisk';
+  const mark = document.createElement('span'); mark.className = 'dsp-console-mark' + (masterOn ? ' on' : '');
+  mark.textContent = masterOn ? T('st_on', 'Enabled') : T('st_off', 'Disabled');
+  head.appendChild(title); head.appendChild(mark); card.appendChild(head);
+  card.appendChild(deviceZygiskLink(evidence || {}));
+  const groups = [['zy_cfg_grp_master', 'Connection', items.filter(function (it) { return it.key === 'zygisk_enabled'; })],
+    ['zy_cfg_grp_features', 'Features', items.filter(function (it) { return it.key !== 'zygisk_enabled'; })]];
+  groups.forEach(function (g) {
+    if (!g[2].length) return;
+    const label = document.createElement('div'); label.className = 'dsp-console-label'; label.textContent = T(g[0], g[1]);
+    card.appendChild(label);
+    const panel = document.createElement('div'); panel.className = 'dsp-console-panel cfg-zygisk-panel';
+    g[2].forEach(function (it) {
+      cfgRenderRow(panel, it, false);
+      const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
+      const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
+      if (tx) tx.nodeValue = String(tx.nodeValue).replace(/\s*\(Zygisk\)\s*$/, '');
+    });
+    card.appendChild(panel);
+  });
   const open = document.createElement('button'); open.type = 'button';
   open.className = 'live-chip cfg-zygisk-open';
   open.textContent = T('zy_settings_open', 'Open ZYGISK control panel');
@@ -19656,12 +19717,18 @@ function asbPageJumpWatch(nav, items) {
   update();
 }
 function asbPageJumpIcon(id) {
+  /* Every dock on one page has its own icon: the report used to fall back to the panel icon
+   * for ten of its sections. */
   const icons = {
-    'lgr-summary': 'panel', 'lgr-actions': 'switches', 'lgr-drain': 'battery',
-    'lgr-smooth': 'zygisk_activity', 'lgr-thermal': 'thermal_point', 'lgr-zygisk': 'zygisk_observer',
-    'lgr-details': 'log_detail', 'zy-mode': 'zygisk_mode', 'zy-auto': 'zygisk_auto',
-    'zy-controls': 'switches', 'zy-activity': 'zygisk_activity', 'zy-guard': 'zygisk_guard',
-    'zy-aot': 'zygisk_art', 'zy-apps': 'zygisk_apps', 'zy-lsp': 'zygisk_hooks', 'zy-s7': 'zygisk_activity'
+    'lgr-summary': 'panel', 'lgr-actions': 'switches', 'lgr-details': 'log_detail',
+    'lgr-drain': 'battery_cell', 'lgr-night': 'quiet_moon', 'lgr-wake': 'wakelock',
+    'lgr-profiles': 'kind_profile', 'lgr-phases': 'timeout', 'lgr-thermal': 'thermal_point',
+    'lgr-smooth': 'anim_speed', 'lgr-display': 'ltpo', 'lgr-bt': 'bluetooth_offload',
+    'lgr-impact': 'radar', 'lgr-smart': 'smart', 'lgr-zygisk': 'zygisk_observer',
+    'lgr-asb': 'wrench', 'lgr-crash': 'error', 'lgr-trend': 'range', 'lgr-observations': 'capture',
+    'zy-mode': 'zygisk_mode', 'zy-auto': 'zygisk_auto', 'zy-controls': 'switches',
+    'zy-activity': 'zygisk_activity', 'zy-guard': 'zygisk_guard', 'zy-aot': 'zygisk_art',
+    'zy-apps': 'zygisk_apps', 'zy-lsp': 'zygisk_hooks', 'zy-s7': 'smart', 'zy-engine': 'zygisk_engine'
   };
   return icons[id] || 'panel';
 }
@@ -19832,7 +19899,7 @@ function closeReportPage() {
  * spec's fifth field lists keys in display order; the last spec of a section also shows every
  * key no earlier card took, so a future collector key is never hidden. */
 const DEVICE_SECTION_ORDER = [
-  ['firmware', 'dev_sec_device', 'Device', 'hw', ['market_name', 'brand', 'manufacturer', 'model', 'device', 'product', 'board']],
+  ['firmware', 'dev_sec_device', 'Device', 'hw', ['market_name', 'model_family', 'form_factor', 'brand', 'manufacturer', 'model', 'device', 'product', 'board']],
   ['soc', 'dev_sec_soc', 'Chip (SoC)', 'hw'],
   ['cpu_policy', 'dev_sec_cpu_policy', 'CPU frequency policies', 'hw'],
   ['gpu', 'dev_sec_gpu', 'GPU and devfreq', 'hw'],
@@ -21172,13 +21239,55 @@ function zygiskGuardActionRow(label, value, btnText, onTap) {
   w.appendChild(row);
   return w;
 }
+/* Shared item panel of the Zygisk and report pages, the layout the LSPosed card introduced:
+ * a name with a coloured badge, plain chips, an optional fold with the details and a row of
+ * evenly sized actions. zyHowFold keeps long explanations folded under one summary. */
+function zyHowFold(title, notes) {
+  const d = document.createElement('details'); d.className = 'asb-disclosure zy-lsp-how';
+  const sm = document.createElement('summary'); sm.textContent = title; d.appendChild(sm);
+  notes.forEach(function (n) { if (n) d.appendChild(typeof n === 'string' ? logReportNote(n) : n); });
+  return d;
+}
+function zyPanelButton(text, onTap) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'dev-zygisk-btn';
+  b.textContent = text; b.onclick = onTap; return b;
+}
+function zyItemPanel(o) {
+  const w = document.createElement('div'); w.className = 'zy-lsp-mod zy-lsp-mod-' + (o.tone || 'off');
+  const head = document.createElement('div'); head.className = 'zy-lsp-head';
+  const name = document.createElement('span'); name.className = 'zy-lsp-name'; name.textContent = o.name;
+  head.appendChild(name);
+  if (o.badge) { const b = document.createElement('span'); b.className = 'zy-lsp-badge zy-lsp-badge-' + (o.tone || 'off'); b.textContent = o.badge; head.appendChild(b); }
+  w.appendChild(head);
+  const list = (o.chips || []).filter(function (c) { return c && (typeof c === 'string' ? c : c[0]); });
+  if (list.length) {
+    const chips = document.createElement('div'); chips.className = 'zy-lsp-chips';
+    list.forEach(function (c) {
+      const t = typeof c === 'string' ? c : c[0];
+      const x = document.createElement('span'); x.className = 'zy-lsp-chip' + (typeof c === 'string' || !c[1] ? '' : ' ' + c[1]); x.textContent = t;
+      chips.appendChild(x);
+    });
+    w.appendChild(chips);
+  }
+  if (o.fold && o.fold.notes && o.fold.notes.length) {
+    const why = document.createElement('details'); why.className = 'zy-lsp-why';
+    const ws = document.createElement('summary'); ws.textContent = o.fold.title; why.appendChild(ws);
+    o.fold.notes.forEach(function (n) { why.appendChild(typeof n === 'string' ? logReportNote(n) : n); });
+    w.appendChild(why);
+  }
+  const acts = (o.actions || []).filter(Boolean);
+  if (acts.length) {
+    const a = document.createElement('div'); a.className = 'zy-lsp-actions';
+    acts.forEach(function (b) { a.appendChild(b); });
+    a.style.setProperty('--zy-lsp-n', String(acts.length));
+    w.appendChild(a);
+  }
+  return w;
+}
+function zyChipsOf(text) { return String(text || '').split(' · ').map(function (x) { return x.trim(); }).filter(Boolean); }
 function zygiskGuardCard() {
   const g = _zyGuard || zygiskGuardParse('');
   const card = logReportSec(T('zy_guard_title', 'Background guard'), 'zygisk_guard');
-  card.appendChild(logReportNote(T('zy_guard_desc', 'With the screen off, an app that starts again and again (%s or more process starts in 5 minutes, counted by the Zygisk start ledger) gets its background activity restricted until the screen turns on; then the previous setting comes back. Messengers, mail, alarms, navigation, watches, VPN and the apps on the Doze keep list or in the notification fix are never touched.').replace('%s', String(g.threshold))));
-  card.appendChild(logReportNote(T('zy_guard_desc_screen_on', 'With the screen on, an app whose background processes - not the app in front - start %s or more times in 5 minutes while nothing of it is visible is restricted for 30 minutes, and given back at once when you use it.').replace('%s', String(g.threshold))));
-  card.appendChild(logReportNote(T('zy_guard_desc_wakers', 'Loops + night wakers: an app whose process starts %s or more times during one screen-off period, at any pace, is restricted the same way until the screen turns on. Each restriction counts the starts that still happened while it was in place.').replace('%s', String(g.wakerMin))));
-  card.appendChild(logReportNote(T('zy_guard_confirm_desc', 'Before an automatic AppOps restriction ASB requires the same evidence in %s separate screen sessions and your confirmation for that package. A proposal changes nothing yet. Restrictions can delay background work and notifications; Give back now restores the recorded mode immediately.').replace('%s', String(g.sessionsRequired))));
   const seg = document.createElement('div');
   seg.className = 'cfg-seg zy-mode-seg zy-guard-seg';
   [['off', T('zy_guard_off', 'Off')], ['loops', T('zy_guard_on', 'Restrain loops')], ['wakers', T('zy_guard_wakers', 'Loops + night wakers')]].forEach(function (o) {
@@ -21190,6 +21299,12 @@ function zygiskGuardCard() {
     seg.appendChild(b);
   });
   card.appendChild(seg);
+  card.appendChild(zyHowFold(T('zy_guard_how', 'How the guard works'), [
+    T('zy_guard_desc', 'With the screen off, an app that starts again and again (%s or more process starts in 5 minutes, counted by the Zygisk start ledger) gets its background activity restricted until the screen turns on; then the previous setting comes back. Messengers, mail, alarms, navigation, watches, VPN and the apps on the Doze keep list or in the notification fix are never touched.').replace('%s', String(g.threshold)),
+    T('zy_guard_desc_screen_on', 'With the screen on, an app whose background processes - not the app in front - start %s or more times in 5 minutes while nothing of it is visible is restricted for 30 minutes, and given back at once when you use it.').replace('%s', String(g.threshold)),
+    T('zy_guard_desc_wakers', 'Loops + night wakers: an app whose process starts %s or more times during one screen-off period, at any pace, is restricted the same way until the screen turns on. Each restriction counts the starts that still happened while it was in place.').replace('%s', String(g.wakerMin)),
+    T('zy_guard_confirm_desc', 'Before an automatic AppOps restriction ASB requires the same evidence in %s separate screen sessions and your confirmation for that package. A proposal changes nothing yet. Restrictions can delay background work and notifications; Give back now restores the recorded mode immediately.').replace('%s', String(g.sessionsRequired))
+  ]));
   if (!g.ok) card.appendChild(logReportNote(T('zy_guard_unread', 'The guard state has not been read yet.')));
   else if (g.enabled && !g.ledger) card.appendChild(logReportNote(T('zy_guard_needs_ledger', 'Needs the process-start ledger: choose Watch or Full above.')));
   const pk = [];
@@ -21209,7 +21324,9 @@ function zygiskGuardCard() {
     g.pending.forEach(function (a) {
       const v = T('zy_guard_pending_row', '%1 starts · %2/%3 sessions · %4').replace('%1', String(a.n)).replace('%2', String(a.sessions)).replace('%3', String(g.sessionsRequired)).replace('%4', zygiskGuardWhy(a.why));
       const bt = a.approved ? T('zy_guard_pending_approved', 'Confirmed · waiting for evidence') : T('zy_guard_pending_approve', 'Confirm this app');
-      pd.appendChild(zygiskGuardActionRow(nm(a.pkg), v, bt, function () { if (!a.approved) zygiskGuardPackage('approve', a.pkg); }));
+      pd.appendChild(zyItemPanel({ name: nm(a.pkg), tone: a.approved ? 'light' : 'watch',
+        badge: a.approved ? T('zy_badge_confirmed', 'Confirmed') : T('zy_badge_proposal', 'Proposal'), chips: zyChipsOf(v),
+        actions: [a.approved ? null : zyPanelButton(bt, function () { zygiskGuardPackage('approve', a.pkg); })] }));
     });
     card.appendChild(pd);
   }
@@ -21218,7 +21335,8 @@ function zygiskGuardCard() {
       let v = T('zy_guard_active', 'restricted since %1 · %2 starts').replace('%1', zygiskGuardClock(a.since)).replace('%2', String(a.n)) + ' · ' + zygiskGuardWhy(a.why);
       if (a.why === 'loop_on' && a.until > 0) v += ' · ' + T('zy_guard_until', 'until %s').replace('%s', zygiskGuardClock(a.until));
       if (a.after >= 0) v += ' · ' + T('zy_guard_after', 'starts while restricted: %s').replace('%s', String(a.after));
-      card.appendChild(zygiskGuardActionRow(nm(a.pkg), v, T('zy_guard_release_now', 'Give back now'), function () { zygiskGuardPackage('release', a.pkg); }));
+      card.appendChild(zyItemPanel({ name: nm(a.pkg), tone: 'heavy', badge: T('zy_badge_restricted', 'Restricted'), chips: zyChipsOf(v),
+        actions: [zyPanelButton(T('zy_guard_release_now', 'Give back now'), function () { zygiskGuardPackage('release', a.pkg); })] }));
     });
   } else if (g.ok && g.enabled) {
     card.appendChild(logReportNote(T('zy_guard_none', 'No app is restricted now.')));
@@ -21232,11 +21350,13 @@ function zygiskGuardCard() {
     gh.appendChild(gs);
     gh.appendChild(logReportNote(T('zy_guard_ghost_desc', 'Started in the background %1 or more times over %2 days, never opened, and Android itself marks them idle. Restricting one is the same as choosing "Restricted" in its battery settings: no background work, the app still works when you open it - and opening it gives the background back.').replace('%1', String(g.ghostMin)).replace('%2', String(g.ghostDays))));
     g.held.forEach(function (h) {
-      gh.appendChild(zygiskGuardActionRow(nm(h.pkg), zygiskGuardHeldText(h), T('zy_guard_ghost_release', 'Give back'), function () { zygiskGuardGhost([h.pkg], false); }));
+      gh.appendChild(zyItemPanel({ name: nm(h.pkg), tone: 'heavy', badge: T('zy_badge_restricted', 'Restricted'), chips: zyChipsOf(zygiskGuardHeldText(h)),
+        actions: [zyPanelButton(T('zy_guard_ghost_release', 'Give back'), function () { zygiskGuardGhost([h.pkg], false); })] }));
     });
     g.suggest.forEach(function (x) {
-      gh.appendChild(zygiskGuardActionRow(nm(x.pkg), T('zy_guard_ghost_row', '%1 background starts in %2 days, never opened').replace('%1', String(x.n)).replace('%2', zygiskGuardTenth(x.days10)),
-        T('zy_guard_ghost_restrict', 'Restrict'), function () { zygiskGuardGhost([x.pkg], true); }));
+      gh.appendChild(zyItemPanel({ name: nm(x.pkg), tone: 'watch', badge: T('zy_badge_never_opened', 'Never opened'),
+        chips: zyChipsOf(T('zy_guard_ghost_row', '%1 background starts in %2 days, never opened').replace('%1', String(x.n)).replace('%2', zygiskGuardTenth(x.days10))),
+        actions: [zyPanelButton(T('zy_guard_ghost_restrict', 'Restrict'), function () { zygiskGuardGhost([x.pkg], true); })] }));
     });
     if (g.suggest.length > 1) {
       const all = document.createElement('button');
@@ -21403,7 +21523,8 @@ function zygiskAotValue(a) {
 function zygiskAotCard() {
   const g = _zyAot || zygiskAotParse('');
   const card = logReportSec(T('zy_aot_title', 'Faster app starts (ART)'), 'zygisk_art');
-  card.appendChild(logReportNote(T('zy_aot_desc', 'ASB counts how often you open each app (Zygisk start ledger) and how long its cold start takes (Android\'s own launch log). Only frequently opened apps without ahead-of-time code are considered, one batch per charging session, with the screen off and a known battery temperature below 40 °C. This can improve startup, but does not guarantee battery savings; compilation itself costs CPU and storage writes.')));
+  const aotHow = zyHowFold(T('zy_aot_how', 'How it works'), []);
+  aotHow.appendChild(logReportNote(T('zy_aot_desc', 'ASB counts how often you open each app (Zygisk start ledger) and how long its cold start takes (Android\'s own launch log). Only frequently opened apps without ahead-of-time code are considered, one batch per charging session, with the screen off and a known battery temperature below 40 °C. This can improve startup, but does not guarantee battery savings; compilation itself costs CPU and storage writes.')));
   const seg = document.createElement('div');
   seg.className = 'cfg-seg zy-mode-seg zy-aot-seg';
   [['off', T('zy_aot_off', 'Off')], ['on', T('zy_aot_on', 'Compile while charging')]].forEach(function (o) {
@@ -21415,6 +21536,7 @@ function zygiskAotCard() {
     seg.appendChild(b);
   });
   card.appendChild(seg);
+  card.appendChild(aotHow);
   if (!g.ok) {
     card.appendChild(logReportNote(_zyAotErr ? T('zy_aot_no_answer', 'The compile-state script did not answer: %s').replace('%s', _zyAotErr)
       : T('zy_aot_unread', 'The compile state has not been read yet.')));
@@ -21431,17 +21553,22 @@ function zygiskAotCard() {
   const names = dozeKeepLabels(g.apps.map(function (a) { return a.pkg; }).concat(g.events.map(function (e) { return e.pkg; }), g.excluded));
   const nm = function (p) { return names[p] || p; };
   if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_list_scope', 'Observed apps below: waiting, compiled and unknown states are listed together.')));
-  if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_exclude_hint', 'If an app misbehaves, exclude it: ASB will not compile it or handle its new processes through the Zygisk observer, ledger or launch assistant. If ASB compiled it, the compile state returns to the one Android installed it with. Restart an already running app.')));
+  if (g.apps.length) aotHow.appendChild(logReportNote(T('zy_aot_exclude_hint', 'If an app misbehaves, exclude it: ASB will not compile it or handle its new processes through the Zygisk observer, ledger or launch assistant. If ASB compiled it, the compile state returns to the one Android installed it with. Restart an already running app.')));
   g.apps.forEach(function (a) {
-    card.appendChild(zygiskGuardActionRow(nm(a.pkg), zygiskAotValue(a), T('zy_aot_exclude_btn', 'Exclude'), function () { zygiskAotPackage('exclude', a.pkg); }));
+    const strong = zygiskAotStrong(a.filter), weakF = zygiskAotWeak(a.filter);
+    card.appendChild(zyItemPanel({ name: nm(a.pkg), tone: strong ? 'light' : weakF ? 'watch' : 'off',
+      badge: strong ? T('zy_badge_compiled', 'Compiled') : weakF ? T('zy_badge_waiting', 'Waiting') : T('zy_badge_unknown', 'Not known'),
+      chips: zyChipsOf(zygiskAotValue(a)),
+      actions: [zyPanelButton(T('zy_aot_exclude_btn', 'Exclude'), function () { zygiskAotPackage('exclude', a.pkg); })] }));
   });
   if (g.excluded.length) {
     card.appendChild(logReportNote(T('zy_aot_excluded_title', 'Excluded by you (%s): no ART compilation or ASB Zygisk handling for new processes.').replace('%s', String(g.excluded.length))));
     g.excluded.forEach(function (p) {
-      card.appendChild(zygiskGuardActionRow(nm(p), T('zy_aot_excluded_v', 'excluded'), T('zy_aot_include_btn', 'Allow again'), function () { zygiskAotPackage('include', p); }));
+      card.appendChild(zyItemPanel({ name: nm(p), tone: 'off', badge: T('zy_badge_excluded', 'Excluded'),
+        actions: [zyPanelButton(T('zy_aot_include_btn', 'Allow again'), function () { zygiskAotPackage('include', p); })] }));
     });
   }
-  if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_note', 'Times come from Android\'s launch log (until the first frame); a cold start is one where Android had to start the app\'s process. They vary with what the app loads - compare medians over several starts.')));
+  if (g.apps.length) aotHow.appendChild(logReportNote(T('zy_aot_note', 'Times come from Android\'s launch log (until the first frame); a cold start is one where Android had to start the app\'s process. They vary with what the app loads - compare medians over several starts.')));
   if (g.events.length) {
     const ev = document.createElement('details');
     ev.className = 'zy-evidence';
@@ -22129,7 +22256,7 @@ function zygiskLinkCard() {
   const g = _zyLink || zygiskLinkParse('');
   const kv = g.kv;
   const card = logReportSec(T('zy_link_title', 'One engine: Zygisk · governor · LSPosed'), 'zygisk_engine');
-  card.appendChild(logReportNote(T('zy_link_desc', 'The Zygisk companion hears every app start, LSPosed tells which apps carry hook modules and Android\'s launch log measures each cold start. From that ASB sorts the apps you open into slow and fast starters: the governor keeps the cold-start lift twice as long for a slow one and ends it at half for a fast one. The background guard never restricts an LSPosed module app.')));
+  card.appendChild(zyHowFold(T('zy_link_how', 'How the engine works'), [T('zy_link_desc', 'The Zygisk companion hears every app start, LSPosed tells which apps carry hook modules and Android\'s launch log measures each cold start. From that ASB sorts the apps you open into slow and fast starters: the governor keeps the cold-start lift twice as long for a slow one and ends it at half for a fast one. The background guard never restricts an LSPosed module app.')]));
   if (!g.ok) { card.appendChild(logReportNote(T('zy_link_unread', 'Not read yet.'))); return card; }
   const clock = function (sec) { return sec > 0 ? zygiskGuardClock(sec) : '-'; };
   let cls;
@@ -22165,7 +22292,11 @@ function zygiskLinkCard() {
     const sm = document.createElement('summary');
     sm.textContent = T('zy_link_apps', 'Each app: what ASB knows and does (%s)').replace('%s', String(g.apps.length));
     box.appendChild(sm);
-    g.apps.forEach(function (a) { box.appendChild(logReportRow(nm(a.pkg), zygiskLinkAppValue(a, nm), false)); });
+    g.apps.forEach(function (a) {
+      const parts = zyChipsOf(zygiskLinkAppValue(a, nm));
+      box.appendChild(zyItemPanel({ name: nm(a.pkg), tone: a.cls === 'slow' ? 'heavy' : a.cls === 'fast' ? 'light' : 'off',
+        badge: parts[0], chips: parts.slice(1) }));
+    });
     card.appendChild(box);
   }
   const note = logReportNote(T('zy_link_note', 'Classes are rebuilt every 30 minutes from the newest data, and an app\'s class applies from its next cold start. ASB only reads LSPosed and the other Zygisk modules: it never enables, disables or changes them.'));
@@ -23630,7 +23761,7 @@ function logReportAppendAnalysis(body, d, analysis) {
   if (analysis.actions.length) {
     const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions')); sec.id = 'lgr-actions';
     analysis.actions.forEach(function (tip, i) {
-      const row = document.createElement('div'); row.className = 'lgr-tip lgr-action';
+      const row = document.createElement('div'); row.className = 'lgr-tip lgr-action lgr-action-card';
       const n = document.createElement('span'); n.className = 'lgr-action-n'; n.textContent = String(i + 1) + '.';
       const tx = document.createElement('span'); tx.textContent = logReportTipText(tip);
       row.appendChild(n); row.appendChild(tx);
@@ -24751,15 +24882,16 @@ function logReportFinalizeLayout(body) {
     return el.classList && el.classList.contains('lgr-sec') && Object.prototype.hasOwnProperty.call(rank, el.id);
   }).sort(function (a, b) { return rank[a.id] - rank[b.id]; });
   sections.forEach(function (sec) { body.appendChild(sec); });
+  /* Short dock labels of their own: the section titles carry emoji and full sentences. */
   const labels = {
-    'lgr-drain':['lr_nav_drain','Battery'], 'lgr-night':['lr_sec_nightd_short','Idle'],
-    'lgr-wake':['lr_sec_wake','Wake'], 'lgr-profiles':['lr_sec_profiles','Profiles'],
-    'lgr-phases':['lr_sec_phases','Phases'], 'lgr-thermal':['lr_sec_thermal','Thermals'],
-    'lgr-smooth':['lr_sec_smooth','Smoothness'], 'lgr-display':['lr_sec_display','Display'],
-    'lgr-bt':['lr_sec_bt','Bluetooth'], 'lgr-impact':['lr_sec_impact','Evidence'],
-    'lgr-smart':['lr_sec_smart','Smart'], 'lgr-zygisk':['lr_sec_zygisk','Zygisk'],
-    'lgr-asb':['lr_sec_asb','ASB cost'], 'lgr-crash':['lr_sec_crash','Errors'],
-    'lgr-trend':['lr_sec_trend','Trend'], 'lgr-observations':['lr_sec_observations','More']
+    'lgr-drain':['lr_nav_drain','Battery'], 'lgr-night':['lr_nav_idle','Idle'],
+    'lgr-wake':['lr_nav_wake','Wakeups'], 'lgr-profiles':['lr_nav_profiles','Profiles'],
+    'lgr-phases':['lr_nav_phases','Phases'], 'lgr-thermal':['lr_nav_thermal','Thermals'],
+    'lgr-smooth':['lr_nav_smooth','Smoothness'], 'lgr-display':['lr_nav_display','Display'],
+    'lgr-bt':['lr_nav_bt','Bluetooth'], 'lgr-impact':['lr_nav_impact','Evidence'],
+    'lgr-smart':['lr_nav_smart','Learning'], 'lgr-zygisk':['lr_nav_zygisk','Zygisk'],
+    'lgr-asb':['lr_nav_asb','ASB cost'], 'lgr-crash':['lr_nav_crash','Errors'],
+    'lgr-trend':['lr_nav_trend','Trend'], 'lgr-observations':['lr_nav_more','More']
   };
   const items = [['lgr-summary', T('lr_nav_summary', 'Summary')], ['lgr-actions', T('lr_nav_actions', 'Actions')],
     ['lgr-details', T('lr_nav_details', 'Details')]];
@@ -27894,6 +28026,10 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
     var kx = (p1.left - p0.left) / 100 || 1, ky = (p1.top - p0.top) / 100 || 1;
     function local(x, y) { return { x:(x - p0.left) / kx, y:(y - p0.top) / ky }; }
     var gr = glyph.getBoundingClientRect(); el.style.lineHeight = (gr.height / ky).toFixed(2) + 'px';
+    /* The header saucer grew; the flying one starts at the same size as the one in the nest
+     * (1.75em wide body) instead of the glyph's text size, and grows much larger in flight. */
+    var fsFit = (gr.width / kx) / 1.75;
+    if (fsFit > fs) el.style.fontSize = fsFit.toFixed(1) + 'px';
     var h0 = home(), l0 = local(h0.x, h0.y);
     el.style.transform = 'translate(' + l0.x + 'px,' + l0.y + 'px) translate(-50%,-50%)';
     document.body.classList.add('ufo-flying');
@@ -27924,7 +28060,7 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
       var b = smoother((t - LIFT) / (IN_END - LIFT)) * (1 - smoother((t - OUT_START) / (LAND - OUT_START)));
       var wx = m + (Math.sin(t * .92 + .4) * .5 + .5) * Math.max(0, w - m * 2);
       var wy = m + (Math.sin(t * 1.31 + 1.9) * .5 + .5) * Math.max(0, hh - m * 2);
-      var wsc = .75 + (Math.sin(t * 1.7 + .6) * .5 + .5) * 1.05;
+      var wsc = 1.5 + (Math.sin(t * 1.7 + .6) * .5 + .5) * 1.7;
       var up = smoother(t / LIFT) * (1 - smoother((t - LAND) / (DUR - LAND)));
       var bob = Math.sin(t * 6) * 2.2 * up * (1 - b), hx = h.x, hy = h.y - fs * .55 * up + bob;
       var x = lerp(hx, wx, b), y = lerp(hy, wy, b), sc = lerp(1 + .12 * up, wsc, b);

@@ -10701,6 +10701,34 @@ grep -F 'error=busy' "$T/busy.out" >/dev/null || fail 'busy error missing'
 echo 'PASS I/O scheduler A/B buildfix37: physical/common exposure, interleaved fio percentiles, new-file-only safety, no winner, fio/busy failures and exact sda/dm-0 baseline restoration'
 )
 
+t_device_db_runtime() (
+  # The model-code table names every OnePlus the owner listed and the MediaTek and tablet
+  # lines, and the installer no longer treats the Chinese OnePlus 13 (PJZ110) as a OnePlus 15.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL device db: $*" >&2; exit 1; }
+  db="$ROOT/runtime/asb_device_db.sh"
+  chk() { out="$(sh "$db" model "$1")" || fail "$1 unknown"; case "$out" in ("name=$2 "*) ;; (*) fail "$1 -> $out (want $2)" ;; esac; }
+  chk OPD2403 'OnePlus Pad 2 (2024)'; chk CPH2723 'OnePlus 13s'; chk CPH2609 'OnePlus 12R'
+  chk CPH2955 'OnePlus N6'; chk CPH2663 'OnePlus Nord 4'; chk CPH2449 'OnePlus 11'
+  chk CPH2709 'OnePlus Nord 5'; chk CPH2645 'OnePlus 13R'; chk CPH2653 'OnePlus 13'
+  chk PKX110 'OnePlus 13T'; chk PKR110 'OnePlus Ace 5 Pro'; chk OPD2413 'OnePlus Pad 2 Pro'
+  chk OPD2415 'OnePlus Pad 3'; chk PLC110 'OnePlus Ace 5 Ultra'; chk PLQ110 'OnePlus Ace 6'
+  chk PLF110 'OnePlus Ace 5 Race'; chk CPH2719 'OnePlus Nord CE 5'; chk CPH2745 'OnePlus 15'
+  chk pjz110 'OnePlus 13'; chk CPH2551 'OnePlus Open'
+  sh "$db" model OPD2415 | grep -q 'form=tablet' || fail 'Pad 3 is not a tablet'
+  sh "$db" model ZZZ999 >/dev/null && fail 'an unknown code matched'
+  sh "$db" soc canoe | grep -q 'soc_name=Snapdragon 8 Elite Gen 5 soc_vendor=Qualcomm soc_class=flagship' || fail 'canoe'
+  sh "$db" soc MT6991 | grep -q 'soc_vendor=MediaTek soc_class=flagship' || fail 'MT6991'
+  sh "$db" soc SM7675 | grep -q 'soc_class=upper_mid' || fail 'SM7675'
+  sh "$db" soc exynos >/dev/null && fail 'a non-OnePlus chip matched'
+  if grep -n 'pjz110' "$ROOT/common/install.sh" | grep -q 'ASB_IS_OP15\|op611fl1'; then fail 'PJZ110 still selects the OnePlus 15 overlay'; fi
+  grep -q '"pjz110"' "$ROOT/common/install.sh" || fail 'PJZ110 is not a OnePlus 13'
+  grep -q 'asb_db_model "$ASB_MODEL_RAW"' "$ROOT/common/install.sh" || fail 'installer does not use the table'
+  grep -q 'asb_device_db.sh' "$ROOT/tools/asb_device_info.sh" || fail 'device page does not use the table'
+  echo 'PASS device db: listed OnePlus models, tablets and MediaTek chips resolve; PJZ110 is a OnePlus 13'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

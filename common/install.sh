@@ -631,11 +631,11 @@ ASB_VENDOR_OVERLAY="$(_asb_feat_from_zip VENDOR_OVERLAY true)"
 
 
   case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
-    *"oneplus 15"*|*"oneplus15"*|*"op15"*|*"cph274"*|*"cph275"*|*"op611fl1"*|*"plk110"*|*"pjz110"*|*"pkz110"*)
+    *"oneplus 15"*|*"oneplus15"*|*"op15"*|*"cph274"*|*"op611fl1"*|*"plk110"*)
       ASB_IS_OP15=true ;;
   esac
   case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
-    *"oneplus 13"*|*"oneplus13"*|*"op13"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
+    *"oneplus 13"*|*"oneplus13"*|*"op13"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"pjz110"*|*"op5d55"*)
       ASB_IS_OP13=true ;;
   esac
   if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ]; then
@@ -654,7 +654,7 @@ ASB_VENDOR_OVERLAY="$(_asb_feat_from_zip VENDOR_OVERLAY true)"
   fi
 
   case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
-    *"oneplus 12"*|*"oneplus12"*|*"op12"*|*"cph2581"*|*"cph2583"*|*"cph2573"*|*"op595"*)
+    *"oneplus 12"*|*"oneplus12"*|*"op12"*|*"cph2581"*|*"cph2583"*|*"cph2573"*|*"pjd110"*|*"op595"*)
       ASB_IS_OP12=true ;;
   esac
   if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ] && [ "$ASB_IS_OP12" != "true" ]; then
@@ -670,14 +670,14 @@ ASB_VENDOR_OVERLAY="$(_asb_feat_from_zip VENDOR_OVERLAY true)"
     esac
   fi
 
-  echo "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" | grep -Eqi '(^|[[:space:]/._-])(cph27[45][0-9a-z]*|op611fl1|op611|plk110|pjz110|pkz110|oplus/cph27[45]|oneplus/cph27[45])([[:space:]/._-]|$)' && ASB_IS_OP15=true
+  echo "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" | grep -Eqi '(^|[[:space:]/._-])(cph274[579][0-9a-z]*|op611fl1|op611|plk110|oplus/cph274[579]|oneplus/cph274[579])([[:space:]/._-]|$)' && ASB_IS_OP15=true
   echo "$ASB_PRJ_L" | grep -Eqi '^(24831|24833|24863)$' && ASB_IS_OP15=true
 
   if [ "$ASB_IS_OP15" != "true" ] && [ -r /proc/cmdline ]; then
     _cmdline_prj="$(cat /proc/cmdline 2>/dev/null | tr ' ' '\n' | grep -i 'prjname=' | cut -d= -f2 | head -1)"
     echo "$_cmdline_prj" | grep -Eqi '^(24831|24833|24863)$' && ASB_IS_OP15=true
     _cmdline_model="$(cat /proc/cmdline 2>/dev/null | tr '[:upper:]' '[:lower:]')"
-    echo "$_cmdline_model" | grep -Eqi '(cph274|cph275|op611fl1|plk110|pjz110|pkz110)' && ASB_IS_OP15=true
+    echo "$_cmdline_model" | grep -Eqi '(cph274[579]|op611fl1|plk110)' && ASB_IS_OP15=true
   fi
 
   if [ "$ASB_IS_OP15" != "true" ]; then
@@ -690,7 +690,7 @@ ASB_VENDOR_OVERLAY="$(_asb_feat_from_zip VENDOR_OVERLAY true)"
       _dt_val="$(cat "$_dt_f" 2>/dev/null | tr '\0' '\n' | tr '[:upper:]' '[:lower:]')"
       [ -n "$_dt_val" ] && _dt_compat="$_dt_compat $_dt_val"
     done
-    echo "$_dt_compat" | grep -Eqi '(cph274|cph275|op611|plk110|pjz110|pkz110|24831|24833|24863|oneplus15|oneplus-15)' && ASB_IS_OP15=true
+    echo "$_dt_compat" | grep -Eqi '(cph274[579]|op611|plk110|24831|24833|24863|oneplus15|oneplus-15)' && ASB_IS_OP15=true
   fi
 
   if [ "$ASB_IS_OP15" != "true" ]; then
@@ -735,28 +735,29 @@ asb_identify_device() {
       ro.vendor.oplus.market.name ro.oplus.market.name \
       ro.config.marketing_name ro.product.marketname)"
   ASB_DEVICE_NAME="$(printf '%s' "$ASB_DEVICE_NAME" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-  # 2) Known-model fallback keyed off model / device / project / fingerprint.
-  if [ -z "$ASB_DEVICE_NAME" ]; then
-    case " $ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L " in
-      *" ktm "*|*plq110*|*op6113*|*24851*|*ossi*)   ASB_DEVICE_NAME="OnePlus Ace 6" ;;
-      *cph2691*|*op5d3b*)                            ASB_DEVICE_NAME="OnePlus Ace 5" ;;
-      *canoe*|*pjz110*|*cph2747*|*cph2749*)          ASB_DEVICE_NAME="OnePlus 15" ;;
-      *cph2649*|*cph2653*|*cph2655*|*pjz120*|*sun*)  ASB_DEVICE_NAME="OnePlus 13" ;;
-      *cph2661*|*cph2663*|*aston*)                   ASB_DEVICE_NAME="OnePlus 13R" ;;
-      *cph2573*|*cph2583*|*cph2581*|*pjd110*)        ASB_DEVICE_NAME="OnePlus 12" ;;
-      *cph2609*|*cph2611*|*cph2607*|*waffle*)        ASB_DEVICE_NAME="OnePlus 12R" ;;
-    esac
+  # 2) Model-code table (runtime/asb_device_db.sh): every OnePlus phone, tablet and the Open,
+  #    by retail model code, with its codename and form factor; the SoC line comes from the
+  #    same table so the log names the chip instead of a platform codename.
+  ASB_DEVICE_CODENAME=""; ASB_DEVICE_FORM=""; ASB_SOC_NAME=""; ASB_SOC_CLASS=""
+  if [ -r "$MODPATH/runtime/asb_device_db.sh" ]; then
+    . "$MODPATH/runtime/asb_device_db.sh"
+    if asb_db_model "$ASB_MODEL_RAW"; then
+      [ -z "$ASB_DEVICE_NAME" ] && ASB_DEVICE_NAME="$_dbn"
+      ASB_DEVICE_CODENAME="$_dbc"; ASB_DEVICE_FORM="$_dbf"
+    fi
+    if asb_db_soc "$(asb_prop_first ro.soc.model)" || asb_db_soc "$(asb_prop_first ro.board.platform ro.hardware.chipname)"; then
+      ASB_SOC_NAME="$_dsn ($_dsm)"; ASB_SOC_CLASS="$_dsk"
+    fi
   fi
-  # 3) Generic OnePlus by SoC family, then bare model code, then a safe default.
-  if [ -z "$ASB_DEVICE_NAME" ]; then
-    case "$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")" in
-      *sm8850*|*canoe*)     ASB_DEVICE_NAME="OnePlus (SM8850)" ;;
-      *sm8750*|*sun*)       ASB_DEVICE_NAME="OnePlus (SM8750)" ;;
-      *sm8650*|*pineapple*) ASB_DEVICE_NAME="OnePlus (SM8650)" ;;
-    esac
+  # 3) Generic OnePlus by SoC, then bare model code, then a safe default.
+  if [ -z "$ASB_DEVICE_NAME" ] && [ -n "$ASB_SOC_NAME" ]; then
+    ASB_DEVICE_NAME="OnePlus (${ASB_SOC_NAME})"
   fi
   [ -z "$ASB_DEVICE_NAME" ] && [ -n "$ASB_MODEL_RAW" ] && ASB_DEVICE_NAME="$ASB_MANUFACTURER_RAW $ASB_MODEL_RAW"
   [ -z "$ASB_DEVICE_NAME" ] && ASB_DEVICE_NAME="OnePlus device"
+  ui_print "[*] Device: ${ASB_DEVICE_NAME}${ASB_MODEL_RAW:+ (${ASB_MODEL_RAW})}${ASB_DEVICE_CODENAME:+, codename ${ASB_DEVICE_CODENAME}}${ASB_DEVICE_FORM:+, ${ASB_DEVICE_FORM}}"
+  [ -n "$ASB_SOC_NAME" ] && ui_print "[*] Chip: ${ASB_SOC_NAME}, class ${ASB_SOC_CLASS:-unknown}"
+  true
 }
 
 ASB_IS_APATCH=false

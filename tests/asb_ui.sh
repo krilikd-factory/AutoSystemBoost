@@ -11842,7 +11842,7 @@ for token in (
  "function cfgGroupCatClass(groupId)",
  "function cfgCatClass(key){ return cfgGroupCatClass(cfgGroupOf(key)); }",
  "groupId ? ' ' + cfgGroupCatClass(groupId)",
- "card.className = 'cfg-zygisk-card cat-zygisk';",
+ "card.className = 'cfg-zygisk-card cat-zygisk dsp-console asb-console';",
  ":is(.cfg-section,.cfg-tile).cat-audio   { --cat: #d4475f; }",
  ":is(.cfg-section,.cfg-tile).cat-camera  { --cat: #82b8ff; }",
  ":is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #b0704a; }",

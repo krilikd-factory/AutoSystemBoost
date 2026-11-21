@@ -724,6 +724,14 @@ asb_device_guard() {
     taro|sm8550*|sm8650*|kalama|crow)         ASB_DEVICE_TIER="high" ;;
     *)                                        ASB_DEVICE_TIER="generic" ;;
   esac
+  if [ -r "$MODDIR/runtime/asb_device_db.sh" ]; then
+    . "$MODDIR/runtime/asb_device_db.sh"
+    if asb_db_soc "$(getprop ro.soc.model 2>/dev/null)" || asb_db_soc "$_soc"; then
+      case "$_dsk" in flagship|high|upper_mid|mid|entry) [ "$ASB_DEVICE_TIER" = generic ] && ASB_DEVICE_TIER="$_dsk" ;; esac
+      _soc="$_soc ($_dsn)"
+    fi
+    asb_db_model "$(getprop ro.product.model 2>/dev/null)" && asb_log "device_guard: model=$(getprop ro.product.model 2>/dev/null) name=$_dbn codename=$_dbc form=$_dbf"
+  fi
   asb_log "device_guard: soc=$_soc tier=$ASB_DEVICE_TIER"
   [ "$ASB_DEVICE_TIER" = "generic" ] && \
     asb_log "device_guard: unknown SoC, conservative limits apply"

@@ -1389,11 +1389,14 @@ zygiskHeaderPublish(linkData({state_freshness:'current',loaded_processes:'2',eve
 chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='connected'),'validated live process did not paint every header');
 zygiskHeaderPublish(linkData({}));chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='idle'),'installed ABI files falsely connected a page header');
 const unifiedList=mk('div');cfgRenderZygiskCard(unifiedList,CFG_ITEMS);
-const unified=find(unifiedList,'cfg-zygisk-card');chk(!!unified&&unified.children.length===6,'Settings card must contain verdict, four control rows and ZYGISK navigation');
+const unified=find(unifiedList,'cfg-zygisk-card');
+const zyPanels=unified?unified.children.filter(c=>/cfg-zygisk-panel/.test(c.className)):[];
+const zyRows=zyPanels.flatMap(p=>p.children);
+chk(!!unified&&!!find(unified,'dev-zygisk-link')&&zyPanels.length===2&&zyRows.length===4,'Settings card must contain verdict, a master panel, a feature panel and ZYGISK navigation');
 chk(unified&&!find(unified,'cfg-zygisk-preset'),'Settings still exposes a second preset panel');
-chk(unified&&unified.children.filter(r=>find(r,'cfg-switch')).length===4,'Settings does not expose all four Zygisk switches');
-chk(unified&&unified.children[1].attrs['data-key']==='zygisk_enabled','the first Settings switch is not the master');
-chk(unified&&unified.children[1].querySelector('.cfg-switch').attrs['aria-checked']==='true','Settings master is not synchronized from the same evidence as its indicator');
+chk(zyRows.filter(r=>find(r,'cfg-switch')).length===4,'Settings does not expose all four Zygisk switches');
+chk(zyPanels[0]&&zyPanels[0].children[0].attrs['data-key']==='zygisk_enabled','the first Settings switch is not the master');
+chk(zyPanels[0]&&zyPanels[0].children[0].querySelector('.cfg-switch').attrs['aria-checked']==='true','Settings master is not synchronized from the same evidence as its indicator');
 chk(unified&&find(unified,'cfg-zygisk-open')&&find(unified,'cfg-zygisk-open').onclick===openZygiskPage,'Settings lost its ZYGISK navigation');
 (async()=>{const ed=deviceZygiskEditor(d),input=find(ed,'dev-zygisk-input'),buttons=ed.children.flatMap(x=>x.children||[]).filter(x=>x.tagName==='button');
 chk(input.tagName==='textarea'&&input.rows===4,'allowlist editor is not a four-row wrapping textarea');

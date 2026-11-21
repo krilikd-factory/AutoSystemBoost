@@ -1,24 +1,24 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-test14-source",
-  "base": "AutoSystemBoost-V66-test13-source.zip",
+  "release": "AutoSystemBoost-V66-test15-source",
+  "base": "AutoSystemBoost-V66-test14-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
-  "file_count_excluding_manifest": 279,
+  "file_count_excluding_manifest": 280,
   "inventory_vs_base": {
     "changed": [
       ".github/workflows/build-release.yml",
       ".github/workflows/build-test.yml",
+      "README.md",
+      "README.ru.md",
+      "common/install.sh",
       "docs/V66_BUILD_HISTORY.md",
-      "post-fs-data.sh",
-      "runtime/asb_module_desc.sh",
-      "runtime/asb_zygisk.sh",
-      "runtime/asb_zygisk_aot.sh",
-      "runtime/asb_zygisk_info.sh",
-      "runtime/asb_zygisk_link.sh",
       "service.sh",
       "system/bin/asbdiag",
+      "tests/asb_system.sh",
+      "tests/asb_ui.sh",
       "tests/asb_zygisk.sh",
+      "tools/asb_device_info.sh",
       "tools/asb_diag.sh",
       "tools/asb_tree.sha256",
       "webroot/i18n/ar.json",
@@ -37,13 +37,16 @@
       "webroot/index.html"
     ],
     "added": [
-      "runtime/asb_zygisk_park.sh"
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/ISSUE_TEMPLATE/config.yml",
+      ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "runtime/asb_device_db.sh"
     ],
     "deleted": [],
     "mode_changes": [],
     "counts": {
       "changed": 28,
-      "added": 1,
+      "added": 4,
       "deleted": 0,
       "mode_changes": 0
     }
@@ -236,15 +239,15 @@
     },
     {
       "path": ".github/workflows/build-release.yml",
-      "bytes": 42847,
+      "bytes": 42927,
       "mode": "0644",
-      "sha256": "dde530ebbf12d58a2fc4994cc4516ec88f4851cfb8514509c488fbd0ddedf569"
+      "sha256": "0f18761bea492a44f1162f07a38d0998d3ddab89f7411a2082c87cc8d069bc6e"
     },
     {
       "path": ".github/workflows/build-test.yml",
-      "bytes": 41867,
+      "bytes": 41947,
       "mode": "0644",
-      "sha256": "4c2313d42907535315832478760ccad6afa337f9511147f6572ffd78ce1a8f32"
+      "sha256": "e63be4246723e5e4a9e0b3df7990349a80ea6c4228c58320989302a9fbda3f90"
     },
     {
       "path": "CHANGELOG.md",
@@ -374,9 +377,9 @@
     },
     {
       "path": "common/install.sh",
-      "bytes": 253928,
+      "bytes": 253952,
       "mode": "0755",
-      "sha256": "0de80c43c1f3cc5af616671b5b5d3b8f5f9c0099388f47290575fc070dcd0058"
+      "sha256": "c1d852cb4956a4ed87323253516d6f318ccd3f1e5f5e5d679196450ba94b686b"
     },
     {
       "path": "common/italiantext.sh",
@@ -476,9 +479,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 294306,
+      "bytes": 296580,
       "mode": "0644",
-      "sha256": "441df83f14eacaa3207d95c5fbdac1066080789cb0514eada155d2f07b296240"
+      "sha256": "d4bbec26ca2d21f1450a2871519b48e36f0894eb592e50690f982c08f3f3f3f4"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -677,6 +680,12 @@
       "bytes": 9270,
       "mode": "0755",
       "sha256": "40eebf80dab0d8062b25f6a7e2985241dad80e383eb189e818788adebffb5593"
+    },
+    {
+      "path": "runtime/asb_device_db.sh",
+      "bytes": 11766,
+      "mode": "0644",
+      "sha256": "5f7c8cfd727ee8456e7b1b1017432c333b323dc27dc72bd8ba04a506814bdab7"
     },
     {
       "path": "runtime/asb_device_pack_manifest.sh",
@@ -1184,9 +1193,9 @@
     },
     {
       "path": "service.sh",
-      "bytes": 226309,
+      "bytes": 226820,
       "mode": "0755",
-      "sha256": "3fd1b25b8a39ac0baa4f609b5a6cecb2c391b895f81115d2f303e5183dfbc40e"
+      "sha256": "e6dc26616e321fb4279b2351811f6c347b5f6ad5a48fe34de738f53e6ee1e772"
     },
     {
       "path": "src/DSP/asb_dsp.c",
@@ -1382,9 +1391,9 @@
     },
     {
       "path": "system/bin/asbdiag",
-      "bytes": 335246,
+      "bytes": 335735,
       "mode": "0755",
-      "sha256": "612419082b796ad0fa748e0b675e98de128ff765009b59bbc4a2635b48d5fa83"
+      "sha256": "a7b15f078234d2222a42de237e108432b1cc349554fd6fbdc29f82bd3d9820d1"
     },
     {
       "path": "system/bin/asbtrial",
@@ -1412,21 +1421,21 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 676718,
+      "bytes": 678867,
       "mode": "0755",
-      "sha256": "e5edc2085f07d179af9284923efa6c7c099afa5a6159101513e28b43c2942e80"
+      "sha256": "7666bcd4b55207ed60cc275702671c10f90d1b7e8ea45307beee7ed6b4eb955d"
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1286634,
+      "bytes": 1286658,
       "mode": "0755",
-      "sha256": "58d707754044227cedc634d8da7d7630a90ed5fa6d9570e2b16a07e587f9c6fb"
+      "sha256": "0998340336d08abf7d0b1aab8ca9c9eabe5cddef7f84f3b4a0f13b2f45290aba"
     },
     {
       "path": "tests/asb_zygisk.sh",
-      "bytes": 156292,
+      "bytes": 156488,
       "mode": "0755",
-      "sha256": "368bf327991839bdef3103972da7773581da37a32af0f027b1d4ec1f4d0afa41"
+      "sha256": "96bc23981ad9aa289eaca397a0372e40dd14f1e9a1fc978d15991579583f2f56"
     },
     {
       "path": "tools/asb_analyze.py",
@@ -1478,15 +1487,15 @@
     },
     {
       "path": "tools/asb_device_info.sh",
-      "bytes": 57772,
+      "bytes": 58257,
       "mode": "0755",
-      "sha256": "8d773ff458f8b4c3773622b9040e989521b9ade46c84a1d912855b0d33bcbd83"
+      "sha256": "7e3981e7d2c561bf23ccf410e04aa57ce6902a25dda7c9519dfb8efd75c19862"
     },
     {
       "path": "tools/asb_diag.sh",
-      "bytes": 335246,
+      "bytes": 335735,
       "mode": "0755",
-      "sha256": "612419082b796ad0fa748e0b675e98de128ff765009b59bbc4a2635b48d5fa83"
+      "sha256": "a7b15f078234d2222a42de237e108432b1cc349554fd6fbdc29f82bd3d9820d1"
     },
     {
       "path": "tools/asb_discover.sh",
@@ -1646,9 +1655,9 @@
     },
     {
       "path": "tools/asb_tree.sha256",
-      "bytes": 24329,
+      "bytes": 24420,
       "mode": "0644",
-      "sha256": "d7a08bbcee2032042efe238eeda04d745e611d7073386e90ba0e8167da2bf52b"
+      "sha256": "e558b155e297a0919c25c32ea469604af91f0eb66242b91ea2abee3e29e2641f"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1778,81 +1787,81 @@
     },
     {
       "path": "webroot/i18n/ar.json",
-      "bytes": 426009,
+      "bytes": 427170,
       "mode": "0644",
-      "sha256": "ead2b1bd604fa57c722236926a672d2e1bce7e60b290c990eb34f2d0402dba07"
+      "sha256": "19b454ffa6f943c7eb4d1c3b7f4fb7120829e6f9ec5613298dd49f07fc51422f"
     },
     {
       "path": "webroot/i18n/de.json",
-      "bytes": 342569,
+      "bytes": 343591,
       "mode": "0644",
-      "sha256": "4dc5fc5d95d71a8cc7eded06d2058cc63d6696f2dc70b73e7c74e26e93b3a0b6"
+      "sha256": "92a22c9942a5ff18b045c2ca780fce5a3428b5fa98774053ca06d9d5697b8e29"
     },
     {
       "path": "webroot/i18n/en.json",
-      "bytes": 309573,
+      "bytes": 310557,
       "mode": "0644",
-      "sha256": "2a6caa0656b82bb460d0e5af7a719d742b01a6297a40fd43fecc4310310cbbc9"
+      "sha256": "26309fddf56bfcee7a60a663756f79240c455f435473cec20db9b94742f6f46b"
     },
     {
       "path": "webroot/i18n/es.json",
-      "bytes": 343870,
+      "bytes": 344906,
       "mode": "0644",
-      "sha256": "b7a8a109a53efa99b33ecc16ce85b57520d42323692ab391472822870badd49f"
+      "sha256": "956ac3ca3ea8bdc6f3916d9d2ec0d175c57514f9bf6940df3728f98ce7356f5f"
     },
     {
       "path": "webroot/i18n/fr.json",
-      "bytes": 358368,
+      "bytes": 359383,
       "mode": "0644",
-      "sha256": "2efd67dd0f3e908635cd5b1c5b0314a8b912af7a25fa30e7fc9629772aa7f7a4"
+      "sha256": "005b332a4517b3eacfb8034cf9034936b75a3472132c3914ea35cee02dbcf72a"
     },
     {
       "path": "webroot/i18n/hy.json",
-      "bytes": 517950,
+      "bytes": 519249,
       "mode": "0644",
-      "sha256": "539a71b82a49e417cad5b08d07188bce32663756dc24e474b04f60e1694d3f28"
+      "sha256": "369e531092478c526449efc2c4cc218d05b19b5a919165f8c579994609ce3d8f"
     },
     {
       "path": "webroot/i18n/id.json",
-      "bytes": 329490,
+      "bytes": 330494,
       "mode": "0644",
-      "sha256": "aee4bd086e62b77baafccc7369bbd914ab093008bfa5315efe2df34380fbfc1d"
+      "sha256": "bd4d4675c256959d36bc17b1863b1301a827426af869dd89b0ef2415e0a288c9"
     },
     {
       "path": "webroot/i18n/it.json",
-      "bytes": 339465,
+      "bytes": 340507,
       "mode": "0644",
-      "sha256": "ea7a3ea175684db16e7402b42de3965e8aae5468c323d05a3a9ab20044b8bd08"
+      "sha256": "4c865a73272845b1e25c2f1e7b0a8805471e2d84dbb306a90a1a7d0f3f910d68"
     },
     {
       "path": "webroot/i18n/pt.json",
-      "bytes": 339369,
+      "bytes": 340395,
       "mode": "0644",
-      "sha256": "01bdca9cbb34e292bd0ee9ffafdf551cf015f19853713a18ae840dd4b1824f77"
+      "sha256": "3b8d0d91dca4ca721ed3af6573834e54be84e216eebb175417fcd74a07bd39d9"
     },
     {
       "path": "webroot/i18n/ru.json",
-      "bytes": 506384,
+      "bytes": 507686,
       "mode": "0644",
-      "sha256": "011fa1a79bed59906c6597311d0d035047714bc31a087bed1af6badb74362ef7"
+      "sha256": "fad730d934acc15ff8163298c4f8af9bacd45cbecc5fe6bd470f93d5e6a47466"
     },
     {
       "path": "webroot/i18n/tr.json",
-      "bytes": 340578,
+      "bytes": 341619,
       "mode": "0644",
-      "sha256": "778743a038632a5b8f88154af6ae1bd75b0c11c28e7aa97fc330682dd71f8f06"
+      "sha256": "0e40d93ba50fa4da4365c1c958b4ea671011a0e1f2b377612f7c8f7af5cfd3b4"
     },
     {
       "path": "webroot/i18n/uk.json",
-      "bytes": 490210,
+      "bytes": 491462,
       "mode": "0644",
-      "sha256": "9e34171972938e31cade5d50dd9e586dcdd070036f6a3ef5a86f7084b231682b"
+      "sha256": "e33d09843b8e5fe2721ac6122e79010f4300992a78a1a22cd4c15868823ae7c9"
     },
     {
       "path": "webroot/i18n/zh.json",
-      "bytes": 302732,
+      "bytes": 303718,
       "mode": "0644",
-      "sha256": "77f3d09c4d73dddc6b05471059868f8c9114f39d5ec4e10d26fcd6ee8a0c950b"
+      "sha256": "ea2955f00e31697de51ca908a8a21c68d8ec65b978a01e700fa38cb170743cdf"
     },
     {
       "path": "webroot/icon.png",
@@ -1862,9 +1871,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1779875,
+      "bytes": 1788534,
       "mode": "0644",
-      "sha256": "da5af4a9f0bb066fe6919cd32afbe3989828af8c481361e3780875c8049103c6"
+      "sha256": "15a0adbb34cbc959e937666951aaecf8f64e6874ff98d8b2ed16fcf3a184225e"
     },
     {
       "path": "zygisk/arm64-v8a.so",

@@ -5,6 +5,37 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test15 - every OnePlus by model code, Zygisk and report panels
+
+Input: the owner's list of OnePlus phones and tablets that must be recognised, the Zygisk
+header dot that only animated from the second WebUI open, and design requests for the Zygisk
+page, Settings -> Zygisk, the Infinite Log report and the Easter egg. Base: V66-test14.
+No native code changed; no CI rebuild of native parts is needed.
+
+- **Device table:** new `runtime/asb_device_db.sh` maps every retail OnePlus model code
+  (198 codes: phones from the One to the 16 and Ace 7 series, Nord, Nord CE, N series,
+  the Open, every Pad) to its name, codename and form factor, and the SoC (Snapdragon and
+  Dimensity, by `ro.soc.model` or platform codename) to its name and class. Source of the
+  codes: the MobileModels list. The installer prints device and chip, `service.sh` logs
+  them and uses the class instead of "generic", the Device page shows model family, form
+  factor, chipset and class, asbdiag prints both lines.
+- **Detection fix:** `PJZ110` is the Chinese OnePlus 13, not a OnePlus 15. It selected the
+  full OnePlus 15 overlay; it now selects the OnePlus 13 one. The OnePlus 15 patterns match
+  only CPH2745/2747/2749 and PLK110 (the 15R's CPH276x never matched them).
+- **Zygisk header dot:** the pulse is created once and only paused or resumed; creating it
+  when the first verdict arrived during the startup slide could leave WebView on a frozen
+  frame until the next open. A cached verdict is dimmed by colour, not by stopping the
+  animation.
+- **Dock shadow:** 36 px instead of 66 px, so it stays behind the lower half of the dock.
+- **Zygisk page:** the guard, ART and engine cards use the LSPosed item panels (name,
+  coloured badge, chips, actions) and fold their long explanations under one "How it works".
+- **Settings -> Zygisk:** a console like DSP: master state in the header, the link verdict,
+  the master switch and the three features in separate panels, a full-width ZYGISK button.
+- **Report:** the dock has its own short labels without emoji and a different icon for every
+  section; priority actions and wake holders are framed panels.
+- **Easter egg:** the flying saucer starts at the size of the header saucer and grows up to
+  about three times that in flight.
+
 ## V66-test14 - WebUI without a Zygisk provider, wider content
 
 Input: the owner removed the Zygisk provider and could not open the ASB WebUI any more; the

@@ -86,6 +86,18 @@ for _spec in \
   _k="${_spec%%:*}"; _v="$(_prop "${_spec#*:}")"
   [ -n "$_v" ] && _emit soc "$_k" "$_v"
 done
+if [ -r "$MODDIR/runtime/asb_device_db.sh" ]; then
+  . "$MODDIR/runtime/asb_device_db.sh"
+  if asb_db_model "$(_prop ro.product.model)"; then
+    [ -n "$(_prop ro.product.market.name)" ] || _emit firmware market_name "$_dbn"
+    _emit firmware model_family "$_dbn${_dbc:+ ($_dbc)}"
+    _emit firmware form_factor "$_dbf"
+  fi
+  if asb_db_soc "$(_prop ro.soc.model)" || asb_db_soc "$(_prop ro.board.platform)"; then
+    _emit soc chipset "$_dsn"
+    _emit soc soc_class "$_dsk"
+  fi
+fi
 _emit soc cpu_online "$(_read "$SYS/devices/system/cpu/online")"
 _emit soc cpu_present "$(_read "$SYS/devices/system/cpu/present")"
 _emit soc cpu_possible "$(_read "$SYS/devices/system/cpu/possible")"

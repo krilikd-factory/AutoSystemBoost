@@ -139,6 +139,11 @@ P "#         AutoSystemBoost — GLOBAL SYSTEM DIAGNOSTIC            #"
 P "################################################################"
 P " date    : $(date 2>/dev/null)"
 P " device  : $(gp ro.product.manufacturer) $(gp ro.product.model)  ($(gp ro.product.device))"
+if [ -r "$MODDIR/runtime/asb_device_db.sh" ]; then
+  _db_out="$(sh "$MODDIR/runtime/asb_device_db.sh" identify 2>/dev/null)"
+  P " model db: $(printf '%s\n' "$_db_out" | sed -n 's/^name=//p') $(printf '%s\n' "$_db_out" | sed -n 's/^codename=//p') $(printf '%s\n' "$_db_out" | sed -n 's/^form=//p')"
+  P " chip    : $(printf '%s\n' "$_db_out" | sed -n 's/^soc_name=//p') ($(printf '%s\n' "$_db_out" | sed -n 's/^soc_model=//p'), $(printf '%s\n' "$_db_out" | sed -n 's/^soc_class=//p'))"
+fi
 P " android : $(gp ro.build.version.release)  | build $(gp ro.build.id)"
 P " platform: $(gp ro.board.platform)  | soc $(gp ro.soc.model)$(gp ro.hardware.chipname)"
 P " kernel  : $(uname -r 2>/dev/null)"
