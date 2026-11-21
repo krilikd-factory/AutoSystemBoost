@@ -5,6 +5,36 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 dev66 buildfix43 - CI test fix, softer loader beam, since-boot drain after a reboot
+
+Input: the failed "ASB · Build Test" run 44894672322 on buildfix42 (shard system-smart:
+`io_scheduler_ab_runner_buildfix37`, "dm-0 restore after fio failure"). Base: buildfix42.
+No runtime script or native code changed.
+
+- **Cause:** the test emulates sysfs with a background loop that rewrites a plain scheduler
+  name into the kernel's bracketed form every 10 ms. A read that fell between the runner's
+  truncate and its write saw an empty file and wrote a line with no active scheduler, and on
+  a loaded runner the loop could miss the runner's 200 ms readback window. Locally the test
+  failed about one run in two under mksh and intermittently under bash; earlier CI runs
+  passed by timing.
+- **Fix:** the emulator skips empty reads, and the runner's readback budget can be raised
+  from the environment (`ASB_IO_AB_READBACK_TRIES`, 1-1000, default 20 = 200 ms, unchanged
+  on the phone); the test uses 500.
+- **Verification:** 96 of 96 runs passed with eight copies in parallel, half under bash and
+  half under mksh.
+- **UFO loader beam:** the scan band of the loading screen (Active profile, Device, Zygisk)
+  ended in a hard line (alpha .32 falling to 0 over 2 % of its height) with square sides, so
+  it read as a green slab. It now peaks at .18 and fades out at the top, bottom and both
+  sides (a horizontal mask), checked frame by frame in Chromium.
+- **Screen-on drain after a reboot:** buildfix42 named the source correctly, but the figure
+  itself stayed the 17.0 %/h, 123-minute Smart session recorded before the reboot, on the
+  Monitor and on the Smart card, an hour after the reboot. For the active profile a mature
+  since-boot figure (15 min with the screen on and 2 % of drop) now wins over a stored session
+  that began before this boot (`on_last_at` against `/proc/uptime`) or over the all-time
+  average. A session recorded during this boot still wins, because the boot meter is
+  phone-wide and can include another profile's time; before maturity the stored sample covers
+  the first minutes, as buildfix32 intended. Other profiles' cards keep their own samples.
+
 ## V66 dev66 buildfix42 - instant sheets and tabs, honest drain labels, EQ panel, Smart halo
 
 Input: the owner's screenshots and seven requests. Base: buildfix41. WebUI only; no runtime
