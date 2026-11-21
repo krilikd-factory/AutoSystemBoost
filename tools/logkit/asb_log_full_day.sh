@@ -538,6 +538,19 @@ lk_phase_rmnet_bytes() {
   lk_mobile_bytes
 }
 
+# Component context at phase boundaries, never a per-poll worker and never a causal
+# attribution. Only Android's resumed/focused component is recorded; no account, intent,
+# extras, title or other activity payload enters the capture.
+lk_activity_component() {
+  lk_dumpsys activity activities 2>/dev/null | awk '
+    /topResumedActivity=/ {
+      for (i = 1; i <= NF; i++) if ($i ~ /^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$-]+$/ && length($i) <= 255) { print $i; exit }
+    }
+    /mCurrentFocus=/ {
+      for (i = 1; i <= NF; i++) if ($i ~ /^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$-]+$/ && length($i) <= 255) { print $i; exit }
+    }'
+}
+
 lk_phase_ledger_row() {
   [ -z "$LK_CUR_PHASE" ] && return 1
   _endpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
@@ -692,6 +705,22 @@ EOF
     "$_cavg" "$_savg" "$_p6avg" "$_gavg" \
     "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg" "$_drx" "$_dtx" \
     "${LK_PH_COOLDOWN:-0}"
+  if [ "${LK_PH_SNAPSHOT:-0}" != 1 ]; then
+    case "$_pl_name" in active|post_wake)
+      case "$LK_PH_START_PCT:$_endpct" in *[!0-9:]*) ;; *)
+        _act_drop=$((LK_PH_START_PCT - _endpct))
+        if [ "$_elapsed" -ge 300 ] && [ "$_act_drop" -gt 0 ]; then
+          _act_rate="$(awk -v d="$_act_drop" -v s="$_elapsed" 'BEGIN { printf "%.1f", d * 3600 / s }')"
+          if awk -v r="$_act_rate" 'BEGIN { exit !(r >= 8.0) }'; then
+            _act_end="$(lk_activity_component)"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_pl_name" "$LK_PH_START" "$_end" \
+              "$_elapsed" "$_act_drop" "$_act_rate" "${LK_PH_ACTIVITY_START:-unknown}" "${_act_end:-unknown}" \
+              >> "$LK_OUT_DIR/phase_activity.tsv" 2>/dev/null || true
+          fi
+        fi ;;
+      esac ;;
+    esac
+  fi
   return 0
 }
 
@@ -730,6 +759,8 @@ lk_phase_ledger_open() {
   LK_PH_START_UP=$(lk_uptime_s)
   LK_PH_START_MONO=$(lk_mono_s)
   LK_PH_START_PCT=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
+  LK_PH_ACTIVITY_START=""
+  case "$1" in active|post_wake) LK_PH_ACTIVITY_START="$(lk_activity_component)" ;; esac
   LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0; LK_PH_SUMP6=0; LK_PH_CNTP6=0; LK_PH_SUMCPU=0; LK_PH_CNTCPU=0; LK_PH_SUMSURF=0; LK_PH_CNTSURF=0
   LK_PH_MASUM=0; LK_PH_MACNT=0; LK_PH_MASEEN=0; LK_PH_COOLDOWN=0
   read -r LK_PH_START_RMNET_RX LK_PH_START_RMNET_TX <<EOF

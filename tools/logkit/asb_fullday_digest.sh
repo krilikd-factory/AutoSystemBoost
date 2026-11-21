@@ -946,6 +946,19 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
     }' 2>/dev/null
 fi
 
+# Boundary-observed activity components for expensive screen-on phases. These are
+# correlations for inspection, not per-activity energy measurements or freeze advice.
+if [ -s "$_DIR/phase_activity.tsv" ]; then
+  awk -F'\t' '
+    NF >= 8 && $1 ~ /^(active|post_wake)$/ && $4 ~ /^[0-9]+$/ && $4 >= 300 &&
+      $5 ~ /^[0-9]+$/ && $6 ~ /^[0-9]+([.][0-9]+)?$/ && $6 + 0 >= 8 {
+      a = ($7 ~ /^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$-]+$/ && length($7) <= 255) ? $7 : "unknown"
+      b = ($8 ~ /^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$-]+$/ && length($8) <= 255) ? $8 : "unknown"
+      printf "appact\tphase=%s\tmin=%d\tdrop=%s\tpctph=%s\tstart=%s\tend=%s\n", $1, $4 / 60, $5, $6, a, b
+      if (++n >= 5) exit
+    }' "$_DIR/phase_activity.tsv" 2>/dev/null
+fi
+
 # ----- kernel wakelock holders on the charger (fix207) ---------------------------
 # batterystats counts no app wakelock while charging; the report lists the KERNEL
 # holders it sampled instead ("kernel holder on the charger: rx_wake_lock 343 min").
