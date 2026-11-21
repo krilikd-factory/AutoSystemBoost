@@ -4099,7 +4099,7 @@
   "pd_result_safety_veto": "safety veto",
   "pd_result_deferred": "deferred",
   "system_fix_reversible": "REVERSIBLE SYSTEM FIX",
-  "pd_epoch_unavailable": "CURRENT TRANSACTION NOT EXPOSED · SAVED HISTORY",
+  "pd_epoch_unavailable": "FROM THE APPLY LOG",
   "cmp_card_title": "Activities & Services",
   "cmp_card_desc": "Exact changes made from Infinite Log or added manually share one restoration ledger. Review disabled components, restore them, or add a declared Activity/Service yourself.",
   "cmp_card_open": "Manage components",
@@ -4135,5 +4135,13 @@
   "kernel_wb_rule_waiting_screen_off": "Saved for screen-off only · inactive while the screen is on or its state is unknown",
   "kernel_wb_rule_readback_missing": "Saved, but absent from the current kernel readback",
   "lr_activity_head": "Activity context in high-drain screen-on phases (8%/h or more, at least 5 min):",
-  "lr_activity_note": "Components were observed at the start/end of the phase. This correlation does not prove that an activity caused the drain; freezing it can break the app. No activity is named when Android did not expose one."
+  "lr_activity_note": "Components were observed at the start/end of the phase. This correlation does not prove that an activity caused the drain; freezing it can break the app. No activity is named when Android did not expose one.",
+  "lv_drain_on_avg_tip": "Average screen-on drain of this profile: %s min measured.",
+  "pd_loading_title": "Reading the active profile…",
+  "pd_stage_intent": "Profile",
+  "pd_stage_owner": "Ownership",
+  "pd_stage_readback": "Readback",
+  "lv_scr_on_avg": "Screen on · profile average",
+  "lv_drain_cmp_avg": "By profile - average of each",
+  "lv_drain_note_src": "Screen on: the latest complete screen-on session of the active profile (10 min or more), otherwise the drain since boot, otherwise the profile average; the heading names which one. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor."
 }

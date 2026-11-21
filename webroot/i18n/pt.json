@@ -4206,7 +4206,7 @@
   "pd_result_safety_veto": "safety veto",
   "pd_result_deferred": "deferred",
   "system_fix_reversible": "CORREÇÃO REVERSÍVEL DO SISTEMA",
-  "pd_epoch_unavailable": "TRANSAÇÃO ATUAL NÃO EXPOSTA · HISTÓRICO GUARDADO",
+  "pd_epoch_unavailable": "PELO REGISTRO DE APLICAÇÃO",
   "cmp_card_title": "Activities e Services",
   "cmp_card_desc": "Alterações exatas do Infinite Log e manuais compartilham um registro de restauração. Revise e restaure componentes desativados ou adicione Activity/Service declarados manualmente.",
   "cmp_card_open": "Gerenciar componentes",
@@ -4242,5 +4242,13 @@
   "kernel_wb_rule_waiting_screen_off": "Guardada apenas para ecrã desligado · inativa com ecrã ligado ou estado desconhecido",
   "kernel_wb_rule_readback_missing": "Guardada, mas ausente na leitura atual do kernel",
   "lr_activity_head": "Contexto da activity em fases com ecrã ligado e consumo elevado (a partir de 8 %/h e 5 min):",
-  "lr_activity_note": "Os componentes foram observados no início e no fim da fase. A correlação não prova a causa; congelar a activity pode danificar a app. Activities não expostas não são inventadas."
+  "lr_activity_note": "Os componentes foram observados no início e no fim da fase. A correlação não prova a causa; congelar a activity pode danificar a app. Activities não expostas não são inventadas.",
+  "lv_drain_on_avg_tip": "Consumo médio deste perfil com a tela ligada: %s min medidos.",
+  "pd_loading_title": "Lendo o perfil ativo…",
+  "pd_stage_intent": "Perfil",
+  "pd_stage_owner": "Responsável",
+  "pd_stage_readback": "Releitura",
+  "lv_scr_on_avg": "Tela ligada · média do perfil",
+  "lv_drain_cmp_avg": "Por perfil – média de cada um",
+  "lv_drain_note_src": "Tela ligada: a última sessão completa com a tela ligada do perfil ativo (10 min ou mais); senão, o consumo desde a inicialização; senão, a média do perfil; o título diz qual. A tabela abaixo mostra a média de cada perfil, então a linha do perfil ativo pode diferir do número acima. «Agora» é só o último trecho contínuo. «Tela desligada» prefere a última noite confirmada. Todos os números vêm do nível da bateria, não do sensor de corrente."
 }

@@ -4206,7 +4206,7 @@
   "pd_result_safety_veto": "safety veto",
   "pd_result_deferred": "deferred",
   "system_fix_reversible": "CORRECTIF SYSTÈME RÉVERSIBLE",
-  "pd_epoch_unavailable": "TRANSACTION ACTUELLE NON EXPOSÉE · HISTORIQUE ENREGISTRÉ",
+  "pd_epoch_unavailable": "D’APRÈS LE JOURNAL D’APPLICATION",
   "cmp_card_title": "Activities et Services",
   "cmp_card_desc": "Les modifications exactes d’Infinite Log et manuelles partagent un registre de restauration. Consultez et restaurez les composants désactivés ou ajoutez manuellement une Activity/Service déclarée.",
   "cmp_card_open": "Gérer les composants",
@@ -4242,5 +4242,13 @@
   "kernel_wb_rule_waiting_screen_off": "Enregistrée uniquement pour écran éteint · inactive écran allumé ou état inconnu",
   "kernel_wb_rule_readback_missing": "Enregistrée, mais absente du readback actuel du kernel",
   "lr_activity_head": "Contexte d’activity dans les phases écran allumé à forte consommation (dès 8 %/h et 5 min) :",
-  "lr_activity_note": "Les composants ont été observés au début et à la fin de la phase. Cette corrélation ne prouve pas la cause ; geler l’activity peut endommager l’app. Aucune activity non exposée n’est inventée."
+  "lr_activity_note": "Les composants ont été observés au début et à la fin de la phase. Cette corrélation ne prouve pas la cause ; geler l’activity peut endommager l’app. Aucune activity non exposée n’est inventée.",
+  "lv_drain_on_avg_tip": "Consommation moyenne de ce profil écran allumé : %s min mesurées.",
+  "pd_loading_title": "Lecture du profil actif…",
+  "pd_stage_intent": "Profil",
+  "pd_stage_owner": "Responsable",
+  "pd_stage_readback": "Relecture",
+  "lv_scr_on_avg": "Écran allumé · moyenne du profil",
+  "lv_drain_cmp_avg": "Par profil – moyenne de chacun",
+  "lv_drain_note_src": "Écran allumé : la dernière session écran allumé terminée du profil actif (10 min ou plus), sinon la consommation depuis le démarrage, sinon la moyenne du profil ; le titre indique laquelle. Le tableau ci-dessous donne la moyenne de chaque profil, la ligne du profil actif peut donc différer du chiffre ci-dessus. « Maintenant » n’est que le dernier segment continu. « Écran éteint » privilégie la dernière nuit confirmée. Tous les chiffres viennent du niveau de batterie, pas du capteur de courant."
 }

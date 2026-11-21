@@ -4206,7 +4206,7 @@
   "pd_result_safety_veto": "safety veto",
   "pd_result_deferred": "deferred",
   "system_fix_reversible": "CORRECCIÓN REVERSIBLE DEL SISTEMA",
-  "pd_epoch_unavailable": "TRANSACCIÓN ACTUAL NO DISPONIBLE · HISTORIAL GUARDADO",
+  "pd_epoch_unavailable": "SEGÚN EL REGISTRO DE APLICACIÓN",
   "cmp_card_title": "Activities y Services",
   "cmp_card_desc": "Los cambios exactos de Infinite Log y los manuales comparten un registro de restauración. Revisa y restaura componentes desactivados o añade una Activity/Service declarada manualmente.",
   "cmp_card_open": "Gestionar componentes",
@@ -4242,5 +4242,13 @@
   "kernel_wb_rule_waiting_screen_off": "Guardada solo para pantalla apagada · inactiva con pantalla encendida o estado desconocido",
   "kernel_wb_rule_readback_missing": "Guardada, pero ausente en la lectura actual del kernel",
   "lr_activity_head": "Contexto de activity en fases con pantalla encendida y consumo elevado (desde 8 %/h y 5 min):",
-  "lr_activity_note": "Los componentes se observaron al inicio y al final de la fase. La correlación no demuestra la causa; congelar una activity puede dañar la app. No se inventan activities no expuestas."
+  "lr_activity_note": "Los componentes se observaron al inicio y al final de la fase. La correlación no demuestra la causa; congelar una activity puede dañar la app. No se inventan activities no expuestas.",
+  "lv_drain_on_avg_tip": "Consumo medio de este perfil con la pantalla encendida: %s min medidos.",
+  "pd_loading_title": "Leyendo el perfil activo…",
+  "pd_stage_intent": "Perfil",
+  "pd_stage_owner": "Responsable",
+  "pd_stage_readback": "Relectura",
+  "lv_scr_on_avg": "Pantalla encendida · media del perfil",
+  "lv_drain_cmp_avg": "Por perfil – media de cada uno",
+  "lv_drain_note_src": "Pantalla encendida: la última sesión completa con la pantalla encendida del perfil activo (10 min o más); si no, el consumo desde el arranque; si no, la media del perfil; el título indica cuál. La tabla de abajo muestra la media de cada perfil, así que la fila del perfil activo puede diferir de la cifra de arriba. «Ahora» es solo el último tramo continuo. «Pantalla apagada» prefiere la última noche confirmada. Todas las cifras salen del nivel de batería, no del sensor de corriente."
 }

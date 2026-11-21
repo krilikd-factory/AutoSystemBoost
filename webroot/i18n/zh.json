@@ -4206,7 +4206,7 @@
   "pd_result_safety_veto": "safety veto",
   "pd_result_deferred": "deferred",
   "system_fix_reversible": "可撤销的系统修复",
-  "pd_epoch_unavailable": "当前事务未提供 · 已保存的历史记录",
+  "pd_epoch_unavailable": "来自应用记录",
   "cmp_card_title": "Activity 与 Service",
   "cmp_card_desc": "来自 Infinite Log 和手动添加的精确更改共用同一个恢复账本。可查看、恢复已停用组件，或手动添加已声明的 Activity/Service。",
   "cmp_card_open": "管理组件",
@@ -4242,5 +4242,13 @@
   "kernel_wb_rule_waiting_screen_off": "仅保存为息屏时生效 · 亮屏或屏幕状态未知时不生效",
   "kernel_wb_rule_readback_missing": "已保存，但不在当前内核 readback 中",
   "lr_activity_head": "高耗电亮屏阶段的 activity 上下文（至少 8 %/小时且持续 5 分钟）：",
-  "lr_activity_note": "组件仅在阶段开始和结束时被观察到。此相关性不能证明耗电原因；冻结 activity 可能破坏应用。不会编造未提供的 activity。"
+  "lr_activity_note": "组件仅在阶段开始和结束时被观察到。此相关性不能证明耗电原因；冻结 activity 可能破坏应用。不会编造未提供的 activity。",
+  "lv_drain_on_avg_tip": "此配置在亮屏时的平均耗电：已测量 %s 分钟。",
+  "pd_loading_title": "正在读取当前配置…",
+  "pd_stage_intent": "配置",
+  "pd_stage_owner": "归属",
+  "pd_stage_readback": "回读",
+  "lv_scr_on_avg": "亮屏 · 配置平均",
+  "lv_drain_cmp_avg": "按配置 - 各自的平均值",
+  "lv_drain_note_src": "亮屏：当前配置最近一次完整的亮屏时段（10 分钟以上），没有则为开机以来的耗电，再没有则为配置平均值；标题会注明是哪一种。下方表格是各配置的平均值，因此当前配置那一行可能与上方数字不同。“当前”只是最近一段连续时间。“熄屏”优先采用最近一个确认的夜晚。所有数字都来自电量百分比，而不是电流传感器。"
 }

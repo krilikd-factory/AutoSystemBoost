@@ -4206,7 +4206,7 @@
   "pd_result_safety_veto": "safety veto",
   "pd_result_deferred": "deferred",
   "system_fix_reversible": "GERİ ALINABİLİR SİSTEM DÜZELTMESİ",
-  "pd_epoch_unavailable": "GEÇERLİ İŞLEM GÖSTERİLMİYOR · KAYDEDİLMİŞ GEÇMİŞ",
+  "pd_epoch_unavailable": "UYGULAMA GÜNLÜĞÜNDEN",
   "cmp_card_title": "Activity ve Service",
   "cmp_card_desc": "Infinite Log ve manuel değişiklikler aynı geri yükleme kaydını paylaşır. Devre dışı bileşenleri inceleyip geri yükleyin veya bildirilmiş Activity/Service ekleyin.",
   "cmp_card_open": "Bileşenleri yönet",
@@ -4242,5 +4242,13 @@
   "kernel_wb_rule_waiting_screen_off": "Yalnızca ekran kapalıyken için kaydedildi · ekran açıkken veya durumu bilinmiyorken etkin değil",
   "kernel_wb_rule_readback_missing": "Kaydedildi ancak geçerli kernel readback çıktısında yok",
   "lr_activity_head": "Yüksek tüketimli ekran açık aşamalarında activity bağlamı (en az %8/sa ve 5 dk):",
-  "lr_activity_note": "Bileşenler aşamanın başında ve sonunda gözlendi. Bu ilişki nedeni kanıtlamaz; activity dondurmak uygulamayı bozabilir. Sunulmayan activity uydurulmaz."
+  "lr_activity_note": "Bileşenler aşamanın başında ve sonunda gözlendi. Bu ilişki nedeni kanıtlamaz; activity dondurmak uygulamayı bozabilir. Sunulmayan activity uydurulmaz.",
+  "lv_drain_on_avg_tip": "Bu profilin ekran açıkken ortalama tüketimi: %s dk ölçüldü.",
+  "pd_loading_title": "Etkin profil okunuyor…",
+  "pd_stage_intent": "Profil",
+  "pd_stage_owner": "Sahiplik",
+  "pd_stage_readback": "Geri okuma",
+  "lv_scr_on_avg": "Ekran açık · profil ortalaması",
+  "lv_drain_cmp_avg": "Profile göre – her birinin ortalaması",
+  "lv_drain_note_src": "Ekran açık: etkin profilin ekran açık son tamamlanmış oturumu (10 dk ve üzeri), yoksa açılıştan beri tüketim, yoksa profil ortalaması; başlık hangisi olduğunu söyler. Aşağıdaki tablo her profilin ortalamasını gösterir, bu yüzden etkin profilin satırı yukarıdaki değerden farklı olabilir. «Şimdi» yalnızca son kesintisiz bölümdür. «Ekran kapalı» son doğrulanmış geceyi tercih eder. Tüm değerler akım sensöründen değil, pil seviyesinden gelir."
 }

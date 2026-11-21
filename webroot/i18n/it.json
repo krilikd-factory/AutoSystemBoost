@@ -4206,7 +4206,7 @@
   "pd_result_safety_veto": "safety veto",
   "pd_result_deferred": "deferred",
   "system_fix_reversible": "CORREZIONE DI SISTEMA REVERSIBILE",
-  "pd_epoch_unavailable": "TRANSAZIONE CORRENTE NON ESPOSTA · CRONOLOGIA SALVATA",
+  "pd_epoch_unavailable": "DAL REGISTRO DI APPLICAZIONE",
   "cmp_card_title": "Activity e Service",
   "cmp_card_desc": "Le modifiche esatte da Infinite Log e manuali condividono un registro di ripristino. Esamina e ripristina i componenti disattivati o aggiungi manualmente Activity/Service dichiarati.",
   "cmp_card_open": "Gestisci componenti",
@@ -4242,5 +4242,13 @@
   "kernel_wb_rule_waiting_screen_off": "Salvata solo per schermo spento · inattiva con schermo acceso o stato sconosciuto",
   "kernel_wb_rule_readback_missing": "Salvata, ma assente nel readback attuale del kernel",
   "lr_activity_head": "Contesto activity nelle fasi a schermo acceso con consumo elevato (da 8 %/h e 5 min):",
-  "lr_activity_note": "I componenti sono stati osservati all'inizio e alla fine della fase. La correlazione non prova la causa; congelare l'activity può danneggiare l'app. Nessuna activity non esposta viene inventata."
+  "lr_activity_note": "I componenti sono stati osservati all'inizio e alla fine della fase. La correlazione non prova la causa; congelare l'activity può danneggiare l'app. Nessuna activity non esposta viene inventata.",
+  "lv_drain_on_avg_tip": "Consumo medio di questo profilo a schermo acceso: %s min misurati.",
+  "pd_loading_title": "Lettura del profilo attivo…",
+  "pd_stage_intent": "Profilo",
+  "pd_stage_owner": "Responsabile",
+  "pd_stage_readback": "Rilettura",
+  "lv_scr_on_avg": "Schermo acceso · media del profilo",
+  "lv_drain_cmp_avg": "Per profilo – media di ciascuno",
+  "lv_drain_note_src": "Schermo acceso: l’ultima sessione completa a schermo acceso del profilo attivo (da 10 min), altrimenti il consumo dall’avvio, altrimenti la media del profilo; il titolo dice quale. La tabella sotto riporta la media di ogni profilo, quindi la riga del profilo attivo può differire dal valore sopra. «Adesso» è solo l’ultimo tratto continuo. «Schermo spento» preferisce l’ultima notte confermata. Tutti i valori vengono dal livello della batteria, non dal sensore di corrente."
 }

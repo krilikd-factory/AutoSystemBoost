@@ -4206,7 +4206,7 @@
   "pd_result_safety_veto": "safety veto",
   "pd_result_deferred": "deferred",
   "system_fix_reversible": "UMKEHRBARER SYSTEM-FIX",
-  "pd_epoch_unavailable": "AKTUELLE TRANSAKTION NICHT VERFÜGBAR · GESPEICHERTER VERLAUF",
+  "pd_epoch_unavailable": "AUS DEM ANWENDUNGSPROTOKOLL",
   "cmp_card_title": "Activities & Services",
   "cmp_card_desc": "Exakte Änderungen aus Infinite Log und manuelle Einträge verwenden dasselbe Wiederherstellungsprotokoll. Deaktivierte Komponenten ansehen und wiederherstellen oder deklarierte Activities/Services manuell hinzufügen.",
   "cmp_card_open": "Komponenten verwalten",
@@ -4242,5 +4242,13 @@
   "kernel_wb_rule_waiting_screen_off": "Nur für ausgeschalteten Bildschirm gespeichert · bei eingeschaltetem oder unbekanntem Bildschirmzustand inaktiv",
   "kernel_wb_rule_readback_missing": "Gespeichert, aber im aktuellen Kernel-Readback nicht vorhanden",
   "lr_activity_head": "Activity-Kontext in Screen-on-Phasen mit hohem Verbrauch (ab 8 %/h und 5 min):",
-  "lr_activity_note": "Komponenten wurden am Anfang und Ende der Phase beobachtet. Diese Korrelation beweist keine Ursache; das Einfrieren kann die App beschädigen. Nicht bereitgestellte Activities werden nicht erfunden."
+  "lr_activity_note": "Komponenten wurden am Anfang und Ende der Phase beobachtet. Diese Korrelation beweist keine Ursache; das Einfrieren kann die App beschädigen. Nicht bereitgestellte Activities werden nicht erfunden.",
+  "lv_drain_on_avg_tip": "Durchschnittlicher Verbrauch dieses Profils bei eingeschaltetem Bildschirm: %s min gemessen.",
+  "pd_loading_title": "Aktives Profil wird gelesen…",
+  "pd_stage_intent": "Profil",
+  "pd_stage_owner": "Zuständigkeit",
+  "pd_stage_readback": "Rücklesen",
+  "lv_scr_on_avg": "Bildschirm an · Profildurchschnitt",
+  "lv_drain_cmp_avg": "Nach Profil – Durchschnitt jedes Profils",
+  "lv_drain_note_src": "Bildschirm an: die letzte abgeschlossene Sitzung des aktiven Profils mit eingeschaltetem Bildschirm (ab 10 min), sonst der Verbrauch seit dem Start, sonst der Profildurchschnitt; die Überschrift sagt, welcher Wert es ist. Die Tabelle darunter zeigt die Durchschnitte der Profile, daher kann die Zeile des aktiven Profils vom Wert oben abweichen. „Jetzt“ ist nur der letzte zusammenhängende Abschnitt. „Bildschirm aus“ bevorzugt die letzte bestätigte Nacht. Alle Werte stammen aus dem Akkustand, nicht aus dem Stromsensor."
 }
