@@ -4250,5 +4250,13 @@
   "pd_stage_readback": "Relectura",
   "lv_scr_on_avg": "Pantalla encendida · media del perfil",
   "lv_drain_cmp_avg": "Por perfil – media de cada uno",
-  "lv_drain_note_src": "Pantalla encendida: la última sesión completa con la pantalla encendida del perfil activo (10 min o más); si no, el consumo desde el arranque; si no, la media del perfil; el título indica cuál. La tabla de abajo muestra la media de cada perfil, así que la fila del perfil activo puede diferir de la cifra de arriba. «Ahora» es solo el último tramo continuo. «Pantalla apagada» prefiere la última noche confirmada. Todas las cifras salen del nivel de batería, no del sensor de corriente."
+  "lv_drain_note_src": "Pantalla encendida: el consumo del perfil activo en este arranque (desde el arranque o desde que se eligió el perfil) cuando cubre al menos tanto tiempo con pantalla encendida como su última sesión; si no, la última sesión completa (10 min o más); si no, la media del perfil; el encabezado indica cuál. El tiempo de carga no cuenta. La tabla de abajo muestra la media de cada perfil, así que la fila del perfil activo puede diferir de la cifra de arriba. «Ahora» es solo el último tramo continuo. Pantalla apagada prefiere la última noche confirmada. Todas las cifras salen del nivel de batería, no del sensor de corriente.",
+  "lv_scr_on_switch": "Pantalla encendida · desde el cambio de perfil",
+  "lv_drain_on_switch_tip": "Consumo por nivel de batería con la pantalla encendida desde que se eligió este perfil en este arranque: %s min. Se excluyen la carga y los reinicios del nivel.",
+  "dsp_console_title": "Controles del motor",
+  "dsp_console_on": "ACTIVO",
+  "dsp_console_off": "EN DERIVACIÓN",
+  "dsp_grp_route": "Salida",
+  "dsp_grp_tone": "Tono",
+  "dsp_grp_dynamics": "Dinámica y protección"
 }

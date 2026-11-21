@@ -1603,6 +1603,25 @@ grep -q '_aa_prev=""' "$A/probe.sh" || f "the loop does not restart the audio pr
   dm_boot_step 4060 1 88 0
   [ "$dm_b_onx" = 100 ] || { echo "long-gap SOC drop inflated screen-on rate: $dm_b_onx" >&2; exit 1; }
 ) || f "since-boot SOC evidence gate"
+# buildfix44: charging time is not screen-on drain time, and the active profile gets its own
+# this-boot accumulator that restarts on a profile switch and survives a meter restart.
+( B="$T/socp"; mkdir -p "$B"
+  ASB_DM_BOOT="$B/meter.boot"; ASB_DM_BOOTID="$B/boot_id"; export ASB_DM_BOOT ASB_DM_BOOTID
+  echo "cc11dd22-0000-1111-2222-333344445555" > "$ASB_DM_BOOTID"; . "$M"; dm_boot_load
+  dm_boot_step 1000 1 90 0 smart; dm_boot_step 1030 1 89 0 smart; dm_boot_step 1060 1 89 1 smart
+  dm_boot_step 1090 1 90 1 smart; dm_boot_step 1120 1 90 0 smart; dm_boot_step 1150 1 89 0 smart
+  read -r _i _on _off _onx _l1 _l2 _l3 _don _pon _ponx _pprof _psince < "$ASB_DM_BOOT"
+  [ "$_on" = 150 ] && [ "$_onx" = 200 ] && [ "$_don" = 60 ] || { echo "charging counted as drain time: on=$_on onx=$_onx don=$_don" >&2; exit 1; }
+  [ "$_pon" = 60 ] && [ "$_ponx" = 200 ] && [ "$_pprof" = smart ] && [ "$_psince" = 1000 ] || { echo "profile accumulator: $_pon $_ponx $_pprof $_psince" >&2; exit 1; }
+  dm_boot_step 1180 1 89 0 battery; dm_boot_step 1210 1 88 0 battery
+  read -r _i _on _off _onx _l1 _l2 _l3 _don _pon _ponx _pprof _psince < "$ASB_DM_BOOT"
+  [ "$_pon" = 30 ] && [ "$_ponx" = 100 ] && [ "$_pprof" = battery ] && [ "$_psince" = 1180 ] || { echo "switch did not restart: $_pon $_ponx $_pprof $_psince" >&2; exit 1; }
+  [ "$_don" = 120 ] && [ "$_onx" = 300 ] || { echo "phone-wide figure lost a step: $_don $_onx" >&2; exit 1; }
+  dm_boot_load
+  [ "$dm_bp_on" = 30 ] && [ "$dm_bp_prof" = battery ] && [ "$dm_b_don" = 120 ] || { echo "restart lost the profile accumulator" >&2; exit 1; }
+  printf 'cc11dd220000 10 0 0 0 0 0\n' > "$ASB_DM_BOOT"; dm_boot_load
+  [ "$dm_b_on" = 10 ] && [ "$dm_b_don" = 0 ] && [ "$dm_bp_prof" = - ] || { echo "seven-field file misread" >&2; exit 1; }
+) || f "since-boot charging and profile scope"
 grep -q '"lvi_scr_on_time"' "$ROOT/webroot/i18n/en.json" || f "the Uptime popup does not name the screen-on time"
 H="$ROOT/webroot/index.html"
 grep -q "function lvMeterParse(text)" "$H" || f "the Monitor does not read the meter"

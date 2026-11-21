@@ -4143,5 +4143,13 @@
   "pd_stage_readback": "Readback",
   "lv_scr_on_avg": "Screen on · profile average",
   "lv_drain_cmp_avg": "By profile - average of each",
-  "lv_drain_note_src": "Screen on: the latest complete screen-on session of the active profile (10 min or more), otherwise the drain since boot, otherwise the profile average; the heading names which one. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor."
+  "lv_drain_note_src": "Screen on: the active profile’s drain in this boot (since boot, or since the profile was selected) once it covers at least as much screen-on time as its latest session, otherwise the latest complete session (10 min or more), otherwise the profile average; the heading names which one. Charging time is left out. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor.",
+  "lv_scr_on_switch": "Screen on · since profile switch",
+  "lv_drain_on_switch_tip": "Battery-level drain with the screen on since this profile was selected in this boot: %s min. Charging and battery-level resets are excluded.",
+  "dsp_console_title": "Engine controls",
+  "dsp_console_on": "ACTIVE",
+  "dsp_console_off": "BYPASSED",
+  "dsp_grp_route": "Output",
+  "dsp_grp_tone": "Tone",
+  "dsp_grp_dynamics": "Dynamics & protection"
 }

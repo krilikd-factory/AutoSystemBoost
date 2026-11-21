@@ -4250,5 +4250,13 @@
   "pd_stage_readback": "Geri okuma",
   "lv_scr_on_avg": "Ekran açık · profil ortalaması",
   "lv_drain_cmp_avg": "Profile göre – her birinin ortalaması",
-  "lv_drain_note_src": "Ekran açık: etkin profilin ekran açık son tamamlanmış oturumu (10 dk ve üzeri), yoksa açılıştan beri tüketim, yoksa profil ortalaması; başlık hangisi olduğunu söyler. Aşağıdaki tablo her profilin ortalamasını gösterir, bu yüzden etkin profilin satırı yukarıdaki değerden farklı olabilir. «Şimdi» yalnızca son kesintisiz bölümdür. «Ekran kapalı» son doğrulanmış geceyi tercih eder. Tüm değerler akım sensöründen değil, pil seviyesinden gelir."
+  "lv_drain_note_src": "Ekran açık: etkin profilin bu açılıştaki tüketimi (açılıştan ya da profil seçildiğinden beri), son oturumu kadar ekran açık süreyi kapsadığında; aksi halde son tamamlanan oturum (10 dk veya fazlası), aksi halde profil ortalaması; başlık hangisi olduğunu söyler. Şarj süresi sayılmaz. Aşağıdaki tablo her profilin ortalamasını gösterir, bu yüzden etkin profilin satırı yukarıdaki değerden farklı olabilir. «Şimdi» yalnızca son kesintisiz bölümdür. Ekran kapalı, son doğrulanmış geceyi tercih eder. Tüm değerler akım sensöründen değil, pil seviyesinden gelir.",
+  "lv_scr_on_switch": "Ekran açık · profil değişiminden beri",
+  "lv_drain_on_switch_tip": "Bu açılışta bu profil seçildiğinden beri ekran açıkken pil seviyesine göre tüketim: %s dk. Şarj ve seviye sıfırlamaları hariçtir.",
+  "dsp_console_title": "Motor denetimleri",
+  "dsp_console_on": "ETKİN",
+  "dsp_console_off": "DEVRE DIŞI",
+  "dsp_grp_route": "Çıkış",
+  "dsp_grp_tone": "Ton",
+  "dsp_grp_dynamics": "Dinamik ve koruma"
 }

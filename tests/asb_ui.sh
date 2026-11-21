@@ -1647,7 +1647,7 @@ function asbMetricPaint(){} function liveDrainIsOpen(){return false} function li
 let _selectedProfile='smart';
 """
 src='\n'.join([body,const('_lvMeter'),const('_lvGovOff'),const('_lvDrain'),const('_lvEta'),
- fn('lvBootParse'),fn('lvBootOnFigure'),fn('lvNightParse'),fn('lvMeterParse'),fn('lvDurDHM'),fn('lvPct'),fn('lvOffFigure'),
+ fn('lvBootParse'),fn('lvBootBasis'),fn('lvBootOnFigure'),fn('lvNightParse'),fn('lvMeterParse'),fn('lvDurDHM'),fn('lvPct'),fn('lvOffFigure'),
  fn('lvNightFresh'),fn('lvNightFigure'),fn('lvProfileNightFigure'),fn('lvProfileOnFigure'),fn('lvBootMature'),fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'),fn('lvPrimaryOffFigure'),fn('lvMeterHasOn'),fn('lvMeterPaint'),fn('lvEtaFmt'),fn('lvEtaPaint'),fn('homeOffFigure'),fn('homeMeterPaint'),r"""
 let bad=0;function chk(c,m){if(!c){bad=1;console.log('FAIL '+m)}}
 const testNowDate=new Date();testNowDate.setHours(12,0,0,0);const testNow=Math.floor(testNowDate.getTime()/1000);Date.now=()=>testNow*1000;
@@ -2229,7 +2229,7 @@ const _lvMeter = { at: 0, cur: '', p: {} };
 function liveDrainIsOpen() { return false; }
 function liveDrainPaint() {}
 EOF
-  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure lvBootOnFigure lvNightFresh lvNightFigure lvProfileNightFigure lvProfileOnFigure lvBootMature lvOnFigure lvOnKind lvOnTip lvPrimaryOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure lvBootBasis lvBootOnFigure lvNightFresh lvNightFigure lvProfileNightFigure lvProfileOnFigure lvBootMature lvOnFigure lvOnKind lvOnTip lvPrimaryOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   sed -n "/^const _lvEta = /p; /^const _lvDrain = /p; /^const _lvGovOff = /p; /^const METRIC_STEPS = /p" "$H"
   sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   cat <<'EOF'
@@ -2505,7 +2505,7 @@ for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'ld .pchk',
 # buildfix42: the rule is a plain selector list now (asb_css_bucket rewrote the :is()).
 _ai = s.index('html[data-asb-effects="reduced"] .zygisk-header-dot:not(asb-spec-pad),')
 auto_sel = s[_ai:s.index('{', _ai)]
-assert 'animation:none' in s[_ai:s.index('}', _ai)], 'automatic reduced-effects animation rule not found'
+assert 'animation' not in s[_ai:s.index('}', _ai)], 'buildfix44: ui-jank must not stop the Zygisk link pulse'
 for header in ('.logo-sphere-a','.logo-sphere-b','.logo-inner','.app-name','.dot ', '.dot,', '.ai-glow'):
     assert header not in auto_sel, 'ui-jank still freezes ' + header
 osrm = re.search(r'@media \(prefers-reduced-motion:\s*reduce\) \{([\s\S]*?)\n\}', s)
@@ -10278,7 +10278,7 @@ paint_src = '\n'.join([
     "function T(k,d){return d} function _el(id){return els[id]||null}",
     "const els={}; ['bnDrain','bnDrainOff','bnDrainOnLabel','bnDrainOffLabel'].forEach(x=>els[x]={textContent:'',title:''});",
     const('_lvMeter'), const('_lvGovOff'), "const _lvDrain={}; let _selectedProfile='smart';",
-    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvBootOnFigure'), fn('lvNightFresh'), fn('lvNightFigure'), fn('lvProfileNightFigure'), fn('lvProfileOnFigure'), fn('lvBootMature'),fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'), fn('lvPrimaryOffFigure'),
+    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvBootBasis'), fn('lvBootOnFigure'), fn('lvNightFresh'), fn('lvNightFigure'), fn('lvProfileNightFigure'), fn('lvProfileOnFigure'), fn('lvBootMature'),fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'), fn('lvPrimaryOffFigure'),
     "function asbMetricPaint(){} function lvEtaPaint(){} function liveDrainIsOpen(){return false}",
     fn('lvMeterPaint'),
     "_lvMeter.cur='smart';_lvMeter.p={battery:{on:330,onMin:88,off:126,offN:3,offS:30000,offLast:138,offLastS:18000,offLastAt:1,onLast:330,onLastS:5280,onLastAt:1}};",
@@ -10765,7 +10765,7 @@ def body(sig):
     i=h.index(sig); return h[i:h.index('\n}\n',i)]
 for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display: none; position: fixed; left: 12px; right: 12px;',
               'bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);', 'overflow-x: auto;',
-              'scrollbar-width: none;', 'flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px;',
+              'scrollbar-width: none;', 'flex:1 1 0; width:auto; min-width:82px; max-width:none; min-height:60px; padding:4px 6px;',
               "b.setAttribute('aria-current', 'location')", "page.addEventListener('scroll', onScroll, { passive: true })",
               'padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px));',
               'if (prevScroll > 0) el.scrollTop = prevScroll;',
@@ -11151,7 +11151,7 @@ for token in ('url(#asbUfoDome)','url(#asbUfoHull)','url(#asbUfoUnder)','url(#as
 assert len(re.findall(r'<(?:linearGradient|radialGradient)\s',s)) >= 7
 assert 'animation: asbSweep 5.5s' in s and 'class="asb-boot-brand app-name"' in s
 css=':is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
-assert css+' .lgr-jump-btn { flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px; }' in s
+assert css+' .lgr-jump-btn { flex:1 1 0; width:auto; min-width:82px; max-width:none; min-height:60px; padding:4px 6px; }' in s
 label=s[s.index(css+' .asb-tab-label'):]
 label=label[:label.index('}')]
 for token in ('white-space:normal','overflow:visible','text-overflow:clip','overflow-wrap:break-word','word-break:normal','text-align:center'):
@@ -11241,7 +11241,7 @@ import json, sys
 from pathlib import Path
 r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
 css=':is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
-button=css+' .lgr-jump-btn { flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px; }'
+button=css+' .lgr-jump-btn { flex:1 1 0; width:auto; min-width:82px; max-width:none; min-height:60px; padding:4px 6px; }'
 assert button in h
 label=h[h.index(css+' .asb-tab-label'):]
 label=label[:label.index('}')]
@@ -11304,7 +11304,7 @@ from pathlib import Path
 h=(Path(sys.argv[1])/'webroot/index.html').read_text()
 css=':is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
 for token in (
-    css+' .lgr-jump-btn { flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px; }',
+    css+' .lgr-jump-btn { flex:1 1 0; width:auto; min-width:82px; max-width:none; min-height:60px; padding:4px 6px; }',
     css+' .asb-tab-ico { flex: 0 0 28px; }',
     css+' .asb-tab-ind::before { top:4px; height:28px; border-radius:14px; }',
     'overflow-wrap:break-word; word-break:normal; line-height:11px; letter-spacing:0;',
@@ -13285,6 +13285,7 @@ blk = blk.split('/* dev61: the GPU tile')[0]
 assert 'html.asb-calm .pico-smart .ai-glow' not in h and 'html.asb-calm .ai-glow' not in h
 _a42 = h.index('html[data-asb-effects="reduced"] .zygisk-header-dot:not(asb-spec-pad),')
 assert 'ai-glow' not in h[_a42:h.index('{', _a42)], 'ui-jank still freezes the Smart halo'
+assert 'animation' not in h[_a42:h.index('}', _a42)], 'ui-jank still freezes the Zygisk header dot'
 assert '.pico-smart .ai-glow { animation: none !important; }' in h, 'OS reduced motion no longer owns the halo'
 assert 'body.live-active .page:not(.live-page) .ai-glow' in h, 'the halo keeps running behind another page'
 assert 'html.asb-calm .app-name' not in h, 'calm still removes the wordmark animation'
@@ -16412,7 +16413,7 @@ profile=fn('function profileDetailsPaint() {')
 assert "p === 'smart'" in profile and 'profile-details-smart-policy' in profile
 on=fn('function lvOnFigure(profile) {')
 # buildfix43: a mature since-boot figure wins; before that the profile's sample still does.
-assert on.index('lvProfileOnFigure(profile)') < on.index('if (boot && lvBootMature()) {') < on.index('own.at < bootAt') < on.index('return own || boot;')
+assert on.index('lvProfileOnFigure(profile)') < on.index('if (boot && lvBootMature(profile)) {') < on.index('own.at < bootAt') < on.index('return own || boot;')
 nav=fn('function asbNavAnimMark() {')
 assert 'asb-nav-moving' in nav and 'setTimeout' in nav and 'setInterval' not in nav and 'Worker(' not in nav
 assert "const simpleSlot = key === 'slot';" in h and "fold.open = simpleSlot;" in h
@@ -16570,7 +16571,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cat > "$T/t.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function fn(name){const a=h.indexOf('function '+name+'('),b=h.indexOf('\n}',a);if(a<0||b<0)throw Error(name);global[name]=eval('('+h.slice(a,b+2)+')');}
-fn('lvBootParse');fn('lvBootOnFigure');global._lvMeter={boot:null};
+fn('lvBootParse');fn('lvBootBasis');fn('lvBootOnFigure');global._lvMeter={boot:null};
 if(lvBootParse('abc 2580 1200 0 0 0 0','300')!==null)throw Error('stale 43-minute boot window survived five-minute uptime');
 const fresh=lvBootParse('abc 240 20 0 0 0 0','300');if(!fresh||fresh.on!==240)throw Error('fresh boot rejected');
 _lvMeter.boot=fresh;if(lvBootOnFigure()!==null)throw Error('zero battery steps invented a rate');
@@ -16735,7 +16736,7 @@ assert '.dsp-eq-console .dsp-eq-editor { margin:0 0 2px; padding:2px 12px;' in h
 o = fn('function profileDetailsOpen(p) {')
 assert o.index("m.hidden = false;") < o.index("profileDetailsRefresh();")
 r = fn('async function profileDetailsRefresh() {')
-assert r.index("asbCosmicLoading(body, { kind:'profile'") < r.index('await asbPaintYield();') < r.index("await run(")
+assert r.index("asbCosmicLoading(body, { kind:'profile'") < r.index('await asbPaintYield();') < r.index("asbRunDetached('profile'")
 assert "T('pd_epoch_unavailable', 'FROM THE APPLY LOG')" in h and 'NOT EXPOSED' not in h
 e = fn('function cfgHubExtrasEnsure() {')
 assert 'setTimeout(' not in e and '}, 600, 3);' in e and '_hubExtrasCache' in e
@@ -16804,6 +16805,115 @@ JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS webui buildfix42: kernel notes behind Details, EQ panel padded in both themes, instant profile sheet with UFO loader and no error-like pill, hub reads idle-only with a remembered answer, polls yield to touches, drain labels follow the figure source, Smart halo keeps turning, 13 locales'
+)
+
+t_webui_buildfix44_owner_review() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui buildfix44: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'P' || fail 'static contract and locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+def body(sig):
+    a = h.index(sig); return h[a:h.index('\n}\n', a)]
+ct = body('async function ctLoad(')
+assert "asbRunDetached('camtools'" in ct, 'camera status still holds the page thread'
+kl = body('async function kernelPanelLoad(')
+assert "asbRunBatchDetached('kernel'" in kl, 'kernel status still holds the page thread'
+ke = body('function kernelPanelEnsure(')
+assert 'cfgAfterEnter(go' in ke and 'kernelPanelLoad(false)' in ke, 'kernel read starts before the category is drawn'
+pd = body('async function profileDetailsRefresh(')
+assert "asbRunDetached('profile'" in pd
+assert "profile-details-hero-name', T('prof_'" not in h, 'the profile name is shown twice'
+cm = body('function cfgRenderComponentManagerCard(')
+assert "techIcon('app_components')" in cm
+assert "techIcon('zygisk" not in cm, 'Activity and Service card still carries a Zygisk icon'
+a = h.index('html[data-asb-effects="reduced"] .zygisk-header-dot:not(asb-spec-pad),')
+assert 'animation' not in h[a:h.index('}', a)], 'jank fallback still stops the Zygisk dot'
+assert 'will-change: transform, opacity;\n  animation: zyLivePulse' in h
+assert '.asb-cosmic-loading[data-cosmic="profile"],' in h and 'border:0 !important; border-radius:0;' in h
+assert 'transform:scale(1.14)' in h and 'transform: scale(1.12);' in h
+assert "cfgRenderDspConsole(list, sectionItems)" in h
+for k in ('dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_compressor','dsp_headroom','dsp_lookahead','dsp_rumble','dsp_true_peak','dsp_dc_protect'):
+    assert "'" + k + "'" in h[h.index('const DSP_CONSOLE_GROUPS'):h.index('function cfgRenderDspConsole(')], k
+assert '<div class="dock-scrim" aria-hidden="true"></div>' in h
+assert 'nav._asbJumpPick = { id: it[0], top: page.scrollTop };' in h and "window.removeEventListener('resize', onResize)" in h
+D = {p.stem: json.loads(p.read_text(encoding='utf-8')) for p in (root / 'webroot/i18n').glob('*.json')}
+assert len(D) == 13
+keys = ('lv_scr_on_switch', 'lv_drain_on_switch_tip', 'dsp_console_title', 'dsp_console_on', 'dsp_console_off', 'dsp_grp_route', 'dsp_grp_tone', 'dsp_grp_dynamics')
+for loc, d in D.items():
+    for k in keys:
+        assert d.get(k), (loc, k)
+        if loc != 'en': assert d[k] != D['en'][k], ('untranslated', loc, k)
+    assert d['lv_drain_on_switch_tip'].count('%s') == 1, loc
+for k in keys[:5] + ('lv_drain_note_src',):
+    m = re.search(r"T\('" + k + r"', '((?:[^'\\]|\\.)*)'\)", h)
+    assert m and m.group(1) == D['en'][k], 'fallback differs: ' + k
+for k in keys[5:]:
+    m = re.search(r"\['" + k + r"', '([^']*)'", h)
+    assert m and m.group(1) == D['en'][k], 'group fallback differs: ' + k
+P
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui buildfix44: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+function fn(name) { const a = h.indexOf('function ' + name + '('), b = h.indexOf('\n}', a); if (a < 0) throw Error(name); return h.slice(a, b + 2); }
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+global.T = (k, f) => f;
+global._lvMeter = { boot: null, bootAt: 0 }; global._selectedProfile = 'smart';
+eval(fn('lvBootParse') + fn('lvBootBasis') + fn('lvBootOnFigure') + fn('lvBootMature') + fn('lvOnFigure') + fn('lvOnKind'));
+let own = { x: 104, upper: false, s: 720, src: 'latest', at: 9000 };
+global.lvProfileOnFigure = () => own;
+const now = Math.floor(Date.now() / 1000);
+_lvMeter.bootAt = now - 9000;
+_lvMeter.boot = lvBootParse('abc 7000 2000 1200 0 0 0 6300 6300 1190 smart ' + (now - 8990), '9000');
+chk(_lvMeter.boot && _lvMeter.boot.prof === 'smart' && _lvMeter.boot.pOn === 6300 && _lvMeter.boot.don === 6300, 'twelve-field boot file');
+let f = lvOnFigure('smart');
+chk(f.src === 'boot' && f.x === 68, 'a 12-minute session beat 105 minutes of the same profile: ' + JSON.stringify(f));
+chk(lvOnKind(f) === 'boot', 'kind');
+own = { x: 50, upper: false, s: 7000, src: 'latest', at: now - 100 };
+chk(lvOnFigure('smart').src === 'latest', 'a longer own session must keep winning');
+own = { x: 104, upper: false, s: 720, src: 'latest', at: 9000 };
+chk(lvOnFigure('battery') === own, 'another profile borrowed this profile’s boot figure');
+_lvMeter.boot = lvBootParse('abc 7000 2000 1200 0 0 0 6300 1500 300 smart ' + (now - 8990), '9000');
+chk(lvOnFigure('smart') === own, 'a 25-minute profile total is not mature yet');
+_lvMeter.boot = lvBootParse('abc 7000 2000 1200 0 0 0 6300 3000 600 smart ' + (now - 3000), '9000');
+f = lvOnFigure('smart');
+chk(f.src === 'switch' && lvOnKind(f) === 'switch' && f.x === 72, 'since-switch scope: ' + JSON.stringify(f));
+_lvMeter.boot = lvBootParse('abc 7200 0 1200 0 0 0 3600 0 0 - 0', '9000');
+chk(_lvMeter.boot.don === 3600 && !_lvMeter.boot.prof, 'charging-free divisor without a profile');
+chk(lvBootOnFigure('smart').x === 120, 'charging time diluted the phone-wide rate: ' + JSON.stringify(lvBootOnFigure('smart')));
+_lvMeter.boot = lvBootParse('abc 7200 0 1200 0 0 0', '9000');
+chk(lvBootOnFigure('smart').x === 60 && lvBootOnFigure('smart').scope === 'phone', 'seven-field file keeps the old meaning');
+global._ASB_PART = '@@part:'; global._asbDetachedSeq = 0; global.shQuote = v => "'" + v + "'";
+global.setTimeout = (f) => { Promise.resolve().then(f); return 0; };
+eval(fn('asbDetachedWait') + 'async ' + fn('asbRunDetached'));
+(async () => {
+  const cmds = []; let polls = 0;
+  global.run = async (c) => {
+    cmds.push(c);
+    if (/ &$/.test(c)) return { errno: 0, stdout: '' };
+    if (/^if \[ -f /.test(c)) { polls++; return polls < 3 ? { errno: 0, stdout: '@@part:detached:running' } : { errno: 0, stdout: 'a|1\nb|2\n\n@@part:detached\n' }; }
+    return { errno: 0, stdout: '' };
+  };
+  const r = await asbRunDetached('camtools', 'sh /m/x.sh status', 5000);
+  chk(r.errno === 0 && r.stdout === 'a|1\nb|2', 'detached output: ' + JSON.stringify(r));
+  chk(/^\( \{ sh \/m\/x\.sh status; \} > '\/dev\/\.asb_ui_camtools_\d+_\d+\.part' 2>\/dev\/null; mv -f /.test(cmds[0]) && / <\/dev\/null >\/dev\/null 2>&1 &$/.test(cmds[0]), 'spawn line: ' + cmds[0]);
+  chk(polls === 3 && cmds.length === 4, 'polls ' + polls);
+  global.run = async () => ({ errno: 1, stdout: '' });
+  const f = await asbRunDetached('x', 'true', 1000);
+  chk(f.errno === 1 && f.stdout === '', 'failed spawn must not claim output');
+  const seen = [];
+  global.run = async (c) => { seen.push(c); if (/ &$/.test(c)) return { errno: 0, stdout: '' }; if (/^if /.test(c)) return { errno: 1, stdout: '' }; return { errno: 0, stdout: 'direct' }; };
+  const g = await asbRunDetached('x', 'sh /m/y.sh status', 5000);
+  chk(g.stdout === 'direct' && seen[seen.length - 1] === 'sh /m/y.sh status' && seen.length === 4, 'a killed job must fall back to one direct read: ' + JSON.stringify(seen));
+  console.log(bad ? 'bad' : 'ok');
+})().catch(e => { console.log('ERR ' + (e.stack || e)); });
+JS
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS webui buildfix44: camera/kernel/profile reads detached from the page thread, Zygisk dot keeps pulsing, drain follows the profile with charging left out, DSP console, framed-less profile loader, component icon, docks share width with a scrim, 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

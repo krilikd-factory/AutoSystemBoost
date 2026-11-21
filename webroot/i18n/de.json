@@ -4250,5 +4250,13 @@
   "pd_stage_readback": "Rücklesen",
   "lv_scr_on_avg": "Bildschirm an · Profildurchschnitt",
   "lv_drain_cmp_avg": "Nach Profil – Durchschnitt jedes Profils",
-  "lv_drain_note_src": "Bildschirm an: die letzte abgeschlossene Sitzung des aktiven Profils mit eingeschaltetem Bildschirm (ab 10 min), sonst der Verbrauch seit dem Start, sonst der Profildurchschnitt; die Überschrift sagt, welcher Wert es ist. Die Tabelle darunter zeigt die Durchschnitte der Profile, daher kann die Zeile des aktiven Profils vom Wert oben abweichen. „Jetzt“ ist nur der letzte zusammenhängende Abschnitt. „Bildschirm aus“ bevorzugt die letzte bestätigte Nacht. Alle Werte stammen aus dem Akkustand, nicht aus dem Stromsensor."
+  "lv_drain_note_src": "Bildschirm an: der Verbrauch des aktiven Profils in diesem Start (seit dem Start oder seit der Profilwahl), sobald er mindestens so viel Bildschirmzeit abdeckt wie die letzte Sitzung; sonst die letzte vollständige Sitzung (ab 10 Min), sonst der Profildurchschnitt; die Überschrift nennt, welcher. Ladezeit zählt nicht. Die Tabelle unten zeigt den Durchschnitt jedes Profils, daher kann die Zeile des aktiven Profils von der Zahl oben abweichen. „Jetzt“ ist nur der letzte durchgehende Abschnitt. Bildschirm aus bevorzugt die letzte bestätigte Nacht. Alle Werte stammen aus dem Akkustand, nicht aus dem Stromsensor.",
+  "lv_scr_on_switch": "Bildschirm an · seit Profilwechsel",
+  "lv_drain_on_switch_tip": "Akkustand-Verbrauch bei eingeschaltetem Bildschirm, seit dieses Profil in diesem Start gewählt wurde: %s Min. Laden und Akkustand-Resets sind ausgenommen.",
+  "dsp_console_title": "Engine-Steuerung",
+  "dsp_console_on": "AKTIV",
+  "dsp_console_off": "UMGANGEN",
+  "dsp_grp_route": "Ausgang",
+  "dsp_grp_tone": "Klang",
+  "dsp_grp_dynamics": "Dynamik & Schutz"
 }

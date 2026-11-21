@@ -4250,5 +4250,13 @@
   "pd_stage_readback": "Releitura",
   "lv_scr_on_avg": "Tela ligada · média do perfil",
   "lv_drain_cmp_avg": "Por perfil – média de cada um",
-  "lv_drain_note_src": "Tela ligada: a última sessão completa com a tela ligada do perfil ativo (10 min ou mais); senão, o consumo desde a inicialização; senão, a média do perfil; o título diz qual. A tabela abaixo mostra a média de cada perfil, então a linha do perfil ativo pode diferir do número acima. «Agora» é só o último trecho contínuo. «Tela desligada» prefere a última noite confirmada. Todos os números vêm do nível da bateria, não do sensor de corrente."
+  "lv_drain_note_src": "Ecrã ligado: o consumo do perfil ativo neste arranque (desde o arranque ou desde a escolha do perfil) quando cobre pelo menos tanto tempo de ecrã ligado como a sua última sessão; senão a última sessão completa (10 min ou mais), senão a média do perfil; o título indica qual. O tempo de carregamento fica de fora. A tabela abaixo mostra a média de cada perfil, por isso a linha do perfil ativo pode diferir do valor acima. «Agora» é só o último troço contínuo. Ecrã desligado prefere a última noite confirmada. Todos os valores vêm do nível da bateria, não do sensor de corrente.",
+  "lv_scr_on_switch": "Ecrã ligado · desde a troca de perfil",
+  "lv_drain_on_switch_tip": "Consumo pelo nível da bateria com o ecrã ligado desde que este perfil foi escolhido neste arranque: %s min. Carregamento e reposições do nível excluídos.",
+  "dsp_console_title": "Controlos do motor",
+  "dsp_console_on": "ATIVO",
+  "dsp_console_off": "CONTORNADO",
+  "dsp_grp_route": "Saída",
+  "dsp_grp_tone": "Tom",
+  "dsp_grp_dynamics": "Dinâmica e proteção"
 }

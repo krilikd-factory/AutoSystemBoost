@@ -255,6 +255,10 @@ body::before, body::after {
      height is taken from the page's top gap, so everything below stays where it was. */
   margin-top: -14px;
   margin-bottom: 8px;
+  /* buildfix44: the emblem is drawn 12 % larger in every page header without taking layout
+     space - a transform does not move the wordmark, chips or cards under it. */
+  transform: scale(1.12);
+  transform-origin: 50% 50%;
 }
 .logo-c::before {
   content: "";
@@ -550,6 +554,7 @@ button.badge:active { color: var(--accent); }
 .zygisk-header-connected .zygisk-header-dot, .zygisk-header-confirmed .zygisk-header-dot, .zygisk-header-quiet .zygisk-header-dot,
 .dev-zygisk-link-connected .dev-zygisk-link-dot, .dev-zygisk-link-confirmed .dev-zygisk-link-dot, .dev-zygisk-link-quiet .dev-zygisk-link-dot {
   position: relative;
+  will-change: transform, opacity;
   animation: zyLivePulse 3.6s ease-in-out infinite;
 }
 .zygisk-header-connected .zygisk-header-dot::after, .zygisk-header-confirmed .zygisk-header-dot::after, .zygisk-header-quiet .zygisk-header-dot::after,
@@ -2074,7 +2079,8 @@ body.config-category-active #configPage.cfg-short-fit .cfg-list { padding-bottom
   -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 26%,#000 74%,transparent 100%);
   mask-image:linear-gradient(90deg,transparent 0%,#000 26%,#000 74%,transparent 100%);
   opacity:0; animation:asbCosmicScan 3.4s ease-in-out infinite; }
-.asb-cosmic-scene { position:relative; width:156px; height:156px; margin:0 auto 18px; }
+.asb-cosmic-scene { position:relative; width:156px; height:156px; margin:0 auto 18px;
+  transform:scale(1.14); transform-origin:50% 50%; }
 .asb-cosmic-scene::before { content:''; position:absolute; inset:42px; border-radius:50%;
   background:radial-gradient(circle,rgba(75,243,200,.13),rgba(50,69,255,.055) 48%,transparent 72%);
   box-shadow:0 0 34px rgba(75,243,200,.1); }
@@ -2105,11 +2111,31 @@ html[data-asb-theme="light"] .asb-cosmic-loading .dev-loading-title { color:#1c2
 html[data-asb-theme="light"] .asb-cosmic-loading .dev-loading-sub { color:#4c5e70; }
 html[data-asb-theme="light"] .asb-cosmic-loading .dev-loading-step { color:#405468; background:rgba(255,255,255,.48); border-color:rgba(60,84,119,.15); }
 html[data-asb-theme="light"] .asb-cosmic-ufo { color:#167c70; filter:drop-shadow(0 0 8px rgba(22,124,112,.18)); }
+/* buildfix44: inside the Active profile sheet the loader is not a second card. The sheet is
+ * already the surface; a bordered panel under its sticky header read as two overlapping
+ * cards. The scene, the text and the three stages stand on the sheet itself, the stages as
+ * soft pills without outlines. */
+.asb-cosmic-loading[data-cosmic="profile"],
+html:root[data-asb-glass="1"] .asb-cosmic-loading[data-cosmic="profile"]:not(asb-spec-pad),
+html[data-asb-theme="light"] .asb-cosmic-loading[data-cosmic="profile"]:not(asb-spec-pad) {
+  min-height:0; margin:4px 0 0; padding:10px 4px 6px; border:0 !important; border-radius:0;
+  background:transparent !important; box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+.asb-cosmic-loading[data-cosmic="profile"] .asb-cosmic-scan { top:44px; }
+.asb-cosmic-loading[data-cosmic="profile"] .dev-loading-steps { max-width:330px; gap:8px; }
+.asb-cosmic-loading[data-cosmic="profile"] .dev-loading-step,
+html:root[data-asb-glass="1"] .asb-cosmic-loading[data-cosmic="profile"] .dev-loading-step:not(asb-spec-pad) {
+  padding:8px 6px; border:0 !important; border-radius:999px; color:#bfe9dc;
+  background:rgba(75,243,200,.085) !important; box-shadow:none !important; font-size:9.5px; letter-spacing:.02em;
+  animation:devEvidenceStep 1.8s ease-in-out infinite; }
+.asb-cosmic-loading[data-cosmic="profile"] .dev-loading-step:nth-child(2) { animation-delay:.3s; }
+.asb-cosmic-loading[data-cosmic="profile"] .dev-loading-step:nth-child(3) { animation-delay:.6s; }
+html[data-asb-theme="light"] .asb-cosmic-loading[data-cosmic="profile"] .dev-loading-step:not(asb-spec-pad) { color:#14604f; background:rgba(22,124,112,.09) !important; }
 @keyframes asbCosmicReverse { to { transform:rotate(-360deg); } }
 @keyframes asbCosmicHover { 0%,100% { transform:translate(-50%,-50%); } 50% { transform:translate(-50%,calc(-50% - 5px)); } }
 @keyframes asbCosmicStar { 0%,100% { opacity:.22; } 50% { opacity:.85; } }
 @keyframes asbCosmicScan { 0% { opacity:0; transform:translateY(-12px); } 22% { opacity:.85; } 70% { opacity:.5; } 100% { opacity:0; transform:translateY(116px); } }
 @media (prefers-reduced-motion:reduce) { .asb-cosmic-ring,.asb-cosmic-ufo,.asb-cosmic-star,.asb-cosmic-scan { animation:none; }
+  .asb-cosmic-loading[data-cosmic="profile"] .dev-loading-step { animation:none !important; }
   .asb-cosmic-scan { opacity:.2; transform:translateY(42px); } .asb-cosmic-star { opacity:.48; } }
 .device-page .dev-pressure { margin: 2px 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
 :is(.device-page,.live-info-sheet) .dev-pressure-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -2347,9 +2373,21 @@ body.config-category-active #configPage .cfg-list {
   width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
   -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-padding-inline: 4px; }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-track::-webkit-scrollbar { display: none; }
-:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn { flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px; }
+/* buildfix44: the buttons share the dock evenly and a long name wraps to two lines; they
+ * only scroll sideways when the minimum width no longer fits. A fixed 104-176 px width cut
+ * "Listening safety" at the edge with three sections and left the dock half empty with two. */
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn { flex:1 1 0; width:auto; min-width:82px; max-width:none; min-height:60px; padding:4px 6px; }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ico { flex: 0 0 28px; }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-label { width:100%; max-width:none; overflow:visible; text-align:center; white-space:normal; text-overflow:clip; overflow-wrap:break-word; word-break:normal; line-height:11px; letter-spacing:0; }
+/* buildfix44: cards scrolled under the floating dock showed through and around it and read
+ * as overlapping text. A fixed fade below the dock (under it, above the page) hides them. */
+.dock-scrim { display:none; position:fixed; left:0; right:0; bottom:0; z-index:150; pointer-events:none;
+  height:calc(env(safe-area-inset-bottom, 0px) + 92px);
+  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--bg) 82%,transparent) 38%,var(--bg) 66%); }
+body.report-active .dock-scrim, body.zygisk-active .dock-scrim, body.device-active .dock-scrim,
+body.config-active.config-category-active .dock-scrim { display:block; }
+html:root[data-asb-glass="1"] .dock-scrim {
+  background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--glass-scrim) 82%,transparent) 38%,var(--glass-scrim) 66%); }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ind::before { top:4px; height:28px; border-radius:14px; }
 .lgr-jump-track.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
 #reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor,
@@ -6261,6 +6299,7 @@ html:root[data-asb-glass="1"] .cfg-reset-dialog {
 .profile-details-refresh { font-size:17px; }
 .profile-details-hero { position:relative; overflow:hidden; margin-top:14px; padding:16px; border:1px solid rgba(64,230,165,.28); border-radius:20px; background:radial-gradient(circle at 90% 0,rgba(56,225,170,.18),transparent 48%),linear-gradient(145deg,rgba(31,155,111,.18),rgba(9,19,19,.88)); }
 .profile-details-hero-name { color:#78efbf; font:850 24px/1.15 var(--sans); }
+.profile-details-hero > :first-child { margin-top:0; }
 .profile-details-hero-sub { margin-top:7px; color:var(--text-secondary); font:500 12px/1.5 var(--sans); }
 .package-fix-card .bfx-fix-kicker { margin:0 0 8px; color:var(--cat-ink,var(--accent)); font:700 10px/1.2 var(--mono); letter-spacing:.09em; }
 .zy-merged-subsection { margin-top:12px; padding-top:11px; }
@@ -6357,11 +6396,12 @@ html[data-asb-effects="reduced"] .live-info-src {
  * UFO/orbits then stayed frozen until their nodes were recreated. Real OS reduced-motion is
  * still honoured by the media query above; temporary rendering pressure is not a motion
  * preference and no longer stops the emblem, wordmark or status indicators. */
+/* buildfix44: the Zygisk link dot was the last indicator this fallback still stopped; after
+ * three slow frames it stood still for the rest of the session, like the Smart halo did.
+ * Reduced effects now only drop its soft glow ring, which is painted, not composited. */
 html[data-asb-effects="reduced"] .zygisk-header-dot:not(asb-spec-pad),
-html[data-asb-effects="reduced"] .zygisk-header-dot::after,
-html[data-asb-effects="reduced"] .dev-zygisk-link-dot:not(asb-spec-pad),
-html[data-asb-effects="reduced"] .dev-zygisk-link-dot::after {
-  animation:none !important;
+html[data-asb-effects="reduced"] .dev-zygisk-link-dot:not(asb-spec-pad) {
+  box-shadow:none;
 }
 /* During a page slide, compositing the moving surface matters more than backdrop sampling.
  * This bounded class exists only for the slide; it is not a worker or a persistent render mode. */
@@ -6417,6 +6457,36 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
 
 /* buildfix39: the EQ remains one compact tool, but uses ASB's own surface, accent,
  * segmented controls and spacing. No clipped sub-card or separate colour system. */
+/* buildfix44: the DSP console - one card, labelled inner panels, compact rows (see
+ * cfgRenderDspConsole). Selectors out-rank the Liquid Glass row skin on purpose. */
+.dsp-console { box-sizing:border-box; width:100%; min-width:0; max-width:100%; margin:0; padding:15px !important; overflow:visible; }
+.dsp-console > * { min-width:0; max-width:100%; box-sizing:border-box; }
+.dsp-console-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.dsp-console-title { min-width:0; color:var(--text); font:750 15px/1.3 var(--sans); }
+.dsp-console-mark { flex:0 0 auto; padding:4px 8px; border-radius:999px; color:var(--text-tertiary);
+  background:color-mix(in srgb,var(--text) 6%,transparent); font:700 9px/1 var(--mono); letter-spacing:.08em; }
+.dsp-console-mark.on { color:var(--accent); background:color-mix(in srgb,var(--accent) 13%,transparent); }
+.dsp-console-label { margin:13px 2px 6px; color:var(--text-tertiary); font:700 9.5px/1.2 var(--mono); letter-spacing:.09em; text-transform:uppercase; }
+.dsp-console-panel { position:relative; min-width:0; padding:2px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+html .dsp-console .dsp-console-panel .cfg-row.cfg-row.is-on,
+html .dsp-console .dsp-console-panel .cfg-row.cfg-row:not(.is-on),
+html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row.is-on,
+html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row:not(.is-on) {
+  min-width:0; margin:0 !important; padding:8px 0 !important; overflow:visible !important; border:0 !important; border-radius:0 !important;
+  background:transparent !important; box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+html .dsp-console .dsp-console-panel .cfg-row.cfg-row + .cfg-row,
+html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row + .cfg-row { border-top:1px solid var(--border) !important; }
+.dsp-console-panel .cfg-row-top { display:grid; grid-template-columns:minmax(96px,.46fr) minmax(0,1fr); align-items:center; gap:10px; width:100%; min-width:0; min-height:38px; padding:0 !important; }
+.dsp-console-panel .cfg-icon, .dsp-console-panel .cfg-status-row { display:none !important; }
+.dsp-console-panel .cfg-main { min-width:0; }
+.dsp-console-panel .cfg-name { color:var(--text-secondary); font:650 11.5px/1.25 var(--sans); white-space:normal; overflow-wrap:anywhere; }
+.dsp-console-panel .cfg-row.is-on .cfg-name { color:var(--text); }
+.dsp-console-panel .cfg-range { display:grid; grid-template-columns:minmax(0,1fr) 52px; align-items:center; gap:8px; width:100%; min-width:0; margin:0 !important; }
+.dsp-console-panel .cfg-range input { width:100%; min-width:0; margin:0; accent-color:var(--accent); }
+.dsp-console-panel .cfg-range-val { position:static; min-width:0; padding:0; color:var(--text); background:transparent; font:700 11px/1 var(--mono); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.dsp-console-panel .cfg-sel-wrap, .dsp-console-panel .cfg-seg, .dsp-console-panel .cfg-switch { justify-self:end; margin:0; }
+.dsp-console-panel .cfg-sel-btn { max-width:100%; }
+.dsp-console-panel .cfg-row-desc { padding:4px 0 2px; font-size:11px; line-height:1.45; }
 .dsp-eq-console { box-sizing:border-box; width:100%; min-width:0; max-width:100%; margin:0; padding:15px !important; overflow:visible; }
 .dsp-eq-console > * { min-width:0; max-width:100%; box-sizing:border-box; }
 .dsp-eq-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -6547,6 +6617,7 @@ html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + 
   </div>
 </div>
 <div class="status-bar-scrim" aria-hidden="true"></div>
+<div class="dock-scrim" aria-hidden="true"></div>
 <!-- Debug-only actions use this modal while the root export command is executing.
      It is hidden for normal navigation and contains no destructive control. -->
 <div class="debug-action-wait" id="debugActionWait" hidden role="status" aria-live="assertive" aria-modal="true">
@@ -7526,6 +7597,7 @@ const TECH_ICON_PATHS = {
   /* Push transport switched off: a routed signal crossed out, not a generic service stop. */
   push_off: '<path d="M4 7h10M4 12h7M4 17h4"/><path d="m14 7 3 3-3 3M17 10h3"/><path d="m14 15 6 6M20 15l-6 6"/>',
   /* fix280: a hexagonal cell with a Z. The old dot with eight rays read as the light-theme sun beside it. */
+  app_components: '<rect x="3.5" y="4" width="7.5" height="7" rx="1.6"/><rect x="13" y="4" width="7.5" height="7" rx="1.6"/><rect x="3.5" y="13" width="7.5" height="7" rx="1.6"/><circle cx="16.75" cy="16.5" r="2.4"/><path d="M16.75 12.6v1.5M16.75 18.9v1.5M12.85 16.5h1.5M19.15 16.5h1.5"/>',
   zygisk_observer: '<path d="M12 2.8 19.8 7.3v9.4L12 21.2 4.2 16.7V7.3z"/><path d="M9 8.8h6l-6 6.4h6"/>',
   /* Power owns only the master/Off state. Connection keeps the Z cell, so status and control
    * no longer look interchangeable. Layered profiles identify Mode without copying Controls. */
@@ -8251,6 +8323,61 @@ async function runBatch(parts) {
   return res;
 }
 
+/* buildfix44: a slow status script (camera ART dump, kernel/wakeup scan) used to run inside
+ * one ksu.exec call, and that call holds the page's JavaScript thread until the script ends -
+ * a Back tap waited for the whole scan. The script now runs detached into a /dev file and the
+ * page only asks, in short spaced checks, whether the file is there. Each check is one quick
+ * shell; taps and the page slide are served between them. */
+let _asbDetachedSeq = 0;
+function asbDetachedWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+async function asbRunDetached(tag, cmd, maxMs) {
+  const f = '/dev/.asb_ui_' + String(tag || 'job').replace(/[^A-Za-z0-9_]/g, '') + '_' + (++_asbDetachedSeq) + '_' + Date.now();
+  const part = f + '.part', mark = _ASB_PART + 'detached';
+  let start = null;
+  try {
+    start = await run('( { ' + cmd + '; } > ' + shQuote(part) + ' 2>/dev/null; mv -f ' + shQuote(part) + ' ' + shQuote(f) +
+      ' ) </dev/null >/dev/null 2>&1 &');
+  } catch (e) { start = null; }
+  if (!start || start.errno) return { errno: 1, stdout: '', stderr: 'detached start failed' };
+  const limit = Date.now() + Math.max(1000, Number(maxMs) || 20000);
+  const gaps = [140, 220, 300, 380, 450];
+  let lost = 0;
+  for (let i = 0; Date.now() < limit; i++) {
+    await asbDetachedWait(gaps[Math.min(i, gaps.length - 1)]);
+    let r = null;
+    try {
+      r = await run('if [ -f ' + shQuote(f) + ' ]; then cat ' + shQuote(f) + '; rm -f ' + shQuote(f) + '; echo; echo ' + shQuote(mark) +
+        '; elif [ -f ' + shQuote(part) + ' ]; then echo ' + shQuote(mark + ':running') + '; fi');
+    } catch (e) { r = null; }
+    const out = r && r.stdout != null ? String(r.stdout) : '';
+    /* A manager that ends the whole process group with its shell leaves neither file. Two
+     * such answers in a row mean the job is gone: read it the old, blocking way once. */
+    if (out.indexOf(mark) < 0) {
+      if (++lost >= 2) return run(cmd);
+      continue;
+    }
+    lost = 0;
+    const at = out.lastIndexOf('\n' + mark);
+    if (at >= 0 || out.indexOf(mark + '\n') === 0 || out === mark) {
+      let body = at >= 0 ? out.slice(0, at) : '';
+      if (body.slice(-1) === '\n') body = body.slice(0, -1);
+      return { errno: 0, stdout: body, stderr: '' };
+    }
+  }
+  try { run('rm -f ' + shQuote(f) + ' ' + shQuote(part)); } catch (e) {}
+  return { errno: 1, stdout: '', stderr: 'detached timeout' };
+}
+async function asbRunBatchDetached(tag, parts, maxMs) {
+  const r = await asbRunDetached(tag, runBatchCmd(parts), maxMs);
+  const got = runBatchSplit(r && r.errno === 0 ? r.stdout : '');
+  const res = Object.create(null);
+  parts.forEach(function (p) {
+    const has = Object.prototype.hasOwnProperty.call(got, p[0]);
+    res[p[0]] = { errno: has ? 0 : 1, stdout: has ? got[p[0]] : '', stderr: '' };
+  });
+  return res;
+}
+
 /* fix325: the first paint, Smart subtitle and once-per-boot guard used to start three
  * independent root shells (and a fourth for the Smart state). They are immutable startup
  * evidence for the lifetime of this WebView, so share one batch and one Promise. The random
@@ -8605,8 +8732,9 @@ async function profileDetailsRefresh() {
   if (ticket !== _profileDetails.request) return;
   try {
     const marker = '__ASB_EFFECTIVE_POLICY__';
-    const r = await run('sh ' + shQuote(MD + '/tools/asb_profile_details.sh') + ' ' + p
-      + "; printf '\n" + marker + "\n'; sh " + shQuote(MD + '/tools/asb_effective_policy.sh'));
+    const pdCmd = 'sh ' + shQuote(MD + '/tools/asb_profile_details.sh') + ' ' + p
+      + "; printf '\n" + marker + "\n'; sh " + shQuote(MD + '/tools/asb_effective_policy.sh');
+    const r = await (typeof asbRunDetached === 'function' ? asbRunDetached('profile', pdCmd, 30000) : run(pdCmd));
     if (ticket !== _profileDetails.request) return;
     if (!r || r.errno !== 0) throw new Error((r && r.stderr) || 'profile details unavailable');
     const out = String(r.stdout || ''), split = out.lastIndexOf(marker);
@@ -8651,7 +8779,6 @@ function profileDetailsPaint() {
   const d = _profileDetails.data || {}, e = _profileDetails.effective || {};
   const p = _profileDetails.profile, body = _el('profileDetailsBody'); body.replaceChildren();
   const hero = profileDetailsNode('div', 'profile-details-hero');
-  hero.appendChild(profileDetailsNode('div', 'profile-details-hero-name', T('prof_' + p, p)));
   const heroNote = T('pd_' + p + '_note', '');
   if (p === 'smart' && heroNote) {
     const fold = profileDetailsNode('details', 'profile-details-smart-policy asb-disclosure');
@@ -9182,16 +9309,39 @@ function lvBootParse(text, uptimeS) {
    * corrupt boot file instead of presenting its duration and synthetic no-drop rate. */
   const up = parseInt(uptimeS, 10);
   if (Number.isFinite(up) && up >= 0 && n[0] + n[1] > up + 90) return null;
-  return { on:n[0], off:n[1], onX:Number.isFinite(n[2]) ? n[2] : 0,
+  const out = { on:n[0], off:n[1], onX:Number.isFinite(n[2]) ? n[2] : 0,
     last:Number.isFinite(n[3]) ? n[3] : 0, lastS:Number.isFinite(n[4]) ? n[4] : 0,
     lastAt:Number.isFinite(n[5]) ? n[5] : 0 };
+  /* buildfix44: fields 8-12 - discharging screen-on seconds (the divisor of onX; charging time
+   * used to dilute the rate), then the active profile's own this-boot seconds, hundredths,
+   * name and start. A seven-field file from an older meter keeps the old meaning. */
+  const x = f.slice(7, 10).map(function (v) { return parseInt(v, 10); });
+  const since = parseInt(f[11], 10);
+  if (x.every(function (v) { return Number.isFinite(v) && v >= 0; })) {
+    out.don = x[0];
+    if (/^(smart|balanced|battery|performance|stock)$/.test(String(f[10] || '')) && Number.isFinite(since) && since >= 0) {
+      out.pOn = x[1]; out.pOnX = x[2]; out.prof = f[10]; out.pSince = since;
+    }
+  }
+  return out;
 }
-function lvBootOnFigure() {
+function lvBootBasis(profile) {
   const b = _lvMeter.boot;
+  if (!b) return null;
+  if (b.prof) {
+    if (profile && b.prof !== profile) return null;
+    return { on:b.pOn, onX:b.pOnX, scope:'profile', since:b.pSince || 0 };
+  }
+  return { on:b.don > 0 ? b.don : b.on, onX:b.onX, scope:'phone', since:0 };
+}
+function lvBootOnFigure(profile) {
+  const b = lvBootBasis(profile);
   /* Without an observed battery-level step there is no measured rate. An upper bound from
    * a few quiet minutes becomes an absurd 100%/h and a false time-to-empty forecast. */
   if (!b || b.on < 60 || !(b.onX > 0)) return null;
-  return { x:Math.round(b.onX * 360 / b.on), upper:false, s:b.on, src:'boot' };
+  const bootAt = Number(_lvMeter.bootAt) || 0;
+  const switched = b.scope === 'profile' && bootAt > 0 && b.since > bootAt + 300;
+  return { x:Math.round(b.onX * 360 / b.on), upper:false, s:b.on, src:switched ? 'switch' : 'boot', scope:b.scope };
 }
 function lvNightParse(text) {
   const f = String(text || '').trim().split(/\s+/);
@@ -9464,12 +9614,14 @@ function lvProfileOnFigure(profile) {
  * was 30 minutes old. */
 function lvOnKind(fig) {
   if (!fig) return 'meter_wait';
+  if (fig.src === 'switch') return 'switch';
   return fig.src === 'boot' ? 'boot' : (fig.src === 'history' ? 'meter' : 'profile');
 }
 function lvOnTip(fig) {
   if (!fig) return T('lv_drain_on_boot_wait', 'needs a battery-level step with the screen on since this device boot');
   const mins = String(Math.max(1, Math.round(fig.s / 60)));
   const kind = lvOnKind(fig);
+  if (kind === 'switch') return T('lv_drain_on_switch_tip', 'Battery-level drain with the screen on since this profile was selected in this boot: %s min. Charging and battery-level resets are excluded.').replace('%s', mins);
   if (kind === 'boot') return T('lv_drain_on_boot_tip', 'Battery-level drain with the screen on since this device boot: %s min. Charging and battery-level resets are excluded.').replace('%s', mins);
   if (kind === 'meter') return T('lv_drain_on_avg_tip', 'Average screen-on drain of this profile: %s min measured.').replace('%s', mins);
   return T('lv_drain_on_profile_tip', 'Latest recorded screen-on drain for this profile: %s min.').replace('%s', mins);
@@ -9481,20 +9633,28 @@ function lvOnTip(fig) {
  * Monitor an hour later while this boot had long been measured. A session recorded during this
  * boot still wins: the boot meter is phone-wide and may include another profile's time.
  * Mature = 15 min with the screen on and 2 % of drop since boot. */
-function lvBootMature() {
-  const b = _lvMeter.boot;
+function lvBootMature(profile) {
+  const b = typeof lvBootBasis === 'function' ? lvBootBasis(profile) : _lvMeter.boot;
+  /* The profile's own total must hold three battery-level steps over half an hour: two steps
+   * in 15 minutes still move the rate by half when one more step lands inside the window. */
+  if (b && b.scope === 'profile') return b.on >= 1800 && b.onX >= 300;
   return !!(b && b.on >= 900 && b.onX >= 200);
 }
+/* buildfix44: a 12-minute session that dropped two whole percent read 10.4 %/h while the same
+ * profile had measured 6.8 %/h over the last 1 h 45 min - one battery-level step more or less
+ * moves a short session by half. When the meter keeps the active profile's own this-boot
+ * total, that total wins over any shorter sample: same profile, more evidence. The phone-wide
+ * figure of an older meter still only replaces a sample from before this boot. */
 function lvOnFigure(profile) {
   /* The selected WebUI profile owns the phone-wide since-boot view. The meter's "current"
    * line is only a runtime publication and can lag a profile switch; using it here assigned
    * another profile's history to the active card. */
   const own = lvProfileOnFigure(profile);
-  const boot = _selectedProfile === profile ? lvBootOnFigure() : null;
-  if (boot && lvBootMature()) {
+  const boot = _selectedProfile === profile ? lvBootOnFigure(profile) : null;
+  if (boot && lvBootMature(profile)) {
     const bootAt = Number(_lvMeter.bootAt) || 0;
     const stale = !own || own.src === 'history' || (own.src === 'latest' && own.at > 0 && bootAt > 0 && own.at < bootAt);
-    if (stale) return boot;
+    if (stale || (boot.scope === 'profile' && !(own.s > boot.s))) return boot;
   }
   return own || boot;
 }
@@ -9682,6 +9842,7 @@ function liveDrainPaint() {
     charging: T('lv_drain_charging_tip', 'No drain while charging - the figure comes back after unplugging.'),
     wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving'),
     boot: T('lv_drain_on_boot_tip', 'Battery-level drain with the screen on since this device boot: %s min. Charging and battery-level resets are excluded.').replace('%s', String(mins)),
+    switch: T('lv_drain_on_switch_tip', 'Battery-level drain with the screen on since this profile was selected in this boot: %s min. Charging and battery-level resets are excluded.').replace('%s', String(mins)),
     meter: T('lv_drain_on_avg', 'average of this profile: %s min measured with the screen on - the same figure as on the profile card and in the manager action').replace('%s', String(mins)),
     profile: T('lv_drain_on_profile_tip', 'Latest recorded screen-on drain for this profile: %s min.').replace('%s', String(mins)),
     meter_wait: T('lv_drain_on_boot_wait', 'needs a battery-level step with the screen on since this device boot')
@@ -9697,12 +9858,12 @@ function liveDrainPaint() {
   const left = T('lv_drain_left', 'to 0%: %s');
   body.textContent = '';
   /* buildfix42: the sheet's heading names the same source as its sentence and the footer. */
-  const onHead = { boot: T('lv_scr_on_boot', 'Screen on · since boot'), profile: T('lv_scr_on_latest', 'Screen on · latest'),
+  const onHead = { boot: T('lv_scr_on_boot', 'Screen on · since boot'), switch: T('lv_scr_on_switch', 'Screen on · since profile switch'), profile: T('lv_scr_on_latest', 'Screen on · latest'),
     meter: T('lv_scr_on_avg', 'Screen on · profile average') }[_lvDrain.on] || T('lv_scr_on', 'Screen on');
   body.appendChild(liveDrainBlock('sun', onHead, onV, onBasis,
     (etaOn && etaOn !== '\u2014' && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : ''));
   /* fix279: the live window, labelled as what it is and never in place of the average. */
-  if ((_lvDrain.on === 'meter' || _lvDrain.on === 'boot' || _lvDrain.on === 'profile') && _lvDrain.nowX > 0) {
+  if ((_lvDrain.on === 'meter' || _lvDrain.on === 'boot' || _lvDrain.on === 'switch' || _lvDrain.on === 'profile') && _lvDrain.nowX > 0) {
     const nowMin = Math.max(1, Math.round((_lvDrain.nowS || 0) / 60));
     const nowEta = _lvEta.cap > 0 ? lvEtaFmt(Math.floor(_lvEta.cap * 600 / _lvDrain.nowX)) : '';
     body.appendChild(liveDrainBlock('timeout', T('lv_drain_now_lbl', 'Right now'), lvPct(_lvDrain.nowX, 10, 1),
@@ -9714,7 +9875,7 @@ function liveDrainPaint() {
     (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : ''));
   const cmp = liveDrainCompare();
   if (cmp) body.appendChild(cmp);
-  body.appendChild(liveDrainExplanation(T('lv_drain_note_src', 'Screen on: the latest complete screen-on session of the active profile (10 min or more), otherwise the drain since boot, otherwise the profile average; the heading names which one. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor.'), 'live-drain-note'));
+  body.appendChild(liveDrainExplanation(T('lv_drain_note_src', 'Screen on: the active profile’s drain in this boot (since boot, or since the profile was selected) once it covers at least as much screen-on time as its latest session, otherwise the latest complete session (10 min or more), otherwise the profile average; the heading names which one. Charging time is left out. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor.'), 'live-drain-note'));
 }
 function liveDrainCompare() {
   const p = _lvMeter.p || {};
@@ -11549,7 +11710,7 @@ function cfgRenderBatteryFixCard(list) {
 function cfgRenderComponentManagerCard(list) {
   const card = bfxEl('div', 'cfg-row bfx-card component-manager-card'); card.id = 'componentManagerCard';
   const head = bfxEl('div', 'bfx-head');
-  const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon('zygisk_observer'); head.appendChild(em);
+  const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon('app_components'); head.appendChild(em);
   const titles = bfxEl('div', 'bfx-titles');
   titles.appendChild(bfxEl('div', 'bfx-title', T('cmp_card_title', 'Activities & Services')));
   const chip = bfxEl('span', 'bfx-chip is-wait', '—'); chip.id = 'componentManagerChip'; titles.appendChild(chip);
@@ -12304,6 +12465,47 @@ function cfgEqPlotPaint(svg, target, preview) {
   }
   line.setAttribute('d',points.join(' '));
 }
+/* buildfix44: the twelve DSP controls were twelve full cards in a row, each with its own icon,
+ * status line and frame - a long scroll before the EQ. They now sit in one console in the
+ * EQ's language: three labelled panels (output, tone, dynamics and protection) of compact
+ * rows. Every row is still the ordinary control with the same write path and its
+ * description on tap. */
+const DSP_CONSOLE_GROUPS = [
+  ['dsp_grp_route', 'Output', ['dsp_outputs']],
+  ['dsp_grp_tone', 'Tone', ['dsp_loudness', 'dsp_bass', 'dsp_voice', 'dsp_width', 'dsp_clarity']],
+  ['dsp_grp_dynamics', 'Dynamics & protection', ['dsp_compressor', 'dsp_headroom', 'dsp_lookahead', 'dsp_rumble', 'dsp_true_peak', 'dsp_dc_protect']]
+];
+function cfgRenderDspConsole(list, sectionItems) {
+  const by = Object.create(null);
+  sectionItems.forEach(function (it) { by[it.key] = it; });
+  const used = Object.create(null);
+  const card = document.createElement('section');
+  card.className = 'cfg-row cat-audio dsp-console';
+  const head = document.createElement('div'); head.className = 'dsp-console-head';
+  const title = document.createElement('div'); title.className = 'dsp-console-title'; title.textContent = T('dsp_console_title', 'Engine controls');
+  const active = typeof dspEngineActive === 'function' && dspEngineActive();
+  const mark = document.createElement('span'); mark.className = 'dsp-console-mark' + (active ? ' on' : '');
+  mark.textContent = active ? T('dsp_console_on', 'ACTIVE') : T('dsp_console_off', 'BYPASSED');
+  head.appendChild(title); head.appendChild(mark); card.appendChild(head);
+  DSP_CONSOLE_GROUPS.concat([['', '', sectionItems.map(function (it) { return it.key; })]]).forEach(function (g) {
+    const items = g[2].map(function (k) { return used[k] ? null : by[k]; }).filter(Boolean);
+    if (!items.length) return;
+    if (g[0]) {
+      const label = document.createElement('div'); label.className = 'dsp-console-label'; label.textContent = T(g[0], g[1]);
+      card.appendChild(label);
+    }
+    const panel = document.createElement('div'); panel.className = 'dsp-console-panel';
+    items.forEach(function (it) {
+      used[it.key] = true;
+      cfgRenderRow(panel, it, false);
+      const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
+      const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
+      if (tx) tx.nodeValue = String(tx.nodeValue).replace(/^DSP[\s-]+/, '');
+    });
+    card.appendChild(panel);
+  });
+  list.appendChild(card);
+}
 function cfgRenderParametricEqCard(list) {
   const card=document.createElement('section');
   card.className='cfg-row cat-audio dsp-eq-console';
@@ -12390,7 +12592,8 @@ function cfgRenderGroup(list, groupId) {
     else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
     else if (section.card === 'camtools') cfgRenderCameraToolsCards(list);
     else if (section.card === 'dspeq') {
-      sectionItems.forEach(it => cfgRenderRow(list, it, false));
+      if (typeof cfgRenderDspConsole === 'function') cfgRenderDspConsole(list, sectionItems);
+      else sectionItems.forEach(it => cfgRenderRow(list, it, false));
       cfgRenderParametricEqCard(list);
     }
     else if (section.card === 'wakeup') {
@@ -12534,7 +12737,8 @@ async function ctLoad(manual) {
   const seq = ++_ctSeq;
   if (manual) uiSound('nav');
   let r = null;
-  try { r = await run('sh ' + shQuote(CAMTOOLS_SCRIPT) + ' status'); } catch (e) {}
+  const ctCmd = 'sh ' + shQuote(CAMTOOLS_SCRIPT) + ' status';
+  try { r = await (typeof asbRunDetached === 'function' ? asbRunDetached('camtools', ctCmd, 25000) : run(ctCmd)); } catch (e) {}
   if (seq !== _ctSeq || !_el('ctWcCard')) return;
   const p = ctParse(r && r.stdout != null ? String(r.stdout) : '');
   ctWebcamPaint(p.webcam);
@@ -12732,7 +12936,7 @@ function asbKernelControlVerdict(status, live, mode) {
  * control owner and wakeup owner. Read-only kernel evidence belongs to Device Diagnostics.
  * No timer, polling worker, duplicate diagnostics probe or direct browser sysfs write. */
 const ASB_KERNEL_STATUS_KEYS = ['io_scheduler','mglru_mode','kernel_mglru_min_ttl','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend','kernel_rt_boost','kernel_bore'];
-let _kernelPanel = { loaded:false, loading:false, seq:0, controls:Object.create(null), wakeup:null };
+let _kernelPanel = { loaded:false, loading:false, queued:false, seq:0, controls:Object.create(null), wakeup:null };
 let _wbDraft = null, _wbBusy = false;
 function kernelWakeupDrafts() {
   const wb = _kernelPanel.wakeup;
@@ -12743,7 +12947,14 @@ function kernelWakeupDrafts() {
   return _wbDraft;
 }
 let _wbSourceView = { open:false, query:'', filter:'all', sort:'events' };
-function kernelPanelEnsure() { if (!_kernelPanel.loaded && !_kernelPanel.loading) kernelPanelLoad(false); }
+/* buildfix44: the category draws first; the status read starts after the entrance. */
+function kernelPanelEnsure() {
+  if (_kernelPanel.loaded || _kernelPanel.loading || _kernelPanel.queued) return;
+  _kernelPanel.queued = true;
+  const go = function () { _kernelPanel.queued = false; kernelPanelLoad(false); };
+  if (typeof cfgAfterEnter === 'function') cfgAfterEnter(go, function () { _kernelPanel.queued = false; });
+  else go();
+}
 function kernelControlParse(txt) {
   const out = Object.create(null);
   String(txt || '').split(/\r?\n/).forEach(function (line) {
@@ -12815,10 +13026,11 @@ async function kernelPanelLoad(force) {
   if (_cfgGroup === 'kernel') { try { cfgRender(); } catch (e) {} }
   let b = null;
   try {
-    b = await runBatch([
+    const kParts = [
       ['controls', 'sh ' + shQuote(MD + '/runtime/asb_kernel_controls.sh') + ' status'],
       ['wakeup', 'sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh') + ' status']
-    ]);
+    ];
+    b = await (typeof asbRunBatchDetached === 'function' ? asbRunBatchDetached('kernel', kParts, 30000) : runBatch(kParts));
   } catch (e) {}
   if (seq !== _kernelPanel.seq) return;
   ASB_IO_SCHEDULERS = b && b.controls && b.controls.errno === 0 ? kernelSchedulerOptionsParse(b.controls.stdout) : null;
@@ -12851,10 +13063,10 @@ function kernelStateClass(state) {
 function kernelControlAvailability(key) {
   if (ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0) {
     const c = _kernelPanel.controls[key];
-    if (!c) return { state:_kernelPanel.loading ? 'loading' : 'unknown', live:'' };
+    if (!c) return { state:(_kernelPanel.loading || _kernelPanel.queued) ? 'loading' : 'unknown', live:'' };
     return { state:c.state === 'writable' ? 'available' : (c.state === 'not_writable' ? 'read_only' : c.state), live:c.live, mode:c.mode };
   }
-  return { state:_kernelPanel.loading ? 'loading' : 'unknown', live:'' };
+  return { state:(_kernelPanel.loading || _kernelPanel.queued) ? 'loading' : 'unknown', live:'' };
 }
 /* dev49: three controls read "not exposed" on the owner's phone for three different reasons;
  * each now says which, so a kernel that cannot have the switch is not mistaken for a fault. */
@@ -13011,7 +13223,7 @@ function kernelOpenDiagnostics() {
   })();
 }
 function kernelRefreshButton(id) {
-  const b = bfxEl('button', 'bfx-btn bfx-secondary' + (_kernelPanel.loading ? ' is-busy' : ''), _kernelPanel.loading ? T('kernel_refreshing', 'Checking…') : T('kernel_refresh', 'Refresh status'));
+  const b = bfxEl('button', 'bfx-btn bfx-secondary' + ((_kernelPanel.loading || _kernelPanel.queued) ? ' is-busy' : ''), (_kernelPanel.loading || _kernelPanel.queued) ? T('kernel_refreshing', 'Checking…') : T('kernel_refresh', 'Refresh status'));
   b.type = 'button'; b.id = id; b.disabled = _kernelPanel.loading || _wbBusy;
   b.onclick = kernelRefreshClick;
   return b;
@@ -13318,7 +13530,7 @@ function cfgRenderWakeupBlockerCard(list) {
   const titles = bfxEl('div');
   titles.appendChild(bfxEl('div', 'kernel-card-title', T('kernel_wb_title', 'Exact-name wakeup rules')));
   head.appendChild(titles);
-  head.appendChild(kernelStateBadge(wb ? (wb.node === 'writable' ? 'available' : (wb.node === 'not_writable' ? 'read_only' : wb.node)) : (_kernelPanel.loading ? 'loading' : 'unknown')));
+  head.appendChild(kernelStateBadge(wb ? (wb.node === 'writable' ? 'available' : (wb.node === 'not_writable' ? 'read_only' : wb.node)) : ((_kernelPanel.loading || _kernelPanel.queued) ? 'loading' : 'unknown')));
   card.appendChild(head);
   const details = kernelMoreBlock(card, 'wb', [bfxEl('div', 'kernel-card-sub', T('kernel_wb_sub', 'Up to 16 names, 1–63 printable ASCII characters each. No spaces, paths, patterns or automatic rules.')), bfxEl('div', 'kernel-note', T('kernel_wb_warning', 'Only add a name after diagnosing a concrete wakeup source. Blocking can delay notifications, networking or sensors. Existing locks are not force-released.'))]);
   if (wb) kernelWakeupObservedList(card, wb);
@@ -19305,6 +19517,12 @@ function asbPageJumpWatch(nav, items) {
   function update() {
     queued = false;
     if (!nav.isConnected) return;
+    const pick = nav._asbJumpPick;
+    if (pick) {
+      const atEnd = page.scrollTop + page.clientHeight >= page.scrollHeight - 4;
+      if (atEnd && Math.abs(page.scrollTop - pick.top) < 2 && _el(pick.id)) { asbPageJumpActive(nav, pick.id, true); return; }
+      nav._asbJumpPick = null;
+    }
     const targets = items.map(it => _el(it[0])).filter(Boolean);
     if (!targets.length || !page.getBoundingClientRect) return;
     /* The thumb-friendly nav order is not the document order (Details sits near the top,
@@ -19327,8 +19545,13 @@ function asbPageJumpWatch(nav, items) {
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(update);
     else update();
   }
+  function onResize() { asbPageJumpIndicator(nav); }
   page.addEventListener('scroll', onScroll, { passive: true });
-  page._asbJumpDispose = function () { page.removeEventListener('scroll', onScroll); };
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', onResize, { passive: true });
+  page._asbJumpDispose = function () {
+    page.removeEventListener('scroll', onScroll);
+    if (typeof window !== 'undefined' && window.removeEventListener) window.removeEventListener('resize', onResize);
+  };
   update();
 }
 function asbPageJumpIcon(id) {
@@ -19386,6 +19609,10 @@ function asbPageJump(items, label, extraClass) {
         const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
         const top = page.scrollTop + (target.getBoundingClientRect().top - page.getBoundingClientRect().top) / z - margin;
         page.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+        /* buildfix44: a short last section cannot reach the top, and the end-of-page rule
+         * then moved the highlight off the tapped button. At the end of the page the tap
+         * keeps it until the page is scrolled away from where the jump left it. */
+        nav._asbJumpPick = { id: it[0], top: page.scrollTop };
       } else if (target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'auto' });
     };
     parent.appendChild(b); nav._asbJumpButtons.push(b);

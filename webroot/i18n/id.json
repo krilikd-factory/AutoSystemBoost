@@ -4250,5 +4250,13 @@
   "pd_stage_readback": "Baca ulang",
   "lv_scr_on_avg": "Layar nyala · rata-rata profil",
   "lv_drain_cmp_avg": "Per profil – rata-rata masing-masing",
-  "lv_drain_note_src": "Layar nyala: sesi layar nyala terakhir yang selesai dari profil aktif (10 mnt atau lebih), jika tidak ada konsumsi sejak boot, jika tidak ada rata-rata profil; judulnya menyebut yang mana. Tabel di bawah memuat rata-rata tiap profil, jadi baris profil aktif bisa berbeda dari angka di atas. «Sekarang» hanya rentang berkelanjutan terakhir. «Layar mati» mengutamakan malam terkonfirmasi terakhir. Semua angka berasal dari level baterai, bukan sensor arus."
+  "lv_drain_note_src": "Layar menyala: konsumsi profil aktif pada boot ini (sejak boot atau sejak profil dipilih) setelah mencakup waktu layar menyala setidaknya sebanyak sesi terakhirnya; jika tidak, sesi lengkap terakhir (10 mnt atau lebih), jika tidak, rata-rata profil; judul menyebut yang mana. Waktu pengisian tidak dihitung. Tabel di bawah berisi rata-rata tiap profil, jadi baris profil aktif bisa berbeda dari angka di atas. «Sekarang» hanya rentang kontinu terakhir. Layar mati mengutamakan malam terkonfirmasi terakhir. Semua angka berasal dari level baterai, bukan sensor arus.",
+  "lv_scr_on_switch": "Layar menyala · sejak ganti profil",
+  "lv_drain_on_switch_tip": "Konsumsi berdasarkan level baterai dengan layar menyala sejak profil ini dipilih pada boot ini: %s mnt. Pengisian dan reset level dikecualikan.",
+  "dsp_console_title": "Kontrol mesin",
+  "dsp_console_on": "AKTIF",
+  "dsp_console_off": "DILEWATI",
+  "dsp_grp_route": "Keluaran",
+  "dsp_grp_tone": "Nada",
+  "dsp_grp_dynamics": "Dinamika & perlindungan"
 }

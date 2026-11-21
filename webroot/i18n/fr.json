@@ -4250,5 +4250,13 @@
   "pd_stage_readback": "Relecture",
   "lv_scr_on_avg": "Écran allumé · moyenne du profil",
   "lv_drain_cmp_avg": "Par profil – moyenne de chacun",
-  "lv_drain_note_src": "Écran allumé : la dernière session écran allumé terminée du profil actif (10 min ou plus), sinon la consommation depuis le démarrage, sinon la moyenne du profil ; le titre indique laquelle. Le tableau ci-dessous donne la moyenne de chaque profil, la ligne du profil actif peut donc différer du chiffre ci-dessus. « Maintenant » n’est que le dernier segment continu. « Écran éteint » privilégie la dernière nuit confirmée. Tous les chiffres viennent du niveau de batterie, pas du capteur de courant."
+  "lv_drain_note_src": "Écran allumé : la consommation du profil actif dans ce démarrage (depuis le démarrage ou depuis le choix du profil) dès qu’elle couvre au moins autant de temps écran allumé que sa dernière session ; sinon la dernière session complète (10 min ou plus), sinon la moyenne du profil ; le titre indique laquelle. Le temps de charge est exclu. Le tableau ci-dessous donne la moyenne de chaque profil, la ligne du profil actif peut donc différer du chiffre ci-dessus. « Maintenant » n’est que la dernière période continue. Écran éteint privilégie la dernière nuit confirmée. Tous les chiffres viennent du niveau de batterie, pas du capteur de courant.",
+  "lv_scr_on_switch": "Écran allumé · depuis le changement de profil",
+  "lv_drain_on_switch_tip": "Consommation selon le niveau de batterie, écran allumé, depuis la sélection de ce profil dans ce démarrage : %s min. La charge et les réinitialisations du niveau sont exclues.",
+  "dsp_console_title": "Réglages du moteur",
+  "dsp_console_on": "ACTIF",
+  "dsp_console_off": "CONTOURNÉ",
+  "dsp_grp_route": "Sortie",
+  "dsp_grp_tone": "Tonalité",
+  "dsp_grp_dynamics": "Dynamique et protection"
 }

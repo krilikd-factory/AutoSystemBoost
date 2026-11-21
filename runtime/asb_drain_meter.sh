@@ -10,6 +10,7 @@ DM_BOOT="${ASB_DM_BOOT:-$DM_LIVE.boot}"
 DM_BOOTID="${ASB_DM_BOOTID:-/proc/sys/kernel/random/boot_id}"
 dm_b_id=""; dm_b_on=0; dm_b_off=0; dm_b_onx=0; dm_b_pct=""; dm_b_chg=0; dm_b_ts=""; dm_b_scr=""
 dm_b_last=0; dm_b_last_s=0; dm_b_last_at=0
+dm_b_don=0; dm_bp_on=0; dm_bp_onx=0; dm_bp_prof="-"; dm_bp_since=0
 
 dm_prof=""
 dm_prev_ts=""
@@ -266,15 +267,25 @@ dm_boot_load() {
   [ -n "$dm_b_id" ] || dm_b_id=0
   dm_b_on=0; dm_b_off=0; dm_b_onx=0; dm_b_pct=""; dm_b_chg=0; dm_b_ts=""; dm_b_scr=""
   dm_b_last=0; dm_b_last_s=0; dm_b_last_at=0
+  dm_b_don=0; dm_bp_on=0; dm_bp_onx=0; dm_bp_prof="-"; dm_bp_since=0
   [ -r "$DM_BOOT" ] || return 0
-  read -r _bi _bon _boff _bonx _blast _blasts _blastat < "$DM_BOOT" 2>/dev/null
+  read -r _bi _bon _boff _bonx _blast _blasts _blastat _bdon _bpon _bponx _bpprof _bpsince < "$DM_BOOT" 2>/dev/null
   [ "$_bi" = "$dm_b_id" ] || return 0
   case "$_bon$_boff${_bonx:-0}${_blast:-0}${_blasts:-0}${_blastat:-0}" in ''|*[!0-9]*) return 0 ;; esac
   dm_b_on="$_bon"; dm_b_off="$_boff"; dm_b_onx="${_bonx:-0}"
   dm_b_last="${_blast:-0}"; dm_b_last_s="${_blasts:-0}"; dm_b_last_at="${_blastat:-0}"
+  case "${_bdon:-x}${_bpon:-x}${_bponx:-x}${_bpsince:-x}" in *[!0-9]*) return 0 ;; esac
+  dm_b_don="$_bdon"
+  case " $DM_PROFILES " in *" ${_bpprof:-x} "*) : ;; *) return 0 ;; esac
+  dm_bp_on="$_bpon"; dm_bp_onx="$_bponx"; dm_bp_prof="$_bpprof"; dm_bp_since="$_bpsince"
 }
 
 dm_boot_step() {
+  _bpf="${5:-}"; _bpnew=0
+  case " $DM_PROFILES " in *" $_bpf "*) : ;; *) _bpf="" ;; esac
+  if [ -n "$_bpf" ] && [ "$_bpf" != "$dm_bp_prof" ]; then
+    dm_bp_prof="$_bpf"; dm_bp_on=0; dm_bp_onx=0; dm_bp_since="$1"; _bpnew=1
+  fi
   if [ -n "$dm_b_ts" ]; then
     _bd=$(( $1 - dm_b_ts ))
     if [ "$_bd" -gt 0 ]; then
@@ -286,7 +297,13 @@ dm_boot_step() {
         # jumps are excluded; sampled current_now is deliberately not used here.
         if [ "$_bd" -le 120 ] && [ "${3:-}" != '' ] && [ "$dm_b_pct" != '' ] && [ "${4:-0}" = 0 ] && [ "$dm_b_chg" = 0 ]; then
           case "$3$dm_b_pct" in *[!0-9]*) : ;; *)
-            _bq=$((dm_b_pct - $3)); [ "$_bq" -ge 0 ] && [ "$_bq" -le 5 ] && dm_b_onx=$((dm_b_onx + _bq * 100)) ;;
+            _bq=$((dm_b_pct - $3))
+            if [ "$_bq" -ge 0 ] && [ "$_bq" -le 5 ]; then
+              dm_b_onx=$((dm_b_onx + _bq * 100)); dm_b_don=$((dm_b_don + _bd))
+              if [ -n "$_bpf" ] && [ "$_bpnew" = 0 ]; then
+                dm_bp_on=$((dm_bp_on + _bd)); dm_bp_onx=$((dm_bp_onx + _bq * 100))
+              fi
+            fi ;;
           esac
         fi
       else
@@ -295,8 +312,8 @@ dm_boot_step() {
     fi
   fi
   dm_b_ts="$1"; dm_b_scr="$2"; dm_b_pct="${3:-}"; dm_b_chg="${4:-0}"
-  printf '%s %s %s %s %s %s %s\n' "$dm_b_id" "$dm_b_on" "$dm_b_off" "$dm_b_onx" \
-    "$dm_b_last" "$dm_b_last_s" "$dm_b_last_at" > "$DM_BOOT.tmp" 2>/dev/null \
+  printf '%s %s %s %s %s %s %s %s %s %s %s %s\n' "$dm_b_id" "$dm_b_on" "$dm_b_off" "$dm_b_onx" \
+    "$dm_b_last" "$dm_b_last_s" "$dm_b_last_at" "$dm_b_don" "$dm_bp_on" "$dm_bp_onx" "$dm_bp_prof" "$dm_bp_since" > "$DM_BOOT.tmp" 2>/dev/null \
     && mv -f "$DM_BOOT.tmp" "$DM_BOOT" 2>/dev/null
   return 0
 }
@@ -324,7 +341,7 @@ dm_loop() {
       [ -n "${_aa_sig:-}" ] && _lm=1
     fi
     _was="$dm_prof"; _was_scr="$dm_prev_scr"
-    dm_boot_step "$_ln" "$_ls" "$_lp" "$_lc"
+    dm_boot_step "$_ln" "$_ls" "$_lp" "$_lc" "$_lf"
     dm_step "$_ln" "$_lp" "$_lc" "$_ls" "$_lf" "$_lm"
     if [ "$dm_dirty" = 1 ] || [ "$_was" != "$dm_prof" ]; then dm_publish; fi
     if [ "$dm_dirty" = 1 ]; then

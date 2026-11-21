@@ -4250,5 +4250,13 @@
   "pd_stage_readback": "Rilettura",
   "lv_scr_on_avg": "Schermo acceso · media del profilo",
   "lv_drain_cmp_avg": "Per profilo – media di ciascuno",
-  "lv_drain_note_src": "Schermo acceso: l’ultima sessione completa a schermo acceso del profilo attivo (da 10 min), altrimenti il consumo dall’avvio, altrimenti la media del profilo; il titolo dice quale. La tabella sotto riporta la media di ogni profilo, quindi la riga del profilo attivo può differire dal valore sopra. «Adesso» è solo l’ultimo tratto continuo. «Schermo spento» preferisce l’ultima notte confermata. Tutti i valori vengono dal livello della batteria, non dal sensore di corrente."
+  "lv_drain_note_src": "Schermo acceso: il consumo del profilo attivo in questo avvio (dall’avvio o dalla scelta del profilo) quando copre almeno tanto tempo a schermo acceso quanto la sua ultima sessione; altrimenti l’ultima sessione completa (10 min o più), altrimenti la media del profilo; il titolo indica quale. Il tempo di ricarica è escluso. La tabella sotto riporta la media di ogni profilo, quindi la riga del profilo attivo può differire dal valore sopra. «Adesso» è solo l’ultimo tratto continuo. Schermo spento preferisce l’ultima notte confermata. Tutti i valori derivano dal livello della batteria, non dal sensore di corrente.",
+  "lv_scr_on_switch": "Schermo acceso · dal cambio profilo",
+  "lv_drain_on_switch_tip": "Consumo dal livello della batteria a schermo acceso da quando questo profilo è stato scelto in questo avvio: %s min. Ricarica e reset del livello esclusi.",
+  "dsp_console_title": "Controlli del motore",
+  "dsp_console_on": "ATTIVO",
+  "dsp_console_off": "BYPASSATO",
+  "dsp_grp_route": "Uscita",
+  "dsp_grp_tone": "Tono",
+  "dsp_grp_dynamics": "Dinamica e protezione"
 }

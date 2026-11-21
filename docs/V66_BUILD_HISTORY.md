@@ -5,6 +5,55 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 dev66 buildfix44 - detached status reads, drain with charging, DSP console, docks
+
+Input: owner review of buildfix43 on the phone (eight items plus the screen-on drain figure,
+the loader emblem and the report dock). Base: buildfix43. No native code changed; no CI
+rebuild of native parts is needed.
+
+- **Camera exit and Kernel entry:** every `ksu.exec` call holds the page's JavaScript thread
+  until its script ends. Camera ran `asb_camera_tools.sh status` (an ART dump of the camera
+  app, `pm list packages -d`, `svc usb`, intent resolution) right after the entrance, so a
+  Back tap waited for it; Kernel started `asb_kernel_controls.sh status` and the wakeup-source
+  scan inside the first render, before the category was painted. Both reads (and the Active
+  profile read) now run detached into a `/dev/.asb_ui_*` file; the page asks for the file in
+  short spaced checks, so taps and the slide are served between them. Kernel starts its read
+  after the entrance and shows "Checking…" until then. If a manager kills background jobs,
+  two empty checks fall back to one direct read. Not timed on a phone.
+- **Zygisk header dot:** the automatic jank fallback (`data-asb-effects="reduced"`) still set
+  `animation:none` on it, so after three slow frames it stood still for the session, the same
+  cause as the Smart halo in buildfix42. The fallback now only drops its glow ring; OS
+  reduced motion still stops it.
+- **Screen-on drain with charging:** the since-boot meter added charging time with the screen
+  on to its divisor while the drop counter skipped it, so charging lowered the rate. The boot
+  file gained five fields: discharging screen-on seconds (the new divisor) and the active
+  profile's own this-boot seconds, hundredths, name and start; a profile switch restarts the
+  profile part. A seven-field file from an older meter keeps its meaning.
+- **Which figure is shown:** a 12-minute session that dropped two whole percent read
+  10.4 %/h while the same profile had measured 6.8 %/h over 1 h 45 min in the Infinite Log;
+  one battery-level step moves a short session by half. When the meter has the profile's own
+  this-boot total (30 min and 3 % at least) and it covers at least as much time as the latest
+  session, that total is shown, headed "since boot" or "since profile switch". Checked on
+  the owner's capture of 12:30-14:37 (`battery_trace.txt`): the meter's own rule (screen-on
+  intervals up to 90 s, steps of 1-5 %) gives 12 % over 92 min = 7.8 %/h there, while the
+  stored 11.5-minute session read 10.4 %/h.
+- **DSP console:** the twelve DSP controls are one card with three labelled panels (output,
+  tone, dynamics and protection) of compact rows in the Parametric EQ's style; each row keeps
+  its write path and opens its description on tap.
+- **Active profile sheet:** the profile name is no longer repeated under the title; the loader
+  stands on the sheet without a second frame, with outline-free stage pills, and its read is
+  detached so the emblem keeps moving.
+- **Icons and emblem:** the Infirmary "Activity and Service" card has its own component icon
+  instead of the Zygisk one. The loader scene and the header emblem are drawn larger with a
+  transform, so nothing under them moves; the emblem change applies to the header of every
+  page (Home, Monitor, Settings, report, Device, Zygisk), compact fit modes included.
+- **Bottom docks (report, Zygisk, Device, categories):** buttons share the dock width and wrap
+  a long name to two lines instead of cutting it at the edge; they scroll sideways only when
+  the minimum width no longer fits. A fixed fade under the dock hides cards scrolled beneath
+  it. A tapped section keeps the highlight while the page jumps, and the indicator is
+  re-measured on resize.
+- **Locales:** 8 new keys and the updated drain note in all 13 locales.
+
 ## V66 dev66 buildfix43 - CI test fix, softer loader beam, since-boot drain after a reboot
 
 Input: the failed "ASB · Build Test" run 44894672322 on buildfix42 (shard system-smart:
