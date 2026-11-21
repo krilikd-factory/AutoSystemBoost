@@ -1010,7 +1010,8 @@ lk_capture_display_trace_row() {
   case "$_blr:$_blm" in *[!0-9:]*|:*|*:) : ;; *) [ "$_blm" -gt 0 ] 2>/dev/null && _blp=$(( _blr * 100 / _blm )) ;; esac
   _hz=""
   if [ "$_dscr" = 1 ]; then
-    _dd="$(dumpsys display 2>/dev/null)"
+    _dd="$(dumpsys display 2>/dev/null | grep -oE 'renderFrameRate[ =]+[0-9.]+|fps=[0-9.]+' \
+      | awk '/^renderFrameRate/ && !r { r = $0 } /^fps=/ && !f { f = $0 } END { if (r) print r; if (f) print f }')"
     _hz="$(printf '%s\n' "$_dd" | grep -m1 -oE 'renderFrameRate[ =]+[0-9.]+' | grep -oE '[0-9.]+$')"
     [ -n "$_hz" ] || _hz="$(printf '%s\n' "$_dd" | grep -m1 -oE 'fps=[0-9.]+' | cut -d= -f2)"
     _dd=""
