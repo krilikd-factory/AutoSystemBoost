@@ -1900,6 +1900,8 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .lgr-summary-legend { margin-top: 5px; padding-top: 8px; border-top: 1px solid var(--border); }
 .lgr-details-anchor { scroll-margin-top: 12px; padding: 3px 3px 0; }
 .lgr-sec[id] { scroll-margin-top: 12px; }
+.lgr-context { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:10px 0 0; padding:0; }
+.lgr-context > .lgr-chip { margin:0; }
 .lgr-ref { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .lgr-ref-btn { min-height: 28px; cursor: pointer; font-size: 11px; }
 .lgr-ref-btn:active { border-color: var(--accent); color: var(--text); }
@@ -3856,6 +3858,8 @@ html[data-asb-theme="light"] .bfx-card.cfg-row.cat-camera .bfx-primary:not(:disa
 .kernel-source-main { min-width:0; flex:1 1 auto; }
 .kernel-source-name { color:var(--text); font:600 11px/1.35 var(--mono); overflow-wrap:anywhere; }
 .kernel-source-metrics { margin-top:3px; color:var(--text-secondary); font-size:10.5px; line-height:1.35; }
+.kernel-source-block-state { margin-top:5px; color:var(--accent); font-size:10.5px; line-height:1.4; }
+.kernel-source-block-state.is-mismatch { color:var(--warn); }
 .kernel-source-purpose { margin-top:6px; color:var(--text-secondary); font-size:11px; line-height:1.42; }
 .kernel-source-details { margin-top:6px; color:var(--text-secondary); font-size:10.5px; }
 .kernel-source-details > summary { cursor:pointer; color:var(--accent); }
@@ -6403,7 +6407,8 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
 
 /* buildfix39: the EQ remains one compact tool, but uses ASB's own surface, accent,
  * segmented controls and spacing. No clipped sub-card or separate colour system. */
-.dsp-eq-console { padding:15px !important; overflow:visible; }
+.dsp-eq-console { box-sizing:border-box; width:100%; min-width:0; max-width:100%; margin:0; padding:15px !important; overflow:visible; }
+.dsp-eq-console > * { min-width:0; max-width:100%; box-sizing:border-box; }
 .dsp-eq-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .dsp-eq-title { min-width:0; color:var(--text); font:750 15px/1.3 var(--sans); }
 .dsp-eq-mark { flex:0 0 auto; color:var(--text-tertiary); font:700 9px/1 var(--mono); letter-spacing:.08em; }
@@ -9398,7 +9403,10 @@ function lvProfileNightFigure(profile) {
 function lvProfileOnFigure(profile) {
   const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
   if (!e) return null;
-  if (e.onLastS >= 600) return { x:e.onLast > 0 ? e.onLast : Math.max(1, Math.ceil(360000 / e.onLastS)),
+  /* on_last is the session's accumulated hundredths of a percent, not its rate.
+   * Dividing that total by 10 printed a 5% session as 50.0%/h. Convert the complete
+   * session with the same x10 units used by the aggregate and since-boot figures. */
+  if (e.onLastS >= 600) return { x:e.onLast > 0 ? Math.round(e.onLast * 360 / e.onLastS) : Math.max(1, Math.ceil(360000 / e.onLastS)),
     upper:!(e.onLast > 0), s:e.onLastS, src:'latest' };
   return e.on > 0 ? { x:e.on, upper:false, s:e.onMin * 60, src:'history' } : null;
 }
@@ -9421,7 +9429,11 @@ function lvPrimaryOffFigure(profile) {
   return own || lvOffFigure(profile);
 }
 function lvPct(x, div, digits) {
-  return (x / div).toFixed(digits) + T('unit_pcth', '%/h');
+  /* T() has the full dictionary only after I18N_READY. The selected language is already
+   * known synchronously, so the first cached Home paint must use its own unit too. Keep
+   * this tiny table inside the formatter: meter tests and embedders extract it alone. */
+  const early = { ru:'%/ч', uk:'%/год', de:'%/h', es:'%/h', pt:'%/h', tr:'%/sa', id:'%/j', it:'%/h', fr:'%/h', ar:'%/س', zh:'%/小时', hy:'%/ժ' };
+  return (x / div).toFixed(digits) + T('unit_pcth', early[typeof ASB_LANG === 'string' ? ASB_LANG : 'en'] || '%/h');
 }
 /* This hour's learned drain is an average of whole sessions, the screen-off part of them
  * included, so it understates the screen-on rate (fix169): after a governor start the OP15
@@ -12214,7 +12226,7 @@ function cfgEqPlotPaint(svg, target, preview) {
 }
 function cfgRenderParametricEqCard(list) {
   const card=document.createElement('section');
-  card.className='cfg-card cat-audio dsp-eq-console';
+  card.className='cfg-row cat-audio dsp-eq-console';
   const targets=['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'];
   const names=[T('dsp_eq_band_low','Low band'),T('dsp_eq_band_mid','Mid band'),T('dsp_eq_band_high','High band')];
   function render() {
@@ -13069,8 +13081,21 @@ function kernelWakeupSourcesDrawList(m) {
     const row = bfxEl('div', 'kernel-source');
     const main = bfxEl('div', 'kernel-source-main');
     main.appendChild(bfxEl('div', 'kernel-source-name', src.name));
-    const metric = T('kernel_wb_source_metrics', '+{events} events · +{active} activations · +{time} active').replace('{events}', src.events).replace('{active}', src.active).replace('{time}', kernelWakeupDuration(src.time));
+    const metric = T('kernel_wb_source_metrics_raw', 'Raw kernel counters: +{events} events · +{active} activations · +{time} active').replace('{events}', src.events).replace('{active}', src.active).replace('{time}', kernelWakeupDuration(src.time));
     main.appendChild(bfxEl('div', 'kernel-source-metrics', metric + (src.reset ? ' · ' + T('kernel_wb_reset_short', 'counter reset') : '')));
+    const savedAlways = !!(wb && wb.savedAlways.indexOf(src.name) >= 0), savedSleep = !!(wb && wb.savedSleep.indexOf(src.name) >= 0);
+    const activeNow = !!(wb && wb.current.indexOf(src.name) >= 0);
+    if (savedAlways || savedSleep || activeNow) {
+      let state = '';
+      if (activeNow) {
+        if (wb && Object.prototype.hasOwnProperty.call(wb.blocked, src.name))
+          state = T('kernel_wb_rule_active_blocked', 'Rule active now · blocked by this rule: {n}').replace('{n}', wb.blocked[src.name]);
+        else state = T('kernel_wb_rule_active_stats_unknown', 'Rule active now · per-rule blocked counter not exposed');
+      } else if (savedSleep && !savedAlways && wb && wb.screen !== 'off') {
+        state = T('kernel_wb_rule_waiting_screen_off', 'Saved for screen-off only · inactive while the screen is on or its state is unknown');
+      } else state = T('kernel_wb_rule_readback_missing', 'Saved, but absent from the current kernel readback');
+      main.appendChild(bfxEl('div', 'kernel-source-block-state' + (!activeNow && !savedSleep ? ' is-mismatch' : ''), state));
+    }
     const info = kernelWakeupInfo(src.name);
     main.appendChild(bfxEl('div', 'kernel-source-purpose', T('kernel_wb_short_' + info.key, 'Owner not identified; inspect the details before adding a rule.')));
     const more = bfxEl('details', 'kernel-source-details');
@@ -13125,7 +13150,7 @@ function kernelWakeupSourceDialogRender() {
   const wb = _kernelPanel.wakeup;
   const body = m.querySelector('#kernelWakeupSourcesBody');
   body.textContent = '';
-  body.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_dialog_hint', 'Counters are changes during this observation window, not energy measurements. A high count alone does not prove that blocking is useful or safe.')));
+  body.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_dialog_hint_raw', 'Raw event/activation counters can keep increasing while a rule works: they describe source attempts, not successful wakeups. Only the active kernel rule and its blocked counter prove blocking. A screen-off rule is inactive while the screen is on. These are not energy measurements.')));
   const search = bfxEl('input', 'kernel-input kernel-sources-search');
   search.type = 'search'; search.id = 'kernelWakeupSourcesSearch'; search.maxLength = 63; search.value = _wbSourceView.query;
   search.placeholder = T('kernel_wb_search', 'Search exact source names'); search.setAttribute('aria-label', search.placeholder);
@@ -18026,7 +18051,7 @@ function asbToggleLogMenu(ev) {
  * capture too: the digest folds in the still-open phase, so the numbers move as the
  * day goes on. */
 function parseLogReport(txt) {
-  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], jphases: [], jstates: [], jwhys: [], hzs: [], hist: [], rapps: [], btdrops: [], cfg: {} };
+  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], activities: [], kwk: [], japps: [], jphases: [], jstates: [], jwhys: [], hzs: [], hist: [], rapps: [], btdrops: [], cfg: {} };
   if (!txt) { d.error = 'empty'; return d; }
   const lines = String(txt).split('\n');
   for (const raw of lines) {
@@ -18062,6 +18087,11 @@ function parseLogReport(txt) {
       /* fix207: the per-phase breakdown - every phase's time, signed drop (negative is
          charge gained) and drain rate, longest first. */
       if (kv.name) d.phases.push({ name: kv.name, min: +kv.min || 0, drop: +kv.drop || 0, pctph: +kv.pctph || 0 });
+    } else if (tag === 'appact') {
+      const component = function (v) { return /^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$-]{1,255}$/.test(String(v || '')) ? String(v) : 'unknown'; };
+      if ((+kv.min || 0) >= 5 && (+kv.pctph || 0) >= 8)
+        d.activities.push({ phase:kv.phase || 'active', min:+kv.min || 0, drop:+kv.drop || 0,
+          pctph:+kv.pctph || 0, start:component(kv.start), end:component(kv.end) });
     } else if (tag === 'kwk') {
       /* fix207: kernel holders on the charger - batterystats counts no app wakelock
          while charging, so these are the only names a charging day has. */
@@ -19230,7 +19260,10 @@ function asbPageJump(items, label, extraClass) {
       b.appendChild(icon); b.appendChild(text); b.setAttribute('aria-label', it[1]);
     } else b.textContent = it[1];
     if (b.setAttribute) b.setAttribute('aria-controls', it[0]);
-    b.onclick = function () {
+    b.onclick = function (event) {
+      /* A reference inside a clickable evidence row must navigate, not open that row's
+       * detail window through event bubbling. */
+      if (event) { event.preventDefault(); event.stopPropagation(); }
       const target = _el(it[0]);
       if (!target) return;
       asbPageJumpActive(nav, it[0], true);
@@ -19257,10 +19290,21 @@ function asbPageReference(targets, label, extraClass) {
   box.className = 'lgr-ref' + (extraClass ? ' ' + extraClass : '');
   const b = document.createElement('button'); b.type = 'button'; b.className = 'lgr-chip lgr-ref-btn';
   b.textContent = '↳ ' + label;
-  b.onclick = function () {
+  b.onclick = function (event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
     for (let i = 0; i < targets.length; i++) {
       const target = _el(targets[i]);
-      if (target && target.scrollIntoView) { target.scrollIntoView({ block: 'start' }); return true; }
+      if (!target) continue;
+      const page = target.closest ? target.closest('.live-page') : null;
+      if (page && page.scrollTo && page.getBoundingClientRect && target.getBoundingClientRect) {
+        const z = window._asbUiScale || 1;
+        const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+        const top = page.scrollTop + (target.getBoundingClientRect().top - page.getBoundingClientRect().top) / z - margin;
+        page.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+      } else if (target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'auto' });
+      const nav = page && page.querySelector ? page.querySelector('.report-nav') : null;
+      if (nav) asbPageJumpActive(nav, target.id, true);
+      return true;
     }
     return false;
   };
@@ -23025,13 +23069,7 @@ function logReportDiagRef(it) {
   return null;
 }
 function logReportAppendAnalysis(body, d, analysis) {
-  /* Put the map before the prose. Only sections supported by this capture become targets;
-   * Summary, Actions and Details always exist. The strip itself scrolls, never the page sideways. */
-  const navItems = [['lgr-summary', T('lr_nav_summary', 'Summary')], ['lgr-actions', T('lr_nav_actions', 'Actions')]];
-  if (d.sections.drain || d.sections.cover || d.sections.night || d.sections.idlemax || d.sections.radio || d.sections.chg)
-    navItems.push(['lgr-drain', T('lr_nav_drain', 'Battery')]);
-  navItems.push(['lgr-details', T('lr_nav_details', 'Details')]);
-  body.appendChild(asbPageJump(navItems, T('dev_nav_title', 'Jump to'), 'report-nav'));
+  /* The dock is built after the detail cards, from their final logical order. */
   const brief = logReportBrief(d, analysis);
   if (brief) body.appendChild(brief);
   d.diagnosis = logReportDiagnose(d);
@@ -23587,6 +23625,15 @@ function logReportRender(d) {
           sa >= lt ? ['lr_rat_sa', '5G SA in {n} of {of} checks', sa] : ['lr_rat_lte', 'LTE only in {n} of {of} checks', lt];
         s.appendChild(logReportRow(T('lr_rat', 'Modem network'), logReportT(rk[0], rk[1], { n: String(rk[2]), of: of })));
       }
+    }
+    if (d.activities.length) {
+      s.appendChild(logReportNote(T('lr_activity_head', 'Activity context in high-drain screen-on phases (8%/h or more, at least 5 min):')));
+      d.activities.slice(0, 5).forEach(function (a) {
+        const components = a.start === a.end ? a.start : a.start + ' → ' + a.end;
+        s.appendChild(logReportRow(T('lr_ph_' + a.phase, a.phase) + ' · ' + String(a.pctph) + T('lr_per_hour', '%/h'),
+          components + ' · ' + logReportDur(a.min) + ' · −' + String(a.drop) + '%'));
+      });
+      s.appendChild(logReportNote(T('lr_activity_note', 'Components were observed at the start/end of the phase. This correlation does not prove that an activity caused the drain; freezing it can break the app. No activity is named when Android did not expose one.')));
     }
     if (audio && (+audio.spk_min || 0) >= 10) {
       /* Speaker playback is the one background sound that shows up in drain.
@@ -24175,6 +24222,35 @@ function logReportRender(d) {
     });
     body.appendChild(s);
   }
+  logReportFinalizeLayout(body);
+}
+
+function logReportFinalizeLayout(body) {
+  const order = ['lgr-drain', 'lgr-night', 'lgr-wake', 'lgr-profiles', 'lgr-phases',
+    'lgr-thermal', 'lgr-smooth', 'lgr-display', 'lgr-bt', 'lgr-impact', 'lgr-smart',
+    'lgr-zygisk', 'lgr-asb', 'lgr-crash', 'lgr-trend', 'lgr-observations'];
+  const rank = {}; order.forEach(function (id, i) { rank[id] = i; });
+  const sections = Array.prototype.slice.call(body.children).filter(function (el) {
+    return el.classList && el.classList.contains('lgr-sec') && Object.prototype.hasOwnProperty.call(rank, el.id);
+  }).sort(function (a, b) { return rank[a.id] - rank[b.id]; });
+  sections.forEach(function (sec) { body.appendChild(sec); });
+  const labels = {
+    'lgr-drain':['lr_nav_drain','Battery'], 'lgr-night':['lr_sec_nightd_short','Idle'],
+    'lgr-wake':['lr_sec_wake','Wake'], 'lgr-profiles':['lr_sec_profiles','Profiles'],
+    'lgr-phases':['lr_sec_phases','Phases'], 'lgr-thermal':['lr_sec_thermal','Thermals'],
+    'lgr-smooth':['lr_sec_smooth','Smoothness'], 'lgr-display':['lr_sec_display','Display'],
+    'lgr-bt':['lr_sec_bt','Bluetooth'], 'lgr-impact':['lr_sec_impact','Evidence'],
+    'lgr-smart':['lr_sec_smart','Smart'], 'lgr-zygisk':['lr_sec_zygisk','Zygisk'],
+    'lgr-asb':['lr_sec_asb','ASB cost'], 'lgr-crash':['lr_sec_crash','Errors'],
+    'lgr-trend':['lr_sec_trend','Trend'], 'lgr-observations':['lr_sec_observations','More']
+  };
+  const items = [['lgr-summary', T('lr_nav_summary', 'Summary')], ['lgr-actions', T('lr_nav_actions', 'Actions')],
+    ['lgr-details', T('lr_nav_details', 'Details')]];
+  sections.forEach(function (sec) {
+    const spec = labels[sec.id]; if (spec) items.push([sec.id, T(spec[0], spec[1])]);
+  });
+  const summary = _el('lgr-summary');
+  body.insertBefore(asbPageJump(items, T('dev_nav_title', 'Jump to'), 'report-nav'), summary || body.firstChild);
 }
 
 let _asbLogRunning = false;
@@ -26009,13 +26085,15 @@ async function pollLive(visible, prefetch) {
     if (_lb.meter) lvMeterApply(_lb.meter.stdout || '', false);
     if (livePollTrack(snapshot, visible, prime, success)) {
       lvStale(false);
-      if (visible) lvMeterPaint(_selectedProfile); else homeMeterPaint();
+      /* lvMeterApply already painted a fresh meter. Repaint here only when this pass
+       * had no meter result; duplicate DOM reconstruction also retriggered page fitting. */
+      if (visible) lvMeterPaint(_selectedProfile); else if (!_lb.meter) homeMeterPaint();
       return;
     }
     if (visible) lvGpuClockRead(_lb);
     /* Ordinary cold start paints Home from this same read. The boot preview's visible
      * warmer paints it after the complete Live pass instead of forcing another shell. */
-    if (_lb.meter && !visible) homeMeterPaint();
+    if (!_lb.meter && !visible) homeMeterPaint();
     if (_lb.rom) stockTelemetryApply(_lb.rom);
     const r = _lb.state;
     /*
@@ -26906,12 +26984,11 @@ async function asbBootIntroStart() {
   overlay.classList.remove('is-ready');
   document.body.setAttribute('aria-busy', 'true');
   if (status) status.textContent = T('boot_intro_warm', 'Preloading ASB metrics…');
+  /* Warm only what Home actually displays. Preloading Config, Device, a full log digest
+   * and Zygisk in parallel contended for root shells and held the first Home frame behind
+   * pages the owner had not opened. Those pages retain their ordinary lazy loaders. */
   const jobs = [
-    ['live', function () { return Promise.resolve(pollLive(true, true)).then(function () { homeMeterPaint(); }); }],
-    ['config', function () { return cfgLoad(); }],
-    ['device', function () { return Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)]); }],
-    ['log', function () { return asbLogReportLoad(true); }],
-    ['zygisk', function () { return zygiskPageLoad(false); }]
+    ['live', function () { return Promise.resolve(pollLive(true, true)); }]
   ];
   asbBootIntroPaint(0, jobs.length);
   const started = Date.now();
