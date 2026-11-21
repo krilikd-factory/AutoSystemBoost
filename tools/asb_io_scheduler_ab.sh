@@ -28,7 +28,10 @@ _active() { _options "$1" | awk '{for(i=1;i<=NF;i++)if($i!=""){print $i;exit}}';
 _current() { cat "$1" 2>/dev/null | awk '{for(i=1;i<=NF;i++)if($i~/^\[.*\]$/){gsub(/[][]/,"",$i);print $i;exit}}'; }
 _readback() {
   _rb_i=0
-  while [ "$_rb_i" -lt 20 ]; do
+  _rb_n="${ASB_IO_AB_READBACK_TRIES:-20}"
+  case "$_rb_n" in ''|*[!0-9]*) _rb_n=20 ;; esac
+  [ "$_rb_n" -ge 1 ] && [ "$_rb_n" -le 1000 ] || _rb_n=20
+  while [ "$_rb_i" -lt "$_rb_n" ]; do
     [ "$(_current "$1")" = "$2" ] && return 0
     sleep 0.01
     _rb_i=$((_rb_i+1))
