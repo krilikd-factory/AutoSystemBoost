@@ -541,7 +541,7 @@ button.badge:active { color: var(--accent); }
   background: var(--zygisk-header-color);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--zygisk-header-color) 14%, transparent);
 }
-/* V66-test13: a verdict painted from this viewer's cache until the fresh read lands. */
+/* A verdict painted from this viewer's cache until the fresh read lands. */
 .zygisk-header-link.zygisk-header-cached .zygisk-header-dot { opacity: .55; animation: none; }
 .zygisk-header-link.zygisk-header-cached .zygisk-header-dot::after { animation: none; opacity: 0; }
 .zygisk-header-label { display: inline-flex; align-items: center; flex: 0 0 auto; white-space: nowrap; line-height: 0; }
@@ -2226,7 +2226,7 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
 #zygiskPage .zy-note-fold-body > :first-child { margin-top:0; }
 #zygiskPage .zy-note-fold-body > :last-child { margin-bottom:0; }
 .zy-ghost .zy-lsp-actions .dev-zygisk-btn { align-self: auto; }
-/* V66-test13: LSPosed module panels (lspLiteCard). */
+/* LSPosed module panels (lspLiteCard). */
 #zygiskPage .zy-lsp-summary { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 4px; }
 #zygiskPage .zy-lsp-mod { margin:10px 0 0; padding:12px 12px 10px; border:1px solid var(--border); border-radius:16px;
   background:color-mix(in srgb, var(--surface) 70%, transparent); }
@@ -2413,7 +2413,7 @@ body.config-category-active #configPage .cfg-list {
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-label { width:100%; max-width:none; overflow:visible; text-align:center; white-space:normal; text-overflow:clip; overflow-wrap:break-word; word-break:normal; line-height:11px; letter-spacing:0; }
 /* buildfix44: cards scrolled under the floating dock showed through and around it and read
  * as overlapping text. A fixed fade below the dock (under it, above the page) hides them.
- * V66-test13: the fade rose 20 px above the dock and took a band of every page with it. It
+ * The fade rose 20 px above the dock and took a band of every page with it. It
  * now ends level with the dock's top edge (10 px lift + 60 px targets) and is solid only in
  * the strip below the dock and around its rounded ends. */
 .dock-scrim { display:none; position:fixed; left:0; right:0; bottom:0; z-index:150; pointer-events:none;
@@ -2586,7 +2586,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 .live-page .live-cell-value { font-size: 14px; }
 
 
-/* V66-test14: content runs closer to the screen edges. The container fills the 440 px
+/* Content runs closer to the screen edges. The container fills the 440 px
  * reference width (the UI scale is unchanged) and the side padding drops from 20 to 10 px,
  * so cards gain about 40 px; the header keeps its former 20 px inset and width. */
 .page, .live-page { max-width: 440px; padding-left: 10px; padding-right: 10px; }
@@ -6528,7 +6528,7 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row +
 .dsp-console-panel .cfg-sel-wrap, .dsp-console-panel .cfg-seg, .dsp-console-panel .cfg-switch { justify-self:end; margin:0; }
 .dsp-console-panel .cfg-sel-btn { max-width:100%; }
 .dsp-console-panel .cfg-row-desc { padding:4px 0 2px; font-size:11px; line-height:1.45; }
-/* V66-test13: console polish, shared by DSP, camera grading, per-link transport and screen &
+/* Console polish, shared by DSP, camera grading, per-link transport and screen &
  * touch. The category colour draws a thin top rule, tints the panel labels and the state mark,
  * and the panels sit a step closer together. */
 .dsp-console { position:relative; border-radius:20px !important; }
@@ -12544,7 +12544,7 @@ function cfgRenderDspConsole(list, sectionItems) {
     on: T('dsp_console_on', 'ACTIVE'), off: T('dsp_console_off', 'BYPASSED'), strip: /^DSP[\s-]+/
   });
 }
-/* V66-test13: the DSP console's layout for other sections whose controls belong together -
+/* The DSP console's layout for other sections whose controls belong together -
  * camera grading (sliders), download speed per link (Wi-Fi / mobile / other) and the display
  * and haptics group. One card, a state mark, labelled inner panels of compact rows; each row
  * is still the ordinary control with the same write path and its description on tap.
@@ -20538,7 +20538,7 @@ function zygiskHeaderWordmark() {
     + '<path d="M58 1H60.4V4.1L64.3 1H67L62.6 4.9 67.2 9H64.4L60.4 5.6V9H58Z"/>'
     + '</svg><span class="zygisk-header-text">ZYGISK</span>';
 }
-/* V66-test13: the last link verdict, kept for this viewer only (6 hours at most), paints the
+/* The last link verdict, kept for this viewer only (6 hours at most), paints the
  * header dot on the first frame; a fresh read replaces it. A cached dot is drawn dimmed. */
 const ZYGISK_HEADER_CACHE_KEY = 'asb_zygisk_header';
 const ZYGISK_HEADER_CACHE_MAX_MS = 21600000;
@@ -21674,7 +21674,7 @@ function lspLiteCard() {
   if (ab) card.appendChild(ab);
   const abBusy = /^(a|b_wait|b)$/.test(g.ab.phase || '');
   if (!g.mods.length) card.appendChild(logReportNote(T('lsp_no_mods', 'No LSPosed modules are installed.')));
-  /* V66-test13: each module is its own small panel - name and a coloured verdict badge on
+  /* Each module is its own small panel - name and a coloured verdict badge on
    * one line, then plain chips for scope count, reach and background starts, then a fold
    * with the reasons and the affected apps, then evenly sized actions. The old layout put
    * the verdict and every figure into one right-aligned monospace string beside the name. */
@@ -25255,7 +25255,7 @@ function asbStartupWarmCaches() {
      * tap joins this exact promise instead of queuing a second ten-part read behind Live.
      * There is no timer/worker after the transaction and no repeat eager Config batch. */
     asbStartupLater(function () { return cfgLoad(); }, 0, 0);
-    /* V66-test13: the header dot stayed grey for minutes. A priority-1 job waits while any
+    /* The header dot stayed grey for minutes. A priority-1 job waits while any
      * page is open (asbPageBusy), and Monitor or Settings are open right after the start, so
      * the link read waited until the user left them. It now runs at priority 0, detached
      * (the page is not held), and the last verdict is painted at once from this viewer's

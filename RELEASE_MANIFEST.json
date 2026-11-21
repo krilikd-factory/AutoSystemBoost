@@ -1406,9 +1406,9 @@
     },
     {
       "path": "tests/asb_zygisk.sh",
-      "bytes": 156304,
+      "bytes": 156292,
       "mode": "0755",
-      "sha256": "0f1d71c82e844273b21381db6b91f6e96227d83d2deb2f61ca3dfd38afeb0172"
+      "sha256": "368bf327991839bdef3103972da7773581da37a32af0f027b1d4ec1f4d0afa41"
     },
     {
       "path": "tools/asb_analyze.py",
@@ -1630,7 +1630,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24329,
       "mode": "0644",
-      "sha256": "f31018944dc8cc3cb59979694138e38f786fa30ebefbfe368d2d6e4fb48693b6"
+      "sha256": "13d42a93ca0259e02b3177ecee153d2fb6ed2b09e3131b7b68927ba3abe14047"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1844,9 +1844,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1779983,
+      "bytes": 1779875,
       "mode": "0644",
-      "sha256": "e1b41b5673154d8539de9a883442a40dd3ebadcd3d0aaae1de93f86abdbea18b"
+      "sha256": "da5af4a9f0bb066fe6919cd32afbe3989828af8c481361e3780875c8049103c6"
     },
     {
       "path": "zygisk/arm64-v8a.so",

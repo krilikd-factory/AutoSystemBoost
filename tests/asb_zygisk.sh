@@ -3,7 +3,7 @@
 # No Android app is injected here; on-device Zygisk validation remains a separate requirement.
 
 t_zygisk_park_runtime() (
-  # V66-test13: KernelSU-Next hides the WebUI and action of a module whose zygisk/ folder has
+  # KernelSU-Next hides the WebUI and action of a module whose zygisk/ folder has
   # files while no Zygisk provider runs. ASB sets its libraries aside at boot when no provider
   # is enabled, brings them back when one is, and its scripts follow the parked folder.
   set -eu
