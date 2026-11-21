@@ -3926,6 +3926,7 @@
   "zy_aot_title": "Daha hızlı uygulama açılışı (ART)",
   "zy_aot_unknown": "derleme durumu bilinmiyor",
   "zy_aot_unread": "Derleme durumu henüz okunmadı.",
+  "zy_aot_no_answer": "Derleme durumu betiği yanıt vermedi: %s",
   "zy_aot_waiting": "AOT kodu olmayan %s uygulama, ekran kapalıyken şarj cihazını bekliyor.",
   "zy_aot_weak": "AOT kodu yok (%s)",
   "zy_auto_current": "Geçerli bağımsız anahtarlar: %s",

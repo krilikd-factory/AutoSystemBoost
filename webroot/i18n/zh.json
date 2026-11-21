@@ -3926,6 +3926,7 @@
   "zy_aot_title": "加快应用启动（ART）",
   "zy_aot_unknown": "编译状态未知",
   "zy_aot_unread": "尚未读取编译状态。",
+  "zy_aot_no_answer": "编译状态脚本没有响应：%s",
   "zy_aot_waiting": "%s 个没有 AOT 代码的应用在等待熄屏充电。",
   "zy_aot_weak": "无 AOT 代码（%s）",
   "zy_auto_current": "当前独立开关：%s",

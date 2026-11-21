@@ -21233,7 +21233,11 @@ async function zygiskGuardSet(level) {
  * off and the battery below 40 C, compiles the ones running without ahead-of-time code the way
  * the nightly maintenance job does (bg-dexopt: speed-profile at background priority). The card
  * shows each app's cold-start median from Android's launch log before and after. */
-let _zyAot = null;
+let _zyAot = null, _zyAotErr = '';
+function zygiskAotErrLine(out) {
+  const ln = String(out || '').split('\n').map(function (x) { return x.trim(); }).filter(function (x) { return x && !/^[a-z_]+=/.test(x); })[0] || '';
+  return ln.replace(/^.*?asb_zygisk_aot\.sh(\[\d+\])?:\s*/, '').slice(0, 160);
+}
 function zygiskAotParse(out) {
   const g = { ok: false, enabled: false, ledger: false, charging: false, screen: true, running: false, checked: 0, launches: 0, apps: [], events: [], excluded: [] };
   const num = function (v) { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : 0; };
@@ -21288,7 +21292,11 @@ function zygiskAotCard() {
     seg.appendChild(b);
   });
   card.appendChild(seg);
-  if (!g.ok) { card.appendChild(logReportNote(T('zy_aot_unread', 'The compile state has not been read yet.'))); return card; }
+  if (!g.ok) {
+    card.appendChild(logReportNote(_zyAotErr ? T('zy_aot_no_answer', 'The compile-state script did not answer: %s').replace('%s', _zyAotErr)
+      : T('zy_aot_unread', 'The compile state has not been read yet.')));
+    return card;
+  }
   if (g.enabled && !g.ledger) card.appendChild(logReportNote(T('zy_aot_no_ledger', 'Without the process-start ledger (Watch or Full above) apps are ranked by the launches Android logged.')));
   const weak = g.apps.filter(function (a) { return zygiskAotWeak(a.filter) && a.result !== 'no_profile'; }).length;
   if (g.enabled) {
@@ -21343,16 +21351,22 @@ async function zygiskAotSet(on) {
    * its result line and the switch reported a failure. The script now answers at once and
    * fills the list in the background; when the answer is still missing, the saved switch
    * state read back from status decides. */
+  /* buildfix46: the read-back keeps the script's error output, so a script the phone's shell
+   * cannot run says why instead of a bare failure (the card and the toast show its first line). */
+  let why = '';
   if (!ok) {
     let v = null;
-    try { v = await runBatch([['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']]); } catch (e) { v = null; }
+    try { v = await runBatch([['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status 2>&1']]); } catch (e) { v = null; }
     if (v && v.aot && v.aot.errno === 0) {
       const g = zygiskAotParse(v.aot.stdout);
-      if (g.ok) { _zyAot = g; ok = g.enabled === !!on; }
+      if (g.ok) { _zyAot = g; _zyAotErr = ''; ok = g.enabled === !!on; }
+      else why = zygiskAotErrLine(v.aot.stdout);
     }
   }
+  if (why) _zyAotErr = why;
   _zygiskModeBusy = false;
   toast(ok ? (on ? T('zy_aot_set_on', 'Compiling while charging: on') : T('zy_aot_set_off', 'Compiling while charging: off'))
+           : why ? T('zy_aot_no_answer', 'The compile-state script did not answer: %s').replace('%s', why)
            : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
   if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
 }

@@ -5,6 +5,35 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 dev66 buildfix46 - the ART script runs on the phone's shell
+
+Input: buildfix45 (V66-test11) on the owner's OnePlus 15 and a user's phone: the Faster app
+starts (ART) switch still failed and the card stayed unread. Base: buildfix45 (`2d06afd`).
+No native code changed; no CI rebuild of native parts is needed.
+
+- **Evidence:** the owner's asbdiag of V66-test11 (16:25, KernelSU, Android 17) prints
+  `launch_art : enabled= charging= compiling= launches_recorded= apps=0` - every key empty.
+  asbdiag runs `asb_zygisk_aot.sh status`, whose first line is an unconditional
+  `version=1`, so the phone's `/system/bin/sh` produced no output at all from this script,
+  while the guard and link scripts beside it answered in the same report. A script that
+  prints nothing before its first command is one the shell refused to parse. The buildfix45
+  change (answer at once) could not help: the result line never came.
+- **Cause (most likely, not reproduced on the phone):** `_launch_scan` was the only place in
+  the module with a quoted case pattern and a `${var%...}` pattern that span two lines
+  (`*'<newline>#ev')` and `"${_new%<newline>}"`), and with `${_new%#ev}`. Host mksh R59c,
+  dash and busybox accept it; Android ships mksh R59 2020/10/31, whose lexer for patterns
+  and word ends was rewritten afterwards. Building Android's mksh on the host was not
+  possible here, so this is the one construct that differs, not a confirmed parse error.
+- **Fix:** the launch scan writes awk's output to a per-process file
+  (`zygisk_aot_launch.scan.<pid>`), detects the events-buffer marker with `grep -x` and
+  appends from the file; no multi-line pattern, no `%` trim and no large shell variable
+  (the old `printf '%s\n' "$_new"` also passed the whole scan as one argument, the E2BIG
+  case under mksh).
+- **If it still fails, it says why:** asbdiag prints `NO ANSWER from asb_zygisk_aot.sh
+  status` with the shell version and the first lines of `sh -n` (or of the run's stderr);
+  the WebUI read-back after a failed switch keeps the script's stderr and shows its first
+  line in the toast and on the card (new key `zy_aot_no_answer`, 13 locales).
+
 ## V66 dev66 buildfix45 - the ART switch answers at once
 
 Input: a user report, "cannot turn on faster app starts": the Zygisk page's Faster app starts

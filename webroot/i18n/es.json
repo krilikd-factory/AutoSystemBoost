@@ -3926,6 +3926,7 @@
   "zy_aot_title": "Apertura más rápida de apps (ART)",
   "zy_aot_unknown": "estado de compilación desconocido",
   "zy_aot_unread": "El estado de compilación aún no se ha leído.",
+  "zy_aot_no_answer": "El script del estado de compilación no respondió: %s",
   "zy_aot_waiting": "%s app(s) sin código AOT esperan al cargador con la pantalla apagada.",
   "zy_aot_weak": "sin código AOT (%s)",
   "zy_auto_current": "Interruptores independientes actuales: %s",

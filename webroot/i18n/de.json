@@ -3926,6 +3926,7 @@
   "zy_aot_title": "Schnellere App-Starts (ART)",
   "zy_aot_unknown": "Kompilierzustand unbekannt",
   "zy_aot_unread": "Der Kompilierzustand wurde noch nicht gelesen.",
+  "zy_aot_no_answer": "Das Skript für den Kompilierzustand hat nicht geantwortet: %s",
   "zy_aot_waiting": "%s App(s) ohne AOT-Code warten auf das Ladegerät bei ausgeschaltetem Bildschirm.",
   "zy_aot_weak": "kein AOT-Code (%s)",
   "zy_auto_current": "Aktuelle unabhängige Schalter: %s",

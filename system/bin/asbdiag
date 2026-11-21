@@ -5048,6 +5048,11 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
     if [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ]; then
       _za_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" status 2>/dev/null)"
       _za_kv() { printf '%s\n' "$_za_out" | sed -n "s/^$1=//p" | head -1; }
+      if ! printf '%s\n' "$_za_out" | grep -qx 'version=1'; then
+        _za_err="$(MODDIR="$MODDIR" sh -n "$MODDIR/runtime/asb_zygisk_aot.sh" 2>&1 | head -n 2 | tr '\n' ' ')"
+        [ -n "$_za_err" ] || _za_err="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" status 2>&1 >/dev/null | head -n 2 | tr '\n' ' ')"
+        P "     launch_art : NO ANSWER from asb_zygisk_aot.sh status (shell: $(sh -c 'echo ${KSH_VERSION:-unknown}' 2>/dev/null)) ${_za_err:-no error text}"
+      fi
       P "     launch_art : enabled=$(_za_kv enabled) charging=$(_za_kv charging) compiling=$(_za_kv running) launches_recorded=$(_za_kv launches) apps=$(printf '%s\n' "$_za_out" | grep -c '^app|') excluded=$(printf '%s\n' "$_za_out" | grep -c '^exclude|')"
       printf '%s\n' "$_za_out" | awk -F'|' '$1 == "app" {
           printf "       %s: %s launches, ART %s (%s), last result %s", $2, $3, $4, $5, $7

@@ -120,7 +120,9 @@ _count_update() {
 _launch_scan() {
   _since="$(sed -n 's/^scan=//p' "$SCAN" 2>/dev/null)"
   case "$_since" in ''|*[!0-9]*) _since=0 ;; esac
-  _new="$(logcat -b events -d -v epoch -s wm_activity_launch_time:I am_proc_start:I 2>/dev/null | awk -v since="$_since" '
+  mkdir -p "$D" 2>/dev/null
+  _sf="$LAUNCH.scan.$$"
+  logcat -b events -d -v epoch -s wm_activity_launch_time:I am_proc_start:I 2>/dev/null | awk -v since="$_since" '
     {
       t = int($1 + 0); if (t <= since) next
       if (index($0, "am_proc_start: [")) {
@@ -137,13 +139,12 @@ _launch_scan() {
         if (p ~ /^[A-Za-z0-9_.]+$/ && ms > 0 && ms < 60000) printf "%d|%s|%d|%d\n", t, p, ms, cold
       }
     }
-    END { if (NR > 0) print "#ev" }')"
-  _ev=""
-  case "$_new" in '#ev'|*'
-#ev') _ev=1; _new="${_new%#ev}"; _new="${_new%
-}" ;; esac
-  if [ -z "$_ev" ]; then
-    _new="$(logcat -d -v epoch -s ActivityTaskManager:I ActivityManager:I 2>/dev/null | awk -v since="$_since" '
+    END { if (NR > 0) print "ASB_EV_END" }' > "$_sf" 2>/dev/null
+  if grep -qx 'ASB_EV_END' "$_sf" 2>/dev/null; then
+    grep -vx 'ASB_EV_END' "$_sf" > "$_sf.n" 2>/dev/null
+    mv -f "$_sf.n" "$_sf" 2>/dev/null
+  else
+    logcat -d -v epoch -s ActivityTaskManager:I ActivityManager:I 2>/dev/null | awk -v since="$_since" '
       {
         t = int($1 + 0); if (t <= since) next
         if (match($0, /Start proc [0-9]+:[A-Za-z0-9_.]+/) && $0 ~ /for [a-z-]*activity/) {
@@ -158,15 +159,16 @@ _launch_scan() {
           if (cold) delete ps[p]
           if (ms > 0 && ms < 60000) printf "%d|%s|%d|%d\n", t, p, ms, cold
         }
-      }')"
+      }' > "$_sf" 2>/dev/null
   fi
-  mkdir -p "$D" 2>/dev/null
-  if [ -n "$_new" ]; then
-    { [ -f "$LAUNCH" ] && cat "$LAUNCH"; printf '%s\n' "$_new"; } | tail -n 400 > "$LAUNCH.tmp" 2>/dev/null && mv -f "$LAUNCH.tmp" "$LAUNCH"
-    _last="$(printf '%s\n' "$_new" | tail -n 1 | cut -d'|' -f1)"
+  if [ -s "$_sf" ]; then
+    { [ -f "$LAUNCH" ] && cat "$LAUNCH"; cat "$_sf"; } | tail -n 400 > "$LAUNCH.tmp" 2>/dev/null && mv -f "$LAUNCH.tmp" "$LAUNCH"
+    _last="$(tail -n 1 "$_sf" | cut -d'|' -f1)"
   else
     _last="$_since"
   fi
+  rm -f "$_sf" "$_sf.n" 2>/dev/null
+  case "$_last" in ''|*[!0-9]*) _last="$_since" ;; esac
   printf 'scan=%s\nat=%s\n' "${_last:-0}" "$(_now)" > "$SCAN" 2>/dev/null
 }
 _filter() {
