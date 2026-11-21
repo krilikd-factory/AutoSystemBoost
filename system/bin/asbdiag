@@ -305,7 +305,7 @@ if [ -n "$_ss_cnt" ] && [ -n "$_ss_el" ] && [ -n "$_ss_up" ]; then
   fi
 fi
 if command -v dumpsys >/dev/null 2>&1; then
-  _lb_db="$(dumpsys dropbox 2>/dev/null)"
+  _lb_db="$(dumpsys dropbox 2>/dev/null | grep -E '^[0-9-]+ [0-9:.]+ [A-Za-z_]+( |$)')"
   for _lb_tag in system_server_watchdog system_server_crash system_server_native_crash SYSTEM_RESTART SYSTEM_TOMBSTONE SYSTEM_LAST_KMSG system_app_crash system_app_native_crash system_app_anr system_server_anr; do
     _lb_last="$(printf '%s\n' "$_lb_db" | grep -E "^[0-9-]+ [0-9:.]+ $_lb_tag( |$)" | tail -1 | cut -c1-19)"
     _lb_n="$(printf '%s\n' "$_lb_db" | grep -cE "^[0-9-]+ [0-9:.]+ $_lb_tag( |$)")"
