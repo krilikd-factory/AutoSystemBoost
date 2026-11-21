@@ -5,6 +5,52 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 dev66 buildfix42 - instant sheets and tabs, honest drain labels, EQ panel, Smart halo
+
+Input: the owner's screenshots and seven requests. Base: buildfix41. WebUI only; no runtime
+script, native source or binary changed.
+
+- **Kernel category:** the summary line and "Hidden: N" now sit behind Details with the rest of
+  the explanation; the card keeps only Details and the two actions.
+- **Parametric EQ under Liquid Glass:** the theme's row material
+  (`html:root[data-asb-glass] .cfg-row:not(.is-on)`) is more specific than the EQ editor's
+  reset, so every slider row was repainted as a full-width card and the names (Frequency,
+  Q × 10, Gain) and values touched its edges. The three sliders now sit in one inset panel
+  with 12 px side padding and hairline separators, and the reset outranks the theme in both
+  themes (checked in Chromium, dark and glass).
+- **Active profile sheet:** it opened only after `asb_profile_details.sh` and
+  `asb_effective_policy.sh` had finished, because the read started in the same task and
+  `ksu.exec` blocks the page thread. The sheet now opens on the tap with the ASB UFO loader
+  (the Zygisk page's), and the read starts after the loader has painted; a sheet closed
+  before that never starts it.
+- **"Current transaction not exposed · saved history":** the pill under the profile name read
+  as an error. It now says where the figures come from: "From the apply log".
+- **Tab switching:** every background read on Home blocks the page thread for its whole run,
+  so a tap that arrived meanwhile waited for it. Home read the kernel controls together with
+  every wakeup source and the camera flags 450 ms after start, outside the idle queue, only
+  to label two Settings tiles. Those tiles now use the last answer this viewer saw (kept in
+  its own storage) and the category refreshes it when opened; with no answer yet the read
+  waits in the idle queue. Background jobs above priority 0 start only after 1.5 s without
+  a touch (was 300 ms), the 30 s Home refresh likewise, and a Monitor poll waits 0.9 s after
+  a touch. A browser model with a blocking bridge freed the page about 2 s earlier after
+  start; the real gain depends on how long each script takes on the phone.
+- **Battery drain sheet:** a mature profile session wins over the since-boot estimate
+  (buildfix32), but it kept the "since this device boot" caption, so 30 minutes after a
+  reboot the sheet showed "since boot: 123 min" (a session recorded before the reboot), next
+  to a table of profile averages headed "the same measurement for each" (14.8 %/h against
+  the 17.0 %/h above). The heading and sentence now name the source (latest session, since
+  boot or profile average), the table is headed "average of each", and the footer explains
+  the order and why the two can differ. The Russian footer had also claimed "since boot".
+- **Smart halo:** it paused after ten idle seconds (calm) and under automatic reduced effects,
+  and stood still as a half-lit ring that looked like a frozen icon. It now keeps turning
+  while Home is visible; it still stops behind another page and under the OS reduced-motion
+  setting.
+- **i18n:** `lv_drain_on_avg_tip`, `lv_scr_on_avg`, `lv_drain_cmp_avg`, `lv_drain_note_src`,
+  `pd_loading_title`, `pd_stage_intent`, `pd_stage_owner`, `pd_stage_readback`;
+  `pd_epoch_unavailable` reworded. 13 languages.
+- **Tests:** `t_webui_buildfix42_owner_review`; the profile-sheet test (the read now starts
+  after the loader frame), the hub, battery-meter and dev61 harnesses follow the new structure.
+
 ## V66 dev66 buildfix41 - review fixes: large dumps under the Android shell, core components
 
 Input: a review of the buildfix40 source archive. The full host regression passed, so the
