@@ -4170,5 +4170,9 @@
   "dsp_console_off": "BYPASSED",
   "dsp_grp_route": "Output",
   "dsp_grp_tone": "Tone",
-  "dsp_grp_dynamics": "Dynamics & protection"
+  "dsp_grp_dynamics": "Dynamics & protection",
+  "dev_zygisk_provider_asb_libraries": "ASB Zygisk libraries",
+  "dev_zygisk_provider_lib_active": "In place",
+  "dev_zygisk_provider_lib_parked": "Set aside until a provider is enabled (keeps the WebUI open)",
+  "dev_zygisk_provider_lib_none": "Not in this build"
 }

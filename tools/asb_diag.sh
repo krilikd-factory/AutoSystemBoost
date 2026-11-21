@@ -5063,6 +5063,10 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
         $1 == "exclude" { printf "       excluded by the owner: %s (never compiled by ASB)\n", $2 }
         $1 == "event" && ($4 == "reset" || $4 == "reset_failed") { printf "       compile state reset for %s: %s%s\n", $3, $5, ($4 == "reset_failed" ? " (Android refused the reset)" : "") }' | while IFS= read -r _za_l; do P "$_za_l"; done
     fi
+    if [ -f "$MODDIR/runtime/asb_zygisk_park.sh" ]; then
+      _zk_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_park.sh" status 2>/dev/null)"
+      P "     libraries  : $(printf '%s\n' "$_zk_out" | sed -n 's/^asb_libraries=//p' | head -1) provider=$(printf '%s\n' "$_zk_out" | sed -n 's/^provider=//p' | head -1)"
+    fi
     if [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ]; then
       _zl_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_link.sh" status 2>/dev/null)"
       _zl_kv() { printf '%s\n' "$_zl_out" | sed -n "s/^$1=//p" | head -1; }

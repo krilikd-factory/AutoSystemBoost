@@ -2,6 +2,40 @@
 # Host regression for the native observer/lifecycle core, allowlist and pressure diagnostics.
 # No Android app is injected here; on-device Zygisk validation remains a separate requirement.
 
+t_zygisk_park_runtime() (
+  # V66-test13: KernelSU-Next hides the WebUI and action of a module whose zygisk/ folder has
+  # files while no Zygisk provider runs. ASB sets its libraries aside at boot when no provider
+  # is enabled, brings them back when one is, and its scripts follow the parked folder.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL zygisk park: $*" >&2; exit 1; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  M="$T/modules"; A="$M/AutoSystemBoost"
+  mkdir -p "$A/zygisk" "$A/config"
+  : > "$A/zygisk/arm64-v8a.so"; echo x > "$A/zygisk/policy"
+  run() { env -u KSU -u APATCH -u ZYGISK_ENABLED PATH="/usr/bin:/bin" MODDIR="$A" ASB_ZP_MODULES="$M" sh "$ROOT/runtime/asb_zygisk_park.sh" "$@"; }
+  out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "no provider: $out"
+  [ ! -e "$A/zygisk" ] && [ -f "$A/zygisk.off/arm64-v8a.so" ] || fail 'libraries not parked'
+  out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "second boot: $out"
+  grep -q '^POLICY="${ASB_ZYGISK_POLICY:-$ZMOD/policy}"' "$ROOT/runtime/asb_zygisk.sh" || fail 'asb_zygisk.sh does not follow the parked folder'
+  ( MODDIR="$A"; . /dev/null; ZMOD="$MODDIR/zygisk"; [ -d "$ZMOD" ] || [ ! -d "$MODDIR/zygisk.off" ] || ZMOD="$MODDIR/zygisk.off"; [ "$ZMOD" = "$A/zygisk.off" ] ) || fail 'resolver'
+  mkdir -p "$M/zygisksu/bin"; printf 'name=NeoZygisk\n' > "$M/zygisksu/module.prop"; : > "$M/zygisksu/disable"
+  out="$(run unpark)"; [ "$out" = asb_libraries=parked ] || fail "disabled provider unparked: $out"
+  rm -f "$M/zygisksu/disable"
+  out="$(run unpark)"; [ "$out" = asb_libraries=active ] || fail "enabled provider: $out"
+  [ -f "$A/zygisk/arm64-v8a.so" ] && [ ! -e "$A/zygisk.off" ] || fail 'libraries not restored'
+  : > "$M/zygisksu/remove"
+  out="$(run unpark)"; [ "$out" = asb_libraries=active ] || fail 'unpark must never park'
+  out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "pending removal still counted: $out"
+  rm -f "$M/zygisksu/remove" "$M/zygisksu/module.prop"; : > "$M/zygisksu/bin/zygiskd"
+  out="$(run boot)"; [ "$out" = asb_libraries=active ] || fail "bin/zygiskd provider not seen: $out"
+  grep -q 'asb_zygisk_park.sh" boot' "$ROOT/post-fs-data.sh" || fail 'post-fs-data does not park'
+  awk '/asb_zygisk_park.sh" boot/{p=NR} /asb_zygisk.sh" sync/{s=NR} END{exit !(p && s && p < s)}' "$ROOT/post-fs-data.sh" || fail 'park must run before the policy sync'
+  grep -q 'asb_zygisk_park.sh" unpark' "$ROOT/service.sh" || fail 'service does not unpark'
+  grep -q "asb_libraries" "$ROOT/runtime/asb_zygisk_info.sh" || fail 'provider section lacks the library state'
+  echo 'PASS zygisk park: libraries set aside without an enabled provider, restored with one, unpark never parks, scripts follow the parked folder'
+)
+
 t_zygisk_native_core_runtime() (
   set -eu
   ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"

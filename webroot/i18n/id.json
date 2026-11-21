@@ -4277,5 +4277,9 @@
   "dsp_console_off": "DILEWATI",
   "dsp_grp_route": "Keluaran",
   "dsp_grp_tone": "Nada",
-  "dsp_grp_dynamics": "Dinamika & perlindungan"
+  "dsp_grp_dynamics": "Dinamika & perlindungan",
+  "dev_zygisk_provider_asb_libraries": "Pustaka Zygisk ASB",
+  "dev_zygisk_provider_lib_active": "Terpasang",
+  "dev_zygisk_provider_lib_parked": "Disisihkan sampai penyedia diaktifkan (WebUI tetap bisa dibuka)",
+  "dev_zygisk_provider_lib_none": "Tidak ada di build ini"
 }

@@ -4277,5 +4277,9 @@
   "dsp_console_off": "В ОБХІД",
   "dsp_grp_route": "Вихід",
   "dsp_grp_tone": "Тон",
-  "dsp_grp_dynamics": "Динаміка і захист"
+  "dsp_grp_dynamics": "Динаміка і захист",
+  "dev_zygisk_provider_asb_libraries": "Бібліотеки Zygisk ASB",
+  "dev_zygisk_provider_lib_active": "На місці",
+  "dev_zygisk_provider_lib_parked": "Відкладені до ввімкнення провайдера (WebUI лишається доступним)",
+  "dev_zygisk_provider_lib_none": "Немає в цій збірці"
 }

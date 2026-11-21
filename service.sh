@@ -3835,6 +3835,9 @@ asb_gov_liveness() {
       # Refresh an explicitly enabled automatic Zygisk allowlist after Package Manager is up.
       # This uses the existing five-minute service pass; it starts no worker and writes nothing
       # when the candidate list is unchanged or Package Manager is not ready.
+      if [ "${_fit_boot:-0}" = 1 ] && [ -d "$MODDIR/zygisk.off" ] && [ -f "$MODDIR/runtime/asb_zygisk_park.sh" ]; then
+        MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_park.sh" unpark >/dev/null 2>&1
+      fi
       if [ "${_fit_boot:-0}" = 1 ] && [ -f /data/adb/asb/zygisk_observer/auto ]; then
         ASB_ZYGISK_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk.sh" auto-refresh >/dev/null 2>&1
       fi

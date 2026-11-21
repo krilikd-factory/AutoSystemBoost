@@ -97,6 +97,9 @@ rm -f /data/adb/asb/battery_fix.pkgs.* /data/adb/asb/battery_fix.compile.tmp.* \
       /data/adb/asb/battery_fix.stop 2>/dev/null
 [ -f /data/adb/asb/battery_fix.pending ] && [ -f "$MODDIR/runtime/asb_battery_fix.sh" ] && \
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_battery_fix.sh" boot >/dev/null 2>&1 || true
+if [ -f "$MODDIR/runtime/asb_zygisk_park.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_park.sh" boot >/dev/null 2>&1 || true
+fi
 if [ -f "$MODDIR/runtime/asb_zygisk.sh" ]; then
   ASB_ZYGISK_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk.sh" sync >/dev/null 2>&1 || true
 fi

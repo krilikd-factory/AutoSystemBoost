@@ -203,6 +203,7 @@ jobs:
             runtime/asb_lsposed_lite.sh \
             runtime/asb_smart7.sh \
             runtime/asb_zygisk_link.sh \
+            runtime/asb_zygisk_park.sh \
             runtime/asb_ltpo_video.sh \
             runtime/asb_odm_rebind.sh \
             runtime/asb_io_scheduler.sh \
@@ -744,6 +745,7 @@ jobs:
             "runtime/asb_lsposed_lite.sh" \
             "runtime/asb_smart7.sh" \
             "runtime/asb_zygisk_link.sh" \
+            "runtime/asb_zygisk_park.sh" \
             "runtime/asb_ltpo_video.sh" \
             "runtime/asb_odm_rebind.sh" \
             "runtime/asb_io_scheduler.sh" \

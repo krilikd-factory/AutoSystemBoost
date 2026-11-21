@@ -4277,5 +4277,9 @@
   "dsp_console_off": "CONTOURNÉ",
   "dsp_grp_route": "Sortie",
   "dsp_grp_tone": "Tonalité",
-  "dsp_grp_dynamics": "Dynamique et protection"
+  "dsp_grp_dynamics": "Dynamique et protection",
+  "dev_zygisk_provider_asb_libraries": "Bibliothèques Zygisk d’ASB",
+  "dev_zygisk_provider_lib_active": "En place",
+  "dev_zygisk_provider_lib_parked": "Mises de côté jusqu’à l’activation d’un fournisseur (la WebUI reste accessible)",
+  "dev_zygisk_provider_lib_none": "Absentes de cette version"
 }

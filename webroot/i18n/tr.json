@@ -4277,5 +4277,9 @@
   "dsp_console_off": "DEVRE DIŞI",
   "dsp_grp_route": "Çıkış",
   "dsp_grp_tone": "Ton",
-  "dsp_grp_dynamics": "Dinamik ve koruma"
+  "dsp_grp_dynamics": "Dinamik ve koruma",
+  "dev_zygisk_provider_asb_libraries": "ASB Zygisk kütüphaneleri",
+  "dev_zygisk_provider_lib_active": "Yerinde",
+  "dev_zygisk_provider_lib_parked": "Bir sağlayıcı etkinleşene kadar kenara alındı (WebUI açık kalır)",
+  "dev_zygisk_provider_lib_none": "Bu sürümde yok"
 }

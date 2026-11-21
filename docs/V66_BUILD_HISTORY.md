@@ -5,6 +5,29 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test14 - WebUI without a Zygisk provider, wider content
+
+Input: the owner removed the Zygisk provider and could not open the ASB WebUI any more; the
+content also looked narrow with empty space at both sides. Base: V66-test13 (`36ca527`).
+No native code changed; no CI rebuild of native parts is needed.
+
+- **Cause:** KernelSU-Next's manager treats a module whose `zygisk/` folder has files as
+  "Zygisk required" and, while no Zygisk runs, hides its WebUI and action buttons and greys
+  its switches (`filterZygiskModules` in its module screen). ASB ships its observer libraries
+  in `zygisk/`, so without a provider the whole module UI was unreachable.
+- **Fix:** new `runtime/asb_zygisk_park.sh`. At post-fs-data (before zygote and before the
+  policy sync) it renames `zygisk/` to `zygisk.off/` when no Zygisk is enabled (no enabled
+  module with `bin/zygiskd` or a known provider name, no Magisk built-in Zygisk) and back
+  when one is. The once-after-boot service pass only brings the folder back, never sets it
+  aside, so a provider still running before its removal keeps ASB's libraries. The Zygisk
+  scripts follow the parked folder; the provider section shows "ASB Zygisk libraries"
+  (4 keys, 13 locales); asbdiag prints a `libraries` line; the module card says
+  "no provider". A provider installed while the libraries are parked may load ASB's part
+  from the reboot after it.
+- **Wider content:** pages fill the 440 px reference width and the side padding is 10 px
+  instead of 20 px (cards gain about 40 px); the header keeps its former inset. The UI scale
+  is unchanged.
+
 ## V66-test13 - honest screen drain, quick Zygisk header, LSPosed card, tweak consoles
 
 Input: V66-test12 on the owner's OnePlus 15 and a user's asbdiag (V66-test11, Magisk,

@@ -62,12 +62,17 @@ _asb_zygisk_provider_info() {
   _emit zygisk_provider active_evidence 'not exposed by this read-only collector'
   _emit zygisk_provider conflict "$_zp_conflict"
   _emit zygisk_provider evidence "$_zp_evidence"
+  if [ -d "$MODDIR/zygisk" ]; then _emit zygisk_provider asb_libraries active
+  elif [ -d "$MODDIR/zygisk.off" ]; then _emit zygisk_provider asb_libraries parked
+  else _emit zygisk_provider asb_libraries none
+  fi
 }
 
 _asb_zygisk_info() {
   _zi_dir="${ASB_ZYGISK_DIR:-$DATA/asb/zygisk_observer}"
   _zi_run="${ASB_ZYGISK_RUN_DIR:-/dev/.asb/zygisk}"
-  _zi_policy="${ASB_ZYGISK_POLICY:-$MODDIR/zygisk/policy}"
+  _zi_zmod="$MODDIR/zygisk"; [ -d "$_zi_zmod" ] || [ ! -d "$MODDIR/zygisk.off" ] || _zi_zmod="$MODDIR/zygisk.off"
+  _zi_policy="${ASB_ZYGISK_POLICY:-$_zi_zmod/policy}"
   _zi_conf="$MODDIR/config/governor.conf"
   _zi_enabled="$(sed -n 's/^[[:space:]]*zygisk_enabled=//p' "$_zi_conf" 2>/dev/null | head -n 1 | tr -d ' \r')"
   _zi_mode="$(sed -n 's/^[[:space:]]*zygisk_mode=//p' "$_zi_conf" 2>/dev/null | head -n 1 | tr -d ' \r')"
@@ -241,10 +246,10 @@ _asb_zygisk_info() {
   fi
 
   _zi_abis='not installed'
-  if [ -f "$MODDIR/zygisk/arm64-v8a.so" ] || [ -f "$MODDIR/zygisk/armeabi-v7a.so" ]; then
+  if [ -f "$_zi_zmod/arm64-v8a.so" ] || [ -f "$_zi_zmod/armeabi-v7a.so" ]; then
     _zi_abis=''
-    [ -f "$MODDIR/zygisk/arm64-v8a.so" ] && _zi_abis=arm64-v8a
-    if [ -f "$MODDIR/zygisk/armeabi-v7a.so" ]; then _zi_abis="${_zi_abis:+$_zi_abis,}armeabi-v7a"; fi
+    [ -f "$_zi_zmod/arm64-v8a.so" ] && _zi_abis=arm64-v8a
+    if [ -f "$_zi_zmod/armeabi-v7a.so" ]; then _zi_abis="${_zi_abis:+$_zi_abis,}armeabi-v7a"; fi
   fi
 
   _emit zygisk_observer enabled "$_zi_enabled"

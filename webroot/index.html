@@ -2586,6 +2586,12 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 .live-page .live-cell-value { font-size: 14px; }
 
 
+/* V66-test14: content runs closer to the screen edges. The container fills the 440 px
+ * reference width (the UI scale is unchanged) and the side padding drops from 20 to 10 px,
+ * so cards gain about 40 px; the header keeps its former 20 px inset and width. */
+.page, .live-page { max-width: 440px; padding-left: 10px; padding-right: 10px; }
+.page .header, .live-page .header { box-sizing: border-box; padding-left: 20px; padding-right: 20px; }
+
 /*
  * tablet + large-screen adaptation Default mobile-first layout uses max-width: 420px (set on
  * .page, .live-page, .header, .tg-link-wrap).
@@ -20117,6 +20123,7 @@ function deviceDisplayValue(sec, key, value, d) {
   }
   if (sec === 'zygisk_provider') {
     if (key === 'install_state') return T('dev_zygisk_provider_install_' + value, deviceFallbackLabel(value));
+    if (key === 'asb_libraries') return T('dev_zygisk_provider_lib_' + value, deviceFallbackLabel(value));
     if (key === 'provider' && value === 'unknown') return T('dev_zygisk_provider_unknown', deviceFallbackLabel(value));
     if (key === 'provider' && value === 'conflict') return T('dev_zygisk_provider_conflict_value', deviceFallbackLabel(value));
   }

@@ -4277,5 +4277,9 @@
   "dsp_console_off": "متجاوَز",
   "dsp_grp_route": "المخرج",
   "dsp_grp_tone": "النغمة",
-  "dsp_grp_dynamics": "الديناميكية والحماية"
+  "dsp_grp_dynamics": "الديناميكية والحماية",
+  "dev_zygisk_provider_asb_libraries": "مكتبات Zygisk الخاصة بـ ASB",
+  "dev_zygisk_provider_lib_active": "في مكانها",
+  "dev_zygisk_provider_lib_parked": "مُنحّاة حتى تفعيل مزوّد (تبقى واجهة WebUI متاحة)",
+  "dev_zygisk_provider_lib_none": "غير موجودة في هذا الإصدار"
 }

@@ -4277,5 +4277,9 @@
   "dsp_console_off": "ՇՐՋԱՆՑՎԱԾ",
   "dsp_grp_route": "Ելք",
   "dsp_grp_tone": "Տոն",
-  "dsp_grp_dynamics": "Դինամիկա և պաշտպանություն"
+  "dsp_grp_dynamics": "Դինամիկա և պաշտպանություն",
+  "dev_zygisk_provider_asb_libraries": "ASB-ի Zygisk գրադարաններ",
+  "dev_zygisk_provider_lib_active": "Տեղում են",
+  "dev_zygisk_provider_lib_parked": "Մի կողմ են դրված մինչև մատակարարի միացումը (WebUI-ն հասանելի է մնում)",
+  "dev_zygisk_provider_lib_none": "Այս տարբերակում չկան"
 }

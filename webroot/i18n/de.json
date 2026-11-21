@@ -4277,5 +4277,9 @@
   "dsp_console_off": "UMGANGEN",
   "dsp_grp_route": "Ausgang",
   "dsp_grp_tone": "Klang",
-  "dsp_grp_dynamics": "Dynamik & Schutz"
+  "dsp_grp_dynamics": "Dynamik & Schutz",
+  "dev_zygisk_provider_asb_libraries": "ASB-Zygisk-Bibliotheken",
+  "dev_zygisk_provider_lib_active": "Vorhanden",
+  "dev_zygisk_provider_lib_parked": "Zurückgestellt, bis ein Provider aktiv ist (WebUI bleibt offen)",
+  "dev_zygisk_provider_lib_none": "Nicht in diesem Build"
 }

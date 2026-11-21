@@ -11,6 +11,8 @@ asb_md_cfg() {
 asb_md_zstate() {
   if [ "$(asb_md_cfg zygisk_enabled)" != 1 ]; then
     printf 'off\n'
+  elif [ -d "$ASB_MD_MODDIR/zygisk.off" ] && [ ! -d "$ASB_MD_MODDIR/zygisk" ]; then
+    printf 'no_provider\n'
   elif [ ! -f "$ASB_MD_MODDIR/zygisk/arm64-v8a.so" ] && [ ! -f "$ASB_MD_MODDIR/zygisk/armeabi-v7a.so" ]; then
     printf 'not_installed\n'
   elif [ -e "$ASB_MD_ZDIR/disable" ]; then
@@ -27,6 +29,7 @@ asb_md_zstate() {
 asb_md_zygisk() {
   case "$(asb_md_zstate)" in
     off) printf '[Zygisk 🧩 off ⏸️]' ;;
+    no_provider) printf '[Zygisk 🧩 no provider ⏸️]' ;;
     not_installed) printf '[Zygisk 🧩 not installed ⛔]' ;;
     safe) printf '[Zygisk 🧩 safe mode 🛟]' ;;
     connected) printf '[Zygisk 🧩 connected ✅]' ;;

@@ -4277,5 +4277,9 @@
   "dsp_console_off": "已旁路",
   "dsp_grp_route": "输出",
   "dsp_grp_tone": "音色",
-  "dsp_grp_dynamics": "动态与保护"
+  "dsp_grp_dynamics": "动态与保护",
+  "dev_zygisk_provider_asb_libraries": "ASB Zygisk 库",
+  "dev_zygisk_provider_lib_active": "已就位",
+  "dev_zygisk_provider_lib_parked": "已暂存，待启用提供者后恢复（WebUI 保持可用）",
+  "dev_zygisk_provider_lib_none": "此版本未包含"
 }
