@@ -421,9 +421,10 @@ body.live-active .page:not(.live-page) .dot::after, body.live-active .page:not(.
  * wordmark sweep after exactly ten seconds. The Smart card's decorative glow now pauses
  * directly through CSS; there is no Web Animations ticker. All header loops remain on the
  * native CSS clock and are paused only by closed-page, reduced-effects and reduced-motion rules. */
-html.asb-calm .pico-smart .ai-glow {
-  animation-play-state: paused !important;
-}
+/* buildfix42: the Smart halo no longer calms either. Paused at ten idle seconds it stood
+ * still on Home as a half-lit ring, which read as a frozen, broken profile icon. The header
+ * keeps producing frames while Home is visible anyway, so the halo's own rotation is one
+ * small composited layer; it still stops off-screen and for reduced motion. */
 
 /* dev61: the GPU tile's clock, small beside the busy share. */
 .live-cell-value .lv-sub { font-size: 11px; font-weight: 600; letter-spacing: 0; margin-left: 5px; opacity: .62;
@@ -436,6 +437,7 @@ html.asb-calm .pico-smart .ai-glow {
   .app-name { animation: none; background-position: -70% 0, 0 0; }
   .cfg-stagger > *, .profiles > * { animation: none !important; }
   .logo-sphere-a, .logo-sphere-b, .logo-inner { animation: none !important; }
+  .pico-smart .ai-glow { animation: none !important; }
 }
 @media (forced-colors: active) {
   .logo-sphere-a, .logo-sphere-b, .logo-frame-a, .logo-frame-b, .logo-inner { border-color: CanvasText !important; }
@@ -856,6 +858,7 @@ html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translate
   opacity: 0;
   animation: ai-spin 4s linear infinite;
   pointer-events: none;
+  will-change: transform;
 }
 .pbtn-smart.on .pico-smart .ai-glow {
   opacity: 0.85;
@@ -6350,7 +6353,10 @@ html[data-asb-effects="reduced"] .live-info-src {
  * UFO/orbits then stayed frozen until their nodes were recreated. Real OS reduced-motion is
  * still honoured by the media query above; temporary rendering pressure is not a motion
  * preference and no longer stops the emblem, wordmark or status indicators. */
-html[data-asb-effects="reduced"] :is(.zygisk-header-dot,.zygisk-header-dot::after,.dev-zygisk-link-dot,.dev-zygisk-link-dot::after,.pico-smart .ai-glow) {
+html[data-asb-effects="reduced"] .zygisk-header-dot:not(asb-spec-pad),
+html[data-asb-effects="reduced"] .zygisk-header-dot::after,
+html[data-asb-effects="reduced"] .dev-zygisk-link-dot:not(asb-spec-pad),
+html[data-asb-effects="reduced"] .dev-zygisk-link-dot::after {
   animation:none !important;
 }
 /* During a page slide, compositing the moving surface matters more than backdrop sampling.
@@ -6442,7 +6448,20 @@ html:root .cfg-profile-sheet.live-info-sheet .live-drain-done { margin-top:16px;
 .dsp-eq-details { margin-top:7px; }
 .dsp-eq-details summary { padding:7px 0 0; color:var(--text-tertiary); font:600 10px/1.3 var(--sans); cursor:pointer; }
 .dsp-eq-details .cfg-row-desc { padding:7px 0 0; font-size:11px; line-height:1.45; }
-@media (max-width:360px) { .dsp-eq-console { padding:13px !important; } .dsp-eq-editor .cfg-row-top { grid-template-columns:78px minmax(0,1fr); gap:7px; } }
+/* buildfix42: the three sliders sit in one inset panel with their own side padding. Under
+ * Liquid Glass the theme's row material (html:root[data-asb-glass] .cfg-row:not(.is-on), a
+ * more specific selector) repainted every slider row as a full-width card, so the names and
+ * values touched its edges. The panel and the rows now win in both themes. */
+.dsp-eq-console .dsp-eq-editor { margin:0 0 2px; padding:2px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+html .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row:is(.is-on,:not(.is-on)),
+html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row:is(.is-on,:not(.is-on)) {
+  margin:0 !important; padding:8px 0 !important; border:0 !important; border-radius:0 !important;
+  background:transparent !important; box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+html .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + .cfg-row,
+html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + .cfg-row { border-top:1px solid var(--border) !important; }
+.dsp-eq-console .dsp-eq-editor .cfg-row-top { grid-template-columns:minmax(92px,.44fr) minmax(0,1fr); }
+.dsp-eq-console .dsp-eq-editor .cfg-range { grid-template-columns:minmax(0,1fr) 40px; }
+@media (max-width:360px) { .dsp-eq-console { padding:13px !important; } .dsp-eq-console .dsp-eq-editor { padding:2px 10px; } .dsp-eq-console .dsp-eq-editor .cfg-row-top { grid-template-columns:80px minmax(0,1fr); gap:7px; } }
 
 </style>
 </head>
@@ -7585,6 +7604,10 @@ asbCalmArm();
  * the page's own reads then queued behind them. Jobs above priority 0 wait for the home screen;
  * the Live pass is dropped when MONITOR is open, which polls by itself. */
 const ASB_LATER_QUIET_MS = 300;
+/* buildfix42: background reads (priority above 0) start only after 1.5 s without a touch. A
+ * root call cannot be interrupted once running, and a hand that just touched the screen is
+ * usually about to tap a tab; 300 ms was shorter than the gap between those two touches. */
+const ASB_LATER_IDLE_MS = 1500;
 let _asbLater = [], _asbLaterBusy = false, _asbLaterSeq = 0;
 function asbPageBusy() {
   try { return !!(_liveOpen || _cfgOpen || _rpOpen || _deviceOpen || _zygiskOpen); } catch (e) { return false; }
@@ -7604,7 +7627,8 @@ function asbLaterPump() {
       const navWait = asbNavReadDelay();
       if (navWait > 0) { setTimeout(go, navWait); return; }
       const quiet = performance.now() - _asbInputAt;
-      if (quiet < ASB_LATER_QUIET_MS) { setTimeout(go, ASB_LATER_QUIET_MS - quiet + 16); return; }
+      const need = job.prio > 0 ? ASB_LATER_IDLE_MS : ASB_LATER_QUIET_MS;
+      if (quiet < need) { setTimeout(go, need - quiet + 16); return; }
       if (job.prio > 0 && asbPageBusy()) { setTimeout(go, 1000); return; }
       Promise.resolve().then(job.fn).catch(function () {}).then(function () {
         _asbLaterBusy = false;
@@ -8552,6 +8576,8 @@ function profileDetailsOpen(p) {
   _el('profileDetailsKicker').textContent = T('pd_kicker', 'ACTIVE PROFILE · LIVE EVIDENCE');
   _el('profileDetailsTitle').textContent = T('prof_' + p, p);
   m.hidden = false; m.setAttribute('aria-hidden', 'false'); navSync();
+  /* buildfix42: the sheet opens on the tap. The read used to start in the same task, and
+   * ksu.exec blocks the page thread, so the sheet appeared only after both scripts finished. */
   profileDetailsRefresh();
   setTimeout(function() { _el('profileDetailsClose').focus(); }, 0);
 }
@@ -8567,7 +8593,12 @@ async function profileDetailsRefresh() {
   const p = _profileDetails.profile; if (!p) return;
   const ticket = ++_profileDetails.request;
   const body = _el('profileDetailsBody');
-  body.replaceChildren(profileDetailsNode('div', 'profile-details-loading', T('pd_loading', 'Reading profile intent, live ownership and write readbacks…')));
+  asbCosmicLoading(body, { kind:'profile', titleKey:'pd_loading_title', title:'Reading the active profile…',
+    subKey:'pd_loading', sub:'Reading profile intent, live ownership and write readbacks…',
+    steps:[['pd_stage_intent','Profile'],['pd_stage_owner','Ownership'],['pd_stage_readback','Readback']] });
+  await asbPaintYield();
+  await asbPaintYield();
+  if (ticket !== _profileDetails.request) return;
   try {
     const marker = '__ASB_EFFECTIVE_POLICY__';
     const r = await run('sh ' + shQuote(MD + '/tools/asb_profile_details.sh') + ' ' + p
@@ -8626,7 +8657,7 @@ function profileDetailsPaint() {
   } else if (heroNote) hero.appendChild(profileDetailsNode('div', 'profile-details-hero-sub', heroNote));
   hero.appendChild(profileDetailsNode('div', 'profile-details-epoch', Number(d.epoch) > 0
     ? T('pd_epoch', 'apply epoch').toUpperCase() + ' · ' + String(d.epoch)
-    : T('pd_epoch_unavailable', 'CURRENT TRANSACTION NOT EXPOSED · SAVED HISTORY')));
+    : T('pd_epoch_unavailable', 'FROM THE APPLY LOG')));
   body.appendChild(hero);
   const sum = (d.ledger && d.ledger.summary) || {};
   const good = (sum.applied || 0) + (sum.already_set || 0);
@@ -8865,6 +8896,14 @@ function asbNavReadDelay() {
   const left = (typeof _asbNavAnimUntil === 'number' ? _asbNavAnimUntil : 0) - performance.now();
   return left > 0 ? Math.ceil(left) + 32 : 0;
 }
+/* buildfix42: a periodic read never starts right after a touch. ksu.exec cannot be cut short,
+ * so a poll that began as the finger came down made the next tab tap wait for all of it. */
+const ASB_POLL_TOUCH_GAP_MS = 900;
+function asbTouchReadDelay(gap) {
+  const at = typeof _asbInputAt === 'number' ? _asbInputAt : -1e9;
+  const left = gap - (performance.now() - at);
+  return left > 0 ? Math.ceil(left) + 16 : 0;
+}
 function liveMonitorSchedule(delay) {
   if (_liveTimer) { clearTimeout(_liveTimer); _liveTimer = null; }
   if (!_liveOpen || document.hidden) return;
@@ -8875,6 +8914,8 @@ function liveMonitorSchedule(delay) {
     if (!_liveOpen || document.hidden) return;
     const navWait = asbNavReadDelay();
     if (navWait > 0) { liveMonitorSchedule(navWait); return; }
+    const touchWait = asbTouchReadDelay(ASB_POLL_TOUCH_GAP_MS);
+    if (touchWait > 0) { liveMonitorSchedule(touchWait); return; }
     /* Stock keeps its existing ten-second ROM cache; this additional call reuses that sample
      * instead of forcing another shell. */
     if (_selectedProfile === 'stock') pollStockTelemetry(true);
@@ -8894,6 +8935,8 @@ function liveBackgroundSchedule(delay) {
     if (document.hidden || _liveOpen) return;
     const navWait = asbNavReadDelay();
     if (navWait > 0) { liveBackgroundSchedule(navWait); return; }
+    const touchWait = asbTouchReadDelay(ASB_LATER_IDLE_MS);
+    if (touchWait > 0) { liveBackgroundSchedule(touchWait); return; }
     Promise.resolve(pollLive(false)).then(liveBackgroundSchedule, liveBackgroundSchedule);
   }, Math.max(requested, asbNavReadDelay()));
 }
@@ -9144,7 +9187,7 @@ function lvBootOnFigure() {
   /* Without an observed battery-level step there is no measured rate. An upper bound from
    * a few quiet minutes becomes an absurd 100%/h and a false time-to-empty forecast. */
   if (!b || b.on < 60 || !(b.onX > 0)) return null;
-  return { x:Math.round(b.onX * 360 / b.on), upper:false, s:b.on };
+  return { x:Math.round(b.onX * 360 / b.on), upper:false, s:b.on, src:'boot' };
 }
 function lvNightParse(text) {
   const f = String(text || '').trim().split(/\s+/);
@@ -9410,6 +9453,22 @@ function lvProfileOnFigure(profile) {
     upper:!(e.onLast > 0), s:e.onLastS, src:'latest' };
   return e.on > 0 ? { x:e.on, upper:false, s:e.onMin * 60, src:'history' } : null;
 }
+/* buildfix42: the label follows where the figure came from. A mature profile sample wins over
+ * the since-boot estimate (buildfix32), but it was still captioned "since this device boot",
+ * so a 123-minute session recorded before a reboot read as 123 minutes since a reboot that
+ * was 30 minutes old. */
+function lvOnKind(fig) {
+  if (!fig) return 'meter_wait';
+  return fig.src === 'boot' ? 'boot' : (fig.src === 'history' ? 'meter' : 'profile');
+}
+function lvOnTip(fig) {
+  if (!fig) return T('lv_drain_on_boot_wait', 'needs a battery-level step with the screen on since this device boot');
+  const mins = String(Math.max(1, Math.round(fig.s / 60)));
+  const kind = lvOnKind(fig);
+  if (kind === 'boot') return T('lv_drain_on_boot_tip', 'Battery-level drain with the screen on since this device boot: %s min. Charging and battery-level resets are excluded.').replace('%s', mins);
+  if (kind === 'meter') return T('lv_drain_on_avg_tip', 'Average screen-on drain of this profile: %s min measured.').replace('%s', mins);
+  return T('lv_drain_on_profile_tip', 'Latest recorded screen-on drain for this profile: %s min.').replace('%s', mins);
+}
 function lvOnFigure(profile) {
   /* The selected WebUI profile owns the phone-wide since-boot view. The meter's "current"
    * line is only a runtime publication and can lag a profile switch; using it here assigned
@@ -9462,15 +9521,11 @@ function lvMeterPaint(profile) {
   const onLab = _el('bnDrainOnLabel'), offLab = _el('bnDrainOffLabel');
   if (onLab) onLab.textContent = T('lv_scr_on', 'Screen on');
   if (offLab) offLab.textContent = T('lv_scr_off', 'Screen off');
-  if (onEl) onEl.title = bootOn
-    ? (_selectedProfile === profile
-      ? T('lv_drain_on_boot_tip', 'Battery-level drain with the screen on since this device boot: %s min. Charging and battery-level resets are excluded.').replace('%s', String(Math.max(1, Math.round(bootOn.s / 60))))
-      : T('lv_drain_on_profile_tip', 'Latest recorded screen-on drain for this profile: %s min.').replace('%s', String(Math.max(1, Math.round(bootOn.s / 60)))))
-    : T('lv_drain_on_boot_wait', 'needs a battery-level step with the screen on since this device boot');
+  if (onEl) onEl.title = lvOnTip(bootOn);
   /* Rates are descriptive context, not alarms: both numeric %/h values stay neutral. */
   asbMetricPaint('bnDrain', 'metric-info');
   asbMetricPaint('bnDrainOff', 'metric-info');
-  _lvDrain.on = bootOn ? (_selectedProfile === profile ? 'boot' : 'profile') : 'meter_wait';
+  _lvDrain.on = lvOnKind(bootOn);
   _lvDrain.onLabel = onLab ? onLab.textContent : T('lv_scr_on_boot', 'Screen on · since boot');
   _lvDrain.off = off ? 'measured' : 'wait';
   _lvDrain.offN = off ? off.n : 0;
@@ -9619,7 +9674,10 @@ function liveDrainPaint() {
   }
   const left = T('lv_drain_left', 'to 0%: %s');
   body.textContent = '';
-  body.appendChild(liveDrainBlock('sun', _lvDrain.onLabel || T('lv_scr_on_boot', 'Screen on · since boot'), onV, onBasis,
+  /* buildfix42: the sheet's heading names the same source as its sentence and the footer. */
+  const onHead = { boot: T('lv_scr_on_boot', 'Screen on · since boot'), profile: T('lv_scr_on_latest', 'Screen on · latest'),
+    meter: T('lv_scr_on_avg', 'Screen on · profile average') }[_lvDrain.on] || T('lv_scr_on', 'Screen on');
+  body.appendChild(liveDrainBlock('sun', onHead, onV, onBasis,
     (etaOn && etaOn !== '\u2014' && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : ''));
   /* fix279: the live window, labelled as what it is and never in place of the average. */
   if ((_lvDrain.on === 'meter' || _lvDrain.on === 'boot' || _lvDrain.on === 'profile') && _lvDrain.nowX > 0) {
@@ -9634,7 +9692,7 @@ function liveDrainPaint() {
     (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : ''));
   const cmp = liveDrainCompare();
   if (cmp) body.appendChild(cmp);
-  body.appendChild(liveDrainExplanation(T('lv_drain_note_avg', 'Screen on is the average of this profile - the same figure on the profile cards, in the manager action and on this tile. Right now is only the latest continuous stretch with the screen on and moves with what you are doing. Screen off prefers the latest complete quiet window. The infinite-log report counts only the time of its own recording. All figures come from the battery level, not from the current sensor.'), 'live-drain-note'));
+  body.appendChild(liveDrainExplanation(T('lv_drain_note_src', 'Screen on: the latest complete screen-on session of the active profile (10 min or more), otherwise the drain since boot, otherwise the profile average; the heading names which one. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor.'), 'live-drain-note'));
 }
 function liveDrainCompare() {
   const p = _lvMeter.p || {};
@@ -9647,7 +9705,7 @@ function liveDrainCompare() {
   box.className = 'live-drain-cmp';
   const h = document.createElement('div');
   h.className = 'live-drain-lbl';
-  h.textContent = T('lv_drain_cmp', 'By profile - the same measurement for each');
+  h.textContent = T('lv_drain_cmp_avg', 'By profile - average of each');
   box.appendChild(h);
   order.forEach(function (k) {
     const e = p[k] || { on: 0, off: 0, offN: 0, offS: 0 };
@@ -12352,7 +12410,7 @@ async function ctFlagsEnsure() {
   let r = null;
   try { r = await run('sh ' + shQuote(CAMTOOLS_SCRIPT) + ' flags'); } catch (e) {}
   const p = ctParse(r && r.stdout != null ? String(r.stdout) : '');
-  if (p.other.flags) { _ctFlags = { webcam: p.other.flags.webcam === '1' ? '1' : '0', launch: p.other.flags.launch === '1' ? '1' : '0' }; cfgHubRepaintIfShowing(); }
+  if (p.other.flags) { _ctFlags = { webcam: p.other.flags.webcam === '1' ? '1' : '0', launch: p.other.flags.launch === '1' ? '1' : '0' }; if (typeof hubExtrasSave === 'function') hubExtrasSave({ ct: _ctFlags }); cfgHubRepaintIfShowing(); }
 }
 function ctParse(txt) {
   const out = { webcam: null, launch: null, other: {} };
@@ -12748,6 +12806,8 @@ async function kernelPanelLoad(force) {
   if (!_wbBusy && (_kernelPanel.wakeup && !hadWakeup || force)) _wbDraft = null;
   _kernelPanel.loaded = true;
   _kernelPanel.loading = false;
+  if (b && b.controls && b.controls.errno === 0 && typeof hubExtrasSave === 'function')
+    hubExtrasSave({ hidden: kernelHiddenAbsent(), wb: kernelWakeupSavedAny(_kernelPanel.wakeup) });
   if (_cfgGroup === 'kernel' || (_cfgOpen && _cfgSearch)) { try { cfgRender(); } catch (e) {} }
   else cfgHubRepaintIfShowing();
   kernelWakeupSourceDialogRender();
@@ -12937,9 +12997,10 @@ function kernelRefreshButton(id) {
 function cfgRenderKernelControlsHelp(list) {
   const card = bfxEl('div', 'cfg-row kernel-card kernel-controls-help cat-kernel'); card.id = 'kernelControlsHelp';
   const hidden = kernelHiddenAbsent();
-  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_controls_summary', 'Each control writes only its own kernel switch; Stock puts back the value the kernel had.')));
-  if (hidden.length) card.appendChild(bfxEl('div', 'kernel-why kernel-absent-note', bfxT('kernel_hidden_count', 'Hidden: {n} - this kernel has no separate switch for them', { n: String(hidden.length) })));
-  const more = [bfxEl('div', 'kernel-note', T('kernel_controls_help', 'Each switch below writes only its named standard kernel interface. Stock restores the value captured before ASB first wrote it. Missing or read-only interfaces are disabled; a different readback is reported as a mismatch, not as success.'))];
+  /* buildfix42: the summary and the hidden count live behind Details with the rest. */
+  const more = [bfxEl('div', 'kernel-note', T('kernel_controls_summary', 'Each control writes only its own kernel switch; Stock puts back the value the kernel had.'))];
+  if (hidden.length) more.push(bfxEl('div', 'kernel-why kernel-absent-note', bfxT('kernel_hidden_count', 'Hidden: {n} - this kernel has no separate switch for them', { n: String(hidden.length) })));
+  more.push(bfxEl('div', 'kernel-note', T('kernel_controls_help', 'Each switch below writes only its named standard kernel interface. Stock restores the value captured before ASB first wrote it. Missing or read-only interfaces are disabled; a different readback is reported as a mismatch, not as success.')));
   if (hidden.indexOf('kernel_sched_autogroup') >= 0) {
     more.push(bfxEl('div', 'kernel-why kernel-absent-note', T('kernel_absent_autogroup', 'Scheduler Autogroup is hidden: this kernel has no such switch (GKI kernels are built without it), and on Android it would not touch apps anyway, because they run in Android\'s own CPU groups.')));
   }
@@ -14082,15 +14143,40 @@ function cfgIsActive(it, cur) {
 /* dev60: the tile counts what the category screen shows. Controls the running kernel hides
  * (no separate switch) are left out; cards that are not CFG_ITEMS but live in the category
  * (Camera Tools, the wakeup rules, the notification fix) are included in the total. */
+/* buildfix42: the hub tiles' hidden/extra counts come from the last read of this viewer until
+ * the category itself is opened. Reading them on Home (kernel controls plus every wakeup source,
+ * and the camera flags) ran a multi-second root call right when the owner reached for the tab
+ * bar, and ksu.exec holds the page thread, so the tap waited for it. */
+const HUB_EXTRAS_KEY = 'asb_hub_extras_v1';
+let _hubExtrasCache = (function () {
+  try { const v = JSON.parse(localStorage.getItem(HUB_EXTRAS_KEY) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; }
+})();
+function hubExtrasSave(part) {
+  const next = Object.assign({}, _hubExtrasCache || {}, part, { t: Date.now() });
+  _hubExtrasCache = next;
+  try { localStorage.setItem(HUB_EXTRAS_KEY, JSON.stringify(next)); } catch (e) {}
+}
+function kernelWakeupSavedAny(wb) {
+  return !!(wb && ((wb.savedAlways && wb.savedAlways.length) || (wb.saved && wb.saved.length) || (wb.savedSleep && wb.savedSleep.length)));
+}
 function cfgGroupHiddenKeys(groupId) {
-  return groupId === 'kernel' && typeof _kernelPanel !== 'undefined' && typeof kernelHiddenAbsent === 'function' ? kernelHiddenAbsent() : [];
+  if (groupId !== 'kernel') return [];
+  const c = typeof _hubExtrasCache !== 'undefined' ? _hubExtrasCache : null;
+  const live = typeof _kernelPanel !== 'undefined' && typeof kernelHiddenAbsent === 'function';
+  if (live && (_kernelPanel.loaded || !c)) return kernelHiddenAbsent();
+  return c && Array.isArray(c.hidden) ? c.hidden.filter(function (k) { return typeof k === 'string'; }) : [];
 }
 function cfgGroupExtraCards(groupId) {
-  const ctf = typeof _ctFlags !== 'undefined' ? _ctFlags : null;
+  const c = typeof _hubExtrasCache !== 'undefined' ? _hubExtrasCache : null;
+  const ctf = typeof _ctFlags !== 'undefined' && _ctFlags ? _ctFlags : (c && c.ct) || null;
   if (groupId === 'camera') return [!!(ctf && ctf.webcam === '1'), !!(ctf && ctf.launch === '1')];
   if (groupId === 'kernel') {
     const kp = typeof _kernelPanel !== 'undefined' ? _kernelPanel : null;
-    return [!!(kp && kp.wakeup && ((kp.wakeup.savedAlways && kp.wakeup.savedAlways.length) || (kp.wakeup.saved && kp.wakeup.saved.length) || (kp.wakeup.savedSleep && kp.wakeup.savedSleep.length)))];
+    if (kp && (kp.loaded || kp.wakeup || !c)) {
+      const wb = kp && kp.wakeup;
+      return [!!(wb && ((wb.savedAlways && wb.savedAlways.length) || (wb.saved && wb.saved.length) || (wb.savedSleep && wb.savedSleep.length)))];
+    }
+    return [!!(c && c.wb)];
   }
   if (groupId === 'battery') return [!!(typeof _nf !== 'undefined' && _nf && _nf.count)];
   return [];
@@ -14102,10 +14188,15 @@ let _cfgHubExtrasAsked = false;
 function cfgHubExtrasEnsure() {
   if (_cfgHubExtrasAsked) return;
   _cfgHubExtrasAsked = true;
-  setTimeout(function () {
-    if (typeof kernelPanelEnsure === 'function') kernelPanelEnsure();
-    if (typeof ctFlagsEnsure === 'function') ctFlagsEnsure();
-  }, 450);
+  /* A remembered answer is enough for the tiles; the category refreshes it when opened. With
+   * none yet, the reads wait in the idle queue (priority 3: Home only, after a quiet pause). */
+  if (typeof _hubExtrasCache !== 'undefined' && _hubExtrasCache && Array.isArray(_hubExtrasCache.hidden) && _hubExtrasCache.ct) return;
+  asbStartupLater(function () {
+    const jobs = [];
+    if (typeof kernelPanelEnsure === 'function') jobs.push(kernelPanelLoad(false));
+    if (typeof ctFlagsEnsure === 'function') jobs.push(ctFlagsEnsure());
+    return Promise.all(jobs);
+  }, 600, 3);
 }
 function cfgHubRepaintIfShowing() {
   if (typeof _cfgOpen !== 'undefined' && _cfgOpen && !_cfgGroup && !_cfgSearch && _cfgHubSig !== cfgHubSig()) {
@@ -24649,9 +24740,7 @@ function homeMeterPaint() {
     const on = lvOnFigure(prof), off = homeOffFigure(prof);
     box.textContent = '';
     if (!on && !off) { box.hidden = true; return; }
-    const onTip = on ? (_selectedProfile === prof
-      ? T('lv_drain_on_boot_tip', 'Battery-level drain with the screen on since this device boot: %s min. Charging and battery-level resets are excluded.').replace('%s', String(Math.max(1, Math.round(on.s / 60))))
-      : T('lv_drain_on_profile_tip', 'Latest recorded screen-on drain for this profile: %s min.').replace('%s', String(Math.max(1, Math.round(on.s / 60))))) : '';
+    const onTip = on ? lvOnTip(on) : '';
     [['sun', on ? (on.upper ? '<' : '') + lvPct(on.x, 10, 1) : '', onTip], ['theme_moon', off ? off.t : '', off ? off.tip : '']].forEach(function (c) {
       if (!c[1]) return;
       const chip = document.createElement('span');
