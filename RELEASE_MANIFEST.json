@@ -11,6 +11,7 @@
       "runtime/asb_drain_meter.sh",
       "tests/asb_features.sh",
       "tests/asb_ui.sh",
+      "tests/asb_zygisk.sh",
       "tools/asb_tree.sha256",
       "webroot/i18n/ar.json",
       "webroot/i18n/de.json",
@@ -31,7 +32,7 @@
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 19,
+      "changed": 20,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -1389,9 +1390,9 @@
     },
     {
       "path": "tests/asb_zygisk.sh",
-      "bytes": 153305,
+      "bytes": 153513,
       "mode": "0755",
-      "sha256": "b52851c532e25256579f1069cc72b0a419ac68becfb1b0cfc80b3874fa5b0296"
+      "sha256": "fa9c5afd63a5ad164a04ffb0478f235f5b966b6921324c526022a85eafdaa0f7"
     },
     {
       "path": "tools/asb_analyze.py",
@@ -1613,7 +1614,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24236,
       "mode": "0644",
-      "sha256": "07b1d3bcc76f9ba7f7f5db19ac5aafa8939d2cb10569346cc419bd2796e8c7e6"
+      "sha256": "f6bdaa012f6ce0cea948b844f4bcac3bcd5454dc4b859859556efa67315c6b05"
     },
     {
       "path": "tools/asb_tree_check.sh",
