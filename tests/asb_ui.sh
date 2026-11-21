@@ -1648,7 +1648,7 @@ let _selectedProfile='smart';
 """
 src='\n'.join([body,const('_lvMeter'),const('_lvGovOff'),const('_lvDrain'),const('_lvEta'),
  fn('lvBootParse'),fn('lvBootOnFigure'),fn('lvNightParse'),fn('lvMeterParse'),fn('lvDurDHM'),fn('lvPct'),fn('lvOffFigure'),
- fn('lvNightFresh'),fn('lvNightFigure'),fn('lvProfileNightFigure'),fn('lvProfileOnFigure'),fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'),fn('lvPrimaryOffFigure'),fn('lvMeterHasOn'),fn('lvMeterPaint'),fn('lvEtaFmt'),fn('lvEtaPaint'),fn('homeOffFigure'),fn('homeMeterPaint'),r"""
+ fn('lvNightFresh'),fn('lvNightFigure'),fn('lvProfileNightFigure'),fn('lvProfileOnFigure'),fn('lvBootMature'),fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'),fn('lvPrimaryOffFigure'),fn('lvMeterHasOn'),fn('lvMeterPaint'),fn('lvEtaFmt'),fn('lvEtaPaint'),fn('homeOffFigure'),fn('homeMeterPaint'),r"""
 let bad=0;function chk(c,m){if(!c){bad=1;console.log('FAIL '+m)}}
 const testNowDate=new Date();testNowDate.setHours(12,0,0,0);const testNow=Math.floor(testNowDate.getTime()/1000);Date.now=()=>testNow*1000;
 const parsed=lvMeterParse('smart 3600 500 14400 200 1 50 14400 1 500 3600 10 50 14400 10\ncurrent smart\n');
@@ -2229,7 +2229,7 @@ const _lvMeter = { at: 0, cur: '', p: {} };
 function liveDrainIsOpen() { return false; }
 function liveDrainPaint() {}
 EOF
-  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure lvBootOnFigure lvNightFresh lvNightFigure lvProfileNightFigure lvProfileOnFigure lvOnFigure lvOnKind lvOnTip lvPrimaryOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure lvBootOnFigure lvNightFresh lvNightFigure lvProfileNightFigure lvProfileOnFigure lvBootMature lvOnFigure lvOnKind lvOnTip lvPrimaryOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   sed -n "/^const _lvEta = /p; /^const _lvDrain = /p; /^const _lvGovOff = /p; /^const METRIC_STEPS = /p" "$H"
   sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   cat <<'EOF'
@@ -10278,7 +10278,7 @@ paint_src = '\n'.join([
     "function T(k,d){return d} function _el(id){return els[id]||null}",
     "const els={}; ['bnDrain','bnDrainOff','bnDrainOnLabel','bnDrainOffLabel'].forEach(x=>els[x]={textContent:'',title:''});",
     const('_lvMeter'), const('_lvGovOff'), "const _lvDrain={}; let _selectedProfile='smart';",
-    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvBootOnFigure'), fn('lvNightFresh'), fn('lvNightFigure'), fn('lvProfileNightFigure'), fn('lvProfileOnFigure'), fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'), fn('lvPrimaryOffFigure'),
+    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvBootOnFigure'), fn('lvNightFresh'), fn('lvNightFigure'), fn('lvProfileNightFigure'), fn('lvProfileOnFigure'), fn('lvBootMature'),fn('lvOnFigure'),fn('lvOnKind'),fn('lvOnTip'), fn('lvPrimaryOffFigure'),
     "function asbMetricPaint(){} function lvEtaPaint(){} function liveDrainIsOpen(){return false}",
     fn('lvMeterPaint'),
     "_lvMeter.cur='smart';_lvMeter.p={battery:{on:330,onMin:88,off:126,offN:3,offS:30000,offLast:138,offLastS:18000,offLastAt:1,onLast:330,onLastS:5280,onLastAt:1}};",
@@ -16411,7 +16411,8 @@ for target in ('lgr-drain','lgr-smooth','lgr-thermal','lgr-zygisk','lgr-observat
 profile=fn('function profileDetailsPaint() {')
 assert "p === 'smart'" in profile and 'profile-details-smart-policy' in profile
 on=fn('function lvOnFigure(profile) {')
-assert on.index('lvProfileOnFigure(profile)') < on.index('lvBootOnFigure()')
+# buildfix43: a mature since-boot figure wins; before that the profile's sample still does.
+assert on.index('lvProfileOnFigure(profile)') < on.index('if (boot && lvBootMature()) {') < on.index('own.at < bootAt') < on.index('return own || boot;')
 nav=fn('function asbNavAnimMark() {')
 assert 'asb-nav-moving' in nav and 'setTimeout' in nav and 'setInterval' not in nav and 'Worker(' not in nav
 assert "const simpleSlot = key === 'slot';" in h and "fold.open = simpleSlot;" in h
@@ -16749,6 +16750,11 @@ assert "T('lv_drain_cmp_avg', 'By profile - average of each')" in h
 assert "_lvDrain.on = lvOnKind(bootOn);" in h and "onEl.title = lvOnTip(bootOn);" in h
 assert "const onTip = on ? lvOnTip(on) : '';" in h
 assert 'html.asb-calm .pico-smart .ai-glow' not in h
+# buildfix43: the loader's scan beam fades out on every side (it was a hard-edged green slab).
+scan = h[h.index('.asb-cosmic-scan { position:absolute;'):]
+scan = scan[:scan.index('}')]
+assert 'mask-image:linear-gradient(90deg,transparent 0%,#000 26%' in scan and 'transparent 80%' not in scan
+assert re.search(r'rgba\(75,243,200,\.(\d+)\)', scan) and max(float('0.' + x) for x in re.findall(r'rgba\(75,243,200,\.(\d+)\)', scan)) <= .18
 L = 'en ru uk de fr es it pt tr id zh ar hy'.split()
 D = {l: json.loads((root / f'webroot/i18n/{l}.json').read_text(encoding='utf-8')) for l in L}
 keys = ['lv_drain_on_avg_tip', 'pd_loading_title', 'pd_stage_intent', 'pd_stage_owner', 'pd_stage_readback',
@@ -16779,6 +16785,19 @@ chk(lvOnKind(null) === 'meter_wait', 'no figure');
 chk(lvOnKind({ src: 'boot', s: 1800 }) === 'boot' && /since this device boot: 30 min/.test(lvOnTip({ src: 'boot', s: 1800 })), 'boot');
 chk(lvOnKind({ src: 'latest', s: 7380 }) === 'profile' && /Latest recorded screen-on drain for this profile: 123 min/.test(lvOnTip({ src: 'latest', s: 7380 })), 'a profile session is not since boot');
 chk(!/boot/.test(lvOnTip({ src: 'latest', s: 7380 })), 'a profile session still says boot');
+eval(fn('lvBootMature') + fn('lvOnFigure'));
+global._selectedProfile = 'smart';
+let ownAt = 1000;
+global.lvProfileOnFigure = () => ({ x: 170, upper: false, s: 7380, src: 'latest', at: ownAt });
+global.lvBootOnFigure = () => (_lvMeter.boot && _lvMeter.boot.onX > 0 ? { x: Math.round(_lvMeter.boot.onX * 360 / _lvMeter.boot.on), s: _lvMeter.boot.on, src: 'boot' } : null);
+global._lvMeter = { boot: { on: 600, onX: 100 }, bootAt: 5000 };
+chk(lvOnFigure('smart').src === 'latest', 'buildfix43: a 10-minute, 1 % boot figure replaced the stored sample');
+_lvMeter.boot = { on: 3600, onX: 900 };
+const f43 = lvOnFigure('smart');
+chk(f43.src === 'boot' && f43.x === 90, 'buildfix43: an hour after boot the pre-reboot session still won: ' + JSON.stringify(f43));
+chk(lvOnFigure('battery') && lvOnFigure('battery').src === 'latest', 'buildfix43: another profile borrowed the phone-wide boot figure');
+ownAt = 6000; chk(lvOnFigure('smart').src === 'latest', 'buildfix43: a session recorded in this boot lost to the phone-wide boot meter');
+ownAt = 0; chk(lvOnFigure('smart').src === 'latest', 'buildfix43: a session without a timestamp was assumed stale');
 chk(lvOnKind({ src: 'history', s: 600 }) === 'meter' && /Average screen-on drain of this profile: 10 min/.test(lvOnTip({ src: 'history', s: 600 })), 'history average');
 console.log(bad ? 'bad' : 'ok');
 JS

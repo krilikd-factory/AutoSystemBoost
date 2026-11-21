@@ -10668,8 +10668,12 @@ J
 EOF
 chmod 755 "$T/bin/fio"
 # Host-only bounded sysfs emulator. The shipped utility itself has no worker or polling loop.
-( while [ ! -f "$T/stop" ]; do for node in "$T"/block/*/queue/scheduler; do [ -f "$node" ] || continue; v="$(cat "$node")"; case "$v" in *\[*) continue;; esac; case "$node" in */dm-0/*) opts='adios none';; *) opts='kyber adios mq-deadline bfq none';; esac; line=''; for s in $opts; do if [ "$s" = "$v" ]; then line="$line [$s]"; else line="$line $s"; fi; done; printf '%s\n' "${line# }" > "$node"; done; sleep 0.01; done ) & wp=$!
+# buildfix43: a read between the runner's truncate and its write is empty; converting that
+# wiped the active marker (CI run 44894672322: "dm-0 restore after fio failure"). Empty reads
+# are skipped, and the runner's readback waits longer here than the 200 ms a kernel needs.
+( while [ ! -f "$T/stop" ]; do for node in "$T"/block/*/queue/scheduler; do [ -f "$node" ] || continue; v="$(cat "$node")"; [ -n "$v" ] || continue; case "$v" in *\[*) continue;; esac; case "$node" in */dm-0/*) opts='adios none';; *) opts='kyber adios mq-deadline bfq none';; esac; line=''; for s in $opts; do if [ "$s" = "$v" ]; then line="$line [$s]"; else line="$line $s"; fi; done; printf '%s\n' "${line# }" > "$node"; done; sleep 0.01; done ) & wp=$!
 trap 'touch "$T/stop"; kill "$wp" 2>/dev/null || true; rm -rf "$T"' EXIT HUP INT TERM
+ASB_IO_AB_READBACK_TRIES=500; export ASB_IO_AB_READBACK_TRIES
 PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock" sh "$U" status | grep -F 'queue=sda active=adios' >/dev/null || fail 'status evidence'
 out="$(PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/new.fio" --seconds 2 --rounds 1)" || fail "$out"
 printf '%s\n' "$out" | grep -F 'scheduler=adios round=1 p50=1000 p95=2000 p99=3000' >/dev/null || fail "latency evidence: $out"
