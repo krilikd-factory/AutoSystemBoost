@@ -12984,6 +12984,63 @@ grep -Fq 'kernel_usb_autosuspend kernel_bore"' "$ROOT/runtime/asb_kernel_control
 echo 'PASS BORE controls dev63: fixed node, Stock/Auto/off/on, exact baseline, kernel-change guard, access failures, readback, safe writer and boot/profile ownership'
 )
 
+t_large_dump_argv_runtime() (
+# On Android /system/bin/sh is mksh, whose printf is an external toybox binary. Handing it
+# a whole `dumpsys package`/`batterystats` dump or LSPosed log as ONE argument fails with
+# E2BIG past 128 KiB (MAX_ARG_STRLEN), and the reader silently sees nothing. Dumps of that
+# size are ordinary (Google Play services, a day of batterystats). These paths now read
+# through a here-document or a pipe; the fixtures are well past the limit so the test is
+# meaningful under mksh. Core framework packages also refuse a component disable.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; SRC="$ROOT/runtime/asb_wakelock_watch.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL large dump argv: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/d"
+printf 'wakelock_action=0\n' > "$T/mod/config/governor.conf"
+awk 'BEGIN { for (i = 0; i < 6000; i++) printf "    filler line %06d with some padding to make the dump large\n", i }' > "$T/filler"
+[ "$(wc -c < "$T/filler")" -gt 300000 ] || f 'fixture is not past the argv limit'
+cat > "$T/bin/pm" <<'S'
+#!/bin/sh
+echo "pm $*" >> "$PM_LOG"
+if [ "$1" = list ] && [ "$2" = packages ]; then printf 'package:com.example.big\npackage:com.android.systemui\n'; exit 0; fi
+for c in "$@"; do :; done
+case "$1" in disable) printf '%s\n' "$c" >> "$PM_STATE" ;; default-state|enable) : > "$PM_STATE" ;; *) exit 1 ;; esac
+S
+cat > "$T/bin/dumpsys" <<'S'
+#!/bin/sh
+if [ "$1 $2" = "activity services" ]; then printf '  * ServiceRecord{abc u0 %s}\n' "$RUN_CMP"; exit 0; fi
+if [ "$1 $2" = "activity activities" ]; then exit 0; fi
+if [ "$1" = batterystats ]; then cat "$FILLER"; printf '  Wake lock u0a1 bigtag: 1m 0s (3 times) realtime\n'; exit 0; fi
+[ "$1" = package ] || exit 0
+printf 'Package [%s]\n' "$2"; cat "$FILLER"
+printf '  Service Resolver Table:\n    %s\n' "$RUN_CMP"
+printf '  disabledComponents:\n'; while IFS= read -r c; do printf '    %s\n' "$c"; done < "$PM_STATE"
+printf '  Queries:\n'
+S
+printf '#!/bin/sh\nexit 0\n' > "$T/bin/appops"
+chmod +x "$T/bin/"*
+: > "$T/state"; : > "$T/pm.log"
+cmp='com.example.big/com.example.big.SyncService'
+run() { FILLER="$T/filler" RUN_CMP="$cmp" PM_STATE="$T/state" PM_LOG="$T/pm.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" "$@"; }
+out="$(run sh "$SRC" component-list com.example.big)"
+printf '%s\n' "$out" | grep -x "component|service|$cmp|0|default|1|running|1" >/dev/null || f "a large package dump hid the running service: $out"
+out="$(run sh "$SRC" component-set com.example.big disable "$cmp" service)"
+printf '%s\n' "$out" | grep -x 'result=disabled' >/dev/null || f "a large package dump broke the disable read-back: $out"
+out="$(run sh "$SRC" component-set com.example.big restore "$cmp")"
+printf '%s\n' "$out" | grep -x 'result=restored' >/dev/null || f "restore after a large dump failed: $out"
+: > "$T/pm.log"
+out="$(RUN_CMP='com.android.systemui/com.android.systemui.SystemUIService'; export RUN_CMP; run sh "$SRC" component-set com.android.systemui disable com.android.systemui/com.android.systemui.SystemUIService service)"
+printf '%s\n' "$out" | grep -x 'result=protected' >/dev/null || f "a core framework component was not protected: $out"
+grep -q 'disable' "$T/pm.log" && f 'a protected component reached pm'
+grep -q '_wl_cmp_core "$_sp" && { printf' "$SRC" || f 'disable path lost the core-package guard'
+for p in "$ROOT/runtime/asb_wakelock_watch.sh" "$ROOT/runtime/asb_lsposed_info.sh" "$ROOT/runtime/asb_zygisk_aot.sh"; do
+  grep -nE "printf '%s\\\\n' \"\\\$(_br|_WL_BSRAW|_ls_logs|_ev)\"" "$p" && f "${p##*/} still passes a whole dump to printf"
+done
+grep -q 'printf .%s\\n. "${1:-}" | awk -v c=' "$SRC" && f '_wl_svc_state still pipes the dump through printf'
+[ "$fail" = 0 ] && echo 'PASS large dump argv: 300 KB package/batterystats dumps survive mksh (no printf argv), core framework components refuse disable'
+exit "$fail"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
