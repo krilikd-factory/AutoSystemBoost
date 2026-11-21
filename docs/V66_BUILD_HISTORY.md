@@ -5,6 +5,38 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 dev66 buildfix41 - review fixes: large dumps under the Android shell, core components
+
+Input: a review of the buildfix40 source archive. The full host regression passed, so the
+review also ran it with `sh` resolved to mksh, the shell Android ships as `/system/bin/sh`.
+Base: the buildfix40 source archive. No native source or binary changed.
+
+- **Large dumps lost under mksh:** Android's mksh has no built-in `printf`; it runs the
+  toybox binary, and one argument longer than 128 KiB fails with `Argument list too long`.
+  Scripts started from the WebUI or by the governor (`system()`) normally run in that shell. Several readers
+  stored a whole dump in a variable and handed it to `printf`: the batterystats cache of the
+  wakelock watcher, `dumpsys package` for the component manager (state, declared
+  components and the read-back after a disable), the LSPosed logs (up to 2 MiB) and the
+  Zygisk launch scan's event log. Past the limit the reader saw nothing: a component of a
+  big package (the dump of Google Play services can pass 1 MB) could not be disabled because the
+  read-back came back empty and the change was rolled back, and the LSPosed log rate read
+  `unknown`. These readers now go through a here-document or a pipe. asbdiag's dropbox
+  listing and the full-day recorder's refresh-rate probe keep only the lines they parse.
+- **Core framework components:** the component manager accepts system packages since
+  buildfix28. A disable on the framework, SystemUI, telephony, the settings provider, the
+  permission controller, the package installer, the network stack, Bluetooth, NFC or the
+  root managers is now refused (`result=protected`) before `pm` is called; a disabled
+  component there can leave the phone without a usable interface to undo it.
+- **Small fixes:** the fitness note now records `appops transport unavailable` when the
+  transport fails (the old fallback sat after a pipeline whose status is always zero); one
+  mis-indented line in `service.sh`.
+- **Tests:** `t_large_dump_argv_runtime` feeds 300 KB package and batterystats dumps and
+  checks the protected refusal; under mksh it fails on the buildfix40 script and passes now.
+  The log-report trend check accepted only `elapsed=2866`, a value that moves to 2867 when
+  the suite runs about 20 s slower; it accepts both.
+- **Repository:** the stray `config/V66_BUILD_HISTORY.md` copy (235 KB) is removed. The
+  release workflow copies `config/` into the module, so it was shipped to the phone.
+
 ## V66 dev66 buildfix40 - evidence truth, report navigation and lighter Home startup
 
 Input: the owner's nine-point screenshot/log review covering observed wakeup rules, the EQ outer card, Infinite Log references/order/spacing/activity context, false Home drain units/rates, startup responsiveness and the fresh OnePlus 15 captures. Base: the verified buildfix39 source archive.
