@@ -261,7 +261,7 @@ public final class BtCodec {
 
     private static void tick() {
         applyOnce(false);
-        long next = events ? 600000 : (activeCodec() != null ? 30000 : 90000);
+        long next = events ? 1800000 : (activeCodec() != null ? 120000 : 300000);
         if (retries > 0 && retries < 4) next = 3000;
         handler.postDelayed(BtCodec::tick, next);
     }

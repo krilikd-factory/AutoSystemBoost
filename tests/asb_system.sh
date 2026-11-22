@@ -10761,6 +10761,8 @@ t_bt_ldac_quality_runtime() (
   grep -q 'invoke(ctx, "bluetooth")' "$j" || fail 'the adapter still comes only from getDefaultAdapter (null in app_process on Android 16+)'
   grep -q 'state("waiting"' "$j" && grep -q 'handler.postDelayed(() -> start(ctx)' "$j" || fail 'a watcher exits when Bluetooth is not up yet instead of waiting'
   grep -q 'asb_bt_codec.sh" apply >/dev/null' "$ROOT/service.sh" || fail 'a dead helper is never restarted'
+  grep -qF 'grep -q asb_btcodec "/proc/$_bt_p/cmdline"' "$ROOT/service.sh" || fail 'the 5-minute pass starts a shell and reads the config even while the helper runs'
+  grep -qF 'events ? 1800000 : (activeCodec() != null ? 120000 : 300000)' "$ROOT/src/btcodec/asb/BtCodec.java" || fail 'the helper polls too often'
   grep -q 'bt_ldac_rate=auto' "$ROOT/config/governor.conf" || fail 'rate default missing'
   grep -q '^bt_ldac_rate|' "$ROOT/config/key_ownership.tsv" || fail 'rate ownership missing'
   grep -q 'bt_ldac_(quality|rate)=' "$ROOT/service.sh" || fail 'boot does not start the helper for a fixed rate'

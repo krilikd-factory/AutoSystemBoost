@@ -15,8 +15,11 @@ hand) and the AnyKernel3 install log of the KRILIKD kernel.
   `BluetoothAdapter.getDefaultAdapter()` returns null inside app_process. The helper now takes
   the adapter from the system context's BluetoothManager, keeps waiting (30 s, later 5 min)
   instead of exiting when Bluetooth is not up yet, and names a refused profile proxy.
-- `service.sh` re-applies a fixed `bt_ldac_quality` / `bt_ldac_rate` in its 5-minute loop, so
-  a reconnect or a stack restart no longer leaves the stock rate in place.
+- The resident helper re-applies the rate on codec, active-device and connection broadcasts.
+  `service.sh` only restarts it if it died: the existing 5-minute pass checks the helper's
+  process (one read of /proc, no new shell, no app_process) and starts it again when a fixed
+  rate is set. The helper's safety re-check runs every 30 min with broadcasts and every
+  2 min (headphones) / 5 min (none) without them, on the uptime clock (no wakeups in sleep).
 - The option is named "LDAC/LHDC sample rate" in all 13 locales and both advanced READMEs.
 
 ### Fitness apps & wakelocks

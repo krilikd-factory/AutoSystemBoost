@@ -3836,9 +3836,14 @@ asb_gov_liveness() {
     if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_vendor_cap.sh" ]; then
       MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_vendor_cap.sh" sync >/dev/null 2>&1
     fi
-    if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_bt_codec.sh" ] \
-       && grep -E '^[[:space:]]*bt_ldac_(quality|rate)=' "$MODDIR/config/governor.conf" 2>/dev/null | sed 's/.*=//' | tr -d ' \r' | grep -qv '^auto$'; then
-      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_bt_codec.sh" apply >/dev/null 2>&1
+    if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_bt_codec.sh" ]; then
+      _bt_p=""
+      [ -s "${ASB_CONFIG_STATE:-/data/adb/asb}/bt_ldac.pid" ] && IFS='|' read -r _bt_p _bt_x < "${ASB_CONFIG_STATE:-/data/adb/asb}/bt_ldac.pid" 2>/dev/null
+      case "$_bt_p" in ''|*[!0-9]*) _bt_p=0 ;; esac
+      if ! grep -q asb_btcodec "/proc/$_bt_p/cmdline" 2>/dev/null \
+         && grep -E '^[[:space:]]*bt_ldac_(quality|rate)=' "$MODDIR/config/governor.conf" 2>/dev/null | sed 's/.*=//' | tr -d ' \r' | grep -qv '^auto$'; then
+        MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_bt_codec.sh" apply >/dev/null 2>&1
+      fi
     fi
     # Reconcile the two exact-name wakeup policies on this existing bounded pass. The helper
     # writes only when screen state, policy or kernel readback changed; it starts no worker.
