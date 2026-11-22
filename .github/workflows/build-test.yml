@@ -895,30 +895,30 @@ jobs:
             exit 0
           fi
           [ -f "$ZIP_TEST" ] || { echo "::warning::$ZIP_TEST not found - nothing posted"; exit 0; }
-          python3 - "$ASB_VER" "$RUN_URL" > tg_caption.txt <<'PY'
-          import re, subprocess, sys
-          ver, run = sys.argv[1], sys.argv[2]
-          sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode().strip()
-          subject = subprocess.check_output(['git', 'log', '-1', '--format=%s']).decode().strip()
-          subject = re.sub(r'^V66-test\d+:\s*', '', subject)
-          points = []
+          python3 - "$ASB_VER" > tg_caption.txt <<'PY'
+          import html, sys
+          ver = sys.argv[1]
+          items = []
           try:
-              text = open('docs/V66_BUILD_HISTORY.md', encoding='utf-8').read()
-              sec = text.split('\n## ', 2)[1] if '\n## ' in text else ''
-              for m in re.finditer(r'^- \*\*([^*]+?):?\*\*', sec, re.M):
-                  points.append('• ' + m.group(1).rstrip(':'))
+              for line in open('docs/TELEGRAM_POST.txt', encoding='utf-8'):
+                  line = line.strip()
+                  if line and not line.startswith('#'):
+                      items.append(html.escape(line))
           except Exception:
               pass
-          cap = '🛸 AutoSystemBoost ' + ver + '\n' + subject + '\n'
-          if points:
-              cap += '\n' + '\n'.join(points[:10]) + '\n'
-          cap += '\nCommit ' + sha + ' · test build, not a release\n' + run
+          if not items:
+              items = ['Подправил оптимизацию.', 'Подправил WebUI.']
+          cap = '🛸 <b>AutoSystemBoost ' + html.escape(ver) + '</b>\n'
+          cap += 'Новая тестовая сборка!\n\n'
+          cap += '\n'.join('✅ ' + x for x in items[:12])
+          cap += '\n\n📲 Прошить через KernelSU, Magisk или APatch и перезагрузиться.'
+          cap += '\n🧪 Тестовая сборка: при проблемах пришлите asbdiag и лог.'
           print(cap[:1000])
           PY
           code=$(curl -sS -o tg_out.json -w '%{http_code}' \
             --form-string "chat_id=$TG_CHAT" \
             --form-string "caption=$(cat tg_caption.txt)" \
-            --form-string "disable_notification=false" \
+            --form-string "parse_mode=HTML" \
             -F "document=@$ZIP_TEST" \
             "https://api.telegram.org/bot$TG_TOKEN/sendDocument") || code=000
           if [ "$code" = 200 ]; then
