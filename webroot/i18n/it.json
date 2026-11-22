@@ -884,10 +884,11 @@
       "name": "Agisci sui wakelock"
     },
     "wakelock_fitness": {
-      "desc": "Le app di fitness e contapassi tengono spesso la CPU sveglia in background.\n\n🔋 Autonomia: Limita\n🏃 Registri completi di passi e allenamenti: Proteggi\n✋ Nel dubbio: Proteggi",
+      "desc": "Le app di fitness e contapassi tengono spesso sveglia la CPU in background. Le app compagne di orologi e braccialetti (Mi Fitness, Zepp, Galaxy Wearable, Fitbit e simili) non vengono mai toccate: portano le notifiche al polso.\n\n🔋 Autonomia: Limita, o Rigido se la scheda dice che la ROM lo ignora\n🏃 Passi e allenamenti completi: Proteggi\n✋ Non sei sicuro: Proteggi",
       "descOpt": {
         "limit": "Android ignora i loro wakelock, quindi non possono tenere sveglia la CPU da sole. Cronologie dei passi e allenamenti in background possono avere buchi; le app compagne di orologi e bracciali sono escluse.",
-        "protect": "Esenti dalle misure wakelock di ASB."
+        "protect": "Esenti dalle misure wakelock di ASB.",
+        "strict": "Come Limita e, per un'app di cui questa ROM ignora il limite WAKE_LOCK, anche l'impostazione batteria «Con restrizioni» di Android (restrizione in background). Lavoro in background, sincronizzazione e cronologia dei passi possono essere ritardati; l'impostazione precedente torna con Proteggi, Limita o disinstallando."
       },
       "name": "App fitness e wakelock"
     },
@@ -3499,7 +3500,8 @@
     },
     "wakelock_fitness": {
       "limit": "limita",
-      "protect": "proteggi"
+      "protect": "proteggi",
+      "strict": "rigido"
     },
     "wifi_country": {
       "auto": "stock"
@@ -4359,5 +4361,15 @@
   "cmp_card_saved": "Salvati",
   "vcap_unsupported": "Questo telefono non ha un tetto CPU del produttore che ASB possa alzare; nulla è cambiato",
   "vcap_other_owner": "Un altro modulo gestisce già questo tetto; ASB non lo tocca",
-  "vcap_partial": "Il tetto del produttore è stato alzato solo in parte; il resto resta come impostato dalla ROM"
+  "vcap_partial": "Il tetto del produttore è stato alzato solo in parte; il resto resta come impostato dalla ROM",
+  "st_wlf_strict": "limitato rigido",
+  "st_wlf_strict_ignored": "la ROM ignora entrambi",
+  "st_wlf_watch_only": "solo app orologio – lasciate",
+  "t_wlf_ignored_try_strict": " · questa ROM ignora il limite – prova Rigido",
+  "t_wlf_strict_ignored": " · l'app tiene la CPU anche con la restrizione",
+  "t_wlf_strict_waiting": " · applicato; le app di cui la ROM ignora il limite saranno limitate in background",
+  "wlf_apps_limited": "Limitate",
+  "wlf_apps_strict": "Limitate in background",
+  "wlf_apps_ignored": "La ROM ignora il limite",
+  "wlf_apps_companions": "App di orologi e braccialetti (non toccate)"
 }

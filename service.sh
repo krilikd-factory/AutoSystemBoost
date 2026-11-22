@@ -3849,7 +3849,7 @@ asb_gov_liveness() {
       _fit_boot=$(( ${_fit_boot:-0} + 1 ))
       if [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ]; then
         if grep -E '^[[:space:]]*wakelock_fitness=' "$MODDIR/config/governor.conf" 2>/dev/null \
-             | head -1 | sed 's/.*=//' | tr -d ' \r' | grep -qix limit; then
+             | head -1 | sed 's/.*=//' | tr -d ' \r' | grep -qiE '^(limit|strict)$'; then
           MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" fitness >/dev/null 2>&1
         fi
         # fix276: user-named WAKE_LOCK limits get the same bounded boot re-apply. The manual

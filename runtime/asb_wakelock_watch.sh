@@ -526,7 +526,17 @@ _wl_release_protected() {
 # wakelock_fitness=limit may act on. Watch and band companions are NOT in it: a companion
 # that cannot wake stops forwarding notifications to the wrist, which is a different and
 # worse loss than a coarser step timeline.
+_wl_fit_companion() {
+  case "$1" in
+    *wear*|*watch*|*band*|com.xiaomi.wearable|com.mi.health|com.xiaomi.hm.health|com.huami.*|com.zepp.*|\
+    com.huawei.health|com.huawei.smarthome|com.heytap.health|com.oplus.health|com.oneplus.health|\
+    com.amazfit.*|com.mobvoi.*|com.fossil.*|com.polar.*|com.coros.*|com.suunto.*|com.withings.*|\
+    com.garmin.android.apps.connectmobile|com.fitbit.FitbitMobile) return 0 ;;
+  esac
+  return 1
+}
 _wl_fitness() {
+  _wl_fit_companion "$1" && return 1
   case "$1" in
     *health*|*fitness*|*pedometer*|*stepcounter*|*fitbit*|*garmin*|*strava*) return 0 ;;
     # Step and run trackers whose ids carry none of the words above (fix177).
@@ -553,6 +563,66 @@ _wl_fitness() {
 FIT="$D/wakelock_fitness_limited"
 FIT_IGN="$D/wakelock_fitness_ignored"
 _wl_fit_mode() { _cfg wakelock_fitness; }
+_wl_fit_on() { case "$(_wl_fit_mode)" in limit|strict) return 0 ;; esac; return 1; }
+FIT_BG="$D/wakelock_fitness_bg"
+_wl_fit_rab() {
+  _rb_raw="$(asb_appops get "$1" RUN_ANY_IN_BACKGROUND 2>/dev/null)" || { printf 'unknown'; return; }
+  _rb="$(printf '%s\n' "$_rb_raw" | grep -v 'Uid mode' | sed -n 's/.*RUN_ANY_IN_BACKGROUND: \([a-z_]*\).*/\1/p' | head -1)"
+  printf '%s' "${_rb:-default}"
+}
+_wl_fit_bg_limit() {
+  _has appops || return 1
+  if grep -q "^$1|" "$FIT_BG" 2>/dev/null; then
+    [ "$(_wl_fit_rab "$1")" = ignore ] && return 0
+    asb_appops set "$1" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1
+    [ "$(_wl_fit_rab "$1")" = ignore ] || return 1
+    echo "wakelock: $1 had its background restriction reset by the system - put back (wakelock_fitness=strict)"
+    return 0
+  fi
+  _bo="$(_wl_fit_rab "$1")"
+  case "$_bo" in ignore|unknown) return 1 ;; esac
+  asb_appops set "$1" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || return 1
+  if [ "$(_wl_fit_rab "$1")" != ignore ]; then
+    asb_appops set "$1" RUN_ANY_IN_BACKGROUND "$_bo" >/dev/null 2>&1
+    echo "wakelock: $1 - Android did not keep the background restriction; left as it was"
+    return 1
+  fi
+  echo "$1|$_bo" >> "$FIT_BG"
+  if [ -s "$FIT_IGN" ]; then
+    grep -vxF "$1" "$FIT_IGN" > "$FIT_IGN.tmp" 2>/dev/null
+    if [ -s "$FIT_IGN.tmp" ]; then mv -f "$FIT_IGN.tmp" "$FIT_IGN"; else rm -f "$FIT_IGN.tmp" "$FIT_IGN"; fi
+  fi
+  echo "wakelock: $1 ignores the WAKE_LOCK limit on this ROM - restricted in the background like Android's \"Restricted\" battery setting (wakelock_fitness=strict)"
+  return 0
+}
+_wl_fit_bg_release() {
+  [ -s "$FIT_BG" ] || return 0
+  _has appops || return 0
+  while IFS='|' read -r _bp _bo; do
+    [ -n "$_bp" ] || continue
+    [ "$(_wl_fit_rab "$_bp")" = ignore ] && asb_appops set "$_bp" RUN_ANY_IN_BACKGROUND "${_bo:-default}" >/dev/null 2>&1
+  done < "$FIT_BG"
+  rm -f "$FIT_BG" "$FIT_BG.ign" 2>/dev/null
+  echo "wakelock: fitness apps are no longer restricted in the background"
+}
+_wl_fit_strict_pass() {
+  if [ "$(_wl_fit_mode)" != strict ]; then
+    _wl_fit_bg_release
+    return 0
+  fi
+  _has pm || return 0
+  for _sp in $(cat "$FIT_IGN" "$FIT_REF" 2>/dev/null; cut -d'|' -f1 "$FIT_BG" 2>/dev/null); do
+    case "$_sp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    if [ -z "$(pm path "$_sp" 2>/dev/null | head -1)" ]; then
+      grep -v "^$_sp|" "$FIT_BG" > "$FIT_BG.tmp" 2>/dev/null
+      if [ -s "$FIT_BG.tmp" ]; then mv -f "$FIT_BG.tmp" "$FIT_BG"; else rm -f "$FIT_BG.tmp" "$FIT_BG"; fi
+      continue
+    fi
+    _wl_fitness "$_sp" || continue
+    _wl_fit_bg_limit "$_sp"
+  done
+}
+
 # The package's own mode. asb_appops get prints "Uid mode: WAKE_LOCK: <m>" FIRST when a per-uid
 # mode is set (fix177), and this read whichever WAKE_LOCK line came first: with a uid line a
 # freshly set package "ignore" read back as the uid's mode, the limit counted as not accepted
@@ -672,12 +742,21 @@ _wl_fit_prune() {
   _has pm || return 0
   for _fpp in $(cut -d'|' -f1 "$FIT" 2>/dev/null); do
     case "$_fpp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    if _wl_fit_companion "$_fpp"; then
+      _fpo="$(grep "^$_fpp|" "$FIT" 2>/dev/null | head -1)"
+      _has appops && asb_appops set "$_fpp" WAKE_LOCK "${_fpo#*\|}" >/dev/null 2>&1
+      _wl_fit_uid_release "$_fpp"
+      _wl_fit_forget "$_fpp"
+      echo "wakelock: $_fpp keeps a watch or band connected - its wakelocks are handed back"
+      continue
+    fi
     [ -n "$(pm path "$_fpp" 2>/dev/null | head -1)" ] && continue
     _wl_fit_forget "$_fpp"
     echo "wakelock: $_fpp is no longer installed - its fitness ledger entry was dropped"
   done
 }
 _wl_fit_release() {
+  _wl_fit_bg_release
   rm -f "$FIT_REF" 2>/dev/null
   [ -s "$FIT" ] || return 0
   _has appops || return 0
@@ -728,7 +807,14 @@ asb_wl_relax() {
         fi
       elif grep -qxF "$_p" "$D/wakelock_restricted" 2>/dev/null; then
         _v=restricted
-      elif grep -q "^$_p|" "$FIT" 2>/dev/null && { [ "$_fitmode" != limit ] || _wl_fit_limit "$_p" >/dev/null; }; then
+      elif grep -q "^$_p|" "$FIT_BG" 2>/dev/null; then
+        if [ "$_h" = 1 ]; then
+          grep -qxF "$_p" "$FIT_BG.ign" 2>/dev/null || echo "$_p" >> "$FIT_BG.ign"
+          _v=strict_ignored
+        else
+          _v=strict
+        fi
+      elif grep -q "^$_p|" "$FIT" 2>/dev/null && { [ "$_fitmode" != limit ] && [ "$_fitmode" != strict ] || _wl_fit_limit "$_p" >/dev/null; }; then
         # (_wl_fit_limit above re-asserts a lapsed op before any verdict is drawn: a lock
         # held while the op had been reset says nothing about enforcement.)
         # Verified, not assumed. A lock PowerManager still honours (LONG, not DISABLED) on a
@@ -747,7 +833,7 @@ asb_wl_relax() {
         else
           _v=limited
         fi
-      elif [ "$_fitmode" = limit ] && _wl_fitness "$_p" && _wl_fit_limit "$_p"; then
+      elif { [ "$_fitmode" = limit ] || [ "$_fitmode" = strict ]; } && _wl_fitness "$_p" && _wl_fit_limit "$_p"; then
         # The user's explicit choice for this class of app, so it does not wait for the
         # awake-share gate the generic path needs: that gate exists because the generic
         # path acts on apps nobody named.
@@ -1284,9 +1370,13 @@ if [ "${1:-}" = manual-reapply ]; then _wl_man_reapply; exit 0; fi
 # counted only the ledger lines and read "no fitness apps" on a phone with two whenever the
 # ledger was empty, whatever the reason.
 if [ "${1:-}" = fitness-status ]; then
-  _fs_n=0; _fs_f=0; _fs_names=""
+  _fs_n=0; _fs_f=0; _fs_names=""; _fs_c=0; _fs_cn=""
   if _has pm; then
     for _fs_p in $(pm list packages -3 2>/dev/null | sed -n 's/^package://p'); do
+      if _wl_fit_companion "$_fs_p"; then
+        _fs_c=$((_fs_c + 1)); _fs_cn="${_fs_cn}${_fs_cn:+,}$_fs_p"
+        continue
+      fi
       _wl_fitness "$_fs_p" || continue
       _fs_n=$((_fs_n + 1)); _fs_names="${_fs_names}${_fs_names:+,}$_fs_p"
       # Recorded apps are counted from the ledger; appops (a Java client each) only for the
@@ -1300,8 +1390,14 @@ if [ "${1:-}" = fitness-status ]; then
   [ -s "$FIT_RA" ] && _fs_x="$(awk -F'|' '$3 != "ignore" { n++ } END { print n + 0 }' "$FIT_RA" 2>/dev/null)"
   [ -s "$FIT_IGN" ] && _fs_i="$(grep -c . "$FIT_IGN" 2>/dev/null)"
   [ -s "$FIT_REF" ] && _fs_r="$(grep -c . "$FIT_REF" 2>/dev/null)"
+  _fs_b=0; _fs_bi=0; _fs_bn=""; _fs_in=""
+  [ -s "$FIT_BG" ] && _fs_b="$(grep -c '|' "$FIT_BG" 2>/dev/null)" && _fs_bn="$(cut -d'|' -f1 "$FIT_BG" | tr '\n' ',' | sed 's/,$//')"
+  [ -s "$FIT_BG.ign" ] && _fs_bi="$(grep -c . "$FIT_BG.ign" 2>/dev/null)"
+  [ -s "$FIT_IGN" ] && _fs_in="$(tr '\n' ',' < "$FIT_IGN" | sed 's/,$//')"
   printf 'installed=%s\npreset=%s\nlimited=%s\nignored=%s\nrefused=%s\nnot_kept=%s\nnames=%s\n' \
     "$_fs_n" "$_fs_f" "${_fs_l:-0}" "${_fs_i:-0}" "${_fs_r:-0}" "${_fs_x:-0}" "$_fs_names"
+  printf 'companions=%s\ncompanion_names=%s\nstrict=%s\nstrict_ignored=%s\nstrict_names=%s\nignored_names=%s\n' \
+    "$_fs_c" "$_fs_cn" "${_fs_b:-0}" "${_fs_bi:-0}" "$_fs_bn" "$_fs_in"
   exit 0
 fi
 
@@ -1313,7 +1409,7 @@ fi
 # the CPU up to 21 minutes at a stretch with the screen off. service.sh runs this on its first
 # two ticks after boot. No measurement, no batterystats: pm and appops for the fitness apps.
 if [ "${1:-}" = fitness ]; then
-  [ "$(_wl_fit_mode)" = limit ] || exit 0
+  _wl_fit_on || { _wl_fit_bg_release >/dev/null; exit 0; }
   _has pm || exit 0
   _map="$(_wl_pkgmap)"
   [ -n "$_map" ] || exit 0
@@ -1330,6 +1426,7 @@ if [ "${1:-}" = fitness ]; then
     rm -f "$APPS.fit" 2>/dev/null
   fi
   rm -f "$FIT.reapplied" 2>/dev/null
+  _wl_fit_strict_pass >/dev/null
   exit 0
 fi
 
@@ -1406,13 +1503,14 @@ esac
 # The choice is about a class of app the user named, so it applies to that class.
 rm -f "$FIT.reapplied" 2>/dev/null
 case "$(_wl_fit_mode)" in
-  limit)
+  limit|strict)
     _wl_fit_prune
     if [ -n "$_map" ]; then
       printf '%s\n' "$_map" | while read -r _fu _fp; do
         [ -n "$_fp" ] && _wl_fitness "$_fp" && _wl_fit_limit "$_fp" >/dev/null
       done
     fi
+    _wl_fit_strict_pass
     ;;
   *) _wl_fit_release ;;
 esac

@@ -884,10 +884,11 @@
       "name": "Wakelock'lara müdahale"
     },
     "wakelock_fitness": {
-      "desc": "Spor ve adım sayar uygulamaları çoğu zaman CPU'yu arka planda uyanık tutar.\n\n🔋 Pil ömrü: Sınırla\n🏃 Eksiksiz adım ve antrenman kayıtları: Koru\n✋ Emin değilseniz: Koru",
+      "desc": "Fitness ve adımsayar uygulamaları arka planda CPU'yu sık sık uyanık tutar. Saat ve bileklik eşlikçileri (Mi Fitness, Zepp, Galaxy Wearable, Fitbit ve benzerleri) asla ellenmez: bildirimler bileğinize onlarla ulaşır.\n\n🔋 Pil ömrü: Sınırla, kart ROM'un bunu yok saydığını söylüyorsa Sıkı\n🏃 Eksiksiz adım ve antrenman kaydı: Koru\n✋ Emin değilseniz: Koru",
       "descOpt": {
         "limit": "Android onların wakelock'larını yok sayar, CPU'yu tek başlarına uyanık tutamazlar. Adım geçmişlerinde ve arka plan antrenmanlarında boşluklar olabilir; saat ve bileklik uygulamaları hariçtir.",
-        "protect": "ASB'nin wakelock önlemlerinden muaf."
+        "protect": "ASB'nin wakelock önlemlerinden muaf.",
+        "strict": "Sınırla gibi; bu ROM'un WAKE_LOCK sınırını yok saydığı görülen bir uygulama için ayrıca Android'in kendi \"Kısıtlı\" pil ayarı (arka plan kısıtlaması). Arka plan işleri, eşitleme ve adım zaman çizelgesi gecikebilir; önceki ayar Koru, Sınırla veya kaldırmada geri verilir."
       },
       "name": "Fitness uygulamaları ve wakelock"
     },
@@ -3499,7 +3500,8 @@
     },
     "wakelock_fitness": {
       "limit": "sınırla",
-      "protect": "koru"
+      "protect": "koru",
+      "strict": "sıkı"
     },
     "wifi_country": {
       "auto": "stok"
@@ -4359,5 +4361,15 @@
   "cmp_card_saved": "Kaydedilenler",
   "vcap_unsupported": "Bu telefonda ASB'nin kaldırabileceği bir üretici CPU tavanı yok; hiçbir şey değişmedi",
   "vcap_other_owner": "Bu tavanı zaten başka bir modül yönetiyor; ASB ona dokunmuyor",
-  "vcap_partial": "Üretici tavanı yalnızca kısmen kaldırıldı; geri kalanı ROM'un ayarladığı gibi bırakıldı"
+  "vcap_partial": "Üretici tavanı yalnızca kısmen kaldırıldı; geri kalanı ROM'un ayarladığı gibi bırakıldı",
+  "st_wlf_strict": "sıkı sınırlı",
+  "st_wlf_strict_ignored": "ROM ikisini de yok sayıyor",
+  "st_wlf_watch_only": "yalnızca saat uygulamaları – korunuyor",
+  "t_wlf_ignored_try_strict": " · bu ROM sınırı yok sayıyor – Sıkı deneyin",
+  "t_wlf_strict_ignored": " · uygulama kısıtlıyken bile CPU’yu tutuyor",
+  "t_wlf_strict_waiting": " · uygulandı; ROM’un sınırı yok saydığı uygulamalar arka planda kısıtlanacak",
+  "wlf_apps_limited": "Sınırlı",
+  "wlf_apps_strict": "Arka planda kısıtlı",
+  "wlf_apps_ignored": "ROM sınırı yok sayıyor",
+  "wlf_apps_companions": "Saat ve bileklik uygulamaları (ellenmez)"
 }

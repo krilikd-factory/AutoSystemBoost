@@ -7782,6 +7782,92 @@ grep -q "_wlFitProbed && _wlFitInstalled === 0" "$ROOT/webroot/index.html" || f 
 exit "$fail"
 )
 
+t_wakelock_fitness_strict_runtime() (
+# Runtime: wakelock_fitness=strict and watch/band companions.
+#
+# On the owner's OnePlus 15 Samsung Health kept PedometerLib held (LONG, not DISABLED) with
+# WAKE_LOCK=ignore in force - the ROM does not enforce that app-op. strict adds Android's own
+# background restriction (RUN_ANY_IN_BACKGROUND=ignore, the "Restricted" battery setting) for
+# exactly the apps the ROM was seen ignoring, records the old mode and hands it back. A tester
+# with Mi Fitness (com.xiaomi.wearable) read "no fitness apps": a companion that keeps a watch
+# connected is never limited, but it is now reported as such, and a companion already on the
+# ledger (Fitbit) gets its wakelocks back.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="$ROOT/runtime/asb_wakelock_watch.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL wakelock fitness strict: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/d"
+printf '#!/bin/sh\ncase "$1" in deviceidle) echo false ;; esac\n' > "$T/bin/dumpsys"
+cat > "$T/bin/pm" <<'S'
+#!/bin/sh
+case "$1" in
+  path) echo "package:/data/app/$2/base.apk" ;;
+  *) cat <<'L'
+package:com.sec.android.app.shealth uid:10681
+package:com.xiaomi.wearable uid:10700
+package:com.fitbit.FitbitMobile uid:10701
+package:com.example.notes uid:10500
+L
+  ;;
+esac
+S
+printf '#!/bin/sh\necho "$*" >> "$AM_LOG"\n' > "$T/bin/am"
+cat > "$T/bin/appops" <<'S'
+#!/bin/sh
+echo "appops $*" >> "$AM_LOG"
+case "$1" in
+  get) m="$(sed -n "s/^$2 $3 //p" "$OPS" 2>/dev/null | tail -1)"
+       if [ -n "$m" ]; then echo "$3: $m; time=+1h"; else echo "No operations."; fi ;;
+  set) [ "$2" = --uid ] || echo "$2 $3 $4" >> "$OPS" ;;
+esac
+S
+chmod +x "$T/bin/"*
+env_run() { OPS="$T/ops" AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" "$@"; }
+st() { env_run sh "$SRC" fitness-status 2>/dev/null; }
+fit() { printf 'wakelock_action=0\nwakelock_fitness=%s\n' "$1" > "$T/mod/config/governor.conf"; env_run sh "$SRC" fitness >/dev/null 2>&1; }
+: > "$T/ops"; : > "$T/am.log"
+printf 'com.fitbit.FitbitMobile|default\n' > "$T/d/wakelock_fitness_limited"
+printf 'com.fitbit.FitbitMobile WAKE_LOCK ignore\n' > "$T/ops"
+fit limit
+grep -qx 'com.sec.android.app.shealth|default' "$T/d/wakelock_fitness_limited" || f "Samsung Health not limited: $(cat "$T/d/wakelock_fitness_limited")"
+grep -q 'xiaomi.wearable' "$T/d/wakelock_fitness_limited" && f "a watch companion was limited"
+grep -q 'FitbitMobile' "$T/d/wakelock_fitness_limited" && f "a companion already on the ledger was not handed back"
+grep -q 'appops set com.fitbit.FitbitMobile WAKE_LOCK default' "$T/am.log" || f "the companion's WAKE_LOCK mode was not restored"
+grep -q 'RUN_ANY_IN_BACKGROUND' "$T/am.log" && f "limit touched the background restriction"
+o="$(st)"
+printf '%s\n' "$o" | grep -x 'installed=1' >/dev/null || f "installed: $o"
+printf '%s\n' "$o" | grep -x 'companions=2' >/dev/null || f "companions not reported: $o"
+printf '%s\n' "$o" | grep -x 'companion_names=com.xiaomi.wearable,com.fitbit.FitbitMobile' >/dev/null || f "companion names: $o"
+echo com.sec.android.app.shealth > "$T/d/wakelock_fitness_ignored"; : > "$T/am.log"
+fit limit
+grep -q 'RUN_ANY_IN_BACKGROUND' "$T/am.log" && f "limit escalated on its own"
+fit strict
+grep -q 'appops set com.sec.android.app.shealth RUN_ANY_IN_BACKGROUND ignore' "$T/am.log" || f "strict did not restrict the app the ROM ignored"
+grep -qx 'com.sec.android.app.shealth|default' "$T/d/wakelock_fitness_bg" || f "background mode not recorded: $(cat "$T/d/wakelock_fitness_bg" 2>/dev/null)"
+[ -s "$T/d/wakelock_fitness_ignored" ] && f "the ignored verdict was kept after the stronger limit"
+o="$(st)"
+printf '%s\n' "$o" | grep -x 'strict=1' >/dev/null || f "strict count: $o"
+printf '%s\n' "$o" | grep -x 'strict_names=com.sec.android.app.shealth' >/dev/null || f "strict names: $o"
+printf 'com.sec.android.app.shealth RUN_ANY_IN_BACKGROUND default\n' >> "$T/ops"; : > "$T/am.log"
+fit strict
+grep -q 'appops set com.sec.android.app.shealth RUN_ANY_IN_BACKGROUND ignore' "$T/am.log" || f "a reset background restriction was not put back"
+: > "$T/am.log"
+fit limit
+grep -q 'appops set com.sec.android.app.shealth RUN_ANY_IN_BACKGROUND default' "$T/am.log" || f "going back to limit did not lift the background restriction"
+[ -e "$T/d/wakelock_fitness_bg" ] && f "background ledger kept after limit"
+echo com.sec.android.app.shealth > "$T/d/wakelock_fitness_ignored"; fit strict; : > "$T/am.log"
+printf 'wakelock_action=0\nwakelock_fitness=protect\n' > "$T/mod/config/governor.conf"
+env_run sh "$SRC" >/dev/null 2>&1
+grep -q 'appops set com.sec.android.app.shealth RUN_ANY_IN_BACKGROUND default' "$T/am.log" || f "protect did not lift the background restriction"
+[ -e "$T/d/wakelock_fitness_bg" ] && f "background ledger kept after protect"
+grep -q 'wakelock_fitness_bg' "$ROOT/uninstall.sh" && grep -q 'RUN_ANY_IN_BACKGROUND "${_fo:-default}"' "$ROOT/uninstall.sh" || f "uninstall does not hand the background mode back"
+grep -q "grep -qiE '^(limit|strict)\$'" "$ROOT/service.sh" || f "the boot re-apply ignores strict"
+grep -q "opts:\['protect','limit','strict'\]" "$ROOT/webroot/index.html" || f "WebUI has no strict option"
+[ "$fail" = 0 ] && echo "PASS wakelock fitness strict: companions never limited and handed back, strict restricts only apps the ROM ignored, every mode is given back"
+exit "$fail"
+)
+
 t_wakelock_watch_runtime() (
 # Runtime: the wakelock watcher resolves holders by uid on current Android formats.
 #

@@ -884,10 +884,11 @@
       "name": "Agir sur les wakelocks"
     },
     "wakelock_fitness": {
-      "desc": "Les applis de sport et de podomètre gardent souvent le CPU éveillé en arrière-plan.\n\n🔋 Autonomie : Limiter\n🏃 Historique complet des pas et séances : Protéger\n✋ Dans le doute : Protéger",
+      "desc": "Les apps de fitness et podomètres gardent souvent le processeur éveillé en arrière-plan. Les compagnons de montre et de bracelet (Mi Fitness, Zepp, Galaxy Wearable, Fitbit, etc.) ne sont jamais touchés : ils font arriver les notifications au poignet.\n\n🔋 Autonomie : Limiter, ou Strict si la carte indique que la ROM l’ignore\n🏃 Pas et entraînements complets : Protéger\n✋ Pas sûr : Protéger",
       "descOpt": {
         "limit": "Android ignore leurs wakelocks, elles ne peuvent plus garder seules le CPU éveillé. Les historiques de pas et les séances en arrière-plan peuvent avoir des trous ; les compagnons de montre et de bracelet sont exclus.",
-        "protect": "Exemptées des mesures wakelock d’ASB."
+        "protect": "Exemptées des mesures wakelock d’ASB.",
+        "strict": "Comme Limiter, et pour une app dont cette ROM ignore la limite WAKE_LOCK, en plus le réglage de batterie « Restreinte » d’Android (restriction en arrière-plan). Son travail en arrière-plan, sa synchro et sa chronologie de pas peuvent être retardés ; le réglage précédent est rendu avec Protéger, Limiter ou la désinstallation."
       },
       "name": "Applis fitness et wakelocks"
     },
@@ -3499,7 +3500,8 @@
     },
     "wakelock_fitness": {
       "limit": "limiter",
-      "protect": "protéger"
+      "protect": "protéger",
+      "strict": "strict"
     },
     "wifi_country": {
       "auto": "stock"
@@ -4359,5 +4361,15 @@
   "cmp_card_saved": "Enregistrés",
   "vcap_unsupported": "Ce téléphone n’a pas de plafond CPU du fabricant qu’ASB puisse relever ; rien n’a changé",
   "vcap_other_owner": "Un autre module gère déjà ce plafond ; ASB n’y touche pas",
-  "vcap_partial": "Le plafond du fabricant n’a été relevé qu’en partie ; le reste reste tel que la ROM l’a fixé"
+  "vcap_partial": "Le plafond du fabricant n’a été relevé qu’en partie ; le reste reste tel que la ROM l’a fixé",
+  "st_wlf_strict": "limité strictement",
+  "st_wlf_strict_ignored": "la ROM ignore les deux",
+  "st_wlf_watch_only": "apps de montre seulement – gardées",
+  "t_wlf_ignored_try_strict": " · cette ROM ignore la limite – essayez Strict",
+  "t_wlf_strict_ignored": " · l’app garde le processeur même restreinte",
+  "t_wlf_strict_waiting": " · appliqué ; les apps dont la ROM ignore la limite seront restreintes en arrière-plan",
+  "wlf_apps_limited": "Limitées",
+  "wlf_apps_strict": "Restreintes en arrière-plan",
+  "wlf_apps_ignored": "La ROM ignore la limite",
+  "wlf_apps_companions": "Apps de montre et bracelet (non touchées)"
 }

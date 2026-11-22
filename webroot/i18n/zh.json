@@ -884,10 +884,11 @@
       "name": "处理唤醒锁"
     },
     "wakelock_fitness": {
-      "desc": "运动和计步应用经常在后台让 CPU 保持唤醒。\n\n🔋 续航：限制\n🏃 完整的步数和运动记录：保护\n✋ 不确定：保护",
+      "desc": "健身和计步应用经常在后台让 CPU 保持唤醒。手表和手环的配套应用（小米运动健康、Zepp、Galaxy Wearable、Fitbit 等）从不处理：通知要靠它们送到手腕。\n\n🔋 续航：限制；若卡片显示 ROM 忽略限制则选严格\n🏃 完整的步数和运动记录：保护\n✋ 不确定：保护",
       "descOpt": {
         "limit": "Android 忽略它们的唤醒锁，它们无法单独让 CPU 保持唤醒。步数记录和后台运动可能有缺口；手表和手环配套应用除外。",
-        "protect": "不受 ASB 唤醒锁措施影响。"
+        "protect": "不受 ASB 唤醒锁措施影响。",
+        "strict": "与「限制」相同；对于此 ROM 被观察到忽略 WAKE_LOCK 限制的应用，还会启用 Android 自带的「受限」电池设置（后台限制）。其后台工作、同步和步数时间线可能延迟；选择「保护」「限制」或卸载时恢复原设置。"
       },
       "name": "健身应用与唤醒锁"
     },
@@ -3499,7 +3500,8 @@
     },
     "wakelock_fitness": {
       "limit": "限制",
-      "protect": "保护"
+      "protect": "保护",
+      "strict": "严格"
     },
     "wifi_country": {
       "auto": "原生"
@@ -4359,5 +4361,15 @@
   "cmp_card_saved": "已保存",
   "vcap_unsupported": "此手机没有 ASB 可放开的厂商 CPU 上限；未做任何更改",
   "vcap_other_owner": "已有其他模块管理此上限；ASB 不做干预",
-  "vcap_partial": "厂商上限仅部分放开；其余保持系统设定"
+  "vcap_partial": "厂商上限仅部分放开；其余保持系统设定",
+  "st_wlf_strict": "已严格限制",
+  "st_wlf_strict_ignored": "ROM 两者都忽略",
+  "st_wlf_watch_only": "仅手表应用 – 不处理",
+  "t_wlf_ignored_try_strict": " · 此 ROM 忽略限制 – 试试严格",
+  "t_wlf_strict_ignored": " · 即使受限该应用仍占用 CPU",
+  "t_wlf_strict_waiting": " · 已应用；ROM 忽略限制的应用将受到后台限制",
+  "wlf_apps_limited": "已限制",
+  "wlf_apps_strict": "后台受限",
+  "wlf_apps_ignored": "ROM 忽略限制",
+  "wlf_apps_companions": "手表和手环应用（不处理）"
 }

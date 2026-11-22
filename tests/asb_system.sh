@@ -837,7 +837,7 @@ cmp -s "$CONF" "$SHIPPED" || fail 'active and shipped config copies differ'
 shape="$(cd "$ROOT" && grep -oE "key:'[a-zA-Z0-9_]+'[^}]*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
   | sed -E "s/.*key:'([a-zA-Z0-9_]+)'.*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)/\1=\2/" \
   | sort | md5sum | cut -c1-12)"
-[ "$shape" = fe45b1bff3fa ] || fail "unexpected computed WebUI shape: $shape"
+[ "$shape" = e874e1e60759 ] || fail "unexpected computed WebUI shape: $shape"
 grep -Fqx "# CONFIG_SHAPE=$shape" "$CONF" || fail 'governor.conf shape is stale'
 grep -Fqx "# CONFIG_SHAPE=$shape" "$SHIPPED" || fail 'shipped config shape is stale'
 schema="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' "$ROOT/common/install.sh" \
@@ -871,7 +871,7 @@ for rel in ('config/governor.conf', 'config/governor.conf.shipped', 'config/key_
             kept.append(line)
     text = ''.join(kept)
     if separator == '=':
-        text = text.replace('# CONFIG_SHAPE=fe45b1bff3fa',
+        text = text.replace('# CONFIG_SHAPE=e874e1e60759',
                             '# CONFIG_SHAPE=928eea600217', 1)
     path.write_text(text, encoding='utf-8')
 PY
@@ -879,7 +879,7 @@ if (cd "$TMP/stale" && MODE=RELEASE_STRICT bash tools/asb_lint.sh) > "$TMP/befor
   fail 'stale 237-key metadata with dev64 WebUI cards passed lint'
 fi
 need "$TMP/before.log" 'internal-or-unregistered-cards=[feel_dc_dimming feel_game_memc feel_gesture_mistouch feel_pointer_speed ui_nav_handle_autohide ui_recents_corner_radius ui_recents_memory ui_smooth_corners ] stale-public-keys=[]' 'ownership drift no longer reproduces the CI failure'
-need "$TMP/before.log" 'config shape changed (928eea600217 -> fe45b1bff3fa) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
+need "$TMP/before.log" 'config shape changed (928eea600217 -> e874e1e60759) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
 if ! grep -Fq 'Lint: ❌ 2 errors  ⚠️  0 warnings' "$TMP/before.log"; then cat "$TMP/before.log" >&2; fail 'stale fixture has unexpected additional lint findings'; fi
 
 cp "$CONF" "$TMP/stale/config/governor.conf"
@@ -891,7 +891,7 @@ cp "$REG" "$TMP/stale/config/key_ownership.tsv"
 }
 need "$TMP/after.log" 'config shape matches the recorded fingerprint (schema 4)' 'schema 4 coherence was not reported'
 need "$TMP/after.log" 'Lint: ❌ 0 errors  ⚠️  0 warnings' 'corrected fixture is not lint-clean'
-echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 281-key configs, shape fe45b1bff3fa/schema 4, exact stale-CI failure and three-file repair'
+echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 281-key configs, shape e874e1e60759/schema 4, exact stale-CI failure and three-file repair'
 )
 
 t_config_restore_outcome_runtime() (

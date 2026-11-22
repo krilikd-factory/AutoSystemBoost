@@ -3627,6 +3627,8 @@ if [ -s /data/adb/asb/wakelock_apps ]; then
       manual)     _avt="WAKE_LOCK=ignore from your explicit app list; read-back confirms it (restorable)" ;;
       manual_lapsed) _avt="explicit WAKE_LOCK limit is recorded but NOT in force now; ASB will retry on its existing passes" ;;
       limit_ignored) _avt="wakelock_fitness=limit is set, but this Android does not enforce the WAKE_LOCK app-op - the app still held the CPU (not DISABLED) after it was set" ;;
+      strict)     _avt="wakelock_fitness=strict: WAKE_LOCK ignored and restricted in the background (RUN_ANY_IN_BACKGROUND=ignore); not holding now" ;;
+      strict_ignored) _avt="wakelock_fitness=strict is in force and the app STILL held the CPU - this ROM honours neither restriction for it" ;;
       *)          _avt="report only" ;;
     esac
     P "    $_ap  ·  $_al  ·  $_avt"
@@ -3686,7 +3688,7 @@ if [ -n "$_vpn_if" ] && [ -s /data/adb/asb/wakelock_top ] && \
   NOTE "VPN is up ($_vpn_if) and the mobile data path (rmnet/IPA) leads the wake sources: the tunnel's keepalives wake the modem and CPU through the night. Not something ASB can change - the VPN app's keepalive / always-on settings, split tunnelling or Wi-Fi at night can."
 fi
 NOTE "wakelock_action = $(cfg wakelock_action)  (0 = report only)"
-NOTE "wakelock_fitness = $(cfg wakelock_fitness)  (protect = fitness/step apps never touched)"
+NOTE "wakelock_fitness = $(cfg wakelock_fitness)  (protect = fitness/step apps never touched; strict adds the background restriction where the ROM ignores the limit)"
 if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
   while IFS='|' read -r _fp _fo; do
     [ -n "$_fp" ] || continue
@@ -3739,6 +3741,14 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
         ;;
     esac
   done < /data/adb/asb/wakelock_fitness_limited
+fi
+if [ -s /data/adb/asb/wakelock_fitness_bg ]; then
+  while IFS='|' read -r _fp _fo; do
+    [ -n "$_fp" ] || continue
+    _fbg="$(asb_appops get "$_fp" RUN_ANY_IN_BACKGROUND 2>/dev/null | grep -v 'Uid mode' | sed -n 's/.*RUN_ANY_IN_BACKGROUND: \([a-z_]*\).*/\1/p' | head -1)"
+    P "    background-restricted (strict): $_fp  (was: ${_fo:-default}; now: ${_fbg:-default})"
+  done < /data/adb/asb/wakelock_fitness_bg
+  [ -s /data/adb/asb/wakelock_fitness_bg.ign ] && NOTE "  still held the CPU with both restrictions: $(tr '\n' ' ' < /data/adb/asb/wakelock_fitness_bg.ign)"
 fi
 if [ "$(cfg wakelock_fitness)" = limit ] && [ ! -s /data/adb/asb/wakelock_fitness_limited ] \
    && [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ]; then

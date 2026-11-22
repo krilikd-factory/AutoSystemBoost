@@ -781,10 +781,11 @@
       }
     },
     "wakelock_fitness": {
-      "desc": "Fitness and step-counter apps often keep the CPU awake in the background.\n\n🔋 Battery life: Limit\n🏃 Complete step and workout records: Protect\n✋ Not sure: Protect",
+      "desc": "Fitness and step-counter apps often keep the CPU awake in the background. Watch and band companions (Mi Fitness, Zepp, Galaxy Wearable, Fitbit and the like) are never touched: they keep notifications reaching your wrist.\n\n🔋 Battery life: Limit, or Strict if the card says the ROM ignores it\n🏃 Complete step and workout records: Protect\n✋ Not sure: Protect",
       "descOpt": {
         "limit": "Android ignores their wakelocks, so they cannot keep the CPU awake alone. Step timelines and background workouts can have gaps; watch and band companions are excluded.",
-        "protect": "Exempt from ASB's wakelock measures."
+        "protect": "Exempt from ASB's wakelock measures.",
+        "strict": "Like Limit, and for an app this ROM is seen ignoring the WAKE_LOCK limit for, also Android's own \"Restricted\" battery setting (background restriction). Its background work, syncing and step timeline can be delayed; the previous setting is handed back on Protect, Limit or uninstall."
       }
     },
     "wifi_country": {
@@ -3392,7 +3393,8 @@
     },
     "wakelock_fitness": {
       "limit": "limit",
-      "protect": "protect"
+      "protect": "protect",
+      "strict": "strict"
     },
     "wifi_country": {
       "auto": "stock"
@@ -4252,5 +4254,15 @@
   "cmp_card_saved": "Saved changes",
   "vcap_unsupported": "This phone has no vendor CPU ceiling ASB can lift; nothing was changed",
   "vcap_other_owner": "Another module already manages this ceiling; ASB leaves it alone",
-  "vcap_partial": "The vendor ceiling was only partly lifted; the rest is left as the ROM set it"
+  "vcap_partial": "The vendor ceiling was only partly lifted; the rest is left as the ROM set it",
+  "st_wlf_strict": "strictly limited",
+  "st_wlf_strict_ignored": "ROM ignores both",
+  "st_wlf_watch_only": "watch apps only - kept",
+  "t_wlf_ignored_try_strict": " · this ROM ignores the limit - try Strict",
+  "t_wlf_strict_ignored": " · the app still holds the CPU even when restricted",
+  "t_wlf_strict_waiting": " · applied; apps the ROM is seen ignoring get the background restriction",
+  "wlf_apps_limited": "Limited",
+  "wlf_apps_strict": "Restricted in background",
+  "wlf_apps_ignored": "ROM ignores the limit",
+  "wlf_apps_companions": "Watch and band apps (not touched)"
 }

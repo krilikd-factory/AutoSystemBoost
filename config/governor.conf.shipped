@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=fe45b1bff3fa
+# CONFIG_SHAPE=e874e1e60759
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -147,7 +147,7 @@ doze_trim_whitelist=0
 #   Restricted is a state Android manages and can undo; nothing is force-stopped.
 wakelock_action=0
 
-# Fitness and step-counter apps: protect | limit
+# Fitness and step-counter apps: protect | limit | strict
 #   protect (default) = never touched, like every other tracking app.
 #   limit = the step/fitness apps installed on this phone may no longer hold the CPU awake:
 #   app-op WAKE_LOCK ignore. It still runs whenever the phone is awake for
@@ -155,6 +155,9 @@ wakelock_action=0
 #   total usually survives; the minute-by-minute timeline and screen-off workout recording
 #   may not. Watch/band companion apps are never included. The previous mode is recorded
 #   and given back on protect or uninstall. Independent of wakelock_action.
+#   strict = limit, plus RUN_ANY_IN_BACKGROUND ignore (Android's "Restricted" battery setting)
+#   for each app this ROM was seen ignoring the WAKE_LOCK limit for; read back, recorded and
+#   given back on protect, limit or uninstall.
 wakelock_fitness=protect
 
 # Limit GPS for apps the user has already left: 0 = off, 1 = on

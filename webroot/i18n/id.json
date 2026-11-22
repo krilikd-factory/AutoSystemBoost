@@ -884,10 +884,11 @@
       "name": "Tindak lanjuti wakelock"
     },
     "wakelock_fitness": {
-      "desc": "Aplikasi kebugaran dan penghitung langkah sering membuat CPU terjaga di latar belakang.\n\n🔋 Daya tahan baterai: Batasi\n🏃 Catatan langkah dan latihan lengkap: Lindungi\n✋ Jika ragu: Lindungi",
+      "desc": "Aplikasi kebugaran dan penghitung langkah sering membuat CPU tetap terjaga di latar belakang. Aplikasi pendamping jam dan gelang (Mi Fitness, Zepp, Galaxy Wearable, Fitbit dan sejenisnya) tidak pernah disentuh: lewat merekalah notifikasi sampai ke pergelangan.\n\n🔋 Daya tahan baterai: Batasi, atau Ketat jika kartu menyebut ROM mengabaikannya\n🏃 Catatan langkah dan latihan lengkap: Lindungi\n✋ Tidak yakin: Lindungi",
       "descOpt": {
         "limit": "Android mengabaikan wakelock mereka, sehingga tidak bisa membuat CPU terjaga sendirian. Riwayat langkah dan latihan latar belakang bisa berlubang; aplikasi pendamping jam dan gelang dikecualikan.",
-        "protect": "Dikecualikan dari tindakan wakelock ASB."
+        "protect": "Dikecualikan dari tindakan wakelock ASB.",
+        "strict": "Seperti Batasi, dan untuk aplikasi yang batas WAKE_LOCK-nya diabaikan ROM ini, juga setelan baterai \"Dibatasi\" milik Android (pembatasan latar belakang). Kerja latar, sinkronisasi, dan linimasa langkah bisa tertunda; setelan sebelumnya dikembalikan saat Lindungi, Batasi, atau uninstal."
       },
       "name": "Aplikasi kebugaran & wakelock"
     },
@@ -3499,7 +3500,8 @@
     },
     "wakelock_fitness": {
       "limit": "batasi",
-      "protect": "lindungi"
+      "protect": "lindungi",
+      "strict": "ketat"
     },
     "wifi_country": {
       "auto": "stok"
@@ -4359,5 +4361,15 @@
   "cmp_card_saved": "Tersimpan",
   "vcap_unsupported": "Ponsel ini tidak punya batas CPU pabrikan yang bisa dinaikkan ASB; tidak ada yang diubah",
   "vcap_other_owner": "Modul lain sudah mengatur batas ini; ASB tidak menyentuhnya",
-  "vcap_partial": "Batas pabrikan hanya sebagian dinaikkan; sisanya dibiarkan seperti yang diatur ROM"
+  "vcap_partial": "Batas pabrikan hanya sebagian dinaikkan; sisanya dibiarkan seperti yang diatur ROM",
+  "st_wlf_strict": "dibatasi ketat",
+  "st_wlf_strict_ignored": "ROM mengabaikan keduanya",
+  "st_wlf_watch_only": "hanya aplikasi jam – dibiarkan",
+  "t_wlf_ignored_try_strict": " · ROM ini mengabaikan batas – coba Ketat",
+  "t_wlf_strict_ignored": " · aplikasi tetap menahan CPU meski dibatasi",
+  "t_wlf_strict_waiting": " · diterapkan; aplikasi yang batasnya diabaikan ROM akan dibatasi di latar belakang",
+  "wlf_apps_limited": "Dibatasi",
+  "wlf_apps_strict": "Dibatasi di latar",
+  "wlf_apps_ignored": "ROM mengabaikan batas",
+  "wlf_apps_companions": "Aplikasi jam dan gelang (tidak disentuh)"
 }

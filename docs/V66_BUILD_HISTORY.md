@@ -5,7 +5,32 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
-## Next test build (in progress) - sample rate on OPlus LHDC builds, GPU trim hysteresis
+## V66-test17 - fitness strict mode, option lists in console cards, LDAC rate on LHDC builds
+
+Input: the owner's capture asb_log_full_day_9563 (OnePlus 15, Smart, 4 h, test16), two
+screenshots of the Per-link transport card, a tester with Mi Fitness reading "no fitness apps".
+
+### Fitness apps & wakelocks
+- The capture had Samsung Health's `PedometerLib` held in 64 % of samples (longest 33 min) with
+  `WAKE_LOCK=ignore` in force and never DISABLED in dumpsys power: this ROM does not enforce the
+  app-op for it, and the card said "ROM ignores it" with nothing left to do.
+- New option `strict`: limit, plus `RUN_ANY_IN_BACKGROUND=ignore` (Android's "Restricted" battery
+  setting) for exactly the apps the ROM was seen ignoring; old mode recorded in
+  `wakelock_fitness_bg`, read back, re-asserted after ROM resets, handed back on protect, limit
+  or uninstall. A strict app still holding the CPU is reported as `strict_ignored`.
+- Watch and band companions (Mi Fitness `com.xiaomi.wearable`, Zepp, Huawei/HeyTap Health,
+  Fitbit, Garmin Connect and the like) are never limited; one already on the ledger (Fitbit)
+  gets its WAKE_LOCK mode back. The card shows which apps are limited, restricted, ignored by
+  the ROM or kept as companions; a phone with only a companion reads "watch apps only - kept".
+- Config shape updated (new option value; old values keep their meaning).
+
+### WebUI
+- Option lists in console cards (Per-link transport, Photo grading, Screen & touch): every box
+  between the list and the page is lifted while it is open, so the list is no longer covered by
+  the next panel or cut by the next section, and the glass-theme list is opaque (the value boxes
+  underneath read through it).
+
+### Carried from the previous in-progress note
 
 Input: the owner's OnePlus 15 (CPH2745, ColorOS 17): `bt_ldac_rate=96` did nothing; 96 kHz
 had to be picked by hand in Developer options. asbdiag showed the active link named

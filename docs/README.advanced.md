@@ -510,7 +510,7 @@ The following tables mirror the WebUI's seven configuration groups. Defaults des
 | `doze_level` | Deep Sleep | `stock` | Stock/night/moderate/aggressive idle timing; aggressive modes can delay notifications. |
 | `doze_trim_whitelist` | Trim Doze Exemptions | `0` | Trims exemptions only for eligible user applications; verify messaging and automation behaviour. |
 | `wakelock_action` | Act on Wakelocks | `0` | Enables optional action beyond observation; a wakelock name alone is not proof of a faulty app. |
-| `wakelock_fitness` | Fitness Apps & Wakelocks | `protect` | Protects or limits fitness-related wake behaviour; test actual tracking sessions. |
+| `wakelock_fitness` | Fitness Apps & Wakelocks | `protect` | `protect`/`limit`/`strict`: limit = WAKE_LOCK app-op ignore for step/fitness apps; strict also applies Android's "Restricted" background setting to an app the ROM is seen ignoring that limit for. Watch and band companions are never touched. Every mode is handed back. |
 | `gnss_trim` | Trim Background GPS | `0` | Restrains background location work without treating foreground navigation as unnecessary. |
 | `night_quiet_enable` | Quiet Night | `1` | Reduces optional ASB activity in the night window; does not disable the native safety path. |
 | `sustained_temp_mode` | Throttling Point | `smart` | Selects stock, Smart or manual sustained-temperature policy. |

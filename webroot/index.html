@@ -3374,6 +3374,7 @@ html[data-asb-theme="light"] .cfg-smart-owner {
 
 /* Option breakdown under a description. The current value is marked - "which of these am
    I on" is the second question after "what is the difference". */
+.cfg-fit-apps { margin: 8px 2px 0; font: 500 11.5px/1.45 var(--sans); color: var(--text-secondary); white-space: pre-line; overflow-wrap: anywhere; }
 .doze-edit-btn {
   margin-top: 10px; width: 100%; padding: 9px 10px;
   border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,0.12));
@@ -3547,6 +3548,7 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
  * blend, and opacity:1 overrides any inherited fade from the card or its animation. */
 /* A row whose option list is open paints above the rows after it. */
 .cfg-row.sel-open { position: relative; z-index: 60; }
+.dsp-console-panel.sel-open { z-index: 61; }
 /* dev55: a category or search list lays out only the rows near the viewport. Opening the
  * 29-row Battery category styled and laid out ~700 elements before its first frame; rows
  * further down now keep a placeholder (remembered once drawn) until they scroll near.
@@ -5868,6 +5870,16 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] .log-menu,
 html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-lang-pop,
 html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-sel-pop {
   box-shadow:0 16px 38px rgba(40,50,65,.16),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight) !important;
+}
+/* An option list must be opaque. At 90 % the glass surface let the value boxes of the rows
+ * underneath read through the list (in the Per-link transport card three of them lined up
+ * with the options), and a nested card's own glass leaves the list's blur nothing to blur.
+ * The same wash and tint stay on top; a solid base sits under them. */
+html:root[data-asb-glass="1"] .cfg-sel-pop {
+  background:var(--glass-wash),linear-gradient(var(--glass-surface-strong),var(--glass-surface-strong)),#0b0e12 !important;
+}
+html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-sel-pop {
+  background:var(--glass-wash),linear-gradient(var(--glass-surface-strong),var(--glass-surface-strong)),#fafcfb !important;
 }
 html:root[data-asb-glass="1"] .hdr-cap,
 html:root[data-asb-glass="1"] .theme-toggle,
@@ -11304,8 +11316,8 @@ const CFG_ITEMS = [
     desc:'Some installed apps are allowed to ignore deep sleep. Trimming takes user-installed apps off that list; the dialer, SMS, clock, root manager and the apps you keep in the list below stay exempt.\n\n🔋 Battery life: Trim\n🔔 Notifications on time: Leave alone\n✋ Not sure: Leave alone' },
   { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
     desc:'What ASB does with apps that keep the phone awake with the screen off. Measuring and the reports work either way.\n\n🔋 Battery life: Act\n🔔 Notifications on time: Watch only\n✋ Not sure: Watch only' },
-  { key:'wakelock_fitness', type:'seg', def:'protect', stock:'protect', opts:['protect','limit'], name:'Fitness Apps & Wakelocks',
-    desc:'Fitness and step-counter apps often keep the CPU awake in the background.\n\n🔋 Battery life: Limit\n🏃 Complete step and workout records: Protect\n✋ Not sure: Protect' },
+  { key:'wakelock_fitness', type:'seg', def:'protect', stock:'protect', opts:['protect','limit','strict'], name:'Fitness Apps & Wakelocks',
+    desc:'Fitness and step-counter apps often keep the CPU awake in the background. Watch and band companions (Mi Fitness, Zepp, Galaxy Wearable, Fitbit and the like) are never touched: they keep notifications reaching your wrist.\n\n🔋 Battery life: Limit, or Strict if the card says the ROM ignores it\n🏃 Complete step and workout records: Protect\n✋ Not sure: Protect' },
   { key:'gnss_trim', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Background GPS',
     desc:'Background apps get only coarse location while the screen is off and precise location again when opened. Navigation, fitness tracking, emergency and find-my apps are never trimmed.\n\n🔋 Battery life: Trim\n📍 Precise background tracks: Off\n✋ Not sure: Off' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
@@ -14060,6 +14072,7 @@ let _ltpoStatus = '', _ltpoState = '', _ltpoVideoStatus = '', _ltpoPeak = { stat
  * WAKE_LOCK app-op is not enforced on ColorOS/OxygenOS 16, so "limit" can be set and
  * dead at the same time. The badge below must not claim otherwise. */
 let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false, _wlFitNotKept = 0;
+let _wlFitInfo = null;
 let _mmfeedStatus = '', _mmfeedState = '';
 // Is this the reference model the flat-effects option was validated on?
 //
@@ -14168,6 +14181,13 @@ function wlFitParse(out) {
     ignored: parseInt(kv.ignored, 10) || 0,
     refused: parseInt(kv.refused, 10) || 0,
     notKept: parseInt(kv.not_kept, 10) || 0,
+    companions: parseInt(kv.companions, 10) || 0,
+    strict: parseInt(kv.strict, 10) || 0,
+    strictIgnored: parseInt(kv.strict_ignored, 10) || 0,
+    names: String(kv.names || '').split(',').filter(Boolean),
+    companionNames: String(kv.companion_names || '').split(',').filter(Boolean),
+    strictNames: String(kv.strict_names || '').split(',').filter(Boolean),
+    ignoredNames: String(kv.ignored_names || '').split(',').filter(Boolean),
     ok: Object.prototype.hasOwnProperty.call(kv, 'installed')
   };
 }
@@ -14177,7 +14197,7 @@ async function loadWlFitStatus(force) {
    * clients that hold the page: asked when limit is chosen, at most once a minute unless the
    * switch was just flipped. */
   if (!force) {
-    if (String(_cfgVals['wakelock_fitness'] || '') !== 'limit') return;
+    if (['limit', 'strict'].indexOf(String(_cfgVals['wakelock_fitness'] || '')) < 0) return;
     if (_wlFitProbed && Date.now() - _wlFitAt < 60000) return;
   }
   _wlFitAt = Date.now();
@@ -14190,7 +14210,8 @@ async function loadWlFitStatus(force) {
     _wlFitIgnored = st.ignored + (_wlFitLimited === 0 ? st.refused : 0);
     _wlFitInstalled = st.installed;
     _wlFitProbed = st.ok;
-  } catch (e) { _wlFitIgnored = 0; _wlFitLimited = 0; _wlFitInstalled = 0; _wlFitProbed = false; _wlFitNotKept = 0; }
+    _wlFitInfo = st.ok ? st : null;
+  } catch (e) { _wlFitIgnored = 0; _wlFitLimited = 0; _wlFitInstalled = 0; _wlFitProbed = false; _wlFitNotKept = 0; _wlFitInfo = null; }
 }
 
 /* fix187: LSPosed's verbose log as LSPosed itself has it. The card's value only says what
@@ -14543,12 +14564,22 @@ function cfgStatus(it, cur) {
    * op set to ignore. The watcher records that verdict; a card that keeps claiming
    * "LIMIT" over it is the lie the ledger badges were built against. */
   if (it.key === 'wakelock_fitness') {
-    if (cur !== 'limit') return { cls:'neutral', text: String(Topt(cur, it.key)).toUpperCase() };
+    if (cur !== 'limit' && cur !== 'strict') return { cls:'neutral', text: String(Topt(cur, it.key)).toUpperCase() };
+    const fi = _wlFitInfo;
+    /* strict: the background restriction is what stands between the app and the CPU on a
+     * ROM that ignores the WAKE_LOCK op, so its own read-back decides the badge. */
+    if (cur === 'strict' && fi && fi.strict > 0)
+      return fi.strictIgnored > 0 ? { cls:'warn', text: T('st_wlf_strict_ignored', 'ROM ignores both') }
+                                  : { cls:'good', text: T('st_wlf_strict', 'strictly limited') };
     if (_wlFitIgnored > 0) return { cls:'warn', text: T('st_wlf_ignored', 'ROM ignores it') };
     if (_wlFitNotKept > 0) return { cls:'warn', text: T('st_wlf_not_kept', 'ROM does not keep it') };
     if (_wlFitLimited > 0) return { cls:'good', text: T('st_on', 'Enabled') };
     /* "no fitness apps" only when the watcher found none installed (fix177); apps there and
      * nothing limited yet is pending - the next pass (or the one this toggle ran) sets it. */
+    /* A watch or band companion (Mi Fitness, Zepp, Galaxy Wearable) is never limited: say
+     * that it was found and left alone, rather than "no fitness apps" to someone who has one. */
+    if (_wlFitProbed && _wlFitInstalled === 0 && fi && fi.companions > 0)
+      return { cls:'neutral', text: T('st_wlf_watch_only', 'watch apps only - kept') };
     if (_wlFitProbed && _wlFitInstalled === 0) return { cls:'neutral', text: T('st_wlf_none', 'no fitness apps') };
     return { cls:'warn', text: T('st_pending', 'pending') };
   }
@@ -15262,10 +15293,18 @@ const _unav = ASB_CAP_REQUIRES[it.key];
              * comes after it - the row itself has to win.
              *
              * Cleared on close so the rows go back to their natural order. */
-            document.querySelectorAll('.cfg-row.sel-open').forEach(r => r.classList.remove('sel-open'));
+            document.querySelectorAll('.sel-open').forEach(r => r.classList.remove('sel-open'));
+            /* Inside a console card (Per-link transport, Photo grading, Screen & touch) the row
+             * sits in a panel, and the panel in the card: each of them is its own stacking
+             * context under the glass theme, so lifting only the row left the menu under the
+             * next panel (its values showed through the list) and under the next section
+             * (the list was cut off at the card edge). Every box between the list and the
+             * page is lifted while it is open. */
             if (!pop.hidden) {
-              const _row = selWrap.closest('.cfg-row');
-              if (_row) _row.classList.add('sel-open');
+              for (let _a = selWrap.parentNode; _a && _a.classList; _a = _a.parentNode) {
+                if (_a.id === 'cfgList') break;
+                if (_a.classList.contains('cfg-row') || _a.classList.contains('dsp-console-panel')) _a.classList.add('sel-open');
+              }
             }
             cfgArmPopDismiss();
           };
@@ -15294,6 +15333,22 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       wb.textContent = T('wl_manual_open', 'Find & freeze app wakelocks');
       wb.onclick = (e) => { e.stopPropagation(); uiSound('option'); wlManualOpen(); };
       row.appendChild(wb);
+    }
+    if (it.key === 'wakelock_fitness' && _wlFitInfo && (cur === 'limit' || cur === 'strict')) {
+      /* Which apps the card is talking about: a badge alone cannot tell "Samsung Health is
+       * limited" from "Mi Fitness was found and deliberately left alone". */
+      const fi = _wlFitInfo, parts = [];
+      const lim = fi.names.filter(function (n) { return fi.strictNames.indexOf(n) < 0 && fi.ignoredNames.indexOf(n) < 0; });
+      if (lim.length) parts.push(T('wlf_apps_limited', 'Limited') + ': ' + lim.join(', '));
+      if (fi.strictNames.length) parts.push(T('wlf_apps_strict', 'Restricted in background') + ': ' + fi.strictNames.join(', '));
+      if (fi.ignoredNames.length) parts.push(T('wlf_apps_ignored', 'ROM ignores the limit') + ': ' + fi.ignoredNames.join(', '));
+      if (fi.companionNames.length) parts.push(T('wlf_apps_companions', 'Watch and band apps (not touched)') + ': ' + fi.companionNames.join(', '));
+      if (parts.length) {
+        const fa = document.createElement('div');
+        fa.className = 'cfg-fit-apps';
+        fa.textContent = parts.join('\n');
+        row.appendChild(fa);
+      }
     }
     if (it.key === 'doze_trim_whitelist') {
       /* Outside the collapsible description on purpose.
@@ -16135,9 +16190,14 @@ async function cfgSet(key, val, ctl) {
          * ColorOS/OxygenOS 16) the badge and this toast say so honestly instead of
          * claiming success. */
         await loadWlFitStatus(true);
+        const _fi = _wlFitInfo;
         toast(cfgToastText(key, val) + (String(val) === 'limit' && _wlFitIgnored > 0
-          ? T('t_wlf_ignored', ' \u00b7 this ROM ignores the limit')
-          : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
+          ? T('t_wlf_ignored_try_strict', ' \u00b7 this ROM ignores the limit - try Strict')
+          : (String(val) === 'strict' && _fi && _fi.strictIgnored > 0
+            ? T('t_wlf_strict_ignored', ' \u00b7 the app still holds the CPU even when restricted')
+            : (String(val) === 'strict' && _fi && _fi.strict === 0
+              ? T('t_wlf_strict_waiting', ' \u00b7 applied; apps the ROM is seen ignoring get the background restriction')
+              : T('t_cfg_live', ' \u00b7 applied')))), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
@@ -16611,7 +16671,7 @@ function cfgArmPopDismiss() {
     document.querySelectorAll('.cfg-sel-pop').forEach(function (x) { x.hidden = true; });
     /* Drop the lift with the list: a row left at z-index 60 would keep covering the rows
      * after it long after its menu closed. */
-    document.querySelectorAll('.cfg-row.sel-open').forEach(function (r) { r.classList.remove('sel-open'); });
+    document.querySelectorAll('.sel-open').forEach(function (r) { r.classList.remove('sel-open'); });
   });
   /* Escape closes it too - a keyboard is attached often enough on tablets and desktops
    * for this to matter, and it costs one line. */
@@ -16620,7 +16680,7 @@ function cfgArmPopDismiss() {
       document.querySelectorAll('.cfg-sel-pop').forEach(function (x) { x.hidden = true; });
     /* Drop the lift with the list: a row left at z-index 60 would keep covering the rows
      * after it long after its menu closed. */
-    document.querySelectorAll('.cfg-row.sel-open').forEach(function (r) { r.classList.remove('sel-open'); });
+    document.querySelectorAll('.sel-open').forEach(function (r) { r.classList.remove('sel-open'); });
     }
   });
 }

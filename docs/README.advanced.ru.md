@@ -510,7 +510,7 @@ Budget не заменяет vendor thermal engine. Если платформа 
 | `doze_level` | Deep Sleep | `stock` | Stock/night/moderate/aggressive idle timing; агрессивные режимы могут задерживать уведомления. |
 | `doze_trim_whitelist` | Trim Doze Exemptions | `0` | Сокращает исключения только для подходящих пользовательских приложений; проверять сообщения и автоматизацию. |
 | `wakelock_action` | Act on Wakelocks | `0` | Включает действие в дополнение к наблюдению; одно имя wakelock не доказывает неисправность приложения. |
-| `wakelock_fitness` | Fitness Apps & Wakelocks | `protect` | Защищает или ограничивает fitness wake-активность; проверять реальные tracking-сессии. |
+| `wakelock_fitness` | Fitness Apps & Wakelocks | `protect` | `protect`/`limit`/`strict`: limit — app-op WAKE_LOCK ignore для шагомеров и фитнес-приложений; strict добавляет режим Android «Ограничено» (фон) для приложения, у которого прошивка игнорирует этот лимит. Приложения часов и браслетов не трогаются. Всё возвращается. |
 | `gnss_trim` | Trim Background GPS | `0` | Сдерживает фоновую геолокацию, не считая foreground-навигацию ненужной. |
 | `night_quiet_enable` | Quiet Night | `1` | Уменьшает необязательную активность ASB ночью, не отключая native safety path. |
 | `sustained_temp_mode` | Throttling Point | `smart` | Выбирает stock, Smart или manual sustained-temperature политику. |

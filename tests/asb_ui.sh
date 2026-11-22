@@ -3911,6 +3911,7 @@ function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } 
 function packageTweakBadge() { return null; }
 const _netResult = {}; const _cfgVals = {};
 let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false, _wlFitNotKept = 0;
+let _wlFitInfo = null;
 EOF
   sed -n '/^const DSP_CFG_KEYS = /p; /^function dspEngineActive()/,/^}/p' "$H"
   for fn in Topt cfgScanLabel cfgStatus; do sed -n "/^function $fn(/,/^}/p" "$H"; done
@@ -3940,6 +3941,15 @@ chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'neutral' && 
 _wlFitInstalled = 2;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'ожидает', 'installed apps read as none: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
 _wlFitInstalled = 0;
+/* A watch companion (Mi Fitness) found and deliberately left alone is not "no fitness apps". */
+_wlFitInfo = { companions: 1, strict: 0, strictIgnored: 0 };
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'только часы — не трогаются', 'watch-only badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
+/* strict: the background restriction's own result decides. */
+_wlFitInfo = { companions: 0, strict: 1, strictIgnored: 0 };
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'strict').cls === 'good' && cfgStatus(seg('wakelock_fitness', 'protect'), 'strict').text === 'ограничено строго', 'strict badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'strict').text);
+_wlFitInfo = { companions: 0, strict: 1, strictIgnored: 1 };
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'strict').cls === 'warn', 'strict ignored badge');
+_wlFitInfo = null;
 _wlFitProbed = false;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'ожидает', 'unprobed limit badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
 ASB_LANG = 'en';
@@ -12877,6 +12887,9 @@ assert lp.index('p.scrollTop = 0;') < lp.index("p.classList.add('open');")
 assert '#cfgList > .cfg-row { content-visibility: auto; contain-intrinsic-height: auto 90px; }' in css
 assert '#cfgList > .cfg-row.sel-open { content-visibility: visible; }' in css
 assert '.cfg-row.sel-open { position: relative; z-index: 60; }' in css
+assert '.dsp-console-panel.sel-open { z-index: 61; }' in css, 'a console panel does not lift an open option list above the next panel'
+assert "_a.classList.contains('dsp-console-panel')) _a.classList.add('sel-open')" in h, 'only the inner row is lifted, the list hides under the next panel and section'
+assert 'linear-gradient(var(--glass-surface-strong),var(--glass-surface-strong)),#0b0e12 !important' in css, 'the glass option list is see-through'
 assert ':is(#devicePage, #reportPage, #zygiskPage) .lgr-sec { content-visibility: auto; contain-intrinsic-height: auto 320px; }' in css
 srch = h[h.index('function cfgRenderSearch('):h.index('\n}\n', h.index('function cfgRenderSearch('))]
 assert 'clearTimeout(inp._asbSearchT)' in srch and '}, 90);' in srch and srch.index('_cfgSearch = inp.value.trim();') < srch.index('setTimeout(')

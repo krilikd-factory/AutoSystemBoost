@@ -884,10 +884,11 @@
       "name": "Auf Wakelocks reagieren"
     },
     "wakelock_fitness": {
-      "desc": "Fitness- und Schrittzähler-Apps halten die CPU oft im Hintergrund wach.\n\n🔋 Akkulaufzeit: Begrenzen\n🏃 Vollständige Schritt- und Trainingsdaten: Schützen\n✋ Unsicher: Schützen",
+      "desc": "Fitness- und Schrittzähler-Apps halten die CPU oft im Hintergrund wach. Uhren- und Armband-Begleiter (Mi Fitness, Zepp, Galaxy Wearable, Fitbit und ähnliche) werden nie angefasst: Über sie kommen Benachrichtigungen ans Handgelenk.\n\n🔋 Akkulaufzeit: Begrenzen, oder Streng, wenn die Karte sagt, dass das ROM es ignoriert\n🏃 Vollständige Schritt- und Trainingsdaten: Schützen\n✋ Unsicher: Schützen",
       "descOpt": {
         "limit": "Android ignoriert ihre Wakelocks, sie können die CPU nicht allein wach halten. Schrittverläufe und Hintergrund-Trainings können Lücken haben; Uhren- und Armband-Begleiter sind ausgenommen.",
-        "protect": "Von den Wakelock-Maßnahmen von ASB ausgenommen."
+        "protect": "Von den Wakelock-Maßnahmen von ASB ausgenommen.",
+        "strict": "Wie „Begrenzen“, und für eine App, deren WAKE_LOCK-Grenze dieses ROM nachweislich ignoriert, zusätzlich Androids eigene Akku-Einstellung „Eingeschränkt“ (Hintergrundbeschränkung). Hintergrundarbeit, Synchronisation und Schrittverlauf können sich verzögern; die vorige Einstellung kommt bei Schützen, Begrenzen oder Deinstallation zurück."
       },
       "name": "Fitness-Apps & Wakelocks"
     },
@@ -3499,7 +3500,8 @@
     },
     "wakelock_fitness": {
       "limit": "begrenzen",
-      "protect": "schützen"
+      "protect": "schützen",
+      "strict": "streng"
     },
     "wifi_country": {
       "auto": "Stock"
@@ -4359,5 +4361,15 @@
   "cmp_card_saved": "Gespeicherte",
   "vcap_unsupported": "Dieses Telefon hat keine Hersteller-CPU-Obergrenze, die ASB anheben kann; nichts geändert",
   "vcap_other_owner": "Ein anderes Modul verwaltet diese Grenze bereits; ASB lässt sie in Ruhe",
-  "vcap_partial": "Die Herstellergrenze wurde nur teilweise angehoben; der Rest bleibt wie vom ROM gesetzt"
+  "vcap_partial": "Die Herstellergrenze wurde nur teilweise angehoben; der Rest bleibt wie vom ROM gesetzt",
+  "st_wlf_strict": "streng begrenzt",
+  "st_wlf_strict_ignored": "ROM ignoriert beides",
+  "st_wlf_watch_only": "nur Uhren-Apps – bleiben",
+  "t_wlf_ignored_try_strict": " · dieses ROM ignoriert die Grenze – versuche Streng",
+  "t_wlf_strict_ignored": " · die App hält die CPU trotz Einschränkung",
+  "t_wlf_strict_waiting": " · angewendet; Apps, deren Grenze das ROM ignoriert, werden im Hintergrund eingeschränkt",
+  "wlf_apps_limited": "Begrenzt",
+  "wlf_apps_strict": "Im Hintergrund eingeschränkt",
+  "wlf_apps_ignored": "ROM ignoriert die Grenze",
+  "wlf_apps_companions": "Uhren- und Armband-Apps (bleiben unberührt)"
 }
