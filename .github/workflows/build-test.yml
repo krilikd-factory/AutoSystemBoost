@@ -887,7 +887,7 @@ jobs:
         if: ${{ inputs.telegram }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID || '@AutoSystemBoost' }}
+          TG_CHAT: '@AutoSystemBoost'
           TG_TOPIC: ${{ secrets.TELEGRAM_TOPIC_TEST || '4' }}
         run: python3 .github/scripts/telegram_post.py test "$ZIP_TEST" "$ASB_VER"
 
