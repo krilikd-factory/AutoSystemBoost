@@ -866,7 +866,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT: '@AutoSystemBoost'
-          TG_TOPIC: ${{ secrets.TELEGRAM_TOPIC_RELEASE }}
+          TG_TOPIC: ${{ secrets.TELEGRAM_TOPIC_RELEASE || '2' }}
           TG_ANCHOR: '2472'
           RUN_URL: ${{ github.event.release.html_url }}
         run: python3 .github/scripts/telegram_post.py release "$ZIP_REL" "$ASB_VER"
