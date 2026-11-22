@@ -733,8 +733,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "279" ] || fail "expected 279 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "279" ] || fail "expected 279 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "281" ] || fail "expected 281 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "281" ] || fail "expected 281 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -766,7 +766,7 @@ for _route in speaker wired bt; do
 done >> "$TMP/cards"
 printf 'dsp_eq_target\n' >> "$TMP/cards"
 sort -u "$TMP/cards" > "$TMP/cards.all"; mv "$TMP/cards.all" "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "147" ] || fail "expected 147 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "149" ] || fail "expected 149 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -810,7 +810,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (279 keys; 50 user, 97 advanced, 132 internal)'
+echo 'PASS config ownership registry contract (281 keys; 50 user, 99 advanced, 132 internal)'
 )
 
 t_config_metadata_coherence_buildfix1() (
@@ -837,7 +837,7 @@ cmp -s "$CONF" "$SHIPPED" || fail 'active and shipped config copies differ'
 shape="$(cd "$ROOT" && grep -oE "key:'[a-zA-Z0-9_]+'[^}]*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
   | sed -E "s/.*key:'([a-zA-Z0-9_]+)'.*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)/\1=\2/" \
   | sort | md5sum | cut -c1-12)"
-[ "$shape" = 7e5756044b4c ] || fail "unexpected computed WebUI shape: $shape"
+[ "$shape" = fe45b1bff3fa ] || fail "unexpected computed WebUI shape: $shape"
 grep -Fqx "# CONFIG_SHAPE=$shape" "$CONF" || fail 'governor.conf shape is stale'
 grep -Fqx "# CONFIG_SHAPE=$shape" "$SHIPPED" || fail 'shipped config shape is stale'
 schema="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' "$ROOT/common/install.sh" \
@@ -871,7 +871,7 @@ for rel in ('config/governor.conf', 'config/governor.conf.shipped', 'config/key_
             kept.append(line)
     text = ''.join(kept)
     if separator == '=':
-        text = text.replace('# CONFIG_SHAPE=7e5756044b4c',
+        text = text.replace('# CONFIG_SHAPE=fe45b1bff3fa',
                             '# CONFIG_SHAPE=928eea600217', 1)
     path.write_text(text, encoding='utf-8')
 PY
@@ -879,7 +879,7 @@ if (cd "$TMP/stale" && MODE=RELEASE_STRICT bash tools/asb_lint.sh) > "$TMP/befor
   fail 'stale 237-key metadata with dev64 WebUI cards passed lint'
 fi
 need "$TMP/before.log" 'internal-or-unregistered-cards=[feel_dc_dimming feel_game_memc feel_gesture_mistouch feel_pointer_speed ui_nav_handle_autohide ui_recents_corner_radius ui_recents_memory ui_smooth_corners ] stale-public-keys=[]' 'ownership drift no longer reproduces the CI failure'
-need "$TMP/before.log" 'config shape changed (928eea600217 -> 7e5756044b4c) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
+need "$TMP/before.log" 'config shape changed (928eea600217 -> fe45b1bff3fa) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
 if ! grep -Fq 'Lint: ❌ 2 errors  ⚠️  0 warnings' "$TMP/before.log"; then cat "$TMP/before.log" >&2; fail 'stale fixture has unexpected additional lint findings'; fi
 
 cp "$CONF" "$TMP/stale/config/governor.conf"
@@ -891,7 +891,7 @@ cp "$REG" "$TMP/stale/config/key_ownership.tsv"
 }
 need "$TMP/after.log" 'config shape matches the recorded fingerprint (schema 4)' 'schema 4 coherence was not reported'
 need "$TMP/after.log" 'Lint: ❌ 0 errors  ⚠️  0 warnings' 'corrected fixture is not lint-clean'
-echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 279-key configs, shape 7e5756044b4c/schema 4, exact stale-CI failure and three-file repair'
+echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 281-key configs, shape fe45b1bff3fa/schema 4, exact stale-CI failure and three-file repair'
 )
 
 t_config_restore_outcome_runtime() (
@@ -10746,8 +10746,18 @@ t_bt_ldac_quality_runtime() (
   MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" status | grep -qx 'want=990' || fail 'status want'
   printf 'bt_ldac_quality=bogus\n' > "$T/m/config/governor.conf"
   MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" status | grep -qx 'want=auto' || fail 'bad value is not auto'
+  printf 'bt_ldac_quality=auto\nbt_ldac_rate=96\n' > "$T/m/config/governor.conf"
+  out="$(MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" apply || true)"
+  case "$out" in (*result=unavailable*reason=no_helper*) ;; (*) fail "a fixed rate alone does not start the helper: $out" ;; esac
+  MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" status | grep -qx 'want_rate=96' || fail 'status rate'
+  printf 'bt_ldac_rate=384\n' > "$T/m/config/governor.conf"
+  MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" status | grep -qx 'want_rate=auto' || fail 'bad rate is not auto'
   j="$ROOT/src/btcodec/asb/BtCodec.java"
   grep -q 'SOURCE_CODEC_TYPE_LDAC' "$j" && grep -q 'getCodecSpecific1' "$j" || fail 'helper does not check LDAC/read back'
+  grep -q 'getCodecsSelectableCapabilities' "$j" && grep -q 'gotRate == rt' "$j" || fail 'rate not checked against the headset or read back'
+  grep -q 'bt_ldac_rate=auto' "$ROOT/config/governor.conf" || fail 'rate default missing'
+  grep -q '^bt_ldac_rate|' "$ROOT/config/key_ownership.tsv" || fail 'rate ownership missing'
+  grep -q 'bt_ldac_(quality|rate)=' "$ROOT/service.sh" || fail 'boot does not start the helper for a fixed rate'
   grep -q 'bt_ldac_quality=auto' "$ROOT/config/governor.conf" || fail 'default missing'
   grep -q '^bt_ldac_quality|' "$ROOT/config/key_ownership.tsv" || fail 'ownership missing'
   grep -q 'asb_bt_codec.sh" stop' "$ROOT/uninstall.sh" || fail 'uninstall does not stop the helper'
@@ -10782,6 +10792,59 @@ enabled
 disabled
 disabled" ] || fail "got: $out"
   echo 'PASS component state: class-only and package/Class dumps both read back'
+)
+
+t_vendor_cap_runtime() (
+  # Vendor CPU ceiling: lifted only where the owner allows it (Performance by default), to each
+  # CPU's own hardware maximum, locked against vendor rewrites, the OPlus game-scene ceiling
+  # switched off, and everything handed back exactly as it was. Never fights another owner.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL vendor cap: $*" >&2; exit 1; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  M="$T/mods/AutoSystemBoost"; mkdir -p "$M/config" "$T/s" "$T/sys/kernel/msm_performance/parameters" "$T/proc/game_opt"
+  for c in 0 1 2 3 4 5 6 7; do
+    mkdir -p "$T/sys/devices/system/cpu/cpu$c/cpufreq"
+    if [ "$c" -lt 6 ]; then echo 3532800 > "$T/sys/devices/system/cpu/cpu$c/cpufreq/cpuinfo_max_freq"
+    else echo 4473600 > "$T/sys/devices/system/cpu/cpu$c/cpufreq/cpuinfo_max_freq"; fi
+  done
+  N="$T/sys/kernel/msm_performance/parameters/cpu_max_freq"; G="$T/proc/game_opt/disable_cpufreq_limit"
+  orig='0:2131200 1:2131200 2:2131200 3:2131200 4:2131200 5:2131200 6:2592000 7:2592000'
+  echo "$orig " > "$N"; chmod 0644 "$N"; echo 0 > "$G"
+  run() { MODDIR="$M" ASB_CONFIG_STATE="$T/s" ASB_VC_SYS="$T/sys" ASB_VC_PROC="$T/proc" ASB_VC_MODULES="$T/mods" sh "$ROOT/runtime/asb_vendor_cap.sh" "$@"; }
+  echo balanced > "$M/current_profile"; : > "$M/config/governor.conf"
+  run sync | grep -qx result=stock || fail 'Balanced lifted by default'
+  [ "$(cat "$N")" = "$orig " ] || fail 'Balanced touched the node'
+  echo performance > "$M/current_profile"
+  out="$(run sync)"; echo "$out" | grep -qx result=lifted || fail "Performance: $out"
+  [ "$(cat "$N")" = '0:3532800 1:3532800 2:3532800 3:3532800 4:3532800 5:3532800 6:4473600 7:4473600' ] || fail "lift value: $(cat "$N")"
+  [ "$(stat -c %a "$N")" = 444 ] || fail 'node not locked against vendor rewrites'
+  [ "$(cat "$G")" = 1 ] || fail 'game-scene ceiling not switched off'
+  echo '0:3532800 1:3532800 2:3532800 3:3532800 4:3532800 5:3532800 6:2000000 7:2000000' > "$N"
+  run sync >/dev/null
+  grep -q '6:2000000' "$N" || fail 'a root write while locked (the governor itself) was overwritten'
+  echo balanced > "$M/current_profile"
+  run sync | grep -qx result=stock || fail 'leaving Performance did not hand back'
+  [ "$(tr -s ' ' < "$N" | sed 's/ $//')" = "$orig" ] && [ "$(stat -c %a "$N")" = 644 ] && [ "$(cat "$G")" = 0 ] || fail 'not handed back exactly'
+  [ ! -e "$T/s/vendor_cap" ] || fail 'ownership kept after the hand-back'
+  printf 'cpu_vendor_unlock=always\n' > "$M/config/governor.conf"
+  run sync | grep -qx result=lifted || fail 'always did not lift in Balanced'
+  echo stock > "$M/current_profile"
+  run sync | grep -qx result=stock || fail 'Stock must never be lifted'
+  echo balanced > "$M/current_profile"; printf 'cpu_vendor_unlock=off\n' > "$M/config/governor.conf"
+  run sync | grep -qx result=stock || fail 'off lifted'
+  printf 'cpu_vendor_unlock=perf\n' > "$M/config/governor.conf"; echo performance > "$M/current_profile"
+  mkdir -p "$T/mods/oplus-cloud-block"
+  run sync | grep -qx result=other_owner || fail 'fought another ceiling module'
+  [ "$(stat -c %a "$N")" = 644 ] || fail 'locked the node while another module owns it'
+  rm -rf "$T/mods/oplus-cloud-block" "$T/sys/kernel/msm_performance" "$T/proc/game_opt"
+  run sync | grep -qx result=unsupported || fail 'a device without the vendor nodes'
+  grep -q '^cpu_vendor_unlock=perf' "$ROOT/config/governor.conf" || fail 'default missing'
+  grep -q '^cpu_vendor_unlock|' "$ROOT/config/key_ownership.tsv" || fail 'ownership missing'
+  grep -q 'asb_vendor_cap.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall does not hand back'
+  grep -q 'asb_vendor_cap.sh" sync' "$ROOT/apply_profile.sh" || fail 'profile switch does not follow'
+  grep -q 'asb_vendor_cap.sh" sync' "$ROOT/service.sh" || fail 'boot does not apply'
+  echo 'PASS vendor cap: Performance-only by default, hardware maximum, locked, game ceiling off, exact hand-back, no fight with another owner'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -7956,6 +7956,9 @@ assert load.count('runBatch(') == 1, 'saving must not add a read to the page loa
 openp = h[h.index('function openZygiskPage() {'):h.index('function closeZygiskPage() {')]
 assert "_el('zySave')" in openp and 'run(' not in openp
 assert 'zygiskPageLoad(false)' in openp and 'window._asbZygiskLinkData = null;' in openp and "window._asbZygiskRaw = '';" in openp, 'opening does not clear and reread current evidence'
+zc = h[h.index('function zyCompact(body) {'):]
+zc = zc[:zc.index('\n}\n')]
+assert "!n.closest('.zy-lsp-how')" in zc, 'a How fold explanation is moved into the section fold, leaving the fold empty'
 PY
 {
   cat <<'EOF'
@@ -8030,7 +8033,20 @@ body.appendChild(ctl);
 const ed = mk('textarea'); ed.className = 'dev-zygisk-input'; ed.value = 'com.example.one\ncom.example.two';
 body.appendChild(ed);
 const ev = zygiskEvidenceCard(d); body.appendChild(ev);
+const lspSec = logReportSec('LSPosed'); lspSec.id = 'zy-lsp';
+const how = mk('details'); how.className = 'asb-disclosure zy-lsp-how';
+const howSm = mk('summary'); howSm.textContent = 'How the verdicts are made'; how.appendChild(howSm);
+how.appendChild(logReportNote('A long explanation of how the verdicts are made. '.repeat(8)));
+lspSec.appendChild(how); body.appendChild(lspSec);
 zyCompact(body);
+chk(how.children.length === 2 && how.children[1].className === 'lgr-note', 'a How fold lost its own explanation to the section fold');
+chk(how.open === false && typeof how.ev.toggle === 'function', 'a How fold does not remember its state');
+how.open = true; if (how.ev.toggle) how.ev.toggle();
+const how2 = mk('details'); how2.className = 'asb-disclosure zy-lsp-how';
+const howSm2 = mk('summary'); howSm2.textContent = 'How the verdicts are made'; how2.appendChild(howSm2);
+const lspSec2 = logReportSec('LSPosed'); lspSec2.id = 'zy-lsp'; lspSec2.appendChild(how2);
+const body2 = mk('div'); body2.appendChild(lspSec2); zyCompact(body2);
+chk(how2.open === true, 'an opened How fold closed again after a re-render');
 const fold = act.children.filter(function (c) { return c.className === 'zy-fold'; })[0];
 chk(fold && fold.hidden === true && fold.children.length === 3, 'rows 4-6 were not folded as on screen');
 chk(!ev._built, 'the evidence list was built before it was opened or saved');
@@ -8864,7 +8880,7 @@ for p in (root / 'webroot/i18n').glob('*.json'):
         _opts = re.search(r"\{ key:'%s', type:'seg'[^}]*?opts:\[([^\]]*)\]" % key, h)
         if 'descOpt' in card: assert _opts and set(card['descOpt']) == {o.strip().strip("'") for o in _opts.group(1).split(',')}, (p.name, key)
         if p.stem != 'en': assert card != en['cfg'][key], (p.name, key, 'untranslated')
-for _doc in ('README.advanced.md', 'README.advanced.ru.md'):
+for _doc in ('docs/README.advanced.md', 'docs/README.advanced.ru.md'):
     _t = (root / _doc).read_text(encoding='utf-8')
     assert '/sys/kernel/debug/sched/nr_migrate' in _t and '/proc/sys/kernel/sched_schedstats' in _t, _doc
 P

@@ -23,6 +23,12 @@ _want() {
     *) echo auto ;;
   esac
 }
+_rate() {
+  case "$(_cfg bt_ldac_rate)" in
+    44|48|88|96|192) _cfg bt_ldac_rate ;;
+    *) echo auto ;;
+  esac
+}
 _ap() {
   if [ -x /system/bin/app_process64 ]; then echo /system/bin/app_process64
   elif [ -x /system/bin/app_process ]; then echo /system/bin/app_process
@@ -32,7 +38,8 @@ _ap() {
 _alive() {
   [ -s "$PIDF" ] || return 1
   _p=""; _q=""
-  IFS='|' read -r _p _q < "$PIDF" 2>/dev/null || return 1
+  _r=""
+  IFS='|' read -r _p _q _r < "$PIDF" 2>/dev/null || return 1
   case "$_p" in ''|*[!0-9]*) return 1 ;; esac
   [ -r "/proc/$_p/cmdline" ] || return 1
   tr '\0' ' ' < "/proc/$_p/cmdline" 2>/dev/null | grep -qE 'asb_btcodec|asb\.BtCodec' || return 1
@@ -55,34 +62,37 @@ _run() {
 case "${1:-status}" in
   apply)
     _w="$(_want)"
-    if [ "$_w" = auto ]; then
+    _wr="$(_rate)"
+    if [ "$_w" = auto ] && [ "$_wr" = auto ]; then
       _stop
       rm -f "$STF" 2>/dev/null
       echo "result=stock"
       exit 0
     fi
     _ready || exit 1
-    if _alive && [ "$_q" = "$_w" ]; then echo "result=running"; echo "quality=$_w"; exit 0; fi
+    if _alive && [ "$_q" = "$_w" ] && [ "${_r:-auto}" = "$_wr" ]; then echo "result=running"; echo "quality=$_w"; echo "rate=$_wr"; exit 0; fi
     _stop
     mkdir -p "$STATE_DIR" 2>/dev/null
     rm -f "$STF" 2>/dev/null
     _ap_bin="$(_ap)"
     if _has setsid; then
-      CLASSPATH="$DEX" setsid "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" </dev/null >/dev/null 2>&1 &
+      CLASSPATH="$DEX" setsid "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" </dev/null >/dev/null 2>&1 &
     else
-      CLASSPATH="$DEX" nohup "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" </dev/null >/dev/null 2>&1 &
+      CLASSPATH="$DEX" nohup "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" </dev/null >/dev/null 2>&1 &
     fi
     _np=$!
-    printf '%s|%s\n' "$_np" "$_w" > "$PIDF"
-    _log "watch started quality=$_w pid=$_np"
+    printf '%s|%s|%s\n' "$_np" "$_w" "$_wr" > "$PIDF"
+    _log "watch started quality=$_w rate=$_wr pid=$_np"
     echo "result=started"
     echo "quality=$_w"
+    echo "rate=$_wr"
     ;;
   once)
     _w="$(_want)"
-    [ "$_w" = auto ] && { echo "result=stock"; exit 0; }
+    _wr="$(_rate)"
+    [ "$_w" = auto ] && [ "$_wr" = auto ] && { echo "result=stock"; exit 0; }
     _ready || exit 1
-    _run apply "$_w"
+    _run apply "$_w" - "$_wr"
     ;;
   stop)
     _stop
@@ -92,6 +102,7 @@ case "${1:-status}" in
   status)
     echo "version=1"
     echo "want=$(_want)"
+    echo "want_rate=$(_rate)"
     if [ -f "$DEX" ]; then echo "helper=1"; else echo "helper=0"; fi
     if _alive; then echo "watch=1"; else echo "watch=0"; fi
     [ -s "$STF" ] && sed 's/^/live_/' "$STF" 2>/dev/null

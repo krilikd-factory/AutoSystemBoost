@@ -1,12 +1,12 @@
 <p align="center">
   <a href="README.md"><img src="https://img.shields.io/badge/🇬🇧%20English-16a34a?style=flat-square" alt="English"></a>
-  <a href="README.ru.md"><img src="https://img.shields.io/badge/🇷🇺%20Русский-1f2937?style=flat-square" alt="Русский"></a>
+  <a href="docs/README.ru.md"><img src="https://img.shields.io/badge/🇷🇺%20Русский-1f2937?style=flat-square" alt="Русский"></a>
 </p>
 
 <h1 align="center">AutoSystemBoost</h1>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/banner.png" alt="AutoSystemBoost" width="82%">
+  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/docs/assets/banner.png" alt="AutoSystemBoost" width="82%">
 </p>
 
 <p align="center"><strong>Fast when you need it. Cool and efficient the rest of the time.</strong></p>
@@ -28,7 +28,7 @@
 
 <p align="center">
   <a href="https://github.com/krilikd-factory/AutoSystemBoost/releases/latest"><img src="https://img.shields.io/badge/⬇️_Download-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Download"></a>
-  <a href="README.advanced.md"><img src="https://img.shields.io/badge/🧠_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Advanced guide"></a>
+  <a href="docs/README.advanced.md"><img src="https://img.shields.io/badge/🧠_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Advanced guide"></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/📝_Changelog-334155?style=for-the-badge&logo=github&logoColor=white" alt="Changelog"></a>
   <a href="https://t.me/DKomsomol"><img src="https://img.shields.io/badge/Telegram-229ED9?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"></a>
 </p>
@@ -244,7 +244,7 @@ su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'
 su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh safe-mode on'
 ```
 
-**Device → System Pressure** shows a 0–100 load score from load average, memory, CPU and GPU busy, with its coverage and formula. It is a single-snapshot heuristic, not a health score. The formula and weights are in the [advanced guide](README.advanced.md#-12-device-information-privacy-and-evidence-quality).
+**Device → System Pressure** shows a 0–100 load score from load average, memory, CPU and GPU busy, with its coverage and formula. It is a single-snapshot heuristic, not a health score. The formula and weights are in the [advanced guide](docs/README.advanced.md#-12-device-information-privacy-and-evidence-quality).
 
 ## 📊 WebUI: your control centre
 
@@ -341,7 +341,7 @@ If a result looks wrong, check whether it is **requested**, **effective**, **tem
 Open the advanced guide for the governor states, Smart decision layers and evidence gates, device-bounds schema, thermal and writer ownership, the complete setting index, DSP architecture, diagnostics, source layout and regression workflow.
 
 <p align="center">
-  <a href="README.advanced.md"><img src="https://img.shields.io/badge/🧠_Open_the_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Open the advanced guide"></a>
+  <a href="docs/README.advanced.md"><img src="https://img.shields.io/badge/🧠_Open_the_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Open the advanced guide"></a>
 </p>
 
 For source archives, the main validation entry point is:

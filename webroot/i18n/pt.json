@@ -947,6 +947,14 @@
     "bt_ldac_quality": {
       "name": "Qualidade de reprodução LDAC",
       "desc": "Mantém a qualidade LDAC escolhida após cada reconexão, em vez de voltar à taxa de bits adaptativa. É a mesma configuração das Opções do desenvolvedor, aplicada de novo quando o fone conecta ou o codec muda, e lida de volta depois. Nada muda para AAC, aptX, SBC, LHDC ou fones sem LDAC. 990/909 kbps exige um enlace de rádio limpo; com interferência pode falhar: então escolha 660/606 ou adaptativo. Enquanto uma qualidade fixa estiver escolhida, um pequeno auxiliar fica em segundo plano; Auto o remove."
+    },
+    "bt_ldac_rate": {
+      "name": "Taxa de amostragem LDAC",
+      "desc": "Mantém a taxa de amostragem LDAC escolhida após cada reconexão e reinício, em vez dos 48 kHz a que o Android costuma voltar. É a mesma escolha das Opções do desenvolvedor, pedida de novo quando o fone conecta ou o codec muda, e lida de volta depois. Uma taxa que o fone não oferece (em cinza nas Opções do desenvolvedor) nunca é forçada: a atual é mantida. Só afeta o LDAC. 96 e 192 kHz exigem mais banda; se o som falhar, combine-as com a qualidade 660/606 ou adaptativa. Auto remove o auxiliar quando a qualidade LDAC também está em Auto."
+    },
+    "cpu_vendor_unlock": {
+      "name": "Teto de CPU do fabricante",
+      "desc": "As ROMs OnePlus/OPPO mantêm um segundo teto de CPU próprio, mais baixo – em alguns telefones os núcleos mais rápidos ficam perto de 60 % do máximo – e outro durante jogos. O ASB eleva os dois ao máximo de hardware de cada núcleo, o que ajuda sobretudo picos de um núcleo: abrir apps, carregar páginas, compilar. Perfil Desempenho eleva-os só enquanto Desempenho está escolhido; Sempre em todos os perfis exceto Stock; Desligado nunca. Os limites térmicos do ASB e a proteção térmica do kernel continuam ativos, e os valores do fabricante são devolvidos sem alteração no fim. Só Qualcomm. Não combine com outro módulo que eleve o mesmo teto: o ASB então fica de fora.\n\n🔋 Bateria: Desligado\n⚡ Desempenho: Perfil Desempenho\n✋ Na dúvida: Perfil Desempenho"
     }
   },
   "cfg_after_reboot": "aplica-se após reiniciar",
@@ -3511,6 +3519,19 @@
       "660": "660/606",
       "330": "330/303",
       "abr": "Adaptativo"
+    },
+    "bt_ldac_rate": {
+      "auto": "Auto",
+      "44": "44,1 kHz",
+      "48": "48 kHz",
+      "88": "88,2 kHz",
+      "96": "96 kHz",
+      "192": "192 kHz"
+    },
+    "cpu_vendor_unlock": {
+      "off": "Desligado",
+      "perf": "Perfil Desempenho",
+      "always": "Sempre"
     }
   },
   "page_save": "Salvar",
@@ -4335,5 +4356,8 @@
   "cmp_row_restore": "Restauração",
   "cmp_row_restore_v": "estado original exato, um toque",
   "cmp_card_pick": "Escolher um app",
-  "cmp_card_saved": "Salvos"
+  "cmp_card_saved": "Salvos",
+  "vcap_unsupported": "Este telefone não tem teto de CPU do fabricante que o ASB possa elevar; nada foi alterado",
+  "vcap_other_owner": "Outro módulo já gerencia este teto; o ASB não mexe nele",
+  "vcap_partial": "O teto do fabricante foi elevado só em parte; o resto fica como a ROM definiu"
 }

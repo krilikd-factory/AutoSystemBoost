@@ -302,6 +302,10 @@ fi
 
 # fix276: restore the explicit per-app WAKE_LOCK list, including the original uid override.
 # Never blanket-allow: the ledger carries the exact package and uid modes from before ASB.
+if [ -f "$MODDIR/runtime/asb_vendor_cap.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_vendor_cap.sh" restore >/dev/null 2>&1
+fi
+rm -f /data/adb/asb/vendor_cap /data/adb/asb/vendor_cap.tmp /data/adb/asb/vendor_cap.log /data/adb/asb/vendor_cap.log.tmp 2>/dev/null
 if [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_guard.sh" restore-all >/dev/null 2>&1
 fi

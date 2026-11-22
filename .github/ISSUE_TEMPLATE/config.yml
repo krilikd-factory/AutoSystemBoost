@@ -4,5 +4,5 @@ contact_links:
     url: https://t.me/DKomsomol
     about: Questions, test builds and quick help.
   - name: Advanced guide
-    url: https://github.com/krilikd-factory/AutoSystemBoost/blob/main/README.advanced.md
+    url: https://github.com/krilikd-factory/AutoSystemBoost/blob/main/docs/README.advanced.md
     about: How each subsystem works, settings index and troubleshooting.

@@ -6,7 +6,7 @@
 <h1 align="center">AutoSystemBoost — Advanced Guide</h1>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/banner.png" alt="AutoSystemBoost" width="82%">
+  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/docs/assets/banner.png" alt="AutoSystemBoost" width="82%">
 </p>
 
 <p align="center"><strong>Architecture, policy ownership, Smart evidence, complete controls, diagnostics and source validation.</strong></p>
@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/🚀_Quick_Start-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Quick start"></a>
+  <a href="../README.md"><img src="https://img.shields.io/badge/🚀_Quick_Start-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Quick start"></a>
   <a href="README.advanced.md"><img src="https://img.shields.io/badge/🧠_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Advanced guide"></a>
   <a href="README.ru.md"><img src="https://img.shields.io/badge/🇷🇺_Быстрый_старт-1f2937?style=for-the-badge&logo=github&logoColor=white" alt="Быстрый старт"></a>
   <a href="README.advanced.ru.md"><img src="https://img.shields.io/badge/🇷🇺_Подробное_руководство-334155?style=for-the-badge&logo=github&logoColor=white" alt="Подробное руководство"></a>
@@ -36,7 +36,7 @@
 
 This guide describes the current architecture and operational model of ASB. It is intentionally not a release history: implementation details belong here when they help someone configure, test, diagnose or review the module safely.
 
-The short [README.md](README.md) is the normal entry point. This document assumes that the reader understands root modules, Android system properties, sysfs, basic shell commands and the difference between a requested value and an observed value.
+The short [README.md](../README.md) is the normal entry point. This document assumes that the reader understands root modules, Android system properties, sysfs, basic shell commands and the difference between a requested value and an observed value.
 
 | Term | Meaning in this guide |
 |:---|:---|
@@ -516,6 +516,7 @@ The following tables mirror the WebUI's seven configuration groups. Defaults des
 | `sustained_temp_mode` | Throttling Point | `smart` | Selects stock, Smart or manual sustained-temperature policy. |
 | `sustained_temp_enter` | Throttling Temperature | `65` | Manual entry value for the applicable sustained policy; not a vendor thermal-limit override. |
 | `perf_ceiling_pct` | Performance Ceiling | `100` | Additional profile-level cap; final clocks can be lower because of state, OPPs or vendor limits. |
+| `cpu_vendor_unlock` | Vendor CPU Ceiling | `perf` | `off`/`perf`/`always`: lifts the ROM's own msm_performance ceiling and the OPlus game-scene ceiling to each CPU's hardware maximum (Performance profile only by default), locks the node against vendor rewrites and hands the original values back. Qualcomm only; stays out of the way when another ceiling module is enabled. ASB's thermal rails still apply. |
 | `cool_gaming` | Cool Gaming | `1` | Prefers sustainable game behaviour over unrestrained peaks. |
 | `bat_suppress_gaming` | No Game Mode on Battery Profile | `1` | Preserves Battery's distinct efficiency policy under game load. |
 | `BG_TRIM_LEVEL` | Background Trim Level | `safe` | Controls background trimming intensity; aggressive trimming can reload apps. |
@@ -565,6 +566,7 @@ A valid network test identifies the exact route and interface. Wi-Fi results mus
 | `bt_link_stability` | Bluetooth Link Stability | `stock` | Stable mode suppresses Wi-Fi scans during audio on affected links; new networks can appear more slowly. |
 | `bt_a2dp_offload` | Bluetooth Audio Offload | `auto` | Auto/on/off hardware encoding route; off can help some external EQs but moves work to the CPU. |
 | `bt_ldac_quality` | LDAC Playback Quality | `auto` | Keeps 990/660/330 kbps or adaptive LDAC after every reconnect; only acts while the active codec is LDAC. A small helper stays resident while a fixed value is set. |
+| `bt_ldac_rate` | LDAC Sample Rate | `auto` | Keeps 44.1/48/88.2/96/192 kHz LDAC after every reconnect and reboot; only rates the headset lists as selectable, only while the codec is LDAC, read back afterwards. |
 | `dsp_outputs` | DSP Outputs | `all` | Selects speaker/wired/Bluetooth combinations or disables DSP while preserving its parameter values. |
 | `dsp_loudness` | DSP Loudness | `0` | Main DSP enable/gain control, 0–30 dB in current source; values above 25 dB require newly rebuilt DSP libraries. First effect enable can require reboot. |
 | `dsp_bass` | DSP Bass Boost | `0` | Low-shelf boost; consumes headroom and causes the limiter to engage sooner. |
@@ -1299,11 +1301,14 @@ AutoSystemBoost/
 ├── tests/                     Shell, Smart, system, WebUI and Zygisk regressions
 ├── tools/                     Discovery, diagnostics, reports and validation
 ├── webroot/                   WebUI and capability/configuration manifests
-├── docs/                      Focused technical references
-├── README.md                  English quick start
-├── README.ru.md               Russian quick start
-├── README.advanced.md         This guide
-└── README.advanced.ru.md      Russian advanced guide
+├── docs/                      Focused technical references, guides and release manifest
+│   ├── README.ru.md             Russian quick start
+│   ├── README.advanced.md       This guide
+│   ├── README.advanced.ru.md    Russian advanced guide
+│   ├── RELEASE_MANIFEST.json
+│   └── assets/banner.png        Banner image
+├── CHANGELOG.md
+└── README.md                  English quick start
 ```
 
 When changing a feature, update every copy or counterpart owned by the delivery contract. For example, `tools/asb_diag.sh` and `system/bin/asbdiag` must remain identical. Generated bounds, WebUI manifests, localisation and runtime schemas may have explicit consistency tests.

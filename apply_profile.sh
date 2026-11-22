@@ -246,6 +246,9 @@ run_stock_finish() {
     _sf_rc=0
   fi
   unset ASB_PB_GUARD
+  if profile_epoch_current && [ -f "$MODDIR/runtime/asb_vendor_cap.sh" ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_vendor_cap.sh" sync >/dev/null 2>&1
+  fi
   if [ "$_sf_rc" = 2 ]; then
     asb_log "stock settings restore superseded by a newer profile - ledger kept"
   else
@@ -355,6 +358,10 @@ run_worker() {
     _kc_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_kernel_controls.sh" follow "$PROFILE" 2>/dev/null)"
     _kc_sum="$(printf '%s\n' "$_kc_out" | awk -F'|' '$3 == "auto" { k = $1; sub(/^kernel_/, "", k); printf "%s%s=%s:%s", (n++ ? " " : ""), k, $2, $4 }')"
     asb_log "profile=$PROFILE: kernel controls follow the profile ${_kc_sum:-(none set to auto)}"
+  fi
+  if profile_epoch_current && [ -f "$MODDIR/runtime/asb_vendor_cap.sh" ]; then
+    _vc_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_vendor_cap.sh" sync 2>/dev/null | head -n 1)"
+    asb_log "profile=$PROFILE: vendor CPU ceiling ${_vc_out:-result=none}"
   fi
   if command -v asb_ledger_note >/dev/null 2>&1; then
     _profile_result=applied

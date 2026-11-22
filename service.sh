@@ -697,8 +697,8 @@ asb_migrate_governor_conf
     fi
   fi
 ) >/dev/null 2>&1 &
-case "$(grep -E '^[[:space:]]*bt_ldac_quality=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')" in
-  990|660|330|abr)
+case "$(grep -E '^[[:space:]]*bt_ldac_(quality|rate)=' "$MODDIR/config/governor.conf" 2>/dev/null | sed 's/.*=//' | tr -d ' \r' | grep -v '^auto$' | head -1)" in
+  990|660|330|abr|44|48|88|96|192)
     ( exec </dev/null >/dev/null 2>&1
       _ld_i=0
       while [ "$(getprop sys.boot_completed 2>/dev/null)" != 1 ] && [ "$_ld_i" -lt 120 ]; do sleep 5; _ld_i=$((_ld_i + 1)); done
@@ -707,6 +707,14 @@ case "$(grep -E '^[[:space:]]*bt_ldac_quality=' "$MODDIR/config/governor.conf" 2
     ) &
     ;;
 esac
+if [ -f "$MODDIR/runtime/asb_vendor_cap.sh" ]; then
+  ( exec </dev/null >/dev/null 2>&1
+    _vc_i=0
+    while [ "$(getprop sys.boot_completed 2>/dev/null)" != 1 ] && [ "$_vc_i" -lt 120 ]; do sleep 5; _vc_i=$((_vc_i + 1)); done
+    sleep 60
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_vendor_cap.sh" sync
+  ) &
+fi
 
 # Force-LTPO rebind, outside the audio/camera gate above: a device with DSP and camera
 # off still owns its display. Same late-bind reasoning as the /odm manifest - a root
@@ -3825,6 +3833,9 @@ asb_gov_liveness() {
   _wd_last="$_ho_last"
   while true; do
     sleep 300
+    if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_vendor_cap.sh" ]; then
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_vendor_cap.sh" sync >/dev/null 2>&1
+    fi
     # Reconcile the two exact-name wakeup policies on this existing bounded pass. The helper
     # writes only when screen state, policy or kernel readback changed; it starts no worker.
     if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_wakeup_blocker.sh" ]; then

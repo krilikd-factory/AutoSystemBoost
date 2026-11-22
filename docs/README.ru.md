@@ -1,12 +1,12 @@
 <p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/🇬🇧%20English-1f2937?style=flat-square" alt="English"></a>
+  <a href="../README.md"><img src="https://img.shields.io/badge/🇬🇧%20English-1f2937?style=flat-square" alt="English"></a>
   <a href="README.ru.md"><img src="https://img.shields.io/badge/🇷🇺%20Русский-16a34a?style=flat-square" alt="Русский"></a>
 </p>
 
 <h1 align="center">AutoSystemBoost</h1>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/banner.png" alt="AutoSystemBoost" width="82%">
+  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/docs/assets/banner.png" alt="AutoSystemBoost" width="82%">
 </p>
 
 <p align="center"><strong>Быстро — когда нужно. Спокойно и экономно — всё остальное время.</strong></p>
@@ -29,7 +29,7 @@
 <p align="center">
   <a href="https://github.com/krilikd-factory/AutoSystemBoost/releases/latest"><img src="https://img.shields.io/badge/⬇️_Скачать-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Скачать"></a>
   <a href="README.advanced.ru.md"><img src="https://img.shields.io/badge/🧠_Подробное_руководство-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Подробное руководство"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/📝_Изменения-334155?style=for-the-badge&logo=github&logoColor=white" alt="Список изменений"></a>
+  <a href="../CHANGELOG.md"><img src="https://img.shields.io/badge/📝_Изменения-334155?style=for-the-badge&logo=github&logoColor=white" alt="Список изменений"></a>
   <a href="https://t.me/DKomsomol"><img src="https://img.shields.io/badge/Telegram-229ED9?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"></a>
 </p>
 
@@ -237,7 +237,7 @@ ASB полностью работает без Zygisk. Со встроенным
 - **ART-компиляция** остаётся отдельным ручным выбором. Автоматическая настройка её не включает.
 - **Границы.** Наблюдатель не ставит JNI- или PLT-хуки и никогда не скрывает, не замораживает и не ограничивает LSPosed или модули.
 
-На эталонном OnePlus 15 companion потратил 184 мс процессорного времени примерно за 13 часов при 145 отслеженных запусках (одна запись V65, см. [описание выпуска](CHANGELOG.md)).
+На эталонном OnePlus 15 companion потратил 184 мс процессорного времени примерно за 13 часов при 145 отслеженных запусках (одна запись V65, см. [описание выпуска](../CHANGELOG.md)).
 
 ```bash
 su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'

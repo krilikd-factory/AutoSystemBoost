@@ -5,9 +5,51 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
-## V66-test16 (in progress) - Zygisk libraries stay in place with a built-in provider
+## V66-test16 - vendor CPU ceiling, LDAC sample rate, built-in Zygisk providers, tidier repository
 
-Input: a OnePlus 13 report (KernelSU fork with a built-in Zygisk, LSPosed installed) on
+Input: the owner's requests on top of V66-test15 - take the best of a third-party "factory
+performance lock" module that does not coexist with ASB (it lifts the same ceiling), keep LDAC at
+96/192 kHz after reboots like the LDAC quality card, fix the empty "How the verdicts are made"
+fold on the Zygisk page, and make the repository front page shorter - plus a OnePlus 13 report.
+
+### Vendor CPU ceiling (`cpu_vendor_unlock`, new)
+
+- The other module showed two vendor ceilings above the kernel's own thermal limits: the ROM's
+  values in `msm_performance/parameters/cpu_max_freq` (rewritten every 10-25 s by a vendor
+  service; the prime cores held near 58-60 % of their maximum on some models) and the OPlus
+  game-scene ceiling switched by `/proc/game_opt/disable_cpufreq_limit`. ASB already owned the
+  first one only during its own HEAVY/GAMING registration; outside it the vendor value won.
+- `runtime/asb_vendor_cap.sh` (sync|restore|status): `off|perf|always`, default `perf` (the
+  Performance profile only; `always` never in Stock). Lifts the node to each CPU's own
+  `cpuinfo_max_freq` (not the module's 9999999, so the read-back is exact), sets it 0444 so the
+  non-root vendor writer cannot pull it back, switches the game-scene ceiling off, records the
+  original value, mode and switch and hands all three back unchanged. While the lock is held a
+  root write (the governor's own registration) is never overwritten. Another enabled
+  ceiling module (oplus-cloud-block) makes ASB step back entirely. Qualcomm only; the
+  MediaTek un-pinning and the module's own thermal daemon were not taken - ASB's thermal rails
+  write scaling_max_freq independently and the kernel's thermal limits stay in force.
+- Called at the end of every profile switch (worker and Stock finish), 60 s after boot and on
+  the five-minute service pass; uninstall hands everything back. WebUI card under Heat &
+  Performance (13 locales), asbdiag section 10 prints mode, ownership and the last log lines.
+- Not measured on a phone: no claim of a speed or heat change yet.
+
+### LDAC sample rate (`bt_ldac_rate`, new)
+
+- `auto|44|48|88|96|192`. The dex helper (`src/btcodec`) takes the rate as a fourth argument,
+  asks for it only while the codec is LDAC and only when the headset lists it among its
+  selectable LDAC rates (otherwise keeps the current one and reports `rate_unsupported`), then
+  reads rate and quality back. A fixed rate alone starts the helper; boot starts it for either
+  key. The helper dex is rebuilt in CI.
+
+### Zygisk
+
+- WebUI: the page compactor moved every long note into the section's "Explanation" fold, so
+  "How the verdicts are made" (and the other How folds) opened onto nothing. Notes inside a How
+  fold now stay there, and its open state survives the page re-rendering.
+- Park step, OnePlus 13 with a root manager that has Zygisk built in:
+
+
+Report: a OnePlus 13 (KernelSU fork with a built-in Zygisk, LSPosed installed) on
 V66-test14 and V66-test15: the Zygisk page said "no provider", the companion stayed WAITING and
 the diagnostic showed `libraries : parked provider=present`.
 
@@ -26,6 +68,15 @@ the diagnostic showed `libraries : parked provider=present`.
 - Diagnostic: the libraries line adds `seen_before=`.
 - Tests: `t_zygisk_park_runtime` covers the id match, a Zygisk-using module as evidence, a
   disabled one not counted, the remembered sighting and its clearing.
+
+### Repository layout
+
+- The front page listed 31 entries before the README. Moved to `docs/`: `README.ru.md`,
+  `README.advanced.md`, `README.advanced.ru.md`, `RELEASE_MANIFEST.json`, and `banner.png` to
+  `docs/assets/`. Links, the banner URL, the issue template, the source-tree guide and the doc
+  test follow. Kept in place on purpose: the module files the root managers look for,
+  `update.json` and `CHANGELOG.md` (their URLs live on installed phones), `banner2.png`
+  (named in module.prop), `current_profile` and `features.conf` (runtime paths).
 
 ## V66-test15 - root WebUI keeps its headroom, AppOps reads, component disable
 

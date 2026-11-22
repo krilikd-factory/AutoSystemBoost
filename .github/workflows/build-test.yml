@@ -221,6 +221,7 @@ jobs:
             runtime/asb_zygisk_park.sh \
             runtime/asb_device_db.sh \
             runtime/asb_bt_codec.sh \
+            runtime/asb_vendor_cap.sh \
             src/btcodec/asb/BtCodec.java \
             src/btcodec/build.sh \
             runtime/asb_ltpo_video.sh \
@@ -779,6 +780,7 @@ jobs:
             "runtime/asb_zygisk_park.sh" \
             "runtime/asb_device_db.sh" \
             "runtime/asb_bt_codec.sh" \
+            "runtime/asb_vendor_cap.sh" \
             "runtime/asb_ltpo_video.sh" \
             "runtime/asb_odm_rebind.sh" \
             "runtime/asb_io_scheduler.sh" \

@@ -6,7 +6,7 @@
 <h1 align="center">AutoSystemBoost — подробное руководство</h1>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/banner.png" alt="AutoSystemBoost" width="82%">
+  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/docs/assets/banner.png" alt="AutoSystemBoost" width="82%">
 </p>
 
 <p align="center"><strong>Архитектура, владение политиками, доказательства Smart, все настройки, диагностика и проверка исходников.</strong></p>
@@ -28,7 +28,7 @@
 <p align="center">
   <a href="README.ru.md"><img src="https://img.shields.io/badge/🚀_Быстрый_старт-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Быстрый старт"></a>
   <a href="README.advanced.ru.md"><img src="https://img.shields.io/badge/🧠_Подробное_руководство-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Подробное руководство"></a>
-  <a href="README.md"><img src="https://img.shields.io/badge/🇬🇧_Quick_Start-1f2937?style=for-the-badge&logo=github&logoColor=white" alt="Quick start"></a>
+  <a href="../README.md"><img src="https://img.shields.io/badge/🇬🇧_Quick_Start-1f2937?style=for-the-badge&logo=github&logoColor=white" alt="Quick start"></a>
   <a href="README.advanced.md"><img src="https://img.shields.io/badge/🇬🇧_Advanced_Guide-334155?style=for-the-badge&logo=github&logoColor=white" alt="Advanced guide"></a>
 </p>
 
@@ -516,6 +516,7 @@ Budget не заменяет vendor thermal engine. Если платформа 
 | `sustained_temp_mode` | Throttling Point | `smart` | Выбирает stock, Smart или manual sustained-temperature политику. |
 | `sustained_temp_enter` | Throttling Temperature | `65` | Manual entry value соответствующей sustained-политики; не vendor thermal override. |
 | `perf_ceiling_pct` | Performance Ceiling | `100` | Дополнительный profile-level cap; итоговые частоты могут быть ниже из-за state, OPP или vendor. |
+| `cpu_vendor_unlock` | Vendor CPU Ceiling | `perf` | `off`/`perf`/`always`: поднимает собственный потолок прошивки в msm_performance и игровой потолок OPlus до аппаратного максимума каждого CPU (по умолчанию только в профиле «Производительность»), закрывает узел от перезаписи вендором и возвращает исходные значения. Только Qualcomm; не вмешивается, если включён другой модуль снятия потолка. Тепловые рельсы ASB действуют. |
 | `cool_gaming` | Cool Gaming | `1` | Предпочитает устойчивое игровое поведение неограниченным пикам. |
 | `bat_suppress_gaming` | No Game Mode on Battery Profile | `1` | Сохраняет самостоятельную efficiency-политику Battery под игровой нагрузкой. |
 | `BG_TRIM_LEVEL` | Background Trim Level | `safe` | Интенсивность background trimming; aggressive может перезапускать приложения. |
@@ -565,6 +566,7 @@ Budget не заменяет vendor thermal engine. Если платформа 
 | `bt_link_stability` | Bluetooth Link Stability | `stock` | Stable подавляет Wi-Fi scans во время звука на проблемных соединениях; новые сети могут появляться медленнее. |
 | `bt_a2dp_offload` | Bluetooth Audio Offload | `auto` | Auto/on/off hardware encoding route; off может помочь внешнему EQ, но переносит работу на CPU. |
 | `bt_ldac_quality` | LDAC Playback Quality | `auto` | Удерживает LDAC 990/660/330 кбит/с или адаптивный режим после каждого переподключения; действует только при активном LDAC. Пока выбрано фиксированное значение, в фоне работает небольшой помощник. |
+| `bt_ldac_rate` | LDAC Sample Rate | `auto` | Удерживает LDAC 44,1/48/88,2/96/192 кГц после каждого переподключения и перезагрузки; только частоты, которые наушники перечисляют как доступные, только пока кодек LDAC, с проверкой чтением. |
 | `dsp_outputs` | DSP Outputs | `all` | Выбирает speaker/wired/Bluetooth сочетания или отключает DSP с сохранением значений параметров. |
 | `dsp_loudness` | DSP Loudness | `0` | Основной DSP enable/gain, 0–30 dB в текущем исходнике; значения выше 25 dB требуют новой сборки DSP-библиотек. Первое включение effect может требовать reboot. |
 | `dsp_bass` | DSP Bass Boost | `0` | Low-shelf boost; расходует headroom и приближает срабатывание limiter. |
@@ -1298,11 +1300,14 @@ AutoSystemBoost/
 ├── tests/                     Shell, Smart, system, WebUI и Zygisk regressions
 ├── tools/                     Discovery, diagnostics, reports и validation
 ├── webroot/                   WebUI и capability/configuration manifests
-├── docs/                      Сфокусированные технические справки
-├── README.md                  English quick start
-├── README.ru.md               Русский быстрый старт
-├── README.advanced.md         English advanced guide
-└── README.advanced.ru.md      Это руководство
+├── docs/                      Сфокусированные технические справки, руководства и манифест релиза
+│   ├── README.ru.md             Русский быстрый старт
+│   ├── README.advanced.md       English advanced guide
+│   ├── README.advanced.ru.md    Это руководство
+│   ├── RELEASE_MANIFEST.json
+│   └── assets/banner.png        Баннер
+├── CHANGELOG.md
+└── README.md                  English quick start
 ```
 
 При изменении функции обновляйте каждую копию или counterpart, принадлежащую delivery contract. Например, `tools/asb_diag.sh` и `system/bin/asbdiag` должны оставаться идентичными. Generated bounds, WebUI manifests, локализация и runtime schemas могут иметь явные consistency tests.

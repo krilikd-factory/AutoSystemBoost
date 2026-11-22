@@ -247,6 +247,8 @@ bt_absvol_mode|user|webui_standard|shell
 bt_link_stability|advanced|webui_sensitive|shell
 bt_a2dp_offload|advanced|webui_sensitive|shell
 bt_ldac_quality|advanced|webui_sensitive|shell
+bt_ldac_rate|advanced|webui_sensitive|shell
+cpu_vendor_unlock|advanced|webui_sensitive|shell
 region_allow_locale|internal|engine_or_derived|shell
 charge_assist_alpha_max|internal|engine_or_derived|native
 charge_temp_warn_dC|internal|engine_or_derived|native

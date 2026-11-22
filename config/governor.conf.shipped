@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=7e5756044b4c
+# CONFIG_SHAPE=fe45b1bff3fa
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -76,6 +76,12 @@ shadow_mode=0
 # high-voltage OPP excursions (more heat + drain).
 # This caps the DECLARED scaling_max in gaming so ASB never asks higher than the vendor holds.
 gaming_cpu_max_ceiling_khz=2400000
+# Vendor CPU ceiling (Qualcomm OPlus): off|perf|always. The ROM keeps a second, lower ceiling in
+# msm_performance (the prime cores can sit at ~60 % of their hardware maximum) and a game-scene one
+# in /proc/game_opt. perf lifts both to each CPU's own hardware maximum only in the Performance
+# profile, always in every profile but Stock, off never. ASB's own thermal rails (scaling_max_freq)
+# and the kernel's thermal limits stay in force; the vendor values are handed back unchanged.
+cpu_vendor_unlock=perf
 
 # Camera hold: keep interactive caps while the camera pipeline streams.
 # Reported from the field as jerky 4K60 capture and playback that cleared the instant the CPU,
@@ -835,6 +841,9 @@ bt_a2dp_offload=auto
 # LDAC playback quality kept across reconnects: auto|990|660|330|abr. auto = the ROM/Developer options decide;
 # other values re-apply the same LDAC quality the Developer options set, only while the active codec is LDAC.
 bt_ldac_quality=auto
+# LDAC sample rate kept across reconnects: auto|44|48|88|96|192 (kHz). auto = the ROM/Developer options decide;
+# other values ask for that rate only while the codec is LDAC and the headset lists it as selectable.
+bt_ldac_rate=auto
 
 # Region: allow system locale as a last-resort source for Wi-Fi country code
 # when no SIM/operator country is available. 0=off (safest), 1=allow locale.

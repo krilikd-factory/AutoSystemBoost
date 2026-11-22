@@ -947,6 +947,14 @@
     "bt_ldac_quality": {
       "name": "Qualità di riproduzione LDAC",
       "desc": "Mantiene la qualità LDAC scelta dopo ogni riconnessione, invece di tornare al bitrate adattivo. È la stessa impostazione delle Opzioni sviluppatore, riapplicata quando le cuffie si collegano o il codec cambia, e poi riletta. Nulla cambia per AAC, aptX, SBC, LHDC o cuffie senza LDAC. 990/909 kbps richiede un collegamento radio pulito; con interferenze può scattare: allora scegli 660/606 o adattivo. Finché è scelta una qualità fissa, resta attivo un piccolo assistente in background; Auto lo rimuove."
+    },
+    "bt_ldac_rate": {
+      "name": "Frequenza di campionamento LDAC",
+      "desc": "Mantiene la frequenza di campionamento LDAC scelta dopo ogni riconnessione e riavvio, invece dei 48 kHz a cui Android spesso ritorna. È la stessa scelta delle Opzioni sviluppatore, richiesta di nuovo quando le cuffie si collegano o il codec cambia, e poi riletta. Una frequenza che le cuffie non offrono (grigia nelle Opzioni sviluppatore) non viene mai forzata: resta quella attuale. Riguarda solo LDAC. 96 e 192 kHz richiedono più banda; se l'audio si interrompe, abbinale alla qualità 660/606 o adattiva. Auto rimuove l'helper se anche la qualità LDAC è su Auto."
+    },
+    "cpu_vendor_unlock": {
+      "name": "Tetto CPU del produttore",
+      "desc": "Le ROM OnePlus/OPPO mantengono un proprio secondo tetto CPU, più basso – su alcuni telefoni i core più veloci restano intorno al 60 % del massimo – più un altro durante il gioco. ASB li alza entrambi al massimo hardware di ogni core, cosa che aiuta soprattutto i picchi su un core: avvio delle app, caricamento delle pagine, compilazione. Profilo Prestazioni li alza solo mentre è scelto Prestazioni; Sempre in ogni profilo tranne Stock; Disattivato mai. I limiti termici di ASB e la protezione termica del kernel restano attivi, e i valori del produttore vengono restituiti invariati alla fine. Solo Qualcomm. Non combinarlo con un altro modulo che alza lo stesso tetto: ASB allora si fa da parte.\n\n🔋 Autonomia: Disattivato\n⚡ Prestazioni: Profilo Prestazioni\n✋ Non sei sicuro: Profilo Prestazioni"
     }
   },
   "cfg_after_reboot": "si applica dopo il riavvio",
@@ -3511,6 +3519,19 @@
       "660": "660/606",
       "330": "330/303",
       "abr": "Adattivo"
+    },
+    "bt_ldac_rate": {
+      "auto": "Auto",
+      "44": "44,1 kHz",
+      "48": "48 kHz",
+      "88": "88,2 kHz",
+      "96": "96 kHz",
+      "192": "192 kHz"
+    },
+    "cpu_vendor_unlock": {
+      "off": "Disattivato",
+      "perf": "Profilo Prestazioni",
+      "always": "Sempre"
     }
   },
   "page_save": "Salva",
@@ -4335,5 +4356,8 @@
   "cmp_row_restore": "Ripristino",
   "cmp_row_restore_v": "stato originale esatto, un tocco",
   "cmp_card_pick": "Scegli un’app",
-  "cmp_card_saved": "Salvati"
+  "cmp_card_saved": "Salvati",
+  "vcap_unsupported": "Questo telefono non ha un tetto CPU del produttore che ASB possa alzare; nulla è cambiato",
+  "vcap_other_owner": "Un altro modulo gestisce già questo tetto; ASB non lo tocca",
+  "vcap_partial": "Il tetto del produttore è stato alzato solo in parte; il resto resta come impostato dalla ROM"
 }

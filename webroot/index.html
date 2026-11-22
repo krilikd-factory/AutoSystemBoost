@@ -7645,6 +7645,7 @@ const TECH_ICON_PATHS = {
   volume_sync: '<path d="M4 10v4h2.8l4 3.4V6.6L6.8 10z"/><path d="M13.6 8.6a5 5 0 0 1 0 6.8"/><path d="M17.6 5.4v13.2M17.6 5.4 15.8 7.2M17.6 5.4l1.8 1.8M17.6 18.6l-1.8-1.8M17.6 18.6l1.8-1.8"/>',
   bluetooth_offload: '<path d="M7.2 7.6l9.6 8-4.8 3.9V4.5l4.8 3.9-9.6 8"/><rect x="14.6" y="14.6" width="6.4" height="6.4" rx="1.6"/>',
   ldac_quality: '<path d="M4.2 7.6l7.2 6-3.6 2.9V4.5l3.6 2.9-7.2 6"/><path d="M15 19v-3M18 19v-6M21 19V9"/>',
+  ldac_rate: '<path d="M4.2 7.6l7.2 6-3.6 2.9V4.5l3.6 2.9-7.2 6"/><path d="M14 14c1-3 2-3 3 0s2 3 3 0"/><path d="M14 19.5h7"/>',
   loudness: '<path d="M4.5 9.6v4.8h3L12 18.4V5.6L7.5 9.6z"/><path d="M15.5 12h5M18 9.5v5"/>',
   /* voice: a speech bubble carrying a soft wave - the tone of a voice, not its level. */
   voice: '<path d="M5 5.8h14v9.4h-6.6L8.2 18.6v-3.4H5z"/><path d="M8.3 10.6c.8-1.5 1.3-1.5 2 0s1.3 1.5 2 0 1.3-1.5 2 0"/>',
@@ -7723,6 +7724,7 @@ const TECH_ICON_PATHS = {
   thermal_mode: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4.2 4.2 0 1 1-4 0z"/><path d="M12 10.5v6"/><circle cx="12" cy="17.2" r="1" fill="currentColor" stroke="none"/><path d="M17.5 8.5l1.8-1.8M19.3 6.7l1.2 1.2M19.3 6.7l1.2-1.2M19.3 6.7h-1.7M19.3 6.7h1.7M19.3 6.7V5M19.3 6.7v1.7"/>',
   thermal_point: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4.2 4.2 0 1 1-4 0z"/><path d="M12 10.5v6"/><circle cx="12" cy="17.2" r="1" fill="currentColor" stroke="none"/><path d="M17.5 5.5h4M19.5 3.5v4"/>',
   perf_cap: '<path d="M4 16.5a8 8 0 1 1 16 0"/><path d="M12 16.5 15.8 11"/><circle cx="12" cy="16.5" r="1.2" fill="currentColor" stroke="none"/><path d="M6.5 5.5h11"/>',
+  cpu_unlock: '<rect x="6.5" y="9.5" width="11" height="11" rx="2"/><path d="M9.5 12.5h5v5h-5z"/><path d="M9 9.5V6.8a3 3 0 0 1 5.6-1.5"/><path d="M4 12h2.5M4 18h2.5M17.5 12H20M17.5 18H20"/>',
   cool_game: '<path d="M7 10h10a4 4 0 0 1 3.9 4.8l-.9 3.4a2.4 2.4 0 0 1-4.4.6L14.4 17H9.6l-1.2 1.8a2.4 2.4 0 0 1-4.4-.6l-.9-3.4A4 4 0 0 1 7 10z"/><path d="M7.3 13.2h3M8.8 11.7v3"/><circle cx="15.4" cy="12.6" r=".8" fill="currentColor" stroke="none"/><circle cx="17.2" cy="14.2" r=".8" fill="currentColor" stroke="none"/><path d="M12 2.8v3M10.4 4.3l3.2-1.5M10.4 4.3l3.2 1.5" />',
   game_battery: '<rect x="2.8" y="7.5" width="15.5" height="9" rx="2.4"/><path d="M20.8 10.7v2.6"/><path d="M6 12h3M7.5 10.5v3"/><circle cx="13.4" cy="11.2" r=".8" fill="currentColor" stroke="none"/><circle cx="15.4" cy="13" r=".8" fill="currentColor" stroke="none"/>',
   cleaner: '<rect x="4" y="4" width="11" height="4.2" rx="1.6"/><rect x="4" y="10" width="11" height="4.2" rx="1.6"/><rect x="4" y="16" width="11" height="4.2" rx="1.6"/><path d="M17.8 14v6M17.8 20l-2-2M17.8 20l2-2"/>',
@@ -11043,6 +11045,7 @@ const SNAP_KEYS = [
   'bt_absvol_mode',
   'bt_link_stability',
   'bt_ldac_quality',
+  'bt_ldac_rate',
   'BG_TRIM_LEVEL',
   'mglru_hold',
   'mglru_mode',
@@ -11133,6 +11136,7 @@ const SNAP_KEYS = [
   'wakelock_action',
   'gnss_trim',
   'perf_ceiling_pct',
+  'cpu_vendor_unlock',
   'athena_service',
   'net_rps',
   'net_txqueue',
@@ -11150,6 +11154,8 @@ const CFG_ITEMS = [
     desc:'Optional workaround for Bluetooth audio dropouts during playback. Stable suppresses Wi-Fi scanning while audio plays, which can help on devices where the two radios interfere. New networks may appear more slowly. No codec is forced and pairing is unchanged. Leave this off if your connection is already stable.' },
   { key:'bt_ldac_quality', type:'seg', def:'auto', stock:'auto', opts:['auto','990','660','330','abr'], name:'LDAC Playback Quality',
     desc:'Keeps the LDAC quality you pick after every reconnect, instead of falling back to adaptive bitrate. It is the same setting as Developer options, applied again when the headset connects or the codec changes, and read back afterwards. Nothing changes for AAC, aptX, SBC or LHDC, or for headsets that do not use LDAC. 990/909 kbps needs a clean radio link; on a busy link it can stutter, then choose 660/606 or adaptive. A small background helper stays resident while a fixed quality is selected; Auto removes it.' },
+  { key:'bt_ldac_rate', type:'seg', def:'auto', stock:'auto', opts:['auto','44','48','88','96','192'], name:'LDAC Sample Rate',
+    desc:'Keeps the LDAC sample rate you pick after every reconnect and reboot, instead of the 48 kHz Android often falls back to. It is the sample-rate choice from Developer options, asked for again when the headset connects or the codec changes, and read back afterwards. A rate the headset does not offer (greyed out in Developer options) is never forced: the current one is kept. Only LDAC is affected. 96 and 192 kHz need more bandwidth; if the sound stutters, pair them with 660/606 or adaptive quality. Auto removes the helper when LDAC quality is Auto too.' },
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
     desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU.\n\n🔋 Battery life: Auto or On\n🎛️ Bluetooth equaliser apps: Off\n✋ Not sure: Auto' },
   { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['off','all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
@@ -11310,6 +11316,8 @@ const CFG_ITEMS = [
     desc:'Manual mode only: the CPU temperature at which ASB starts limiting long heavy load. Lower means earlier and cooler but slower; higher means more speed and more heat. The vendor\'s limits stay in force.\n\n🔋 Battery life: 58-60\n⚡ Performance: 68-70\n✋ Not sure: 65' },
   { key:'perf_ceiling_pct', type:'range', def:'100', min:65, max:100, step:5, stock:'100', name:'Performance Ceiling',
     desc:'Caps the highest CPU and GPU speed ASB allows, as a share of the device maximum. Light work rarely reaches the cap; heavy work becomes slower but cooler. A lower cap does not always save battery: slower work keeps the chip awake longer.\n\n🔋 Battery life: 85\n⚡ Performance: 100\n✋ Not sure: 100' },
+  { key:'cpu_vendor_unlock', type:'seg', def:'perf', stock:'off', opts:['off','perf','always'], name:'Vendor CPU Ceiling',
+    desc:'OnePlus/OPPO ROMs keep a second, lower CPU ceiling of their own - on some phones the fastest cores are held near 60 % of their maximum - plus another one while a game runs. ASB lifts both to each core\'s own hardware maximum, which mostly helps single-core bursts: app starts, page loads, compiling. Performance profile lifts them only while Performance is selected; Always in every profile except Stock; Off never. ASB\'s own heat limits and the kernel\'s thermal protection stay in force, and the vendor values are handed back unchanged when the lift ends. Qualcomm only. Do not combine it with another module that lifts the same ceiling: ASB then stays out of the way.\n\n🔋 Battery life: Off\n⚡ Performance: Performance profile\n✋ Not sure: Performance profile' },
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
     desc:'In games ASB starts cooling down earlier, at about 40 °C, instead of waiting for the usual sustained-load threshold.\n\n🔋 Battery life / cooler phone: On\n⚡ Performance: Off\n✋ Not sure: On' },
   // --- Memory & UX ---,
@@ -11507,7 +11515,7 @@ const CFG_CAT = {
   mglru_mode:'battery', kernel_mglru_min_ttl:'system',
   kernel_timer_migration:'system', kernel_sched_nr_migrate:'system',
   kernel_hrtimer_migration:'system', kernel_lpm_prediction:'system', kernel_usb_autosuspend:'system', kernel_rt_boost:'system', kernel_bore:'system',
-  perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
+  perf_ceiling_pct:'battery', cpu_vendor_unlock:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'system',
   net_rps:'net', net_txqueue:'net',
@@ -11515,7 +11523,7 @@ const CFG_CAT = {
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', dsp_true_peak:'audio', dsp_lookahead:'audio', dsp_dc_protect:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio', bt_ldac_quality:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', dsp_true_peak:'audio', dsp_lookahead:'audio', dsp_dc_protect:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio', bt_ldac_quality:'audio', bt_ldac_rate:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_PREVIEW_TNR:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
   smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
@@ -11605,10 +11613,10 @@ const CFG_GROUP_OF = {
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', lsposed_verbose:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', dsp_true_peak:'audio', dsp_lookahead:'audio', dsp_dc_protect:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
-  bt_absvol_mode:'audio', bt_link_stability:'audio', bt_ldac_quality:'audio',
+  bt_absvol_mode:'audio', bt_link_stability:'audio', bt_ldac_quality:'audio', bt_ldac_rate:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera', CAMERA_PREVIEW_TNR:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
+  smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', cpu_vendor_unlock:'battery', 
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net', net_mtu_probing:'net',
@@ -11632,7 +11640,7 @@ const CFG_GROUP_SECTIONS = {
       keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect'], card:'dspeq' },
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth',
-      keys:['audio_profile','audio_dac_hifi','media_loudness','media_vol_steps','audio_resampler','bt_absvol_mode','bt_a2dp_offload','bt_ldac_quality','bt_link_stability'] },
+      keys:['audio_profile','audio_dac_hifi','media_loudness','media_vol_steps','audio_resampler','bt_absvol_mode','bt_a2dp_offload','bt_ldac_quality','bt_ldac_rate','bt_link_stability'] },
     { id:'safety', icon:'ear_safe', titleKey:'cfg_audio_section_safety',
       title:'Listening Safety',
       keys:['audio_remove_volume_limit'] }
@@ -11649,7 +11657,7 @@ const CFG_GROUP_SECTIONS = {
       keys:['doze_level','doze_trim_whitelist','night_quiet_enable','wakelock_action','wakelock_fitness','gnss_trim'] },
     { id:'thermal', icon:'thermal_point', titleKey:'cfg_battery_section_thermal',
       title:'Heat & Performance',
-      keys:['sustained_temp_mode','sustained_temp_enter','perf_ceiling_pct','cool_gaming','bat_suppress_gaming'] },
+      keys:['sustained_temp_mode','sustained_temp_enter','perf_ceiling_pct','cpu_vendor_unlock','cool_gaming','bat_suppress_gaming'] },
     { id:'memory', icon:'cleaner', titleKey:'cfg_battery_section_memory',
       title:'Memory & Apps',
       keys:['BG_TRIM_LEVEL','gms_trim','gms_freeze'] }
@@ -14021,7 +14029,7 @@ const CFG_ICONS = {
   io_scheduler:'kernel', mglru_mode:'mglru_mode', kernel_mglru_min_ttl:'mglru_ttl', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
   kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend', kernel_rt_boost:'rt_boost', kernel_bore:'bore_scheduler',
-  audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload', bt_ldac_quality:'ldac_quality',
+  audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload', bt_ldac_quality:'ldac_quality', bt_ldac_rate:'ldac_rate',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', dsp_true_peak:'true_peak', dsp_lookahead:'lookahead_delay', dsp_dc_protect:'dc_protect', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', CAMERA_PREVIEW_TNR:'camera_preview', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
@@ -14031,7 +14039,7 @@ const CFG_ICONS = {
   net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', net_mtu_probing:'mtu_probe', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', smart_lab:'smart', smart_lab_mem:'membus_cap', profile_class_auto:'kind_profile', smart_records_balanced:'balance_spark', ltpo_peak_force:'refresh_peak', charge_aware_enable:'charge_aware', night_charge_enable:'night_charge', night_charge_start:'night_charge_start', night_charge_end:'night_charge_end', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
-  perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
+  perf_ceiling_pct:'perf_cap', cpu_vendor_unlock:'cpu_unlock', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_idle_speed:'ltpo_idle_speed', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
   heytap_mcs:'push_off', documentsui_fix:'documents_picker', zygisk_enabled:'zygisk_master', zygisk_hints:'zygisk_refresh', zygisk_launch:'zygisk_launch', zygisk_ledger:'zygisk_ledger',
   heavy_prime_escape:'prime_lift', prime_escape_burst_s:'prime_burst', prime_escape_rest_s:'prime_rest', wakelock_fitness:'fitness_pulse',
@@ -14810,7 +14818,7 @@ const APPLY_MODE = {
   kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE, kernel_rt_boost: APPLY_LIVE, kernel_bore: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE, dsp_clarity:APPLY_LIVE, dsp_rumble:APPLY_LIVE,
-  dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, dsp_true_peak:APPLY_LIVE, dsp_lookahead:APPLY_LIVE, dsp_dc_protect:APPLY_LIVE, dsp_eq_target:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_ldac_quality:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
+  dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, dsp_true_peak:APPLY_LIVE, dsp_lookahead:APPLY_LIVE, dsp_dc_protect:APPLY_LIVE, dsp_eq_target:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_ldac_quality:APPLY_LIVE, bt_ldac_rate:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
@@ -14851,6 +14859,7 @@ const APPLY_MODE = {
   gms_trim:APPLY_LIVE,
   gms_freeze:APPLY_NEXT,
   perf_ceiling_pct:APPLY_LIVE,
+  cpu_vendor_unlock:APPLY_LIVE,
   wakelock_action:APPLY_LIVE,
   gnss_trim:APPLY_LIVE,
   /* These three shipped without an entry here, so the map fell through to the generic
@@ -16188,7 +16197,19 @@ async function cfgSet(key, val, ctl) {
         if (ctl) ctl.classList.remove('busy');
         return;
       }
-      if (key === 'bt_ldac_quality') {
+      if (key === 'cpu_vendor_unlock') {
+        let vr = null;
+        try { vr = await run('sh ' + MD + '/runtime/asb_vendor_cap.sh sync 2>/dev/null'); } catch (e) {}
+        const vres = (/^result=([a-z_]+)/m.exec(vr ? runText(vr) : '') || [])[1] || 'failed';
+        if (vres === 'lifted' || vres === 'stock') toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        else if (vres === 'unsupported') toast(T('vcap_unsupported', 'This phone has no vendor CPU ceiling ASB can lift; nothing was changed'), 'warn');
+        else if (vres === 'other_owner') toast(T('vcap_other_owner', 'Another module already manages this ceiling; ASB leaves it alone'), 'warn');
+        else toast(T('vcap_partial', 'The vendor ceiling was only partly lifted; the rest is left as the ROM set it'), 'warn');
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      if (key === 'bt_ldac_quality' || key === 'bt_ldac_rate') {
         let lr = null;
         try { lr = await run('sh ' + MD + '/runtime/asb_bt_codec.sh apply 2>/dev/null'); } catch (e) {}
         const lres = (/^result=([a-z_]+)/m.exec(lr ? runText(lr) : '') || [])[1] || 'failed';
@@ -21279,12 +21300,23 @@ const _zyFoldOpen = new Set();
 const ZY_NOTE_CLAMP = 90;
 function zyCompact(body) {
   if (!body || !body.querySelectorAll) return;
+  /* A "How it works" fold already holds its own explanation: its notes stay inside it (moving
+   * them into the section's Explanation fold left the summary opening onto nothing), and its
+   * open state survives the page re-rendering after a background read. */
+  Array.prototype.forEach.call(body.querySelectorAll('.zy-lsp-how'), function (d) {
+    const sm = Array.prototype.filter.call(d.children || [], function (c) { return c.tagName === 'SUMMARY'; })[0];
+    let owner = d.parentNode;
+    while (owner && !owner.id) owner = owner.parentNode;
+    const key = 'h:' + (owner ? owner.id : '') + ':' + (sm ? sm.textContent : '');
+    d.open = _zyFoldOpen.has(key);
+    d.addEventListener('toggle', function () { if (d.open) _zyFoldOpen.add(key); else _zyFoldOpen.delete(key); });
+  });
   /* One disclosure per logical section, never a column of identical Explanation buttons.
    * All long notes from that section open together at its foot; short operational text,
    * controls and current values stay in place. Export still walks the folded DOM nodes. */
   Array.prototype.forEach.call(body.querySelectorAll('.lgr-sec'), function (sec) {
     const notes = Array.prototype.filter.call(sec.querySelectorAll('.lgr-note,.zy-mode-desc,.zy-auto-desc,.zy-auto-current'), function (n) {
-      return !n.closest('.zy-note-fold') && n.closest('.lgr-sec') === sec && String(n.textContent || '').length > ZY_NOTE_CLAMP;
+      return !n.closest('.zy-note-fold') && !n.closest('.zy-lsp-how') && n.closest('.lgr-sec') === sec && String(n.textContent || '').length > ZY_NOTE_CLAMP;
     });
     if (!notes.length) return;
     const key = 'n:' + (sec.id || 'section');

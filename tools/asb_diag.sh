@@ -4735,6 +4735,13 @@ if [ -r /sys/kernel/msm_performance/parameters/cpu_max_freq ]; then
     P "      (whose values: unknown - this governor build does not publish msm_asb_hold)"
   fi
 fi
+if [ -f "$MODDIR/runtime/asb_vendor_cap.sh" ]; then
+  _vc_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_vendor_cap.sh" status 2>/dev/null)"
+  _vc_k() { printf '%s\n' "$_vc_out" | sed -n "s/^$1=//p" | head -1; }
+  P "    vendor ceiling lift: mode=$(_vc_k mode) profile=$(_vc_k profile) held=$(_vc_k held) node=$(_vc_k node) perm=$(_vc_k node_perm) game_scene_off=$(_vc_k game_scene_off)"
+  [ -n "$(_vc_k other_owner)" ] && P "      (another module owns this ceiling: $(_vc_k other_owner) - ASB leaves it alone)"
+  [ -s /data/adb/asb/vendor_cap.log ] && tail -n 3 /data/adb/asb/vendor_cap.log 2>/dev/null | while IFS= read -r _vc_l; do P "      $_vc_l"; done
+fi
 
 # --- 10d. GPU full profile ---
 P ""
