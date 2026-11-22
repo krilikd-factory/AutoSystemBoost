@@ -88,7 +88,24 @@ def main():
         print('Posted %s to Telegram (%s topic)' % (zip_path, kind))
     else:
         print('::warning::Telegram answered HTTP %s: %s' % (code, desc[:200]))
+        explain_chat(token, chat, topic)
     return 0
+
+
+def explain_chat(token, chat, topic):
+    """On a failed post, say which chat the bot reached and whether it has topics."""
+    try:
+        out = subprocess.run(['curl', '-sS', '--form-string', 'chat_id=' + chat,
+                              'https://api.telegram.org/bot%s/getChat' % token],
+                             capture_output=True, text=True, timeout=30).stdout
+        r = json.loads(out).get('result') or {}
+        if not r:
+            print('::warning::the bot cannot see the chat set as TELEGRAM_CHAT_ID (wrong id, or the bot is not a member)')
+            return
+        print('::notice::chat seen by the bot: type=%s title=%s username=%s forum=%s; topic asked: %s' % (
+            r.get('type'), r.get('title'), r.get('username') or '-', r.get('is_forum', False), topic))
+    except Exception as e:
+        print('::warning::getChat failed: %s' % type(e).__name__)
 
 
 if __name__ == '__main__':
