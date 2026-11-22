@@ -4586,7 +4586,7 @@ grep -qF '#define ASB_LAUNCH_LIFT_GAP_MS 5000L' "$G" || fail "no launch rate lim
 # routine touches into a 20-second arm while preserving the independent app/lock fast path.
 grep -qF 'g_unlock_arm_why = lock_kick ? "lock key" : "app switch";' "$G" || fail "no app-switch arm"
 grep -qF 'g_unlock_arm_why = "touch";' "$G" || fail "no routine-touch arm"
-grep -qF '#define ASB_TOUCH_LIFT_GAP_MS ASB_UNLOCK_TOUCH_WINDOW_MS' "$G" || fail "no independent routine-touch rate limit"
+grep -qF '#define ASB_TOUCH_LIFT_GAP_MS 30000L' "$G" || fail "no independent routine-touch rate limit"
 grep -qF 'g_unlock_arm_why = "screen on";' "$G" || fail "the wake arm lost its reason"
 grep -qF 'static long g_launch_prev_hash = 0;' "$G" || fail "no foreground-hash baseline in the tick"
 grep -qF 'uint64_t _fh = g_smart_rt.app_hash;' "$G" || fail "the launch kick does not read the foreground hash"

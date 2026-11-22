@@ -15,6 +15,7 @@
       "src/asb_governor.c",
       "src/asb_smart.h",
       "tests/asb_smart.sh",
+      "tests/asb_system.sh",
       "tools/asb_tree.sha256",
       "webroot/index.html"
     ],
@@ -22,7 +23,7 @@
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 10,
+      "changed": 11,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -1430,9 +1431,9 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 680555,
+      "bytes": 680535,
       "mode": "0755",
-      "sha256": "44229ec8880049ac5b0c5f9891bd6369bb1e99f16e0770227ddb9c2958ff3a95"
+      "sha256": "552eca615f98d6fa6355bd8183dbb0148dfb0784dda139bb36bd908187f72834"
     },
     {
       "path": "tests/asb_ui.sh",
@@ -1666,7 +1667,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24873,
       "mode": "0644",
-      "sha256": "d532ad93e17be08be75162b64561ae3ad7f4199d2a2bd2e6d41ec09b67acda4b"
+      "sha256": "b3b123d057652fd59d7d43f0438d97733cfc7e3d351b627da2b749e1283a2668"
     },
     {
       "path": "tools/asb_tree_check.sh",
