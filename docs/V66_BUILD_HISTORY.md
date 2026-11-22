@@ -5,6 +5,26 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test14 - fewer touch lifts, wake lift on a warm phone, no false GAMING, calm WebUI
+
+Input: tester logs on V66-test12/13 (Ace 6 PLQ110, OnePlus 15, 15R, 13R) - 247-946 unlock
+lifts a day, 209 wakes on the Ace 6 left unlifted as "warm" while SystemUI drew 11-14 %
+janky frames at the wake, five GAMING latches inside the KernelSU Next manager, and the
+manager hosting the WebUI among the costliest screen-on apps (about 4 W). Base: V66-test13.
+Native code changed: CI rebuilds `bin/asb`.
+
+- **Routine touches:** one lift per 30 s instead of 20 s; wakes, the first touch, app
+  switches, cold starts and lock presses keep their immediate paths.
+- **Warm wake:** the warm-die veto for a wake, first touch, cold start or app switch sits
+  6 C above `bat_comfort_temp`; routine touches keep the plain mark.
+- **GPU-bound GAMING:** apps the package table names as light work (messengers, feeds) and
+  root managers/WebUI hosts no longer latch GAMING from a busy GPU.
+- **WebUI:** looping animations pause after 10 s without input or when the page is hidden;
+  loading scenes keep moving.
+- **Telegram:** test builds post to topic 4 (Test) of @AutoSystemBoost by default; secrets
+  override the chat and topic.
+
+
 ## V66-test13 (rebuild) - component picker, single dock, instant Infirmary, LDAC quality, log-driven fixes
 
 Input: six requests on top of V66-test15 (Infirmary description fold, double dock on the Zygisk

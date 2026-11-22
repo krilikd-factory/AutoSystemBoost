@@ -4975,7 +4975,8 @@ grep -q 'int want_apply = (changed || force_write || g_unlock_edge ||' "$G" || f
 awk '/asb_smart_media_guard_apply_caps\(&_effective_caps\);/{m=NR} /asb_unlock_lift_apply\(&_effective_caps\);/{if(!a)a=NR; l=NR} /int writes = writer_apply_caps\(&_effective_caps, force_write/{w=NR} END{exit !(m && l > m && l < w)}' "$G" \
   || fail "lift not applied between the media guard and the write"
 grep -q 'int calm = !metrics.misc.camera_active && !g_unlock_lift_now &&' "$G" || fail "calm cadence during a lift"
-grep -q '#define ASB_TOUCH_LIFT_GAP_MS ASB_UNLOCK_TOUCH_WINDOW_MS' "$G" || fail "routine-touch 20 s gap missing"
+grep -q '#define ASB_TOUCH_LIFT_GAP_MS 30000L' "$G" || fail "routine-touch 30 s gap missing"
+grep -q 'bat_comfort_temp + (touch_arm ? 0 : ASB_UNLOCK_WAKE_WARM_EXTRA_C)' "$G" || fail "wake lifts use the routine-touch warm veto"
 grep -q 'now_ms - g_touch_arm_ms >= ASB_TOUCH_LIFT_GAP_MS' "$G" || fail "routine touches still use the launch gap"
 grep -q 'g_unlock_touch_defers++;' "$G" || fail "deferred routine touches are not observable"
 grep -q 'A heartbeat refresh inside the unlock window keeps the lift' "$G" || fail "heartbeat refresh drops the lift"
@@ -5049,6 +5050,7 @@ static int uplk(int scr, int lock, long ms) { return asb_unlock_lift_update(scr,
 int main(void) {
     int bad = 0;
 #define CHK(c, what) do { if (!(c)) { printf("%s\n", what); bad = 1; } } while (0)
+    g_touch_arm_ms = -1000000; /* boottime starts far past 0 on a phone */
     CHK(up(1, 0, 1000) == 0, "governor start with the screen on is not a wake");
     CHK(up(0, 0, 2000) == 0, "screen off");
     CHK(up(1, 0, 10000) == 1 && g_unlock_lifts == 1, "a wake lifts");
@@ -5094,11 +5096,11 @@ int main(void) {
     CHK(g_unlock_lifts == l0 + 2, "manual-profile wakes not counted");
     up(0, 0, 104000); P = PROFILE_PERFORMANCE; CHK(up(1, 0, 105000) == 0 && !strcmp(g_unlock_skip_why, "profile"), "Performance lifted"); P = PROFILE_SMART;
     up(0, 0, 106000); TC = 1; CHK(up(1, 0, 107000) == 0 && !strcmp(g_unlock_skip_why, "thermal"), "thermal-capped wake lifted"); TC = 0;
-    up(0, 0, 108000); DIE = 48; CHK(up(1, 0, 109000) == 0 && !strcmp(g_unlock_skip_why, "warm"), "warm die lifted"); DIE = 36;
+    up(0, 0, 108000); DIE = 54; CHK(up(1, 0, 109000) == 0 && !strcmp(g_unlock_skip_why, "warm"), "warm die lifted"); DIE = 36;
     up(0, 0, 110000); g_asb_cfg.unlock_lift_s = 0; CHK(up(1, 0, 111000) == 0 && !strcmp(g_unlock_skip_why, "off"), "switched off and lifted"); g_asb_cfg.unlock_lift_s = 3;
     CHK(g_unlock_lifts == l0 + 2 && g_unlock_skips == 4, "skips not counted");
     /* A skipped wake still lets the first touch try (the phone may have cooled). */
-    up(0, 0, 112000); DIE = 48; up(1, 0, 113000); DIE = 36;
+    up(0, 0, 112000); DIE = 54; up(1, 0, 113000); DIE = 36;
     CHK(up(1, 1, 115000) == 1, "first touch after a warm wake did not lift on a cool die");
     /* fix166: "warm" is the lower of the die at the wake and the last reading in the dark. */
     {
@@ -5170,7 +5172,7 @@ int main(void) {
     TC = 1; CHK(upa(1, 0, 1, 282000) == 0, "thermal cap did not cancel a held Battery lift"); TC = 0;
     CHK(upa(1, 0, 1, 283000) == 0 && g_unlock_lifts == lb + 3,
         "touch hold restarted a thermally cancelled Battery lift");
-    DIE = 48; up(0, 0, 290000); up(1, 0, 291000);
+    DIE = 54; up(0, 0, 290000); up(1, 0, 291000);
     CHK(upa(1, 1, 1, 292000) == 0 && !strcmp(g_unlock_skip_why, "warm"), "a warm Battery touch armed");
     CHK(upa(1, 0, 1, 293000) == 0, "touch hold bypassed the warm-start veto"); DIE = 36;
     /* Smart and Balanced keep the old fixed-length touch window: no permanent boost. */

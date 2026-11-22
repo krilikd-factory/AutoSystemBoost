@@ -3482,7 +3482,16 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
  * too (asb_fsm.h, touch floor), which also covers the taps the warm-die veto keeps from
  * lifting. The lift itself is unchanged. */
 #define ASB_UNLOCK_TOUCH_WINDOW_MS 20000L
-#define ASB_TOUCH_LIFT_GAP_MS ASB_UNLOCK_TOUCH_WINDOW_MS
+/* Routine touches: one lift per 30 s. Field reports from four phones counted 247-561
+ * routine-touch lifts a day (each a raise and a restore of every ceiling) and the Smart lab
+ * kept finding the lift cheaper when smaller; a wake, first touch, app switch, cold start and
+ * lock press keep their own immediate paths. */
+#define ASB_TOUCH_LIFT_GAP_MS 30000L
+/* A wake, first touch, cold start or app switch is a 3 s burst at the moment the user sees
+ * the phone react; the warm-die veto for it sits this far above bat_comfort_temp. An Ace 6
+ * that idles warm skipped 209 wakes (SystemUI drew 11-14 % janky frames at the wake on two
+ * reports) while routine touches, which are frequent, keep the plain comfort mark. */
+#define ASB_UNLOCK_WAKE_WARM_EXTRA_C 6
 #define ASB_LAUNCH_LIFT_GAP_MS 5000L
 static int    g_unlock_prev_screen = -1;  /* screen state of the last pass, -1 before the first */
 static long   g_unlock_on_ms       = 0;   /* boottime ms the screen last came on, 0 = off */
@@ -3656,7 +3665,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
         else if (!asb_unlock_lift_profile_ok(profile_idx)) why = "profile";
         else if (thermal_cap) why = "thermal";
         else if (die_c > 0 && g_asb_cfg.bat_comfort_temp > 0 &&
-                 die_c >= g_asb_cfg.bat_comfort_temp) why = "warm";
+                 die_c >= g_asb_cfg.bat_comfort_temp + (touch_arm ? 0 : ASB_UNLOCK_WAKE_WARM_EXTRA_C)) why = "warm";
         if (why) {
             g_unlock_skips++;
             snprintf(g_unlock_skip_why, sizeof(g_unlock_skip_why), "%s", why);

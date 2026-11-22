@@ -1583,10 +1583,13 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
         if (g_gpu_bound_need > ASB_GPU_BOUND_TICKS && g_gpu_bound_streak == 0 && g_gpu_bound_cleared > 0 &&
             (_gb_now - g_gpu_bound_cleared >= ASB_GPU_BOUND_DECAY_S || _gb_now < g_gpu_bound_cleared))
             g_gpu_bound_need = ASB_GPU_BOUND_TICKS;
+        /* An app the package table names as light work (messengers, feeds, root-manager
+         * WebUIs) can saturate a low GPU step with animation; that is not a game. */
         if (m->misc.screen_on && !m->misc.camera_active && m->gpu.load_valid &&
-            m->gpu.load_pct >= ASB_GPU_BOUND_PCT) {
+            m->misc.app_hint != ASB_APP_LIGHT && m->gpu.load_pct >= ASB_GPU_BOUND_PCT) {
             if (g_gpu_bound_streak < 10000 && ++g_gpu_bound_streak == g_gpu_bound_need) g_gpu_bound_entries++;
-        } else if (!m->misc.screen_on || m->misc.camera_active || m->gpu.load_pct < g_asb_cfg.gaming_gpu_exit) {
+        } else if (!m->misc.screen_on || m->misc.camera_active || m->misc.app_hint == ASB_APP_LIGHT ||
+                   m->gpu.load_pct < g_asb_cfg.gaming_gpu_exit) {
             if (g_gpu_bound_streak >= g_gpu_bound_need) {
                 if (g_gpu_bound_held <= 2) {
                     g_gpu_bound_need = g_gpu_bound_need * 2 > ASB_GPU_BOUND_NEED_MAX ? ASB_GPU_BOUND_NEED_MAX : g_gpu_bound_need * 2;

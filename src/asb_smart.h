@@ -261,6 +261,17 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
         { "com.google.android.apps.messaging", ASB_APP_LIGHT },
         { "ru.ok.android",             ASB_APP_LIGHT  },
         { "com.vkontakte.android",     ASB_APP_LIGHT  },
+        /* Root managers and their WebUI hosts: ASB's own settings pages draw animated cards
+         * at a low GPU clock and once latched GAMING (an Ace 6 report: 5 latches, all in the
+         * KernelSU Next manager). A settings page is light work, never a game. */
+        { "com.rifsxd.ksunext",        ASB_APP_LIGHT  },
+        { "me.weishu.kernelsu",        ASB_APP_LIGHT  },
+        { "com.sukisu.ultra",          ASB_APP_LIGHT  },
+        { "com.topjohnwu.magisk",      ASB_APP_LIGHT  },
+        { "me.bmax.apatch",            ASB_APP_LIGHT  },
+        { "io.github.a13e300.ksuwebui", ASB_APP_LIGHT },
+        { "scorpion.ksuwebui",         ASB_APP_LIGHT  },
+        { "com.dergoogler.mmrl",       ASB_APP_LIGHT  },
         { NULL, 0 }
     };
     for (int i = 0; T[i].prefix; i++) {
