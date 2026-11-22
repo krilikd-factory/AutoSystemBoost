@@ -3668,6 +3668,7 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
 .cfg-range input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
+  touch-action: pan-y;
   width: 116px;
   height: 4px;
   border-radius: 4px;
@@ -15338,29 +15339,54 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       // A real drag produces pointer movement between down and up. Requiring a few pixels
       // of travel keeps dragging exactly as it was, ignores taps and grazes, and leaves
       // keyboard use working because those events carry no pointer at all.
-      let _rngDragged = false, _rngStartX = null, _rngPointer = false, _rngBefore;
+      /* A slider moves only for a deliberate sideways drag. The finger's first 8 px decide:
+       * mostly vertical is a scroll (the thumb goes back at once and nothing is saved),
+       * mostly sideways is a drag. A press while the page is still gliding from a fling is
+       * never a drag - that touch was meant to stop the scroll. A cancelled pointer (the page
+       * took the gesture over) always puts the value back. Keyboard changes carry no pointer
+       * and still save. */
+      let _rngAxis = '', _rngStartX = null, _rngStartY = 0, _rngPointer = false, _rngBefore, _rngBlocked = false, _rngPending = false;
+      const _rngRevert = () => {
+        if (_rngBefore === undefined || rng.value === _rngBefore) return;
+        rng.value = _rngBefore;
+        try { rng.dispatchEvent(new Event('input')); } catch (e) { val.textContent = _rngLabel(rng.value); }
+      };
+      let _rngLast = rng.value;
+      const _rngCommit = () => {
+        if (rng.value === _rngLast) return;
+        _rngLast = rng.value;
+        cfgSet(it.key, (it.stockAt !== undefined && parseInt(rng.value, 10) <= it.stockAt) ? it.stock : rng.value, wrap);
+      };
+      const _rngSettle = () => {
+        const ok = _rngAxis === 'x' && !_rngBlocked;
+        _rngStartX = null;
+        if (!ok) { _rngRevert(); val.textContent = _rngLabel(rng.value); return; }
+        _rngCommit();
+      };
       rng.addEventListener('pointerdown', (e) => {
-        _rngPointer = true; _rngDragged = false; _rngStartX = e.clientX;
+        _rngPointer = true; _rngPending = false; _rngAxis = ''; _rngStartX = e.clientX; _rngStartY = e.clientY;
         _rngBefore = rng.value;
+        _rngBlocked = typeof asbScrollRecent === 'function' && asbScrollRecent();
       });
       rng.addEventListener('pointermove', (e) => {
-        if (_rngPointer && _rngStartX !== null && Math.abs(e.clientX - _rngStartX) > 4)
-          _rngDragged = true;
+        if (!_rngPointer || _rngStartX === null || _rngAxis) return;
+        const dx = Math.abs(e.clientX - _rngStartX), dy = Math.abs(e.clientY - _rngStartY);
+        if (dy > 8 && dy >= dx) { _rngAxis = 'y'; _rngRevert(); }
+        else if (dx > 8 && dx > dy) _rngAxis = 'x';
       });
-      rng.addEventListener('pointerup', () => { _rngPointer = false; });
-      rng.addEventListener('pointercancel', () => {
+      rng.addEventListener('pointerup', () => {
         _rngPointer = false;
-        if (!_rngDragged && _rngBefore !== undefined) rng.value = _rngBefore;
+        if (_rngPending) { _rngPending = false; _rngSettle(); }
+        else if (_rngAxis !== 'x' || _rngBlocked) { _rngRevert(); _rngStartX = null; }
+      });
+      rng.addEventListener('pointercancel', () => {
+        _rngPointer = false; _rngPending = false; _rngAxis = 'y';
+        _rngRevert(); _rngStartX = null;
       });
       rng.onchange = () => {
-        if (_rngPointer === false && _rngStartX !== null && !_rngDragged) {
-          // A tap: put the thumb back and change nothing.
-          if (_rngBefore !== undefined) { rng.value = _rngBefore; val.textContent = _rngLabel(rng.value); }
-          _rngStartX = null;
-          return;
-        }
-        _rngStartX = null;
-        cfgSet(it.key, (it.stockAt !== undefined && parseInt(rng.value, 10) <= it.stockAt) ? it.stock : rng.value, wrap);
+        if (_rngStartX === null) { _rngCommit(); return; }
+        if (_rngPointer) { _rngPending = true; return; }
+        _rngSettle();
       };
       wrap.appendChild(rng);
       wrap.appendChild(val);
@@ -26293,6 +26319,44 @@ function closeConfigPage(toMain) {
 
   document.addEventListener('touchstart', start, { passive: true });
   document.addEventListener('touchend', end, { passive: true });
+})();
+
+/* Scroll guard for every control on every page.
+ *
+ * On Android a touch that lands while a list is still gliding after a fling stops the glide -
+ * and WebView also delivers it as a click on whatever sat under the finger. Scrolling a long
+ * tweak list and touching it to stop therefore flipped switches, picked segments and opened
+ * menus. A click is dropped when its press began while the page was still scrolling (within
+ * 300 ms of the last scroll event that followed a touch - programmatic jumps do not count) or
+ * when the finger travelled more than 12 px before lifting: a scroll, not a tap. Synthetic
+ * clicks (keyboard, code) are never touched; sliders and text fields have their own rules. */
+let _asbScrollAt = 0;
+function asbScrollRecent() { return Date.now() - _asbScrollAt < 300; }
+(function () {
+  let downAt = 0, downX = 0, downY = 0, downScroll = false, moved = false, fingerDown = false, upAt = 0;
+  document.addEventListener('scroll', function () {
+    if (fingerDown || Date.now() - upAt < 4000) _asbScrollAt = Date.now();
+  }, { capture: true, passive: true });
+  document.addEventListener('pointerdown', function (e) {
+    downAt = Date.now(); downX = e.clientX; downY = e.clientY; moved = false; fingerDown = true;
+    downScroll = asbScrollRecent();
+  }, { capture: true, passive: true });
+  ['pointerup', 'pointercancel'].forEach(function (t) {
+    document.addEventListener(t, function () { fingerDown = false; upAt = Date.now(); }, { capture: true, passive: true });
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (!moved && downAt && (Math.abs(e.clientX - downX) > 12 || Math.abs(e.clientY - downY) > 12)) moved = true;
+  }, { capture: true, passive: true });
+  document.addEventListener('click', function (e) {
+    if (!e.isTrusted || !downAt || Date.now() - downAt > 1500) return;
+    const drop = downScroll || moved;
+    downAt = 0;
+    if (!drop) return;
+    const t = e.target && e.target.closest ? e.target : null;
+    if (t && t.closest('input[type="range"], input[type="search"], input[type="time"], textarea, .cfg-profile-name')) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
 })();
 
 

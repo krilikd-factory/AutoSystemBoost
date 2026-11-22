@@ -18,6 +18,16 @@ Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playin
   own `BluetoothServiceManager` before asking for the adapter, and a missing adapter carries its
   cause (`no_adapter:<why>`) into the state file and asbdiag.
 
+### WebUI: no settings changed by scrolling
+- Sliders move only for a deliberate sideways drag: the first 8 px of the finger decide, a
+  mostly vertical move is a scroll (the thumb snaps back, nothing is saved, and the page scrolls
+  from the slider too), a tap on the track changes nothing, and a press while the page is still
+  gliding after a fling is never a drag.
+- Every other control (switches, segments, menus, buttons, tabs): a touch that lands while the
+  page is still gliding only stops the glide, and a finger that travelled more than 12 px is a
+  scroll, not a tap. Checked in Chromium with touch events: tap on a track, vertical swipe from
+  a slider and a tap during a fling saved nothing; a sideways drag and a normal tap saved once.
+
 ### Logs from users
 - "Send logs to Bugs" no longer trips over a pile of old logs: the infinite log being recorded is
   taken first, otherwise the newest folder touched in the last 3 days; asbdiag and reports older
