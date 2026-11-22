@@ -19,6 +19,7 @@ import subprocess
 import sys
 
 
+BUGS_URL = 'https://t.me/AutoSystemBoost/3'
 CAPTION_LIMIT = 1024   # Telegram counts the visible text of a document caption, tags excluded
 
 
@@ -96,7 +97,7 @@ def caption(kind, ver, run_url=''):
         cap = '🛸 <b>AutoSystemBoost ' + html.escape(ver) + '</b>\n'
         cap += 'Новая тестовая сборка!\n\n'
         cap += '\n'.join('✅ ' + x for x in lines)
-        cap += '\n\n🧪 Это тестовая сборка. При проблемах пришлите asbdiag и Вечный лог.'
+        cap += '\n\n🧪 Это тестовая сборка. При проблемах пришлите asbdiag и Вечный лог в раздел <a href="' + BUGS_URL + '">Bugs</a>.'
         cap += link
         if visible(cap) <= CAPTION_LIMIT or len(lines) <= 1:
             return cap

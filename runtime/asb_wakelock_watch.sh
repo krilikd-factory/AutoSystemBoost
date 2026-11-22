@@ -376,6 +376,39 @@ _wl_hist_sum() {
 }
 
 # uids holding a partial wakelock right now that the framework has flagged LONG (> 1 min).
+_wl_lock_age_s() {
+  dumpsys power 2>/dev/null | awk -v u="$1" '
+    /DISABLED/ { next }
+    /PARTIAL_WAKE_LOCK/ && index($0, "uid=" u " ") {
+      if (!match($0, /ACQ=-[0-9hms]+/)) next
+      t = substr($0, RSTART + 5, RLENGTH - 5); s = 0; n = ""
+      for (i = 1; i <= length(t); i++) {
+        c = substr(t, i, 1)
+        if (c ~ /[0-9]/) { n = n c; continue }
+        if (c == "h") s += n * 3600
+        else if (c == "m" && substr(t, i + 1, 1) == "s") { i++; n = "" ; continue }
+        else if (c == "m") s += n * 60
+        else if (c == "s") s += n
+        n = ""
+      }
+      if (best == "" || s < best) best = s
+    }
+    END { if (best != "") print best }'
+}
+_wl_uid_of() { printf '%s\n' "$_map" | awk -v p="$1" '$2 == p { print $1; exit }'; }
+_wl_fit_set_at() {
+  _sa="$(grep "^$1|" "$2" 2>/dev/null | tail -1 | cut -d'|' -f"$3")"
+  case "$_sa" in ''|*[!0-9]*) echo 0 ;; *) echo "$_sa" ;; esac
+}
+_wl_held_since_set() {
+  _hu="$(_wl_uid_of "$1")"
+  [ -n "$_hu" ] || return 1
+  _ha="$(_wl_lock_age_s "$_hu")"
+  case "$_ha" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$2" -gt 0 ] 2>/dev/null || return 1
+  _hn="$(date +%s 2>/dev/null || echo 0)"
+  [ "$_ha" -lt $((_hn - $2)) ] 2>/dev/null
+}
 _wl_power_long_uids() {
   dumpsys power 2>/dev/null | awk '
     # A DISABLED lock is one PowerManager no longer honours (app-op, idle, standby): it
@@ -528,7 +561,7 @@ _wl_release_protected() {
 # worse loss than a coarser step timeline.
 _wl_fit_companion() {
   case "$1" in
-    *wear*|*watch*|*band*|com.xiaomi.wearable|com.mi.health|com.xiaomi.hm.health|com.huami.*|com.zepp.*|\
+    *wear*|*watch*|*smartband*|*miband*|*fitband*|*.band|*.band.*|com.xiaomi.wearable|com.mi.health|com.xiaomi.hm.health|com.huami.*|com.zepp.*|\
     com.huawei.health|com.huawei.smarthome|com.heytap.health|com.oplus.health|com.oneplus.health|\
     com.amazfit.*|com.mobvoi.*|com.fossil.*|com.polar.*|com.coros.*|com.suunto.*|com.withings.*|\
     com.garmin.android.apps.connectmobile|com.fitbit.FitbitMobile) return 0 ;;
@@ -587,7 +620,7 @@ _wl_fit_bg_limit() {
     echo "wakelock: $1 - Android did not keep the background restriction; left as it was"
     return 1
   fi
-  echo "$1|$_bo" >> "$FIT_BG"
+  echo "$1|$_bo|$(date +%s 2>/dev/null || echo 0)" >> "$FIT_BG"
   if [ -s "$FIT_IGN" ]; then
     grep -vxF "$1" "$FIT_IGN" > "$FIT_IGN.tmp" 2>/dev/null
     if [ -s "$FIT_IGN.tmp" ]; then mv -f "$FIT_IGN.tmp" "$FIT_IGN"; else rm -f "$FIT_IGN.tmp" "$FIT_IGN"; fi
@@ -598,7 +631,7 @@ _wl_fit_bg_limit() {
 _wl_fit_bg_release() {
   [ -s "$FIT_BG" ] || return 0
   _has appops || return 0
-  while IFS='|' read -r _bp _bo; do
+  while IFS='|' read -r _bp _bo _bt; do
     [ -n "$_bp" ] || continue
     [ "$(_wl_fit_rab "$_bp")" = ignore ] && asb_appops set "$_bp" RUN_ANY_IN_BACKGROUND "${_bo:-default}" >/dev/null 2>&1
   done < "$FIT_BG"
@@ -808,7 +841,7 @@ asb_wl_relax() {
       elif grep -qxF "$_p" "$D/wakelock_restricted" 2>/dev/null; then
         _v=restricted
       elif grep -q "^$_p|" "$FIT_BG" 2>/dev/null; then
-        if [ "$_h" = 1 ]; then
+        if [ "$_h" = 1 ] && _wl_held_since_set "$_p" "$(_wl_fit_set_at "$_p" "$FIT_BG" 3)"; then
           grep -qxF "$_p" "$FIT_BG.ign" 2>/dev/null || echo "$_p" >> "$FIT_BG.ign"
           _v=strict_ignored
         else
@@ -826,9 +859,9 @@ asb_wl_relax() {
           _v=limited
         elif grep -qxF "$_p" "$FIT_IGN" 2>/dev/null; then
           _v=limit_ignored
-        elif [ "$_h" = 1 ]; then
+        elif [ "$_h" = 1 ] && _wl_held_since_set "$_p" "$(_wl_fit_set_at "$_p" "$FIT_RA" 2)"; then
           echo "$_p" >> "$FIT_IGN"
-          echo "wakelock: $_p still holds the CPU although WAKE_LOCK is ignored - this Android does not enforce the app-op"
+          echo "wakelock: $_p took a wakelock after WAKE_LOCK was set to ignore and it is still honoured - this Android does not enforce the app-op"
           _v=limit_ignored
         else
           _v=limited

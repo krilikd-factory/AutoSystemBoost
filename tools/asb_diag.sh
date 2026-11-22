@@ -3743,7 +3743,7 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
   done < /data/adb/asb/wakelock_fitness_limited
 fi
 if [ -s /data/adb/asb/wakelock_fitness_bg ]; then
-  while IFS='|' read -r _fp _fo; do
+  while IFS='|' read -r _fp _fo _ft; do
     [ -n "$_fp" ] || continue
     _fbg="$(asb_appops get "$_fp" RUN_ANY_IN_BACKGROUND 2>/dev/null | grep -v 'Uid mode' | sed -n 's/.*RUN_ANY_IN_BACKGROUND: \([a-z_]*\).*/\1/p' | head -1)"
     P "    background-restricted (strict): $_fp  (was: ${_fo:-default}; now: ${_fbg:-default})"

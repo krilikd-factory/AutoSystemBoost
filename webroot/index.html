@@ -2461,7 +2461,7 @@ body.config-category-active #configPage .cfg-list {
  * identical insets, width, 31 px outline, material, 60 px targets and icon-top labels. */
 .report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display: none; position: fixed; left: 12px; right: 12px;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); z-index: 160;
-  box-sizing: border-box; width: auto; max-width: 460px; margin: 0 auto; padding: 0 4px;
+  box-sizing: border-box; width: auto; max-width: 416px; margin: 0 auto; padding: 0 4px;
   overflow: hidden; border: 1px solid var(--cap-edge); border-radius: 31px;
   background: var(--cap-wash), var(--tabbar-bg, #000000); box-shadow: var(--cap-shadow); }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-head { display: none; }
@@ -2654,7 +2654,10 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 /* Content runs closer to the screen edges. The container fills the 440 px
  * reference width (the UI scale is unchanged) and the side padding drops from 20 to 10 px,
  * so cards gain about 40 px; the header keeps its former 20 px inset and width. */
-.page, .live-page { max-width: 440px; padding-left: 10px; padding-right: 10px; }
+/* 12 px: the floating tab bar sits 12 px in from the screen edge, and with a
+ * 10 px page the card borders ran 2 px outside the bar's on every page - the two outlines
+ * now line up. */
+.page, .live-page { max-width: 440px; padding-left: 12px; padding-right: 12px; }
 .page .header, .live-page .header { box-sizing: border-box; padding-left: 20px; padding-right: 20px; }
 
 /*
@@ -4883,7 +4886,8 @@ html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !importa
   /* A capsule, not a strip (fix187): on a wide screen or in landscape three tabs spread
    * across the whole width put the thumb a long way from each; capped and centred, the
    * bar keeps the proportions it has on a phone held upright. */
-  max-width: 460px;
+  /* The page's 440 px less its 12 px sides, so on a wide screen the bar ends where the cards do. */
+  max-width: 416px;
   margin: 0 auto;
   padding: 0 4px;
   z-index: 200;
@@ -6632,14 +6636,33 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row +
 .dsp-console::before { content:''; position:absolute; left:18px; right:18px; top:0; height:2px; border-radius:0 0 2px 2px;
   background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 70%,transparent),transparent); pointer-events:none; }
 .dsp-console-head { min-height:28px; }
-.dsp-console-mark.on { color:var(--cat-ink,var(--accent)); background:color-mix(in srgb,var(--cat-ink,var(--accent)) 14%,transparent);
-  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cat-ink,var(--accent)) 30%,transparent); }
+.dsp-console-mark.on { color:var(--cat-ink,var(--cat,var(--accent))); background:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 14%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 30%,transparent); }
 .dsp-console-label { display:flex; align-items:center; gap:7px; margin:14px 4px 7px; color:color-mix(in srgb,var(--cat-ink,var(--text-tertiary)) 75%,var(--text-tertiary)); }
 .dsp-console-label::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--cat-ink,var(--accent)); opacity:.85; }
 .dsp-console-panel { border-radius:14px; background:color-mix(in srgb,var(--surface) 82%,transparent); }
 .dsp-console-panel .cfg-row-top { min-height:42px; }
 .dsp-console-panel .cfg-name { font-size:12px; overflow-wrap:normal; word-break:normal; hyphens:manual; }
 .dsp-console-panel .cfg-range-val { color:var(--cat-ink,var(--text)); }
+.asb-console-sum { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 2px; }
+.asb-console-chip { display:inline-flex; align-items:center; min-height:22px; padding:2px 9px; border-radius:11px;
+  border:1px solid var(--border); color:var(--text-tertiary); background:color-mix(in srgb,var(--surface) 70%,transparent);
+  font:700 10.5px/1.2 var(--sans); letter-spacing:.02em; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.asb-console-chip.on { color:var(--cat-ink,var(--cat,var(--accent))); background:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 14%,transparent);
+  border-color:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 35%,transparent); }
+.dsp-console .asb-console-mod { margin:10px 0 0; padding:11px 12px 4px; border-radius:16px;
+  background:color-mix(in srgb,var(--surface) 70%,transparent); transition:border-color .2s ease; }
+.dsp-console .asb-console-mod.is-tuned { border-color:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 45%,var(--border)); }
+.asb-console-mhead { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:0 0 8px;
+  border-bottom:1px solid var(--border); }
+.asb-console-mname { min-width:0; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font:700 14px/1.3 var(--sans); color:var(--text); }
+.asb-console-badge { flex:0 0 auto; display:inline-flex; align-items:center; min-height:22px; padding:2px 9px; border-radius:11px;
+  font:700 10.5px/1.2 var(--sans); letter-spacing:.02em; white-space:nowrap; color:var(--text-tertiary);
+  background:color-mix(in srgb,var(--text-tertiary) 12%,transparent); border:1px solid color-mix(in srgb,var(--text-tertiary) 30%,transparent); }
+.asb-console-badge:empty { display:none; }
+.asb-console-badge.on { color:var(--cat-ink,var(--cat,var(--accent))); background:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 14%,transparent);
+  border-color:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 35%,transparent); }
 .dsp-eq-console { box-sizing:border-box; width:100%; min-width:0; max-width:100%; margin:0; padding:15px !important; overflow:visible; }
 .dsp-eq-console > * { min-width:0; max-width:100%; box-sizing:border-box; }
 .dsp-eq-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -6688,6 +6711,15 @@ html .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + .cfg-row,
 html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + .cfg-row { border-top:1px solid var(--border) !important; }
 .dsp-eq-console .dsp-eq-editor .cfg-row-top { grid-template-columns:minmax(92px,.44fr) minmax(0,1fr); }
 .dsp-eq-console .dsp-eq-editor .cfg-range { grid-template-columns:minmax(0,1fr) 40px; }
+.dsp-eq-console .dsp-eq-editor.asb-console-mod { margin:0 0 2px; padding:11px 12px 4px; border-radius:16px;
+  background:color-mix(in srgb,var(--surface) 70%,transparent); transition:border-color .2s ease; }
+.dsp-eq-console .dsp-eq-editor.asb-console-mod.is-tuned { border-color:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 45%,var(--border)); }
+.dsp-eq-console .asb-console-sum { margin:0 0 10px; }
+.dsp-eq-console .dsp-eq-curve { stroke:var(--cat-ink,var(--cat,var(--accent))); }
+.dsp-eq-console .dsp-eq-bands button.on, .dsp-eq-console .dsp-eq-bands button.on .dsp-eq-band-hz { color:var(--cat-ink,var(--cat,var(--accent))); }
+.dsp-eq-console .dsp-eq-bands button.on { background:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 13%,transparent); }
+.dsp-eq-console .dsp-eq-route summary::after { color:var(--cat-ink,var(--cat,var(--accent))); }
+.dsp-eq-console .dsp-eq-routes button.on { color:var(--cat-ink,var(--cat,var(--accent))); background:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 12%,transparent); }
 @media (max-width:360px) { .dsp-eq-console { padding:13px !important; } .dsp-eq-console .dsp-eq-editor { padding:2px 10px; } .dsp-eq-console .dsp-eq-editor .cfg-row-top { grid-template-columns:80px minmax(0,1fr); gap:7px; } }
 
 </style>
@@ -11166,7 +11198,7 @@ const CFG_ITEMS = [
     desc:'Optional workaround for Bluetooth audio dropouts during playback. Stable suppresses Wi-Fi scanning while audio plays, which can help on devices where the two radios interfere. New networks may appear more slowly. No codec is forced and pairing is unchanged. Leave this off if your connection is already stable.' },
   { key:'bt_ldac_quality', type:'seg', def:'auto', stock:'auto', opts:['auto','990','660','330','abr'], name:'LDAC Playback Quality',
     desc:'Keeps the LDAC quality you pick after every reconnect, instead of falling back to adaptive bitrate. It is the same setting as Developer options, applied again when the headset connects or the codec changes, and read back afterwards. Nothing changes for AAC, aptX, SBC or LHDC, or for headsets that do not use LDAC. 990/909 kbps needs a clean radio link; on a busy link it can stutter, then choose 660/606 or adaptive. A small background helper stays resident while a fixed quality is selected; Auto removes it.' },
-  { key:'bt_ldac_rate', type:'seg', def:'auto', stock:'auto', opts:['auto','44','48','88','96','192'], name:'LDAC Sample Rate',
+  { key:'bt_ldac_rate', type:'seg', def:'auto', stock:'auto', opts:['auto','44','48','88','96','192'], name:'LDAC/LHDC Sample Rate',
     desc:'Keeps the LDAC sample rate you pick after every reconnect and reboot, instead of the 48 kHz Android often falls back to. It is the sample-rate choice from Developer options, asked for again when the headset connects or the codec changes, and read back afterwards. A rate the headset does not offer (greyed out in Developer options) is never forced: the current one is kept. It works on LDAC and on any other codec that offers the rate, such as LHDC; other codecs keep their rate. 96 and 192 kHz need more bandwidth; if the sound stutters, pair them with 660/606 or adaptive quality. Auto removes the helper when LDAC quality is Auto too.' },
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
     desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU.\n\n🔋 Battery life: Auto or On\n🎛️ Bluetooth equaliser apps: Off\n✋ Not sure: Auto' },
@@ -11821,17 +11853,15 @@ function cfgRenderZygiskCard(list, items) {
     ['zy_cfg_grp_features', 'Features', items.filter(function (it) { return it.key !== 'zygisk_enabled'; })]];
   groups.forEach(function (g) {
     if (!g[2].length) return;
-    const label = document.createElement('div'); label.className = 'dsp-console-label'; label.textContent = T(g[0], g[1]);
-    card.appendChild(label);
-    const panel = document.createElement('div'); panel.className = 'dsp-console-panel cfg-zygisk-panel';
-    g[2].forEach(function (it) {
-      cfgRenderRow(panel, it, false);
-      const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
+    const panel = cfgConsoleGroupPanel(card, T(g[0], g[1]), g[2], function (p, it) {
+      cfgRenderRow(p, it, false);
+      const nm = p.lastChild && p.lastChild.querySelector ? p.lastChild.querySelector('.cfg-name') : null;
       const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
       if (tx) tx.nodeValue = String(tx.nodeValue).replace(/\s*\(Zygisk\)\s*$/, '');
     });
-    card.appendChild(panel);
+    panel.className += ' cfg-zygisk-panel';
   });
+  card._asbNoCount = true;
   const open = document.createElement('button'); open.type = 'button';
   open.className = 'live-chip cfg-zygisk-open';
   open.textContent = T('zy_settings_open', 'Open ZYGISK control panel');
@@ -12720,7 +12750,7 @@ const DSP_CONSOLE_GROUPS = [
 function cfgRenderDspConsole(list, sectionItems) {
   cfgRenderConsole(list, sectionItems, {
     cat: 'audio', title: T('dsp_console_title', 'Engine controls'), groups: DSP_CONSOLE_GROUPS,
-    active: typeof dspEngineActive === 'function' && dspEngineActive(),
+    active: function () { return typeof dspEngineActive === 'function' && dspEngineActive(); },
     on: T('dsp_console_on', 'ACTIVE'), off: T('dsp_console_off', 'BYPASSED'), strip: /^DSP[\s-]+/
   });
 }
@@ -12747,6 +12777,55 @@ const FEEL_CONSOLE_GROUPS = [
 function cfgConsoleNonDefault(items) {
   return items.some(function (it) { return cfgIsActive(it, _cfgVals[it.key] !== undefined ? _cfgVals[it.key] : it.def); });
 }
+function cfgConsoleActiveCount(items) {
+  return items.filter(function (it) { return cfgIsActive(it, _cfgVals[it.key] !== undefined ? _cfgVals[it.key] : it.def); }).length;
+}
+/* Each labelled group is an item panel in the LSPosed card's language: its own frame, the
+ * group's name and a badge that says how many of its controls differ from stock; a tuned
+ * group gets a tinted frame. A chip row under the header sums the card up. Values change
+ * one row at a time, so the card recounts after every save instead of re-drawing. */
+function cfgConsoleGroupPanel(card, title, items, render) {
+  const panel = document.createElement('div'); panel.className = 'dsp-console-panel asb-console-mod';
+  panel._asbItems = items;
+  if (title) {
+    const head = document.createElement('div'); head.className = 'asb-console-mhead';
+    const nm = document.createElement('span'); nm.className = 'asb-console-mname'; nm.textContent = title;
+    const badge = document.createElement('span'); badge.className = 'asb-console-badge';
+    head.appendChild(nm); head.appendChild(badge); panel.appendChild(head);
+  }
+  items.forEach(function (it) { render(panel, it); });
+  card.appendChild(panel);
+  return panel;
+}
+function cfgConsoleRecount(card) {
+  if (card._asbNoCount || !card.querySelectorAll) return;
+  let on = 0, all = 0;
+  Array.prototype.forEach.call(card.querySelectorAll('.asb-console-mod'), function (panel) {
+    const items = panel._asbItems || [];
+    const n = cfgConsoleActiveCount(items);
+    on += n; all += items.length;
+    panel.classList[n > 0 ? 'add' : 'remove']('is-tuned');
+    const b = panel.querySelector('.asb-console-badge');
+    if (b) {
+      b.classList[n > 0 ? 'add' : 'remove']('on');
+      b.textContent = n > 0 ? T('console_grp_changed', 'changed · %n').replace('%n', String(n)) : T('console_grp_stock', 'stock');
+    }
+  });
+  const sum = card.querySelector('.asb-console-sum');
+  if (sum) {
+    sum.textContent = '';
+    const a = document.createElement('span'); a.className = 'asb-console-chip' + (on ? ' on' : '');
+    a.textContent = T('console_sum_changed', 'changed · %n').replace('%n', String(on));
+    const b = document.createElement('span'); b.className = 'asb-console-chip';
+    b.textContent = T('console_sum_stock', 'stock · %n').replace('%n', String(all - on));
+    sum.appendChild(a); sum.appendChild(b);
+  }
+  if (card._asbMark) card._asbMark();
+}
+function cfgConsoleRefreshFrom(el) {
+  const card = el && el.closest ? el.closest('.asb-console') : null;
+  if (card) cfgConsoleRecount(card);
+}
 function cfgRenderConsole(list, sectionItems, o) {
   const by = Object.create(null);
   sectionItems.forEach(function (it) { by[it.key] = it; });
@@ -12755,27 +12834,27 @@ function cfgRenderConsole(list, sectionItems, o) {
   card.className = 'cfg-row cat-' + o.cat + ' dsp-console asb-console';
   const head = document.createElement('div'); head.className = 'dsp-console-head';
   const title = document.createElement('div'); title.className = 'dsp-console-title'; title.textContent = o.title;
-  const mark = document.createElement('span'); mark.className = 'dsp-console-mark' + (o.active ? ' on' : '');
-  mark.textContent = o.active ? o.on : o.off;
+  const mark = document.createElement('span'); mark.className = 'dsp-console-mark';
+  card._asbMark = function () {
+    const on = typeof o.active === 'function' ? !!o.active() : !!o.active;
+    mark.classList[on ? 'add' : 'remove']('on');
+    mark.textContent = on ? o.on : o.off;
+  };
   head.appendChild(title); head.appendChild(mark); card.appendChild(head);
+  const sum = document.createElement('div'); sum.className = 'asb-console-sum'; card.appendChild(sum);
   o.groups.concat([['', '', sectionItems.map(function (it) { return it.key; })]]).forEach(function (g) {
     const items = g[2].map(function (k) { return used[k] ? null : by[k]; }).filter(Boolean);
     if (!items.length) return;
-    if (g[0]) {
-      const label = document.createElement('div'); label.className = 'dsp-console-label'; label.textContent = T(g[0], g[1]);
-      card.appendChild(label);
-    }
-    const panel = document.createElement('div'); panel.className = 'dsp-console-panel';
-    items.forEach(function (it) {
-      used[it.key] = true;
+    items.forEach(function (it) { used[it.key] = true; });
+    cfgConsoleGroupPanel(card, g[0] ? T(g[0], g[1]) : '', items, function (panel, it) {
       cfgRenderRow(panel, it, false);
       if (!o.strip) return;
       const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
       const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
       if (tx) tx.nodeValue = String(tx.nodeValue).replace(o.strip, '');
     });
-    card.appendChild(panel);
   });
+  cfgConsoleRecount(card);
   list.appendChild(card);
 }
 function cfgRenderParametricEqCard(list) {
@@ -12815,9 +12894,18 @@ function cfgRenderParametricEqCard(list) {
       const nm=document.createElement('span');nm.textContent=names[b];
       const hz=document.createElement('span');hz.className='dsp-eq-band-hz';hz.textContent=f+' Hz';
       btn.appendChild(nm);btn.appendChild(hz);btn.onclick=e=>{e.stopPropagation();_dspEqBand=b;render();};bands.appendChild(btn);
-    }card.appendChild(bands);
-    const editor=document.createElement('div');editor.className='dsp-eq-editor';
+    }
+    const gainOf=(bb,v)=>{const g=Number(v!==undefined?v:(_cfgVals['dsp_eq_'+route+'_b'+bb+'_g']||0))/10;return g?(g>0?'+':'−')+String(Math.abs(g))+' dB':'0 dB';};
+    const sum=document.createElement('div');sum.className='asb-console-sum';
+    for(let bb=0;bb<3;bb++){const c=document.createElement('span');const g=gainOf(bb);c.className='asb-console-chip'+(g!=='0 dB'?' on':'');c.textContent=names[bb]+' · '+g;sum.appendChild(c);}
+    card.appendChild(sum);card.appendChild(bands);
+    const editor=document.createElement('div');editor.className='dsp-eq-editor asb-console-mod';
     const b=_dspEqBand, prefix='dsp_eq_'+route+'_b'+b, fdef=b===0?'100':(b===1?'1000':'8000');
+    const ehead=document.createElement('div');ehead.className='asb-console-mhead';
+    const ename=document.createElement('span');ename.className='asb-console-mname';ename.textContent=names[b];
+    const ebadge=document.createElement('span');ebadge.className='asb-console-badge';
+    const paintBadge=v=>{const g=gainOf(b,v),on=g!=='0 dB';ebadge.textContent=on?g:T('console_grp_stock','stock');[[ebadge,'on'],[editor,'is-tuned']].forEach(x=>{if(x[0].classList)x[0].classList[on?'add':'remove'](x[1]);});};
+    ehead.appendChild(ename);ehead.appendChild(ebadge);editor.appendChild(ehead);paintBadge();
     cfgRenderRow(editor,{key:prefix+'_f',type:'range',def:fdef,min:40,max:16000,step:10,name:T('dsp_eq_frequency','Frequency'),desc:T('dsp_eq_frequency_desc','Band centre in Hz.')},false);
     cfgRenderRow(editor,{key:prefix+'_q',type:'range',def:'10',min:3,max:40,step:1,name:T('dsp_eq_q','Q × 10'),desc:T('dsp_eq_q_desc','Bandwidth: 3 means Q 0.3; 40 means Q 4.0.')},false);
     cfgRenderRow(editor,{key:prefix+'_g',type:'range',def:'0',min:-120,max:120,step:5,name:T('dsp_eq_gain','Gain × 0.1 dB'),desc:T('dsp_eq_gain_desc','Range −12…+12 dB. Zero bypasses this band.')},false);
@@ -12828,7 +12916,7 @@ function cfgRenderParametricEqCard(list) {
     details.appendChild(summary);details.appendChild(note);card.appendChild(details);
     editor.querySelectorAll('input[type="range"]').forEach(r=>r.addEventListener('input',()=>{
       const preview={};editor.querySelectorAll('input[type="range"]').forEach(x=>{preview[x.closest('.cfg-row').getAttribute('data-key')]=x.value;});
-      cfgEqPlotPaint(svg,route,preview);bands.children[b].querySelector('.dsp-eq-band-hz').textContent=editor.querySelector('input').value+' Hz';
+      cfgEqPlotPaint(svg,route,preview);bands.children[b].querySelector('.dsp-eq-band-hz').textContent=editor.querySelector('input').value+' Hz';paintBadge(preview[prefix+'_g']);
     }));
     cfgEqPlotPaint(svg,route);
   }
@@ -12880,13 +12968,13 @@ function cfgRenderGroup(list, groupId) {
     else if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
     else if (groupId === 'camera' && section.id === 'processing' && sectionItems.length > 1)
       cfgRenderConsole(list, sectionItems, { cat: 'camera', title: T('cam_console_title', 'Photo grading'), groups: CAM_CONSOLE_GROUPS,
-        active: Number(_cfgVals.CAMERA_LEVEL || 0) > 0, on: T('console_on_graded', 'GRADED'), off: T('console_off_stock', 'STOCK') });
+        active: function () { return Number(_cfgVals.CAMERA_LEVEL || 0) > 0; }, on: T('console_on_graded', 'GRADED'), off: T('console_off_stock', 'STOCK') });
     else if (groupId === 'net' && section.id === 'speed' && sectionItems.length > 1)
       cfgRenderConsole(list, sectionItems, { cat: 'net', title: T('net_console_title', 'Per-link transport'), groups: NET_CONSOLE_GROUPS,
-        active: cfgConsoleNonDefault(sectionItems), on: T('console_on_tuned', 'TUNED'), off: T('console_off_auto', 'AUTO') });
+        active: function () { return cfgConsoleNonDefault(sectionItems); }, on: T('console_on_tuned', 'TUNED'), off: T('console_off_auto', 'AUTO') });
     else if (groupId === 'feel' && section.id === 'feel' && sectionItems.length > 1)
       cfgRenderConsole(list, sectionItems, { cat: 'feel', title: T('feel_console_title', 'Screen & touch'), groups: FEEL_CONSOLE_GROUPS,
-        active: cfgConsoleNonDefault(sectionItems), on: T('console_on_tuned', 'TUNED'), off: T('console_off_stock', 'STOCK') });
+        active: function () { return cfgConsoleNonDefault(sectionItems); }, on: T('console_on_tuned', 'TUNED'), off: T('console_off_stock', 'STOCK') });
     else sectionItems.forEach(it => {
       cfgRenderRow(list, it, false);
       if (ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0) kernelDecorateControlRow(list.lastChild, it.key);
@@ -15334,22 +15422,6 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       wb.onclick = (e) => { e.stopPropagation(); uiSound('option'); wlManualOpen(); };
       row.appendChild(wb);
     }
-    if (it.key === 'wakelock_fitness' && _wlFitInfo && (cur === 'limit' || cur === 'strict')) {
-      /* Which apps the card is talking about: a badge alone cannot tell "Samsung Health is
-       * limited" from "Mi Fitness was found and deliberately left alone". */
-      const fi = _wlFitInfo, parts = [];
-      const lim = fi.names.filter(function (n) { return fi.strictNames.indexOf(n) < 0 && fi.ignoredNames.indexOf(n) < 0; });
-      if (lim.length) parts.push(T('wlf_apps_limited', 'Limited') + ': ' + lim.join(', '));
-      if (fi.strictNames.length) parts.push(T('wlf_apps_strict', 'Restricted in background') + ': ' + fi.strictNames.join(', '));
-      if (fi.ignoredNames.length) parts.push(T('wlf_apps_ignored', 'ROM ignores the limit') + ': ' + fi.ignoredNames.join(', '));
-      if (fi.companionNames.length) parts.push(T('wlf_apps_companions', 'Watch and band apps (not touched)') + ': ' + fi.companionNames.join(', '));
-      if (parts.length) {
-        const fa = document.createElement('div');
-        fa.className = 'cfg-fit-apps';
-        fa.textContent = parts.join('\n');
-        row.appendChild(fa);
-      }
-    }
     if (it.key === 'doze_trim_whitelist') {
       /* Outside the collapsible description on purpose.
        *
@@ -15397,6 +15469,22 @@ const _unav = ASB_CAP_REQUIRES[it.key];
     am.textContent = applyModeLabel(it.key);
     inner.appendChild(am);
 
+    if (it.key === 'wakelock_fitness' && _wlFitInfo && (cur === 'limit' || cur === 'strict')) {
+      /* Which apps the card is talking about: a badge alone cannot tell "Samsung Health is
+       * limited" from "Mi Fitness was found and deliberately left alone". */
+      const fi = _wlFitInfo, parts = [];
+      const lim = fi.names.filter(function (n) { return fi.strictNames.indexOf(n) < 0 && fi.ignoredNames.indexOf(n) < 0; });
+      if (lim.length) parts.push(T('wlf_apps_limited', 'Limited') + ': ' + lim.join(', '));
+      if (fi.strictNames.length) parts.push(T('wlf_apps_strict', 'Restricted in background') + ': ' + fi.strictNames.join(', '));
+      if (fi.ignoredNames.length) parts.push(T('wlf_apps_ignored', 'ROM ignores the limit') + ': ' + fi.ignoredNames.join(', '));
+      if (fi.companionNames.length) parts.push(T('wlf_apps_companions', 'Watch and band apps (not touched)') + ': ' + fi.companionNames.join(', '));
+      if (parts.length) {
+        const fa = document.createElement('div');
+        fa.className = 'cfg-fit-apps';
+        fa.textContent = parts.join('\n');
+        inner.appendChild(fa);
+      }
+    }
     const wb = willBreakOf(it, cur);
     if (wb) {
       const w = document.createElement('div');
@@ -15918,6 +16006,7 @@ async function cfgSet(key, val, ctl) {
         else _row.classList.remove('is-on');
       }
     } catch (e) {}
+    try { cfgConsoleRefreshFrom(ctl); } catch (e) {}
     // The safe writer atomically updates the module config and snapshot under
     // one lock. Keeping the two writes in separate WebUI shell commands used
     // to allow a reboot/import race to create split-brain configuration.
@@ -17789,16 +17878,28 @@ function cfgRenderNotifCard(list) {
   const nm = document.createElement('div');
   nm.className = 'cfg-name';
   nm.textContent = T('nf_title', 'Notification fix');
+  /* Same reading pattern as every tweak card: the explanation opens on a tap. */
+  const caret = document.createElement('span');
+  caret.className = 'cfg-caret';
+  caret.textContent = '\u25BE';
+  nm.appendChild(caret);
   main.appendChild(nm);
   const st = document.createElement('div');
   st.id = 'nfCardState';
   main.appendChild(st);
   top.appendChild(main);
+  top.onclick = function () { row.classList.toggle('desc-open'); };
   row.appendChild(top);
+  const collapse = document.createElement('div');
+  collapse.className = 'cfg-collapse';
+  const inner = document.createElement('div');
+  inner.className = 'cfg-collapse-inner';
   const ds = document.createElement('div');
   ds.className = 'nf-card-desc';
   ds.textContent = T('nf_card_desc', 'Notifications from some apps arrive late? Choose those apps: ASB exempts them from sleep and background limits and shows what else holds push back.');
-  row.appendChild(ds);
+  inner.appendChild(ds);
+  collapse.appendChild(inner);
+  row.appendChild(collapse);
   const b = document.createElement('button');
   b.className = 'doze-edit-btn';
   b.type = 'button';

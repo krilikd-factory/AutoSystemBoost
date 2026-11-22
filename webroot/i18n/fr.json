@@ -950,7 +950,7 @@
       "desc": "Conserve la qualité LDAC choisie après chaque reconnexion, au lieu de revenir au débit adaptatif. C’est le même réglage que dans les options pour développeurs, réappliqué quand le casque se connecte ou que le codec change, puis relu. Rien ne change pour AAC, aptX, SBC, LHDC ni pour les casques sans LDAC. 990/909 kbit/s exige une liaison radio propre ; en cas d’interférences, le son peut saccader – choisissez alors 660/606 ou adaptatif. Tant qu’une qualité fixe est choisie, un petit assistant reste en arrière-plan ; Auto le retire."
     },
     "bt_ldac_rate": {
-      "name": "Fréquence d’échantillonnage LDAC",
+      "name": "Fréquence d’échantillonnage LDAC/LHDC",
       "desc": "Conserve la fréquence d’échantillonnage LDAC choisie après chaque reconnexion et redémarrage, au lieu des 48 kHz auxquels Android revient souvent. C’est le même choix que dans les Options pour les développeurs, redemandé quand le casque se connecte ou que le codec change, puis relu. Une fréquence que le casque ne propose pas (grisée dans les Options pour les développeurs) n’est jamais imposée : l’actuelle est gardée. Fonctionne avec le LDAC et tout autre codec qui propose cette fréquence, comme le LHDC ; les autres codecs gardent la leur. 96 et 192 kHz demandent plus de débit ; si le son saccade, associez-les à la qualité 660/606 ou adaptative. Auto retire l’assistant si la qualité LDAC est aussi sur Auto."
     },
     "cpu_vendor_unlock": {
@@ -4371,5 +4371,9 @@
   "wlf_apps_limited": "Limitées",
   "wlf_apps_strict": "Restreintes en arrière-plan",
   "wlf_apps_ignored": "La ROM ignore la limite",
-  "wlf_apps_companions": "Apps de montre et bracelet (non touchées)"
+  "wlf_apps_companions": "Apps de montre et bracelet (non touchées)",
+  "console_grp_changed": "modifié · %n",
+  "console_grp_stock": "d’origine",
+  "console_sum_changed": "modifié · %n",
+  "console_sum_stock": "d’origine · %n"
 }

@@ -7368,6 +7368,13 @@ echo "com.sec.android.app.shealth WAKE_LOCK allow" > "$T/ops"; rm -f "$T/d/wakel
 run limit
 grep -q '^com.sec.android.app.shealth|244|0|limited$' "$A" || f "first pass after limiting must say limited"
 sed -i "s/^    PARTIAL_WAKE_LOCK                 'Short'/    PARTIAL_WAKE_LOCK                 'PedometerLib:tag' ACQ=-17m49s LONG (uid=10493 pid=21501)\n    PARTIAL_WAKE_LOCK                 'Short'/" "$T/bin/dumpsys"
+# A lock taken BEFORE the op was set proves nothing (the owner's test17 card said "ROM ignores
+# it" seconds after Strict was chosen, for a 4-minute-old PedometerLib lock).
+run limit
+grep -q '^com.sec.android.app.shealth|244|1|limited$' "$A" || f "a lock older than the limit was taken as proof: $(grep shealth "$A")"
+[ -s "$T/d/wakelock_fitness_ignored" ] && f "ignored recorded for a lock older than the limit"
+# Set 30 minutes ago, the lock taken 17 minutes ago and still honoured: that is the proof.
+awk -F'|' -v OFS='|' -v t="$(( $(date +%s) - 1800 ))" '{ $2 = t; print }' "$T/d/wakelock_fitness_reapply" > "$T/ra" && mv "$T/ra" "$T/d/wakelock_fitness_reapply"
 run limit
 grep -q '^com.sec.android.app.shealth|244|1|limit_ignored$' "$A" || f "a still-honoured lock after the op was not reported: $(grep shealth "$A")"
 grep -qx 'com.sec.android.app.shealth' "$T/d/wakelock_fitness_ignored" || f "ignored state not recorded"
@@ -7808,6 +7815,7 @@ package:com.sec.android.app.shealth uid:10681
 package:com.xiaomi.wearable uid:10700
 package:com.fitbit.FitbitMobile uid:10701
 package:com.example.notes uid:10500
+package:com.ftband.mono uid:10502
 L
   ;;
 esac
@@ -7838,13 +7846,14 @@ grep -q 'RUN_ANY_IN_BACKGROUND' "$T/am.log" && f "limit touched the background r
 o="$(st)"
 printf '%s\n' "$o" | grep -x 'installed=1' >/dev/null || f "installed: $o"
 printf '%s\n' "$o" | grep -x 'companions=2' >/dev/null || f "companions not reported: $o"
+printf '%s\n' "$o" | grep -q 'ftband' && f "a bank app (com.ftband.mono) was taken for a band companion: $o"
 printf '%s\n' "$o" | grep -x 'companion_names=com.xiaomi.wearable,com.fitbit.FitbitMobile' >/dev/null || f "companion names: $o"
 echo com.sec.android.app.shealth > "$T/d/wakelock_fitness_ignored"; : > "$T/am.log"
 fit limit
 grep -q 'RUN_ANY_IN_BACKGROUND' "$T/am.log" && f "limit escalated on its own"
 fit strict
 grep -q 'appops set com.sec.android.app.shealth RUN_ANY_IN_BACKGROUND ignore' "$T/am.log" || f "strict did not restrict the app the ROM ignored"
-grep -qx 'com.sec.android.app.shealth|default' "$T/d/wakelock_fitness_bg" || f "background mode not recorded: $(cat "$T/d/wakelock_fitness_bg" 2>/dev/null)"
+grep -q '^com.sec.android.app.shealth|default|[0-9]*$' "$T/d/wakelock_fitness_bg" || f "background mode not recorded: $(cat "$T/d/wakelock_fitness_bg" 2>/dev/null)"
 [ -s "$T/d/wakelock_fitness_ignored" ] && f "the ignored verdict was kept after the stronger limit"
 o="$(st)"
 printf '%s\n' "$o" | grep -x 'strict=1' >/dev/null || f "strict count: $o"

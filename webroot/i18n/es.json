@@ -950,7 +950,7 @@
       "desc": "Mantiene la calidad LDAC elegida tras cada reconexión, en lugar de volver a la tasa de bits adaptativa. Es el mismo ajuste que en Opciones de desarrollador, aplicado de nuevo cuando se conectan los auriculares o cambia el códec, y leído después. No cambia nada para AAC, aptX, SBC, LHDC ni para auriculares sin LDAC. 990/909 kbps necesita un enlace de radio limpio; con interferencias puede entrecortarse: entonces elige 660/606 o adaptativo. Mientras haya una calidad fija, un pequeño asistente queda en segundo plano; Auto lo quita."
     },
     "bt_ldac_rate": {
-      "name": "Frecuencia de muestreo LDAC",
+      "name": "Frecuencia de muestreo LDAC/LHDC",
       "desc": "Mantiene la frecuencia de muestreo LDAC elegida tras cada reconexión y reinicio, en lugar de los 48 kHz a los que Android suele volver. Es la misma elección que en Opciones de desarrollador, pedida de nuevo cuando se conectan los auriculares o cambia el códec, y leída después. Una frecuencia que los auriculares no ofrecen (en gris en Opciones de desarrollador) nunca se fuerza: se mantiene la actual. Funciona con LDAC y con cualquier otro códec que ofrezca esa frecuencia, como LHDC; los demás códecs mantienen la suya. 96 y 192 kHz necesitan más ancho de banda; si el sonido se corta, combínalas con calidad 660/606 o adaptativa. Auto quita el asistente si la calidad LDAC también está en Auto."
     },
     "cpu_vendor_unlock": {
@@ -4371,5 +4371,9 @@
   "wlf_apps_limited": "Limitadas",
   "wlf_apps_strict": "Restringidas en segundo plano",
   "wlf_apps_ignored": "La ROM ignora el límite",
-  "wlf_apps_companions": "Apps de reloj y pulsera (sin tocar)"
+  "wlf_apps_companions": "Apps de reloj y pulsera (sin tocar)",
+  "console_grp_changed": "cambiado · %n",
+  "console_grp_stock": "de fábrica",
+  "console_sum_changed": "cambiado · %n",
+  "console_sum_stock": "de fábrica · %n"
 }

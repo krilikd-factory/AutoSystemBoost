@@ -950,7 +950,7 @@
       "desc": "Seçtiğiniz LDAC kalitesini her yeniden bağlanmadan sonra korur, uyarlanabilir bit hızına dönmez. Geliştirici seçeneklerindeki ayarın aynısıdır; kulaklık bağlandığında veya codec değiştiğinde yeniden uygulanır ve ardından geri okunur. AAC, aptX, SBC, LHDC veya LDAC kullanmayan kulaklıklar için hiçbir şey değişmez. 990/909 kbps temiz bir radyo bağlantısı ister; parazitte takılabilir, o zaman 660/606 veya uyarlanabilir seçin. Sabit kalite seçiliyken küçük bir arka plan yardımcısı çalışır; Otomatik onu kaldırır."
     },
     "bt_ldac_rate": {
-      "name": "LDAC örnekleme hızı",
+      "name": "LDAC/LHDC örnekleme hızı",
       "desc": "Seçtiğiniz LDAC örnekleme hızını her yeniden bağlanma ve yeniden başlatmadan sonra korur; Android'in sık sık döndüğü 48 kHz'e düşmez. Geliştirici seçeneklerindeki aynı seçimdir; kulaklık bağlandığında veya codec değiştiğinde yeniden istenir ve ardından geri okunur. Kulaklığın sunmadığı bir hız (Geliştirici seçeneklerinde gri) asla zorlanmaz: mevcut hız kalır. LDAC ve bu hızı sunan LHDC gibi diğer codec'lerle çalışır; diğer codec'ler kendi hızını korur. 96 ve 192 kHz daha fazla bant genişliği ister; ses takılırsa 660/606 veya uyarlanabilir kaliteyle birlikte kullanın. LDAC kalitesi de Otomatik ise Otomatik yardımcıyı kaldırır."
     },
     "cpu_vendor_unlock": {
@@ -4371,5 +4371,9 @@
   "wlf_apps_limited": "Sınırlı",
   "wlf_apps_strict": "Arka planda kısıtlı",
   "wlf_apps_ignored": "ROM sınırı yok sayıyor",
-  "wlf_apps_companions": "Saat ve bileklik uygulamaları (ellenmez)"
+  "wlf_apps_companions": "Saat ve bileklik uygulamaları (ellenmez)",
+  "console_grp_changed": "değişti · %n",
+  "console_grp_stock": "varsayılan",
+  "console_sum_changed": "değişti · %n",
+  "console_sum_stock": "varsayılan · %n"
 }

@@ -844,7 +844,7 @@
       "desc": "Keeps the LDAC quality you pick after every reconnect, instead of falling back to adaptive bitrate. It is the same setting as Developer options, applied again when the headset connects or the codec changes, and read back afterwards. Nothing changes for AAC, aptX, SBC or LHDC, or for headsets that do not use LDAC. 990/909 kbps needs a clean radio link; on a busy link it can stutter, then choose 660/606 or adaptive. A small background helper stays resident while a fixed quality is selected; Auto removes it."
     },
     "bt_ldac_rate": {
-      "name": "LDAC Sample Rate",
+      "name": "LDAC/LHDC Sample Rate",
       "desc": "Keeps the LDAC sample rate you pick after every reconnect and reboot, instead of the 48 kHz Android often falls back to. It is the sample-rate choice from Developer options, asked for again when the headset connects or the codec changes, and read back afterwards. A rate the headset does not offer (greyed out in Developer options) is never forced: the current one is kept. It works on LDAC and on any other codec that offers the rate, such as LHDC; other codecs keep their rate. 96 and 192 kHz need more bandwidth; if the sound stutters, pair them with 660/606 or adaptive quality. Auto removes the helper when LDAC quality is Auto too."
     },
     "cpu_vendor_unlock": {
@@ -4264,5 +4264,9 @@
   "wlf_apps_limited": "Limited",
   "wlf_apps_strict": "Restricted in background",
   "wlf_apps_ignored": "ROM ignores the limit",
-  "wlf_apps_companions": "Watch and band apps (not touched)"
+  "wlf_apps_companions": "Watch and band apps (not touched)",
+  "console_grp_changed": "changed · %n",
+  "console_grp_stock": "stock",
+  "console_sum_changed": "changed · %n",
+  "console_sum_stock": "stock · %n"
 }

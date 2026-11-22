@@ -950,7 +950,7 @@
       "desc": "Mantiene la qualità LDAC scelta dopo ogni riconnessione, invece di tornare al bitrate adattivo. È la stessa impostazione delle Opzioni sviluppatore, riapplicata quando le cuffie si collegano o il codec cambia, e poi riletta. Nulla cambia per AAC, aptX, SBC, LHDC o cuffie senza LDAC. 990/909 kbps richiede un collegamento radio pulito; con interferenze può scattare: allora scegli 660/606 o adattivo. Finché è scelta una qualità fissa, resta attivo un piccolo assistente in background; Auto lo rimuove."
     },
     "bt_ldac_rate": {
-      "name": "Frequenza di campionamento LDAC",
+      "name": "Frequenza di campionamento LDAC/LHDC",
       "desc": "Mantiene la frequenza di campionamento LDAC scelta dopo ogni riconnessione e riavvio, invece dei 48 kHz a cui Android spesso ritorna. È la stessa scelta delle Opzioni sviluppatore, richiesta di nuovo quando le cuffie si collegano o il codec cambia, e poi riletta. Una frequenza che le cuffie non offrono (grigia nelle Opzioni sviluppatore) non viene mai forzata: resta quella attuale. Funziona con LDAC e con qualsiasi altro codec che offra quella frequenza, come LHDC; gli altri codec mantengono la propria. 96 e 192 kHz richiedono più banda; se l'audio si interrompe, abbinale alla qualità 660/606 o adattiva. Auto rimuove l'helper se anche la qualità LDAC è su Auto."
     },
     "cpu_vendor_unlock": {
@@ -4371,5 +4371,9 @@
   "wlf_apps_limited": "Limitate",
   "wlf_apps_strict": "Limitate in background",
   "wlf_apps_ignored": "La ROM ignora il limite",
-  "wlf_apps_companions": "App di orologi e braccialetti (non toccate)"
+  "wlf_apps_companions": "App di orologi e braccialetti (non toccate)",
+  "console_grp_changed": "modificato · %n",
+  "console_grp_stock": "di serie",
+  "console_sum_changed": "modificato · %n",
+  "console_sum_stock": "di serie · %n"
 }

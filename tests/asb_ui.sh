@@ -12027,7 +12027,7 @@ global._selectedProfile='manual';global.ASB_TCP_ALGS=null;global.ASB_IO_SCHEDULE
 eval(grab('cfgOptsFor'));eval(grab('cfgSmartOwner'));
 eval(between('const ZYGISK_CONTROL_KEYS','const CFG_GROUP_SECTIONS').replace(/^const /gm,'var '));
 eval(between('const CFG_REQUIRES = [','/* What else must change').replace(/^const /gm,'var '));
-eval(between('function cfgRenderRow','let _cfgSearch'));eval(grab('cfgRenderZygiskCard'));
+eval(between('function cfgRenderRow','let _cfgSearch'));eval(grab('cfgConsoleGroupPanel'));eval(grab('cfgRenderZygiskCard'));
 global.deviceZygiskLink=()=>E('div','dev-zygisk-link');global.openZygiskPage=()=>{};
 global.zygiskButtonIcon=b=>b;global.logReportSec=()=>E('div','lgr-sec');global.logReportNote=t=>{const n=E('div','lgr-note');n.textContent=t;return n;};
 function deviceVal(d,s,k){return String((((d||{}).sections||{})[s]||{})[k]||'');}
@@ -16635,7 +16635,7 @@ from pathlib import Path
 import sys
 h=Path(sys.argv[1]).read_text(encoding='utf-8')
 a=h.index('let _dspEqBand = 0;');b=h.index('\nfunction cfgRenderGroup(',a);s=h[a:b]
-for token in ("card.className='cfg-row cat-audio dsp-eq-console'","className='dsp-eq-route'","className='dsp-eq-routes'","className='dsp-eq-bands'","className='dsp-eq-editor'",'function cfgEqPlotPaint(',"svg.setAttribute('viewBox','0 0 320 76')",'cfgRenderRow(editor,',"const targets=['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt']"): 
+for token in ("card.className='cfg-row cat-audio dsp-eq-console'","className='dsp-eq-route'","className='dsp-eq-routes'","className='dsp-eq-bands'","className='dsp-eq-editor asb-console-mod'",'function cfgEqPlotPaint(',"svg.setAttribute('viewBox','0 0 320 76')",'cfgRenderRow(editor,',"const targets=['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt']"): 
  assert token in s,token
 assert s.count('cfgRenderRow(editor,')==3
 assert s.count('cfgRenderRow(card,')==0

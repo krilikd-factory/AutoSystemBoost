@@ -950,7 +950,7 @@
       "desc": "每次重新连接后保持你选择的 LDAC 质量，而不是退回自适应码率。这与开发者选项中的设置相同，在耳机连接或编解码器变化时重新应用并回读确认。对 AAC、aptX、SBC、LHDC 或不使用 LDAC 的耳机不做任何更改。990/909 kbps 需要干净的无线链路；干扰较多时可能断续，此时请选择 660/606 或自适应。选择固定质量时，会有一个小型后台助手常驻；选择“自动”即可移除。"
     },
     "bt_ldac_rate": {
-      "name": "LDAC 采样率",
+      "name": "LDAC/LHDC 采样率",
       "desc": "在每次重新连接和重启后保持你选择的 LDAC 采样率，而不是 Android 经常退回的 48 kHz。它与开发者选项中的采样率选择相同：耳机连接或编码器变化时会重新请求，并在之后读回确认。耳机不提供的采样率（在开发者选项中为灰色）绝不会被强制，保留当前采样率。适用于 LDAC 以及提供该采样率的其他编码器（如 LHDC）；其他编码器保持原采样率。96 和 192 kHz 需要更多带宽；如果声音断续，请搭配 660/606 或自适应质量。当 LDAC 质量也是自动时，选择自动会移除辅助程序。"
     },
     "cpu_vendor_unlock": {
@@ -4371,5 +4371,9 @@
   "wlf_apps_limited": "已限制",
   "wlf_apps_strict": "后台受限",
   "wlf_apps_ignored": "ROM 忽略限制",
-  "wlf_apps_companions": "手表和手环应用（不处理）"
+  "wlf_apps_companions": "手表和手环应用（不处理）",
+  "console_grp_changed": "已修改 · %n",
+  "console_grp_stock": "原厂",
+  "console_sum_changed": "已修改 · %n",
+  "console_sum_stock": "原厂 · %n"
 }

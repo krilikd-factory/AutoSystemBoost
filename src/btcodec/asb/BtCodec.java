@@ -70,18 +70,9 @@ public final class BtCodec {
             Looper.prepareMainLooper();
             handler = new Handler(Looper.getMainLooper());
             final Context ctx = systemContext();
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (ctx == null || adapter == null) { out("result=unavailable\nreason=no_adapter"); System.exit(3); }
-            Object listener = java.lang.reflect.Proxy.newProxyInstance(BtCodec.class.getClassLoader(),
-                new Class<?>[] { BluetoothProfile.ServiceListener.class }, (p, m, a) -> {
-                    if ("onServiceConnected".equals(m.getName())) { a2dp = a[1]; connected(ctx); }
-                    else if ("onServiceDisconnected".equals(m.getName())) { a2dp = null; if (!"watch".equals(mode)) finish("result=unavailable\nreason=profile_lost", 3); }
-                    return null;
-                });
-            if (!adapter.getProfileProxy(ctx, (BluetoothProfile.ServiceListener) listener, BluetoothProfile.A2DP)) {
-                out("result=unavailable\nreason=no_profile"); System.exit(3);
-            }
+            if (ctx == null) { state("failed", "reason=no_context"); out("result=unavailable\nreason=no_context"); System.exit(3); }
             if (!"watch".equals(mode)) handler.postDelayed(() -> finish("result=timeout", 4), 8000);
+            start(ctx);
             Looper.loop();
         } catch (Throwable t) {
             String why = reason(t);
@@ -183,6 +174,48 @@ public final class BtCodec {
             }
             return 0;
         } catch (Throwable t) { return -1; }
+    }
+
+    /* Bluetooth may still be off or starting when the helper runs (it is started 40 s after
+     * boot): a watcher waits for it instead of exiting, and a one-shot call says why it could
+     * not reach it. The adapter comes from the system context's BluetoothManager first:
+     * BluetoothAdapter.getDefaultAdapter() is null in app_process on Android 16 and later,
+     * where it looks for an Application this process never has. */
+    private static int adapterTries = 0;
+
+    private static void start(final Context ctx) {
+        BluetoothAdapter adapter = adapter(ctx);
+        String why = null;
+        if (adapter == null) why = "no_adapter";
+        else {
+            Object listener = java.lang.reflect.Proxy.newProxyInstance(BtCodec.class.getClassLoader(),
+                new Class<?>[] { BluetoothProfile.ServiceListener.class }, (p, m, a) -> {
+                    if ("onServiceConnected".equals(m.getName())) { a2dp = a[1]; connected(ctx); }
+                    else if ("onServiceDisconnected".equals(m.getName())) { a2dp = null; if (!"watch".equals(mode)) finish("result=unavailable\nreason=profile_lost", 3); }
+                    return null;
+                });
+            try {
+                if (!adapter.getProfileProxy(ctx, (BluetoothProfile.ServiceListener) listener, BluetoothProfile.A2DP)) why = "no_profile";
+            } catch (Throwable t) {
+                why = "profile_refused:" + reason(t);
+            }
+        }
+        if (why == null) return;
+        if (!"watch".equals(mode)) { finish("result=unavailable\nreason=" + why, 3); return; }
+        adapterTries++;
+        state("waiting", "reason=" + why + "\ntries=" + adapterTries);
+        handler.postDelayed(() -> start(ctx), adapterTries < 10 ? 30000 : 300000);
+    }
+
+    private static BluetoothAdapter adapter(Context ctx) {
+        try {
+            Object bm = ctx.getClass().getMethod("getSystemService", String.class).invoke(ctx, "bluetooth");
+            if (bm != null) {
+                Object a = bm.getClass().getMethod("getAdapter").invoke(bm);
+                if (a instanceof BluetoothAdapter) return (BluetoothAdapter) a;
+            }
+        } catch (Throwable ignored) { }
+        try { return BluetoothAdapter.getDefaultAdapter(); } catch (Throwable t) { return null; }
     }
 
     private static Context systemContext() throws Exception {

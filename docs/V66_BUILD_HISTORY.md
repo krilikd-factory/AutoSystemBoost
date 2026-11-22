@@ -5,6 +5,38 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## Next test build (in progress)
+
+Input: the owner's asbdiag captures of 20:40 and 20:46 (OnePlus 15, LHDC link, 96 kHz picked by
+hand) and the AnyKernel3 install log of the KRILIKD kernel.
+
+### Bluetooth sample rate (LDAC/LHDC)
+- The capture had `out_reason=no_adapter` and no watcher: on Android 16
+  `BluetoothAdapter.getDefaultAdapter()` returns null inside app_process. The helper now takes
+  the adapter from the system context's BluetoothManager, keeps waiting (30 s, later 5 min)
+  instead of exiting when Bluetooth is not up yet, and names a refused profile proxy.
+- `service.sh` re-applies a fixed `bt_ldac_quality` / `bt_ldac_rate` in its 5-minute loop, so
+  a reconnect or a stack restart no longer leaves the stock rate in place.
+- The option is named "LDAC/LHDC sample rate" in all 13 locales and both advanced READMEs.
+
+### Fitness apps & wakelocks
+- A lock taken before the restriction no longer counts as "the ROM ignores it": the verdicts
+  `limit_ignored` and `strict_ignored` now need a lock younger than the moment the limit or the
+  restriction was set (the time of each is kept in the ledgers).
+- `com.ftband.mono` (a bank app) was taken for a band companion; the companion pattern now
+  matches band apps by name only.
+- The list of limited, restricted and companion apps opens with the description, on tap.
+
+### WebUI
+- Notification fix: the long description is folded behind the name like every other card.
+- Console cards (DSP engine, parametric EQ, Screen & touch, Per-link transport, Photo grading,
+  Zygisk): each group is a framed panel in the LSPosed card's style, with its name and a badge
+  that counts changed controls; a tuned group gets a tinted frame and a chip row sums the card
+  up. The EQ shows each band's gain as a chip and on the band's own panel; panel colours follow
+  the category.
+- The page content is 12 px from the screen edges and the floating bars are no wider than the
+  content, so their edges line up.
+
 ## V66-test17 - fitness strict mode, option lists in console cards, LDAC rate on LHDC builds
 
 Input: the owner's capture asb_log_full_day_9563 (OnePlus 15, Smart, 4 h, test16), two
