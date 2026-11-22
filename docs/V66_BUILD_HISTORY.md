@@ -29,6 +29,10 @@ Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playin
   only when it says something (unavailable, after reboot, a warning, Smart ownership).
   Kernel management keeps its own rows (they carry live kernel evidence).
 - Long slider values (Wi-Fi scan rate) wrap inside the console instead of running off the edge.
+- A segment row with long labels (Factory CPU ceiling: Off · Performance profile · Always) put
+  its control over the name and covered the row's status line (owner's screenshot). Such a row
+  now shows its control on a full-width line under the name; long single-word names hyphenate
+  instead of running under a slider.
 
 ### WebUI: no settings changed by scrolling
 - Sliders move only for a deliberate sideways drag: the first 8 px of the finger decide, a

@@ -6647,6 +6647,10 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row +
 .dsp-console-panel .cfg-range-val { color:var(--cat-ink,var(--text)); }
 .asb-console-sum { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 2px; }
 .asb-console-head-bare { align-items:center; }
+.dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-row-top { grid-template-columns:minmax(0,1fr); row-gap:8px; padding-bottom:4px !important; }
+.dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-seg { justify-self:stretch; width:100%; max-width:100%; display:flex; }
+.dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-seg button { flex:1 1 auto; min-width:0; white-space:normal; overflow-wrap:break-word; line-height:1.2; }
+.dsp-console .dsp-console-panel .cfg-name { overflow-wrap:break-word; hyphens:auto; min-width:0; }
 .dsp-console .dsp-console-panel .cfg-range { grid-template-columns:minmax(0,1fr) minmax(52px,auto); }
 .dsp-console .dsp-console-panel .cfg-range-val { max-width:104px; white-space:normal; line-height:1.2; }
 .asb-console-head-bare .asb-console-sum { margin:0; flex:1 1 auto; min-width:0; }
@@ -12942,6 +12946,15 @@ function cfgConsoleRefreshFrom(el) {
   const card = el && el.closest ? el.closest('.asb-console') : null;
   if (card) cfgConsoleRecount(card);
 }
+/* A console row is two columns: name, control. A segment row whose labels are long
+ * ("Off · Performance profile · Always") does not fit the control column: it spilled over the
+ * name and covered the row's status line. Such a row puts its control on its own full-width
+ * line under the name instead. */
+function cfgConsoleWideControl(row) {
+  if (!row || !row.querySelector || !row.classList) return;
+  const seg = row.querySelector('.cfg-seg');
+  if (seg && String(seg.textContent || '').replace(/\s+/g, '').length > 24) row.classList.add('asb-wide-ctl');
+}
 function cfgRenderConsole(list, sectionItems, o) {
   const by = Object.create(null);
   sectionItems.forEach(function (it) { by[it.key] = it; });
@@ -12966,6 +12979,7 @@ function cfgRenderConsole(list, sectionItems, o) {
     items.forEach(function (it) { used[it.key] = true; });
     cfgConsoleGroupPanel(card, g[0] ? T(g[0], g[1]) : '', items, function (panel, it) {
       cfgRenderRow(panel, it, false);
+      cfgConsoleWideControl(panel.lastChild);
       if (!o.strip) return;
       const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
       const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
