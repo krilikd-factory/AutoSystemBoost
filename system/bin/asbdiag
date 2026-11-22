@@ -128,7 +128,7 @@ CONF="$MODDIR/config/governor.conf"
 if [ -f "$MODDIR/runtime/asb_appops.sh" ]; then
   . "$MODDIR/runtime/asb_appops.sh"
 else
-  asb_appops() { appops "$@"; }
+  asb_appops() { appops "$@" </dev/null; }
 fi
 
 cfg() { grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
@@ -1225,7 +1225,7 @@ if [ -r "$_state" ]; then
       NOTE "unlock lift: $([ "$(_rget unlock_lift /dev/.asb/state 2>/dev/null)" = 1 ] && echo 'ACTIVE now' || echo idle) · ${_ull} lift(s) this session (wakes, first touches, app opens/closes, lock presses) · ceilings to $(cfg unlock_lift_pct)% of hardware max for ${_ulsec:-3} s"
       _utl="$(_rget unlock_touch_lifts /dev/.asb/state 2>/dev/null)"
       _utd="$(_rget unlock_touch_defers /dev/.asb/state 2>/dev/null)"
-      [ -n "$_utl" ] && NOTE "  routine touches: ${_utl:-0} lift(s), ${_utd:-0} deferred · one new touch lift per 20 s; app switches, cold starts, wakes and lock presses keep their own fast paths"
+      [ -n "$_utl" ] && NOTE "  routine touches: ${_utl:-0} lift(s), ${_utd:-0} deferred · one new touch lift per 30 s; app switches, cold starts, wakes and lock presses keep their own fast paths"
       [ "${_uls:-0}" -gt 0 ] 2>/dev/null && NOTE "  wakes not lifted: ${_uls} (last: ${_ulwt})"
       _ullv="$(_rget unlock_levels /dev/.asb/state 2>/dev/null)"
       _ullk="$(_rget unlock_level_khz /dev/.asb/state 2>/dev/null)"

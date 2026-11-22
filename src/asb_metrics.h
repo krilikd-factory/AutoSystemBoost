@@ -181,6 +181,8 @@ typedef struct {
     /* What kind of app is in front, as classified by the Smart package table. Filled by
      * the governor each tick; 0 when package detection is unavailable. */
     int     app_hint;
+    /* 1 = a root manager / WebUI host is in front: its animated pages never count as a game. */
+    int     app_no_gpu_latch;
 } asb_misc_t;
 
 typedef struct {

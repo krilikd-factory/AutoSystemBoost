@@ -86,15 +86,24 @@ def main():
     except Exception as e:
         print('::warning::Telegram request failed: %s' % type(e).__name__)
         return 0
-    desc = ''
+    desc, posted_id = '', ''
     try:
         with open('tg_out.json', encoding='utf-8') as f:
-            desc = json.load(f).get('description', '')
+            body = json.load(f)
+        desc = body.get('description', '')
+        posted_id = str((body.get('result') or {}).get('message_id', ''))
         os.remove('tg_out.json')
     except Exception:
         pass
     if code == '200':
         print('Posted %s to Telegram (%s topic)' % (zip_path, kind))
+        if os.environ.get('TG_PIN', '').strip().lower() in ('1', 'true', 'yes') and posted_id.isdigit():
+            r = api(token, 'pinChatMessage', {'chat_id': chat, 'message_id': posted_id,
+                                              'disable_notification': 'false'})
+            if r.get('ok'):
+                print('Pinned the post (members notified)')
+            else:
+                print('::warning::could not pin the post: %s' % str(r.get('description', ''))[:160])
     else:
         print('::warning::Telegram answered HTTP %s: %s' % (code, desc[:200]))
         explain_chat(token, chat, topic)

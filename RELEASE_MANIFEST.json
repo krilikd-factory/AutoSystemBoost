@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-test14-source",
-  "base": "AutoSystemBoost-V66-test13-source.zip",
+  "release": "AutoSystemBoost-V66-test15-source",
+  "base": "AutoSystemBoost-V66-test14-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 285,
@@ -11,12 +11,15 @@
       ".github/workflows/build-test.yml",
       "docs/TELEGRAM_POST.txt",
       "docs/V66_BUILD_HISTORY.md",
+      "runtime/asb_appops.sh",
       "runtime/asb_wakelock_watch.sh",
       "src/asb_fsm.h",
       "src/asb_governor.c",
+      "src/asb_metrics.h",
       "src/asb_smart.h",
-      "tests/asb_smart.sh",
+      "system/bin/asbdiag",
       "tests/asb_system.sh",
+      "tools/asb_diag.sh",
       "tools/asb_tree.sha256",
       "webroot/index.html"
     ],
@@ -24,7 +27,7 @@
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 12,
+      "changed": 15,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -226,9 +229,9 @@
     },
     {
       "path": ".github/workflows/build-test.yml",
-      "bytes": 43904,
+      "bytes": 44106,
       "mode": "0644",
-      "sha256": "0019b9160538f82887526e92858681e68b55030be8439719bd4ec43160c54ca4"
+      "sha256": "f4ed1e4352d2358b48141c54f8ea209d327925ba2903acc1ab5372f40b3b2d9d"
     },
     {
       "path": "CHANGELOG.md",
@@ -448,9 +451,9 @@
     },
     {
       "path": "docs/TELEGRAM_POST.txt",
-      "bytes": 868,
+      "bytes": 917,
       "mode": "0644",
-      "sha256": "f63459dd7c51c75f8abd2e26a4bb0223f0a0a4b055f6759568eb2903d960bf4f"
+      "sha256": "74dfd00917c12a98def3519056ab5ad86b7ccca9528fd49c7bde7f096e255293"
     },
     {
       "path": "docs/TELEGRAM_RELEASE.txt",
@@ -472,9 +475,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 301589,
+      "bytes": 302678,
       "mode": "0644",
-      "sha256": "3341520e3732bcf9cc95055d77928ebfd7d5229a934741c84bf6bcd29609728a"
+      "sha256": "610dac7d77bdef18d8d5563b935c8505db5a35bc374bf891246a39a7bb1756b9"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -562,9 +565,9 @@
     },
     {
       "path": "runtime/asb_appops.sh",
-      "bytes": 895,
+      "bytes": 917,
       "mode": "0755",
-      "sha256": "ea0b97f9ebaf8132da9c7cd38b4d6c155bc31d87597a678877f287ab2745bf95"
+      "sha256": "511dc570e8e72d442e9eba9544dc33a03c562449e3a9d58200c1543dd0cf9f71"
     },
     {
       "path": "runtime/asb_arbiter.sh",
@@ -1264,9 +1267,9 @@
     },
     {
       "path": "src/asb_fsm.h",
-      "bytes": 191629,
+      "bytes": 191720,
       "mode": "0644",
-      "sha256": "9a882d2e453520e8ef4e4d6bbc8da3b9d7f66797e5c94466aebe019d4a2f8679"
+      "sha256": "cbbaa551a306f0d41921b1b83f15cf86c231d31f2d63c5ff1465c1c80949e446"
     },
     {
       "path": "src/asb_fsm_bounds.generated.h",
@@ -1276,9 +1279,9 @@
     },
     {
       "path": "src/asb_governor.c",
-      "bytes": 660325,
+      "bytes": 660519,
       "mode": "0644",
-      "sha256": "936e08ffe3c87d051a4c015dd276d9220f62147a7c8cfda207cc267d98dfeb10"
+      "sha256": "55709507afcb6b879f3e53ffbf1af6e70a62a4ca49a4bfe0487422913ed1be71"
     },
     {
       "path": "src/asb_lab.h",
@@ -1306,9 +1309,9 @@
     },
     {
       "path": "src/asb_metrics.h",
-      "bytes": 125143,
+      "bytes": 125270,
       "mode": "0644",
-      "sha256": "4402fda1b58bd635429fed5e3e0eeb74f8de4319d15e86809cdd99fc23cee81d"
+      "sha256": "8a61830dc5b33e8d6fe436699c5e457f19fa4b4dba85fc066532d9a4561dad5d"
     },
     {
       "path": "src/asb_record.h",
@@ -1318,9 +1321,9 @@
     },
     {
       "path": "src/asb_smart.h",
-      "bytes": 112124,
+      "bytes": 112209,
       "mode": "0644",
-      "sha256": "8f509e2ab696feae62a17ff511aa274c61da6d4dc3913deee2e5b7a7a016bce8"
+      "sha256": "992225a7752324785d319ba5dfeba86a190c421b1a9d1be16b5381332907e01e"
     },
     {
       "path": "src/asb_smart_defs.h",
@@ -1402,9 +1405,9 @@
     },
     {
       "path": "system/bin/asbdiag",
-      "bytes": 336064,
+      "bytes": 336075,
       "mode": "0755",
-      "sha256": "f51e669be871f913205a62c41c87a76029747d6d95cc8428878a70af6891a207"
+      "sha256": "e1fbf6e1434d173a25c8b925549db22231801dc97dd33a1c2782e9c213da8480"
     },
     {
       "path": "system/bin/asbtrial",
@@ -1504,9 +1507,9 @@
     },
     {
       "path": "tools/asb_diag.sh",
-      "bytes": 336064,
+      "bytes": 336075,
       "mode": "0755",
-      "sha256": "f51e669be871f913205a62c41c87a76029747d6d95cc8428878a70af6891a207"
+      "sha256": "e1fbf6e1434d173a25c8b925549db22231801dc97dd33a1c2782e9c213da8480"
     },
     {
       "path": "tools/asb_discover.sh",
@@ -1668,7 +1671,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24873,
       "mode": "0644",
-      "sha256": "e855c9f4c70a651bf28083b6047f031f9cabaede0f7769810b58b6fc0bb91903"
+      "sha256": "366d21645fe63f9339b8eaafb1bfd21e68f75a3c969fe43f33037b30052768e5"
     },
     {
       "path": "tools/asb_tree_check.sh",

@@ -261,17 +261,6 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
         { "com.google.android.apps.messaging", ASB_APP_LIGHT },
         { "ru.ok.android",             ASB_APP_LIGHT  },
         { "com.vkontakte.android",     ASB_APP_LIGHT  },
-        /* Root managers and their WebUI hosts: ASB's own settings pages draw animated cards
-         * at a low GPU clock and once latched GAMING (an Ace 6 report: 5 latches, all in the
-         * KernelSU Next manager). A settings page is light work, never a game. */
-        { "com.rifsxd.ksunext",        ASB_APP_LIGHT  },
-        { "me.weishu.kernelsu",        ASB_APP_LIGHT  },
-        { "com.sukisu.ultra",          ASB_APP_LIGHT  },
-        { "com.topjohnwu.magisk",      ASB_APP_LIGHT  },
-        { "me.bmax.apatch",            ASB_APP_LIGHT  },
-        { "io.github.a13e300.ksuwebui", ASB_APP_LIGHT },
-        { "scorpion.ksuwebui",         ASB_APP_LIGHT  },
-        { "com.dergoogler.mmrl",       ASB_APP_LIGHT  },
         { NULL, 0 }
     };
     for (int i = 0; T[i].prefix; i++) {
@@ -301,6 +290,22 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
         if (strstr(pkg, SUB[i].prefix)) return SUB[i].hint;
     }
     return ASB_APP_MEDIUM;
+}
+
+/* Root managers and their WebUI hosts. ASB's own settings pages draw animated cards at a
+ * low GPU clock and once latched GAMING (an Ace 6 report: 5 latches, all in the KernelSU Next
+ * manager), so they never latch it from GPU load. They keep the ordinary app class: field
+ * captures show the WebUI janking more when the main cores sat at the ceiling. */
+static int asb_smart_pkg_is_root_ui(const char *pkg) {
+    static const char *const R[] = {
+        "com.rifsxd.ksunext", "me.weishu.kernelsu", "com.sukisu.ultra", "com.topjohnwu.magisk",
+        "me.bmax.apatch", "io.github.a13e300.ksuwebui", "scorpion.ksuwebui", "com.dergoogler.mmrl",
+        NULL
+    };
+    if (!pkg || !pkg[0]) return 0;
+    for (int i = 0; R[i]; i++)
+        if (strncmp(pkg, R[i], strlen(R[i])) == 0) return 1;
+    return 0;
 }
 
 /* A deliberately narrow, affirmative media list for the opt-in Smart Media Guard.

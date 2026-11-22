@@ -5,6 +5,24 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test15 - root WebUI keeps its headroom, AppOps reads, component disable
+
+Input: a OnePlus 15R report on V66-test14 (the WebUI host was the most janky app, 9.1 %,
+janking more with the main cores at the ceiling; every explicit WAKE_LOCK limit read back
+"unknown") and the owner's notes on the Activity/Service manager and light-theme toasts.
+Base: V66-test14. Native code changed: CI rebuilds `bin/asb`.
+
+- **Root manager / WebUI:** back in the ordinary app class, so Smart no longer gives it the
+  light-work lean; a separate flag still keeps it from latching GAMING on GPU load.
+- **AppOps:** `appops`/`cmd appops` read from /dev/null: inside a `while read` loop over a
+  ledger they could take the loop's input, and asbdiag printed "unknown" for every explicit
+  WAKE_LOCK limit.
+- **Activity/Service disable:** read-back accepts the class-only form Android prints (see the
+  V66-test14 rebuild notes); light Liquid Glass toasts; 5 min WebUI calm.
+- **asbdiag:** says one routine-touch lift per 30 s.
+- **Telegram:** the post can be pinned with a notification (`telegram_pin`).
+
+
 ## V66-test14 - fewer touch lifts, wake lift on a warm phone, no false GAMING, calm WebUI
 
 Input: tester logs on V66-test12/13 (Ace 6 PLQ110, OnePlus 15, 15R, 13R) - 247-946 unlock
