@@ -1474,9 +1474,9 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 686750,
+      "bytes": 686784,
       "mode": "0755",
-      "sha256": "ab3da02a2006e85a8eefbd5c3a0842b7912131cc19c2a68a598d4987f196e37b"
+      "sha256": "f9c3ba6b07b225e36f5cfbf06d2f3a796c5f8723ee3e29e176b812d7ed56c6c9"
     },
     {
       "path": "tests/asb_ui.sh",
@@ -1710,7 +1710,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24992,
       "mode": "0644",
-      "sha256": "5208b0695abf82ea94e29b49c3a99001f7eb952fa2f4ca9b4522cdd3a9c2d4dc"
+      "sha256": "918b4b35294ef3205d61c1f295a82bf3a0cd733f2e3969a2dc7678bcb9915e4c"
     },
     {
       "path": "tools/asb_tree_check.sh",

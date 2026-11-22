@@ -10820,7 +10820,7 @@ t_vendor_cap_runtime() (
   [ "$(cat "$N")" = '0:3532800 1:3532800 2:3532800 3:3532800 4:3532800 5:3532800 6:4473600 7:4473600' ] || fail "lift value: $(cat "$N")"
   [ "$(stat -c %a "$N")" = 444 ] || fail 'node not locked against vendor rewrites'
   [ "$(cat "$G")" = 1 ] || fail 'game-scene ceiling not switched off'
-  echo '0:3532800 1:3532800 2:3532800 3:3532800 4:3532800 5:3532800 6:2000000 7:2000000' > "$N"
+  chmod 0644 "$N"; echo '0:3532800 1:3532800 2:3532800 3:3532800 4:3532800 5:3532800 6:2000000 7:2000000' > "$N"; chmod 0444 "$N"
   run sync >/dev/null
   grep -q '6:2000000' "$N" || fail 'a root write while locked (the governor itself) was overwritten'
   echo balanced > "$M/current_profile"
