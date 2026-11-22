@@ -10754,6 +10754,36 @@ t_bt_ldac_quality_runtime() (
   echo 'PASS bt ldac quality: auto removes the helper, a fixed value needs it, LDAC-only with read-back'
 )
 
+t_component_state_class_only() (
+  # Android lists disabled/enabled components by class name only; the package/Class form used
+  # by tests must keep working too. A disable used to read back "not enforced" on phones.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL component state: $*" >&2; exit 1; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  sed -n '/^_wl_svc_state()/,/^}/p' "$ROOT/runtime/asb_wakelock_watch.sh" > "$T/f.sh"
+  out="$(sh -c '. "$1"
+d="  Package [ru.oneme.app]:
+    User 0: installed=true
+      disabledComponents:
+        one.me.webapp.util.WebAppNfcService
+        ru.oneme.app.Short
+      enabledComponents:
+        androidx.work.impl.background.systemjob.SystemJobService
+      gids=[]"
+_wl_svc_state "$d" ru.oneme.app/one.me.webapp.util.WebAppNfcService
+_wl_svc_state "$d" ru.oneme.app/androidx.work.impl.background.systemjob.SystemJobService
+_wl_svc_state "$d" ru.oneme.app/.Short
+_wl_svc_state "$d" ru.oneme.app/other.Cls
+_wl_svc_state "disabledComponents:
+    ru.oneme.app/x.Y" ru.oneme.app/x.Y' _ "$T/f.sh")"
+  [ "$out" = "disabled
+enabled
+disabled
+disabled" ] || fail "got: $out"
+  echo 'PASS component state: class-only and package/Class dumps both read back'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

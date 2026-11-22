@@ -8,6 +8,11 @@ on:
         required: false
         default: '1'
         type: string
+      tg_probe_release:
+        description: 'Only check which Telegram topic holds the Last Release anchor message (silent probe, deleted at once)'
+        required: false
+        default: false
+        type: boolean
       telegram:
         description: 'Post the flashable zip to the Telegram channel (needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID secrets)'
         required: false
@@ -889,7 +894,15 @@ jobs:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT: '@AutoSystemBoost'
           TG_TOPIC: ${{ secrets.TELEGRAM_TOPIC_TEST || '4' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: python3 .github/scripts/telegram_post.py test "$ZIP_TEST" "$ASB_VER"
+
+      - name: Check the Last Release topic (optional)
+        if: ${{ inputs.tg_probe_release }}
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: '@AutoSystemBoost'
+        run: python3 .github/scripts/telegram_post.py probe 2472
 
       - name: Build summary
         if: always()

@@ -1011,10 +1011,11 @@ _wl_svc_state() {
   # result means Android's default state, not a proven manifest-enabled flag; only a
   # service seen running may be newly disabled with that original state recorded.
   awk -v c="${2:-}" '
+    BEGIN { k=index(c,"/"); p=substr(c,1,k-1); q=substr(c,k+1); if (substr(q,1,1)==".") q=p q }
     /^[ \t]*disabledComponents:/ { m="disabled"; next }
     /^[ \t]*enabledComponents:/ { m="enabled"; next }
     /^[ \t]*[A-Za-z][A-Za-z ]*:/ { m="" }
-    m != "" { n=split($0,a,/[ \t,]+/); for(i=1;i<=n;i++) if(a[i]==c) { print m; exit } }' <<EOF_WL_PKG
+    m != "" { n=split($0,a,/[ \t,]+/); for(i=1;i<=n;i++) if(a[i]==c || (k>1 && a[i]==q)) { print m; exit } }' <<EOF_WL_PKG
 ${1:-}
 EOF_WL_PKG
 }

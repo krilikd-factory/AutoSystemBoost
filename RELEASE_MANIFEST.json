@@ -11,6 +11,7 @@
       ".github/workflows/build-test.yml",
       "docs/TELEGRAM_POST.txt",
       "docs/V66_BUILD_HISTORY.md",
+      "runtime/asb_wakelock_watch.sh",
       "src/asb_fsm.h",
       "src/asb_governor.c",
       "src/asb_smart.h",
@@ -23,7 +24,7 @@
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 11,
+      "changed": 12,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -219,15 +220,15 @@
     },
     {
       "path": ".github/workflows/build-release.yml",
-      "bytes": 44089,
+      "bytes": 44138,
       "mode": "0644",
-      "sha256": "8ea3103e22855ce55cd4918c0e5e87f18e64f9f59b8aba77ca9448398ec74a3a"
+      "sha256": "2e6393af9399c7184b734fe0ae3047fcb84f47123ca944359a727b71d543762a"
     },
     {
       "path": ".github/workflows/build-test.yml",
-      "bytes": 43350,
+      "bytes": 43904,
       "mode": "0644",
-      "sha256": "aae9bb1dbc2d062e4822b7983ebce187c3af44097f3d436110e59640524d93cc"
+      "sha256": "0019b9160538f82887526e92858681e68b55030be8439719bd4ec43160c54ca4"
     },
     {
       "path": "CHANGELOG.md",
@@ -447,9 +448,9 @@
     },
     {
       "path": "docs/TELEGRAM_POST.txt",
-      "bytes": 865,
+      "bytes": 868,
       "mode": "0644",
-      "sha256": "12d787abd97a043814eaeed47ac09f09f991b2398fbd260370378d9fb1d3ca42"
+      "sha256": "f63459dd7c51c75f8abd2e26a4bb0223f0a0a4b055f6759568eb2903d960bf4f"
     },
     {
       "path": "docs/TELEGRAM_RELEASE.txt",
@@ -471,9 +472,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 300914,
+      "bytes": 301589,
       "mode": "0644",
-      "sha256": "e6f023b7485e333dba00043ee5e8e4c860e80906b70d309a0df1c647c092d4c6"
+      "sha256": "3341520e3732bcf9cc95055d77928ebfd7d5229a934741c84bf6bcd29609728a"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -1047,9 +1048,9 @@
     },
     {
       "path": "runtime/asb_wakelock_watch.sh",
-      "bytes": 69908,
+      "bytes": 70024,
       "mode": "0755",
-      "sha256": "a6cf72df99e9235f85d5ccaefe212327a5ef649956ff6c09d7d2426f6d8cfdfb"
+      "sha256": "b236bb3d01ed4b2c2bd063e3079a066f9133b01b6a01b3c43b81f1610d371a51"
     },
     {
       "path": "runtime/asb_wakeup_blocker.sh",
@@ -1431,9 +1432,9 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 680535,
+      "bytes": 681771,
       "mode": "0755",
-      "sha256": "552eca615f98d6fa6355bd8183dbb0148dfb0784dda139bb36bd908187f72834"
+      "sha256": "fc290db1cf56c60baaf7c00babebd2e5fc0b124838d5b9c6914f0aa8fb249bfa"
     },
     {
       "path": "tests/asb_ui.sh",
@@ -1667,7 +1668,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24873,
       "mode": "0644",
-      "sha256": "b3b123d057652fd59d7d43f0438d97733cfc7e3d351b627da2b749e1283a2668"
+      "sha256": "e855c9f4c70a651bf28083b6047f031f9cabaede0f7769810b58b6fc0bb91903"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1881,9 +1882,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1801508,
+      "bytes": 1802724,
       "mode": "0644",
-      "sha256": "a71ec91b68b8a84f20fefbe06d0a6915efa16b123a4a599b6559a2536d3e2755"
+      "sha256": "5da6f14f9a57bdc8b1084b975e59c23da737ff678d8ad54a51602736f09fda5c"
     },
     {
       "path": "zygisk/arm64-v8a.so",

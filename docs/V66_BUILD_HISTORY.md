@@ -13,6 +13,14 @@ janky frames at the wake, five GAMING latches inside the KernelSU Next manager, 
 manager hosting the WebUI among the costliest screen-on apps (about 4 W). Base: V66-test13.
 Native code changed: CI rebuilds `bin/asb`.
 
+- **Activity/Service disable:** Android lists disabled and enabled components by class name
+  only, while the read-back looked for package/Class, so every disable of a declared
+  component read back "not enforced" and was rolled back. Both forms are read now.
+- **Light Liquid Glass toasts:** dark ink on the pale pane; good/ok/warn/bad/error got their own
+  colours instead of the grey fallback.
+- **WebUI animations** pause after 5 minutes without input (and while hidden), not 10 s.
+- **Telegram:** a link to the run, the request for asbdiag and the Infinite Log; releases go to
+  the topic of message 2472 (Last Release), found by a silent reply that is deleted at once.
 - **Routine touches:** one lift per 30 s instead of 20 s; wakes, the first touch, app
   switches, cold starts and lock presses keep their immediate paths.
 - **Warm wake:** the warm-die veto for a wake, first touch, cold start or app switch sits

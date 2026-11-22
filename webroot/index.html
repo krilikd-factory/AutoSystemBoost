@@ -1328,6 +1328,12 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
 .toast.stock-restoring.show { animation:stockRestoreToastPulse .92s ease-in-out infinite; }
 @keyframes stockRestoreToastPulse { 0%,100% { filter:brightness(1); box-shadow:0 0 0 1px rgba(200,218,232,.20), 0 0 24px rgba(139,190,230,.18); } 50% { filter:brightness(1.34); box-shadow:0 0 0 2px rgba(210,232,248,.42), 0 0 34px rgba(126,205,255,.34); } }
 
+.toast.t-good, .toast.t-ok { background: rgba(10,30,15,0.95); color: #7bed9f; border-color: rgba(46,213,115,0.35);
+  box-shadow: 0 0 25px rgba(46,213,115,0.15), 0 8px 32px rgba(0,0,0,0.4); }
+.toast.t-warn { background: rgba(35,25,5,0.95); color: #ffc048; border-color: rgba(255,165,2,0.35);
+  box-shadow: 0 0 25px rgba(255,165,2,0.15), 0 8px 32px rgba(0,0,0,0.4); }
+.toast.t-bad, .toast.t-error { background: rgba(40,10,10,0.95); color: #ff6b6b; border-color: rgba(255,26,26,0.35);
+  box-shadow: 0 0 25px rgba(255,26,26,0.15), 0 8px 32px rgba(0,0,0,0.4); }
 .toast.t-performance { 
   background: rgba(40,10,10,0.95); 
   color: #ff4d4d; 
@@ -6008,6 +6014,15 @@ html:root[data-asb-glass="1"] .toast:not(.stock-restoring) {
   box-shadow:0 16px 38px rgba(0,0,0,.34),inset 0 1px 0 var(--glass-highlight),inset 0 -1px 0 var(--glass-underlight);
   -webkit-backdrop-filter:blur(26px) saturate(1.28); backdrop-filter:blur(26px) saturate(1.28);
 }
+/* Light Liquid Glass: the toast sits on a pale pane, so the category's neon text colour is
+ * darkened toward ink for contrast (the category hue stays recognisable). */
+html:root[data-asb-glass="1"][data-asb-theme="light"] .toast:not(.stock-restoring) {
+  -webkit-text-fill-color:color-mix(in srgb,currentColor 30%,#0c1c16);
+  background:linear-gradient(145deg,rgba(255,255,255,.86),rgba(255,255,255,.70)),color-mix(in srgb,currentColor 14%,#ffffff) !important;
+  border-color:color-mix(in srgb,currentColor 45%,rgba(12,28,22,.18)) !important;
+  box-shadow:0 12px 30px rgba(12,28,22,.18),inset 0 1px 0 rgba(255,255,255,.9) !important;
+  font-weight:700;
+}
 html:root[data-asb-glass="1"] .pbtn.pbtn:active,
 html:root[data-asb-glass="1"] .cfg-tile.cfg-tile:active,
 html:root[data-asb-glass="1"] .cfg-row.cfg-row:active,
@@ -7818,7 +7833,7 @@ function asbPageBusy() {
 /* A calm page stops its looping decorations. 53 infinite animations (status pulses, glows,
  * scanners) keep WebView compositing every frame while the page just sits open; field reports
  * show the root manager hosting this WebUI among the costliest screen-on apps (about 4 W on an
- * Ace 6, above YouTube). Ten seconds without a touch, scroll or key pauses them; the next input
+ * Ace 6, above YouTube). Five minutes without a touch, scroll or key pauses them; the next input
  * resumes them where they stopped. Loading scenes keep moving: they are what the wait looks like. */
 (function asbCalmWatch() {
   if (typeof document === 'undefined' || typeof window === 'undefined' || !window.addEventListener) return;
@@ -7827,7 +7842,7 @@ function asbPageBusy() {
   function calm() { timer = 0; if (root) root.classList.add('asb-calm'); }
   function wake() {
     if (root && root.classList.contains('asb-calm')) root.classList.remove('asb-calm');
-    clearTimeout(timer); timer = setTimeout(calm, 10000);
+    clearTimeout(timer); timer = setTimeout(calm, 300000);
   }
   ['pointerdown', 'touchstart', 'wheel', 'keydown', 'scroll'].forEach(function (t) {
     try { window.addEventListener(t, wake, { passive: true, capture: true }); } catch (e) {}

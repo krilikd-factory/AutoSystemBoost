@@ -6,7 +6,8 @@ own topic id, so a build can never land in the wrong place. Without the token, c
 topic id for this kind the script says so and does nothing. A Telegram error never fails a build.
 
 usage: telegram_post.py test|release <zip> <version>
-env:   TG_TOKEN, TG_CHAT, TG_TOPIC
+env:   TG_TOKEN, TG_CHAT, TG_TOPIC (topic id) or TG_ANCHOR (any message already in that
+       topic: a silent reply to it reveals the topic id and is deleted at once), RUN_URL
 text:  docs/TELEGRAM_POST.txt (test) or docs/TELEGRAM_RELEASE.txt (release); one item per line,
        lines starting with # are skipped.
 """
@@ -30,40 +31,48 @@ def items(path):
     return out
 
 
-def caption(kind, ver):
+def caption(kind, ver, run_url=''):
     if kind == 'release':
         lines = items('docs/TELEGRAM_RELEASE.txt') or ['Стабильная версия со всеми исправлениями тестовых сборок.']
         cap = '🚀 <b>AutoSystemBoost ' + html.escape(ver) + '</b>\n'
         cap += 'Новый релиз!\n\n'
         cap += '\n'.join('✅ ' + x for x in lines[:14])
-        cap += '\n\n📲 Прошить через KernelSU, Magisk или APatch и перезагрузиться.'
-        cap += '\n🔄 Настройки сохраняются при обновлении.'
+        cap += '\n\n🔄 Настройки сохраняются при обновлении.'
     else:
         lines = items('docs/TELEGRAM_POST.txt') or ['Подправил оптимизацию.', 'Подправил WebUI.']
         cap = '🛸 <b>AutoSystemBoost ' + html.escape(ver) + '</b>\n'
         cap += 'Новая тестовая сборка!\n\n'
         cap += '\n'.join('✅ ' + x for x in lines[:12])
-        cap += '\n\n📲 Прошить через KernelSU, Magisk или APatch и перезагрузиться.'
-        cap += '\n🧪 Это тестовая сборка: при проблемах пришлите asbdiag и лог.'
+        cap += '\n\n🧪 Это тестовая сборка. При проблемах пришлите asbdiag и Вечный лог.'
+    if run_url:
+        cap += '\n⚙️ <a href="' + html.escape(run_url, quote=True) + '">' + ('Релиз на GitHub' if kind == 'release' else 'Сборка на GitHub') + '</a>'
     return cap[:1024]
 
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == 'probe':
+        token, chat = os.environ.get('TG_TOKEN', '').strip(), os.environ.get('TG_CHAT', '').strip()
+        if token and chat and sys.argv[2].isdigit():
+            topic_of(token, chat, sys.argv[2])
+        return 0
     if len(sys.argv) != 4 or sys.argv[1] not in ('test', 'release'):
         print(__doc__)
         return 0
     kind, zip_path, ver = sys.argv[1:]
-    token, chat, topic = (os.environ.get(k, '').strip() for k in ('TG_TOKEN', 'TG_CHAT', 'TG_TOPIC'))
+    token, chat, topic, anchor, run_url = (os.environ.get(k, '').strip() for k in
+                                           ('TG_TOKEN', 'TG_CHAT', 'TG_TOPIC', 'TG_ANCHOR', 'RUN_URL'))
     if not token or not chat:
         print('::notice::Telegram token or chat id is not set - nothing posted')
         return 0
-    if not topic.lstrip('-').isdigit():
-        print('::notice::Telegram topic id for %s builds is not set - nothing posted' % kind)
+    if not topic.isdigit() and anchor.isdigit():
+        topic = topic_of(token, chat, anchor)
+    if not topic.isdigit():
+        print('::notice::Telegram topic for %s builds is not known - nothing posted' % kind)
         return 0
     if not os.path.isfile(zip_path):
         print('::warning::%s not found - nothing posted' % zip_path)
         return 0
-    cap = caption(kind, ver)
+    cap = caption(kind, ver, run_url)
     print(cap)
     cmd = ['curl', '-sS', '-o', 'tg_out.json', '-w', '%{http_code}',
            '--form-string', 'chat_id=' + chat,
@@ -90,6 +99,37 @@ def main():
         print('::warning::Telegram answered HTTP %s: %s' % (code, desc[:200]))
         explain_chat(token, chat, topic)
     return 0
+
+
+def api(token, method, fields):
+    cmd = ['curl', '-sS']
+    for k, v in fields.items():
+        cmd += ['--form-string', '%s=%s' % (k, v)]
+    cmd.append('https://api.telegram.org/bot%s/%s' % (token, method))
+    try:
+        return json.loads(subprocess.run(cmd, capture_output=True, text=True, timeout=60).stdout or '{}')
+    except Exception:
+        return {}
+
+
+def topic_of(token, chat, anchor):
+    """Topic id of the forum topic holding message <anchor>.
+
+    The Bot API cannot look a message up, but a reply lands in the replied message's topic
+    and Telegram returns that topic id. The probe is silent and deleted straight away."""
+    r = api(token, 'sendMessage', {'chat_id': chat, 'text': '·', 'disable_notification': 'true',
+                                   'reply_parameters': json.dumps({'message_id': int(anchor)})})
+    msg = r.get('result') or {}
+    if not msg:
+        print('::warning::topic lookup by message %s failed: %s' % (anchor, str(r.get('description', ''))[:160]))
+        return ''
+    api(token, 'deleteMessage', {'chat_id': chat, 'message_id': str(msg.get('message_id', ''))})
+    tid = msg.get('message_thread_id')
+    if not tid or not msg.get('is_topic_message'):
+        print('::warning::message %s is not inside a topic - nothing posted' % anchor)
+        return ''
+    print('::notice::message %s is in topic %s' % (anchor, tid))
+    return str(tid)
 
 
 def explain_chat(token, chat, topic):
