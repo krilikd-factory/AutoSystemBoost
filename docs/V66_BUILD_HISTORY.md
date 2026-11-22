@@ -5,7 +5,7 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
-## Next test build (in progress)
+## V66-test18 (second build) - LHDC helper reaches Bluetooth, every section as a console, scroll guard
 
 Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playing, rate set to
 96 kHz): the helper still waited with `no_adapter` after 7 tries.
@@ -17,6 +17,18 @@ Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playin
   `getDefaultAdapter()` return no adapter. The helper now gives the initializer the framework's
   own `BluetoothServiceManager` before asking for the adapter, and a missing adapter carries its
   cause (`no_adapter:<why>`) into the state file and asbdiag.
+
+### WebUI: sections as consoles
+- Every settings section with more than one tweak is now one console in the DSP engine's
+  language: Playback & Bluetooth (output and volume, Bluetooth link, codec quality); Battery -
+  Smart & profile (Smart profile, learning on the phone, prime core bursts), Charging, Sleep &
+  background (deep sleep, wakelocks, location), Heat & performance (throttling, CPU ceiling,
+  games), Memory & apps; Network - mobile, Wi-Fi, network stack; camera performance; interface
+  speed and visual effects; system services and diagnostics. A chip row sums each console up,
+  every group shows how many of its tweaks differ from stock, and a row keeps its status line
+  only when it says something (unavailable, after reboot, a warning, Smart ownership).
+  Kernel management keeps its own rows (they carry live kernel evidence).
+- Long slider values (Wi-Fi scan rate) wrap inside the console instead of running off the edge.
 
 ### WebUI: no settings changed by scrolling
 - Sliders move only for a deliberate sideways drag: the first 8 px of the finger decide, a

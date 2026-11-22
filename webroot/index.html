@@ -6646,6 +6646,15 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row +
 .dsp-console-panel .cfg-name { font-size:12px; overflow-wrap:normal; word-break:normal; hyphens:manual; }
 .dsp-console-panel .cfg-range-val { color:var(--cat-ink,var(--text)); }
 .asb-console-sum { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 2px; }
+.asb-console-head-bare { align-items:center; }
+.dsp-console .dsp-console-panel .cfg-range { grid-template-columns:minmax(0,1fr) minmax(52px,auto); }
+.dsp-console .dsp-console-panel .cfg-range-val { max-width:104px; white-space:normal; line-height:1.2; }
+.asb-console-head-bare .asb-console-sum { margin:0; flex:1 1 auto; min-width:0; }
+.dsp-console.asb-console-status .dsp-console-panel .cfg-status-row { display:flex !important; flex-wrap:wrap; margin-top:3px; }
+.dsp-console.asb-console-status .dsp-console-panel .cfg-status-row:empty { display:none !important; }
+.dsp-console.asb-console-status .dsp-console-panel .cfg-status:not(.warn):not(.bad):not(.na) { display:none; }
+.dsp-console.asb-console-status .dsp-console-panel .cfg-status-row .cfg-status,
+.dsp-console.asb-console-status .dsp-console-panel .cfg-status-row .cfg-smart-owner { font-size:10px; white-space:normal; }
 .asb-console-chip { display:inline-flex; align-items:center; min-height:22px; padding:2px 9px; border-radius:11px;
   border:1px solid var(--border); color:var(--text-tertiary); background:color-mix(in srgb,var(--surface) 70%,transparent);
   font:700 10.5px/1.2 var(--sans); letter-spacing:.02em; font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -12817,6 +12826,70 @@ const FEEL_CONSOLE_GROUPS = [
   ['feel_grp_haptics', 'Haptics', ['haptic_strength', 'haptic_touch_strength']],
   ['feel_grp_input', 'Input & display', ['feel_pointer_speed', 'feel_gesture_mistouch', 'feel_game_memc', 'feel_dc_dimming']]
 ];
+/* Sections laid out as consoles in the same language: labelled group panels with a change
+ * badge instead of one full card per tweak. A section keeps its own header above the console,
+ * so these consoles carry no second title. Rows keep their status line when it says
+ * something (unavailable, after reboot, a verification warning, Smart ownership). */
+const CFG_SECTION_CONSOLES = {
+  'audio/playback': [
+    ['con_grp_audio_out', 'Output & volume', ['audio_profile', 'audio_dac_hifi', 'media_loudness', 'media_vol_steps', 'audio_resampler']],
+    ['con_grp_bt_link', 'Bluetooth link', ['bt_absvol_mode', 'bt_a2dp_offload', 'bt_link_stability']],
+    ['con_grp_bt_codec', 'Codec quality', ['bt_ldac_quality', 'bt_ldac_rate']]
+  ],
+  'battery/smart': [
+    ['con_grp_smart_profile', 'Smart profile', ['auto_battery_enable', 'smart_battery_bias', 'profile_class_auto', 'smart_media_guard']],
+    ['con_grp_smart_learn', 'Learning on the phone', ['smart_lab', 'smart_lab_mem', 'smart_records_balanced']],
+    ['con_grp_prime_burst', 'Prime core bursts', ['heavy_prime_escape', 'prime_escape_burst_s', 'prime_escape_rest_s']]
+  ],
+  'battery/charging': [
+    ['con_grp_charge', 'While charging', ['charge_aware_enable']],
+    ['con_grp_night_charge', 'Night charge limit', ['night_charge_enable', 'night_charge_start', 'night_charge_end']]
+  ],
+  'battery/standby': [
+    ['con_grp_sleep', 'Deep sleep', ['doze_level', 'doze_trim_whitelist', 'night_quiet_enable']],
+    ['con_grp_wakelocks', 'Wakelocks', ['wakelock_action', 'wakelock_fitness']],
+    ['con_grp_location', 'Location', ['gnss_trim']]
+  ],
+  'battery/thermal': [
+    ['con_grp_throttle', 'Throttling', ['sustained_temp_mode', 'sustained_temp_enter']],
+    ['con_grp_cpu_ceiling', 'CPU ceiling', ['perf_ceiling_pct', 'cpu_vendor_unlock']],
+    ['con_grp_games', 'Games', ['cool_gaming', 'bat_suppress_gaming']]
+  ],
+  'battery/memory': [
+    ['con_grp_bg_apps', 'Background apps', ['BG_TRIM_LEVEL']],
+    ['con_grp_google', 'Google services', ['gms_trim', 'gms_freeze']]
+  ],
+  'net/cellular': [
+    ['con_grp_radio', 'Radio', ['radio_policy_enable', 'night_modem_idle']],
+    ['con_grp_lte_5g', 'LTE and 5G', ['net_screen_off_lte', 'net_lte_light']]
+  ],
+  'net/wifi': [
+    ['con_grp_wifi_power', 'Scanning & power', ['wifi_scan_throttle', 'wifi_powersave']],
+    ['con_grp_wifi_link', 'Connection', ['net_wifi_leave', 'wifi_country']]
+  ],
+  'net/stack': [
+    ['con_grp_net_cpu', 'CPU & queues', ['net_rps', 'net_txqueue']],
+    ['con_grp_net_routes', 'Routes', ['net_route_tune', 'net_mtu_probing']]
+  ],
+  'camera/perf': [
+    ['con_grp_cam_capture', 'Capture', ['camera_hold_enable', 'CAMERA_PREVIEW_TNR']]
+  ],
+  'iface/speed': [
+    ['con_grp_anim', 'Animations', ['anim_speed', 'UX_ANIM_FORCE_RESTART', 'UX_MANAGE_TIMEOUTS']]
+  ],
+  'iface/effects': [
+    ['con_grp_effects', 'Blur & effects', ['disable_blur', 'ui_effects_level']],
+    ['con_grp_recents', 'Recent apps', ['ui_recents_memory', 'ui_recents_corner_radius']],
+    ['con_grp_shape', 'Corners & navigation', ['ui_smooth_corners', 'ui_nav_handle_autohide']]
+  ],
+  'ui/services': [
+    ['con_grp_oem', 'OEM switches', ['UX_MANAGE_OEM_TOGGLES', 'mmfeed_off']],
+    ['con_grp_processes', 'Processes', ['athena_service', 'phantom_procs']]
+  ],
+  'ui/diag': [
+    ['con_grp_logs', 'Logs', ['log_level', 'lsposed_verbose']]
+  ]
+};
 function cfgConsoleNonDefault(items) {
   return items.some(function (it) { return cfgIsActive(it, _cfgVals[it.key] !== undefined ? _cfgVals[it.key] : it.def); });
 }
@@ -12875,16 +12948,18 @@ function cfgRenderConsole(list, sectionItems, o) {
   const used = Object.create(null);
   const card = document.createElement('section');
   card.className = 'cfg-row cat-' + o.cat + ' dsp-console asb-console';
-  const head = document.createElement('div'); head.className = 'dsp-console-head';
-  const title = document.createElement('div'); title.className = 'dsp-console-title'; title.textContent = o.title;
+  if (o.keepStatus) card.className += ' asb-console-status';
+  const head = document.createElement('div'); head.className = 'dsp-console-head' + (o.title ? '' : ' asb-console-head-bare');
+  const title = document.createElement('div'); title.className = 'dsp-console-title'; title.textContent = o.title || '';
   const mark = document.createElement('span'); mark.className = 'dsp-console-mark';
   card._asbMark = function () {
     const on = typeof o.active === 'function' ? !!o.active() : !!o.active;
     mark.classList[on ? 'add' : 'remove']('on');
     mark.textContent = on ? o.on : o.off;
   };
-  head.appendChild(title); head.appendChild(mark); card.appendChild(head);
-  const sum = document.createElement('div'); sum.className = 'asb-console-sum'; card.appendChild(sum);
+  const sum = document.createElement('div'); sum.className = 'asb-console-sum';
+  if (o.title) { head.appendChild(title); head.appendChild(mark); card.appendChild(head); card.appendChild(sum); }
+  else { head.appendChild(sum); head.appendChild(mark); card.appendChild(head); }
   o.groups.concat([['', '', sectionItems.map(function (it) { return it.key; })]]).forEach(function (g) {
     const items = g[2].map(function (k) { return used[k] ? null : by[k]; }).filter(Boolean);
     if (!items.length) return;
@@ -13017,6 +13092,9 @@ function cfgRenderGroup(list, groupId) {
         active: function () { return cfgConsoleNonDefault(sectionItems); }, on: T('console_on_tuned', 'TUNED'), off: T('console_off_auto', 'AUTO') });
     else if (groupId === 'feel' && section.id === 'feel' && sectionItems.length > 1)
       cfgRenderConsole(list, sectionItems, { cat: 'feel', title: T('feel_console_title', 'Screen & touch'), groups: FEEL_CONSOLE_GROUPS,
+        active: function () { return cfgConsoleNonDefault(sectionItems); }, on: T('console_on_tuned', 'TUNED'), off: T('console_off_stock', 'STOCK') });
+    else if (CFG_SECTION_CONSOLES[groupId + '/' + section.id] && sectionItems.length > 1)
+      cfgRenderConsole(list, sectionItems, { cat: cfgGroupCatClass(groupId).slice(4), title: '', groups: CFG_SECTION_CONSOLES[groupId + '/' + section.id], keepStatus: true,
         active: function () { return cfgConsoleNonDefault(sectionItems); }, on: T('console_on_tuned', 'TUNED'), off: T('console_off_stock', 'STOCK') });
     else sectionItems.forEach(it => {
       cfgRenderRow(list, it, false);
