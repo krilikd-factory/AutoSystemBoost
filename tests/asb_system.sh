@@ -10761,6 +10761,8 @@ t_bt_ldac_quality_runtime() (
   grep -q 'invoke(ctx, "bluetooth")' "$j" || fail 'the adapter still comes only from getDefaultAdapter (null in app_process on Android 16+)'
   grep -q 'state("waiting"' "$j" && grep -q 'handler.postDelayed(() -> start(ctx)' "$j" || fail 'a watcher exits when Bluetooth is not up yet instead of waiting'
   grep -q 'asb_bt_codec.sh" apply >/dev/null' "$ROOT/service.sh" || fail 'a dead helper is never restarted'
+  grep -q 'setBluetoothServiceManager' "$j" && grep -q 'ensureServiceManager();' "$j" || fail 'app_process never gets the Bluetooth binder, so the adapter stays null on Android 13+'
+  grep -q '"no_adapter" + (adapterWhy' "$j" || fail 'a missing adapter does not say why'
   grep -qF 'grep -q asb_btcodec "/proc/$_bt_p/cmdline"' "$ROOT/service.sh" || fail 'the 5-minute pass starts a shell and reads the config even while the helper runs'
   grep -qF 'events ? 1800000 : (activeCodec() != null ? 120000 : 300000)' "$ROOT/src/btcodec/asb/BtCodec.java" || fail 'the helper polls too often'
   grep -q 'bt_ldac_rate=auto' "$ROOT/config/governor.conf" || fail 'rate default missing'
@@ -10899,7 +10901,27 @@ t_debug_log_bundle_runtime() (
   [ -n "$id4" ] && [ "$id4" != "$id3" ] || fail 'a grown infinite log reused the old id'
   grep -q "'send'" "$ROOT/webroot/index.html" && grep -q 'bundle-check' "$ROOT/webroot/index.html" || fail 'WebUI does not offer sending'
   grep -qF "https://t.me/AutoSystemBoost/3" "$ROOT/webroot/index.html" || fail 'WebUI does not open the Bugs topic'
-  echo 'PASS debug log bundle: newest asbdiag and infinite log packed into Download, partial files skipped, empty folder refused'
+  rm -rf "$T/logs" "$T/out" "$T/st"; mkdir -p "$T/logs" "$T/out"
+  for n in 1 2 3; do mkdir -p "$T/logs/asb_log_full_day_$n"; echo x > "$T/logs/asb_log_full_day_$n/env.txt"; touch -d '-10 days' "$T/logs/asb_log_full_day_$n/env.txt" "$T/logs/asb_log_full_day_$n"; done
+  echo old > "$T/logs/asbdiag_20250101_000000.txt"; touch -d '-9 days' "$T/logs/asbdiag_20250101_000000.txt"
+  out="$(run bundle)"; printf '%s\n' "$out" | grep -qx 'error=nothing_to_send' || fail 'a dump of old logs was packed'
+  mkdir -p "$T/logs/asb_log_full_day_4" "$T/logs/asb_log_full_day_5" "$T/st/full_day_webui.lock"
+  echo a > "$T/logs/asb_log_full_day_4/env.txt"; echo b > "$T/logs/asb_log_full_day_5/env.txt"
+  touch -d '-2 hours' "$T/logs/asb_log_full_day_4/env.txt" "$T/logs/asb_log_full_day_4"
+  printf '%s\n' "$T/logs/asb_log_full_day_4" > "$T/st/full_day_webui.lock/output_dir"
+  echo new > "$T/logs/asbdiag_20260105_000000.txt"
+  out="$(run bundle)"; p="$(printf '%s\n' "$out" | sed -n 's/^path=//p')"
+  l="$(tar -tf "$p")"
+  printf '%s\n' "$l" | grep -q '^asb_log_full_day_4/' || fail 'the running capture was not the one packed'
+  printf '%s\n' "$l" | grep -q '^asb_log_full_day_[1235]/\|asbdiag_2025' && fail 'other folders or old reports were packed'
+  rm -rf "$T/st/full_day_webui.lock"
+  head -c 21000000 /dev/urandom > "$T/logs/asb_log_full_day_5/raw_trace.bin"; touch "$T/logs/asb_log_full_day_5"
+  out="$(run bundle)"; p="$(printf '%s\n' "$out" | sed -n 's/^path=//p')"
+  [ -s "$p" ] || fail "an oversized capture was not trimmed: $out"
+  printf '%s\n' "$out" | grep -qx 'trimmed_files=1' || fail 'the trimmed file count is missing'
+  tar -tf "$p" | grep -q 'raw_trace.bin' && fail 'the oversized file was packed'
+  tar -tf "$p" | grep -qx 'asb_log_full_day_5/env.txt' || fail 'the small files of a trimmed capture are missing'
+  echo 'PASS debug log bundle: newest asbdiag and infinite log packed into Download, partial files skipped, empty folder refused, old dumps ignored, running capture first, oversize trimmed'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

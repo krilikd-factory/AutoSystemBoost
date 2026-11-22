@@ -5,6 +5,26 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## Next test build (in progress)
+
+Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playing, rate set to
+96 kHz): the helper still waited with `no_adapter` after 7 tries.
+
+### Bluetooth sample rate (LDAC/LHDC)
+- Root cause: since Android 13 the Bluetooth binder is resolved through
+  `BluetoothFrameworkInitializer`, which ActivityThread fills in only for app processes and
+  system_server. In a bare app_process it stays empty, so both BluetoothManager and
+  `getDefaultAdapter()` return no adapter. The helper now gives the initializer the framework's
+  own `BluetoothServiceManager` before asking for the adapter, and a missing adapter carries its
+  cause (`no_adapter:<why>`) into the state file and asbdiag.
+
+### Logs from users
+- "Send logs to Bugs" no longer trips over a pile of old logs: the infinite log being recorded is
+  taken first, otherwise the newest folder touched in the last 3 days; asbdiag and reports older
+  than 3 days are left out, and nothing at all is packed when only old logs exist.
+- A capture too large for the bot (over 19 MB packed) is packed again without its files over
+  4 MB; `asb_bundle.txt` in the archive says how many were left out.
+
 ## V66-test18 - LDAC/LHDC rate on Android 16, logs to Bugs, console panels
 
 Input: the owner's asbdiag captures of 20:40 and 20:46 (OnePlus 15, LHDC link, 96 kHz picked by

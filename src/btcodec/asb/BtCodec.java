@@ -186,7 +186,7 @@ public final class BtCodec {
     private static void start(final Context ctx) {
         BluetoothAdapter adapter = adapter(ctx);
         String why = null;
-        if (adapter == null) why = "no_adapter";
+        if (adapter == null) why = "no_adapter" + (adapterWhy.isEmpty() ? "" : ":" + adapterWhy);
         else {
             Object listener = java.lang.reflect.Proxy.newProxyInstance(BtCodec.class.getClassLoader(),
                 new Class<?>[] { BluetoothProfile.ServiceListener.class }, (p, m, a) -> {
@@ -207,15 +207,44 @@ public final class BtCodec {
         handler.postDelayed(() -> start(ctx), adapterTries < 10 ? 30000 : 300000);
     }
 
+    private static String adapterWhy = "";
+
+    /* Android 13+ resolves the Bluetooth binder through BluetoothFrameworkInitializer, which
+     * ActivityThread fills in only for app and system_server processes. A bare app_process
+     * never gets it, so BluetoothManager and getDefaultAdapter() both come back without an
+     * adapter (asbdiag: reason=no_adapter on every try). Hand the initializer the same
+     * BluetoothServiceManager the framework would, once, before asking for the adapter. */
+    private static void ensureServiceManager() {
+        try {
+            Class<?> init = Class.forName("android.bluetooth.BluetoothFrameworkInitializer");
+            Method get = init.getDeclaredMethod("getBluetoothServiceManager");
+            get.setAccessible(true);
+            if (get.invoke(null) != null) return;
+            Class<?> bsm = Class.forName("android.os.BluetoothServiceManager");
+            Constructor<?> c = bsm.getDeclaredConstructor();
+            c.setAccessible(true);
+            Method set = init.getDeclaredMethod("setBluetoothServiceManager", bsm);
+            set.setAccessible(true);
+            set.invoke(null, c.newInstance());
+        } catch (Throwable ignored) { }
+    }
+
     private static BluetoothAdapter adapter(Context ctx) {
+        ensureServiceManager();
+        adapterWhy = "";
         try {
             Object bm = ctx.getClass().getMethod("getSystemService", String.class).invoke(ctx, "bluetooth");
             if (bm != null) {
                 Object a = bm.getClass().getMethod("getAdapter").invoke(bm);
                 if (a instanceof BluetoothAdapter) return (BluetoothAdapter) a;
-            }
-        } catch (Throwable ignored) { }
-        try { return BluetoothAdapter.getDefaultAdapter(); } catch (Throwable t) { return null; }
+                adapterWhy = "manager_without_adapter";
+            } else adapterWhy = "no_manager";
+        } catch (Throwable t) { adapterWhy = reason(t); }
+        try {
+            BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
+            if (a != null) return a;
+        } catch (Throwable t) { adapterWhy = adapterWhy + "/" + reason(t); }
+        return null;
     }
 
     private static Context systemContext() throws Exception {

@@ -953,26 +953,47 @@ revive_full_day() {
   start_full_day 1 "$_vd" restart
 }
 
+bundle_mtime() {
+  _bm_t="$(stat -c %Y "$1" 2>/dev/null || echo 0)"
+  case "$_bm_t" in ''|*[!0-9]*) _bm_t=0 ;; esac
+  if [ -d "$1" ] && [ -e "$1/recorder_heartbeat.env" ]; then
+    _bm_h="$(stat -c %Y "$1/recorder_heartbeat.env" 2>/dev/null || echo 0)"
+    case "$_bm_h" in ''|*[!0-9]*) _bm_h=0 ;; esac
+    [ "$_bm_h" -gt "$_bm_t" ] && _bm_t="$_bm_h"
+  fi
+  printf '%s' "$_bm_t"
+}
+
 bundle_newest() {
   _bn_best=""; _bn_t=0
+  _bn_now="$(date +%s 2>/dev/null || echo 0)"
   for _bn_f in "$DIAG_OUTDIR"/$1; do
     [ -e "$_bn_f" ] || continue
     case "$_bn_f" in *.tmp|*.tmp.*) continue ;; esac
     if [ "$2" = d ]; then [ -d "$_bn_f" ] || continue; else [ -f "$_bn_f" ] || continue; fi
-    _bn_m="$(stat -c %Y "$_bn_f" 2>/dev/null || echo 0)"
-    case "$_bn_m" in ''|*[!0-9]*) _bn_m=0 ;; esac
+    _bn_m="$(bundle_mtime "$_bn_f")"
+    [ "$(( _bn_now - _bn_m ))" -le "${3:-259200}" ] || continue
     if [ -z "$_bn_best" ] || [ "$_bn_m" -gt "$_bn_t" ]; then _bn_best="$_bn_f"; _bn_t="$_bn_m"; fi
   done
   [ -n "$_bn_best" ] || return 1
   printf '%s %s' "$_bn_t" "$_bn_best"
 }
 
+bundle_log_dir() {
+  _bl_o="$(tr -d '\r\n' < "$OUTPUTFILE" 2>/dev/null || true)"
+  if [ -n "$_bl_o" ] && [ -d "$_bl_o" ] && [ "${_bl_o%/*}" = "$DIAG_OUTDIR" ]; then
+    printf '%s %s' "$(bundle_mtime "$_bl_o")" "$_bl_o"
+    return 0
+  fi
+  bundle_newest 'asb_log_full_day_*' d 259200
+}
+
 bundle_check() {
   _now="$(date +%s 2>/dev/null || echo 0)"
-  _d="$(bundle_newest 'asbdiag_*.txt' f 2>/dev/null || true)"
-  _l="$(bundle_newest 'asb_log_full_day_*' d 2>/dev/null || true)"
+  _d="$(bundle_newest 'asbdiag_*.txt' f 259200 2>/dev/null || true)"
+  _l="$(bundle_log_dir 2>/dev/null || true)"
   if [ -n "$_d" ]; then _dt="${_d%% *}"; echo "diag=${_d#* }"; echo "diag_age_s=$(( _now - _dt ))"; else echo 'diag='; fi
-  if [ -n "$_l" ]; then echo "log=${_l#* }"; else echo 'log='; fi
+  if [ -n "$_l" ]; then _lt="${_l%% *}"; echo "log=${_l#* }"; echo "log_age_s=$(( _now - _lt ))"; else echo 'log='; fi
   echo 'status=ok'
 }
 
@@ -984,9 +1005,9 @@ bundle_id_new() {
 
 bundle_logs() {
   _bo="${ASB_DEBUG_SUPPORT_BUNDLE_DIR:-/sdcard/Download}"
-  _d="$(bundle_newest 'asbdiag_*.txt' f 2>/dev/null || true)"
-  _l="$(bundle_newest 'asb_log_full_day_*' d 2>/dev/null || true)"
-  _r="$(bundle_newest 'asb_report_*.txt' f 2>/dev/null || true)"
+  _d="$(bundle_newest 'asbdiag_*.txt' f 259200 2>/dev/null || true)"
+  _l="$(bundle_log_dir 2>/dev/null || true)"
+  _r="$(bundle_newest 'asb_report_*.txt' f 259200 2>/dev/null || true)"
   [ -n "$_d" ] && _d="${_d#* }"; [ -n "$_l" ] && _l="${_l#* }"; [ -n "$_r" ] && _r="${_r#* }"
   [ -n "$_d$_l" ] || { echo 'error=nothing_to_send'; return 3; }
   mkdir -p "$_bo" 2>/dev/null
@@ -1019,20 +1040,45 @@ bundle_logs() {
     echo "log_kb=${_lb:-0}"
     echo "report=${_r##*/}"
   } > "$_mf" 2>/dev/null || { echo 'error=bundle_failed'; return 6; }
-  set -- asb_bundle.txt
-  for _bi in "$_d" "$_l" "$_r"; do [ -n "$_bi" ] && set -- "$@" "${_bi##*/}"; done
+  _bl="$STATE_DIR/bundle.list"
+  mkdir -p "$STATE_DIR" 2>/dev/null
   _bf="$_bo/ASB_logs_${_id}.tar.gz"
-  rm -f "$_bf.tmp" 2>/dev/null
-  tar -czf "$_bf.tmp" -C "$DIAG_OUTDIR" "$@" >/dev/null 2>&1
-  if [ ! -s "$_bf.tmp" ]; then
+  _skip=0
+  for _pass in all trim; do
+    {
+      echo asb_bundle.txt
+      [ -n "$_d" ] && echo "${_d##*/}"
+      [ -n "$_r" ] && echo "${_r##*/}"
+      if [ -n "$_l" ]; then
+        if [ "$_pass" = all ]; then
+          (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' 2>/dev/null)
+        else
+          (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' -size -4096k 2>/dev/null)
+        fi
+      fi
+    } > "$_bl" 2>/dev/null
+    if [ "$_pass" = trim ]; then
+      _all="$( (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' 2>/dev/null) | wc -l | tr -dc '0-9')"
+      _kept="$(grep -c "^${_l##*/}/" "$_bl" 2>/dev/null | tr -dc '0-9')"
+      _skip=$(( ${_all:-0} - ${_kept:-0} ))
+      echo "trimmed_files=$_skip" >> "$_mf"
+    fi
+    _bf="$_bo/ASB_logs_${_id}.tar.gz"
     rm -f "$_bf.tmp" 2>/dev/null
-    _bf="$_bo/ASB_logs_${_id}.tar"
-    tar -cf "$_bf.tmp" -C "$DIAG_OUTDIR" "$@" >/dev/null 2>&1
-  fi
-  rm -f "$_mf" 2>/dev/null
+    tar -czf "$_bf.tmp" -C "$DIAG_OUTDIR" -T "$_bl" >/dev/null 2>&1
+    [ -s "$_bf.tmp" ] || tar -czf "$_bf.tmp" -C "$DIAG_OUTDIR" $(cat "$_bl") >/dev/null 2>&1
+    if [ ! -s "$_bf.tmp" ]; then
+      rm -f "$_bf.tmp" 2>/dev/null
+      _bf="$_bo/ASB_logs_${_id}.tar"
+      tar -cf "$_bf.tmp" -C "$DIAG_OUTDIR" -T "$_bl" >/dev/null 2>&1
+    fi
+    _bb="$(wc -c < "$_bf.tmp" 2>/dev/null | tr -dc '0-9')"
+    case "$_bb" in ''|*[!0-9]*) _bb=0 ;; esac
+    [ "$_bb" -gt 19000000 ] && [ -n "$_l" ] && [ "$_pass" = all ] && continue
+    break
+  done
+  rm -f "$_mf" "$_bl" 2>/dev/null
   [ -s "$_bf.tmp" ] || { rm -f "$_bf.tmp" 2>/dev/null; echo 'error=bundle_failed'; return 6; }
-  _bb="$(wc -c < "$_bf.tmp" 2>/dev/null | tr -dc '0-9')"
-  case "$_bb" in ''|*[!0-9]*) _bb=0 ;; esac
   if [ "$_bb" -gt 19000000 ]; then
     rm -f "$_bf.tmp" 2>/dev/null
     echo 'error=too_big'; echo "bytes=$_bb"; return 7
@@ -1046,6 +1092,7 @@ bundle_logs() {
   [ -n "$_d" ] && echo "diag=${_d##*/}"
   [ -n "$_l" ] && echo "log=${_l##*/}"
   [ -n "$_r" ] && echo "report=${_r##*/}"
+  [ "$_skip" -gt 0 ] && echo "trimmed_files=$_skip"
   echo 'status=saved'
   return 0
 }
