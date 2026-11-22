@@ -859,6 +859,16 @@ jobs:
         with:
           files: ${{ env.ZIP_REL }}
 
+      # Only for a published release (a tag push alone would post twice), into the
+      # "Last Release" topic of the owner's Telegram forum.
+      - name: Post release to Telegram (Last Release topic)
+        if: github.event_name == 'release'
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TG_TOPIC: ${{ secrets.TELEGRAM_TOPIC_RELEASE }}
+        run: python3 .github/scripts/telegram_post.py release "$ZIP_REL" "$ASB_VER"
+
       - name: OTA manifest check (update.json, advisory)
         run: |
           # update.json tells root managers where the published release lives, so it can only

@@ -881,52 +881,15 @@ jobs:
           path: pkg-test/
           retention-days: 30
 
-      # Optional: posts the same flashable zip to a Telegram channel. Without both secrets the
-      # step says so and does nothing; a Telegram error never fails the build.
-      - name: Post test build to Telegram
+      # Optional: posts the flashable zip to the "Test" topic of the owner's Telegram forum.
+      # Releases go to "Last Release" from build-release.yml; each needs its own topic id.
+      - name: Post test build to Telegram (Test topic)
         if: ${{ inputs.telegram }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if [ -z "$TG_TOKEN" ] || [ -z "$TG_CHAT" ]; then
-            echo "::notice::Telegram secrets are not set - nothing posted"
-            exit 0
-          fi
-          [ -f "$ZIP_TEST" ] || { echo "::warning::$ZIP_TEST not found - nothing posted"; exit 0; }
-          python3 - "$ASB_VER" > tg_caption.txt <<'PY'
-          import html, sys
-          ver = sys.argv[1]
-          items = []
-          try:
-              for line in open('docs/TELEGRAM_POST.txt', encoding='utf-8'):
-                  line = line.strip()
-                  if line and not line.startswith('#'):
-                      items.append(html.escape(line))
-          except Exception:
-              pass
-          if not items:
-              items = ['Подправил оптимизацию.', 'Подправил WebUI.']
-          cap = '🛸 <b>AutoSystemBoost ' + html.escape(ver) + '</b>\n'
-          cap += 'Новая тестовая сборка!\n\n'
-          cap += '\n'.join('✅ ' + x for x in items[:12])
-          cap += '\n\n📲 Прошить через KernelSU, Magisk или APatch и перезагрузиться.'
-          cap += '\n🧪 Тестовая сборка: при проблемах пришлите asbdiag и лог.'
-          print(cap[:1000])
-          PY
-          code=$(curl -sS -o tg_out.json -w '%{http_code}' \
-            --form-string "chat_id=$TG_CHAT" \
-            --form-string "caption=$(cat tg_caption.txt)" \
-            --form-string "parse_mode=HTML" \
-            -F "document=@$ZIP_TEST" \
-            "https://api.telegram.org/bot$TG_TOKEN/sendDocument") || code=000
-          if [ "$code" = 200 ]; then
-            echo "Posted $ZIP_TEST to Telegram"
-          else
-            echo "::warning::Telegram answered HTTP $code: $(head -c 300 tg_out.json 2>/dev/null | sed 's/[^[:print:]]//g')"
-          fi
-          rm -f tg_out.json tg_caption.txt
+          TG_TOPIC: ${{ secrets.TELEGRAM_TOPIC_TEST }}
+        run: python3 .github/scripts/telegram_post.py test "$ZIP_TEST" "$ASB_VER"
 
       - name: Build summary
         if: always()

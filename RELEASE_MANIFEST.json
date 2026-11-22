@@ -4,7 +4,7 @@
   "base": "AutoSystemBoost-V66-test15-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
-  "file_count_excluding_manifest": 284,
+  "file_count_excluding_manifest": 285,
   "inventory_vs_base": {
     "changed": [
       ".github/workflows/build-release.yml",
@@ -45,6 +45,7 @@
     ],
     "added": [
       "docs/TELEGRAM_POST.txt",
+      "docs/TELEGRAM_RELEASE.txt",
       "runtime/asb_bt_codec.sh",
       "src/btcodec/asb/BtCodec.java",
       "src/btcodec/build.sh"
@@ -53,7 +54,7 @@
     "mode_changes": [],
     "counts": {
       "changed": 35,
-      "added": 4,
+      "added": 5,
       "deleted": 0,
       "mode_changes": 0
     }
@@ -248,15 +249,15 @@
     },
     {
       "path": ".github/workflows/build-release.yml",
-      "bytes": 43560,
+      "bytes": 44067,
       "mode": "0644",
-      "sha256": "05294e8c34b08f4f16b3a26b6a63f242466f3fb9e770e883c3ca9811bd699def"
+      "sha256": "d0383b250ff420252f8fe5f000b3516ea3ac672ff83a1797b9559afe7c6b466b"
     },
     {
       "path": ".github/workflows/build-test.yml",
-      "bytes": 45173,
+      "bytes": 43321,
       "mode": "0644",
-      "sha256": "c89c5c36c8bed35f6477870f016d51e235ecb0392cbb7ab9fd462fac13a96a74"
+      "sha256": "2c5df00504eb4ee7420ff1a001871f73c1eafa1024982a9f4c267a09d9a0a889"
     },
     {
       "path": "CHANGELOG.md",
@@ -479,6 +480,12 @@
       "bytes": 941,
       "mode": "0644",
       "sha256": "307e67c0d14f6f78bf221107731267f7816f5e589766a882507c2ae823931439"
+    },
+    {
+      "path": "docs/TELEGRAM_RELEASE.txt",
+      "bytes": 260,
+      "mode": "0644",
+      "sha256": "4d9f7f9e7843d28f4ca5d01c74390fadf9de43014434f47e6b0ff1759cb3c475"
     },
     {
       "path": "docs/V64_EFFICIENCY_AUDIT_PATCH_RU.md",
@@ -1688,9 +1695,9 @@
     },
     {
       "path": "tools/asb_tree.sha256",
-      "bytes": 24781,
+      "bytes": 24873,
       "mode": "0644",
-      "sha256": "3a88e04e8dcac90f92c672748d3eaf735eee65af7e973c0155d191924ef349b0"
+      "sha256": "4f1dfaa336ca215d0c3bf57797e95a7a125427155e666041d14215ea4abae89b"
     },
     {
       "path": "tools/asb_tree_check.sh",
