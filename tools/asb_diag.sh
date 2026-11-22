@@ -5075,7 +5075,7 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
     fi
     if [ -f "$MODDIR/runtime/asb_zygisk_park.sh" ]; then
       _zk_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_park.sh" status 2>/dev/null)"
-      P "     libraries  : $(printf '%s\n' "$_zk_out" | sed -n 's/^asb_libraries=//p' | head -1) provider=$(printf '%s\n' "$_zk_out" | sed -n 's/^provider=//p' | head -1)"
+      P "     libraries  : $(printf '%s\n' "$_zk_out" | sed -n 's/^asb_libraries=//p' | head -1) provider=$(printf '%s\n' "$_zk_out" | sed -n 's/^provider=//p' | head -1) seen_before=$(printf '%s\n' "$_zk_out" | sed -n 's/^provider_seen=//p' | head -1)"
     fi
     if [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ]; then
       _zl_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_link.sh" status 2>/dev/null)"

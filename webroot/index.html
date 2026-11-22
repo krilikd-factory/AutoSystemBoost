@@ -3924,9 +3924,9 @@ html[dir="rtl"] .bfx-bar > i { transform-origin: right center; }
 .bfx-primary[data-mode="reboot"] { color: #2a1b00; background: linear-gradient(135deg, #ffd27a, #ffb43c); border-color: rgba(255,200,90,.7); box-shadow: 0 4px 14px rgba(255,180,60,.22); }
 .bfx-secondary { color: var(--text-secondary); background: transparent; border: 1px solid var(--border-active); }
 .bfx-secondary[hidden] { display: none; }
-html.asb-calm :not(.asb-cosmic-loading):not(.asb-cosmic-loading *),
-html.asb-calm :not(.asb-cosmic-loading):not(.asb-cosmic-loading *)::before,
-html.asb-calm :not(.asb-cosmic-loading):not(.asb-cosmic-loading *)::after { animation-play-state: paused !important; }
+html.asb-rest :not(.asb-cosmic-loading):not(.asb-cosmic-loading *),
+html.asb-rest :not(.asb-cosmic-loading):not(.asb-cosmic-loading *)::before,
+html.asb-rest :not(.asb-cosmic-loading):not(.asb-cosmic-loading *)::after { animation-play-state: paused !important; }
 .cmp-actions .bfx-btn { flex: 1 1 0; min-width: 0; }
 .cmp-rows { margin: 2px 0 8px; }
 .bfx-note { margin-top: 8px; font-size: 11.5px; color: var(--text-tertiary); }
@@ -7835,13 +7835,13 @@ function asbPageBusy() {
  * show the root manager hosting this WebUI among the costliest screen-on apps (about 4 W on an
  * Ace 6, above YouTube). Five minutes without a touch, scroll or key pauses them; the next input
  * resumes them where they stopped. Loading scenes keep moving: they are what the wait looks like. */
-(function asbCalmWatch() {
+(function asbRestWatch() {
   if (typeof document === 'undefined' || typeof window === 'undefined' || !window.addEventListener) return;
   let timer = 0;
   const root = document.documentElement;
-  function calm() { timer = 0; if (root) root.classList.add('asb-calm'); }
+  function calm() { timer = 0; if (root) root.classList.add('asb-rest'); }
   function wake() {
-    if (root && root.classList.contains('asb-calm')) root.classList.remove('asb-calm');
+    if (root && root.classList.contains('asb-rest')) root.classList.remove('asb-rest');
     clearTimeout(timer); timer = setTimeout(calm, 300000);
   }
   ['pointerdown', 'touchstart', 'wheel', 'keydown', 'scroll'].forEach(function (t) {

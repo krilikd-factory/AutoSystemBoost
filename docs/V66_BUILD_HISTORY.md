@@ -5,6 +5,28 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test16 (in progress) - Zygisk libraries stay in place with a built-in provider
+
+Input: a OnePlus 13 report (KernelSU fork with a built-in Zygisk, LSPosed installed) on
+V66-test14 and V66-test15: the Zygisk page said "no provider", the companion stayed WAITING and
+the diagnostic showed `libraries : parked provider=present`.
+
+- Cause: the boot-time park step (post-fs-data) looked only for a Zygisk provider module. A
+  root manager with Zygisk built in has no such module, so ASB set its libraries aside on every
+  boot; the later service-stage unpark could not help, because the next boot parked them again
+  before zygote loaded them.
+- `runtime/asb_zygisk_park.sh`: a provider is also recognised by module id (zygisksu and the
+  known forks), by a name containing a known provider, and by any other enabled module that
+  ships `zygisk/*.so` (for example LSPosed), which only loads where Zygisk runs. A sighting is
+  remembered in `/data/adb/asb/zygisk_provider_seen`, so the boot step keeps the libraries in
+  place; the service pass clears the mark when no provider is found, and the next boot parks
+  them again (one boot of delay, the WebUI-hiding protection stays).
+- `service.sh`: the five-minute pass refreshes the mark on its first boot run whether the
+  libraries are parked or not. `uninstall.sh` removes the mark.
+- Diagnostic: the libraries line adds `seen_before=`.
+- Tests: `t_zygisk_park_runtime` covers the id match, a Zygisk-using module as evidence, a
+  disabled one not counted, the remembered sighting and its clearing.
+
 ## V66-test15 - root WebUI keeps its headroom, AppOps reads, component disable
 
 Input: a OnePlus 15R report on V66-test14 (the WebUI host was the most janky app, 9.1 %,

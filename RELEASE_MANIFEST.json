@@ -229,9 +229,9 @@
     },
     {
       "path": ".github/workflows/build-test.yml",
-      "bytes": 44106,
+      "bytes": 44105,
       "mode": "0644",
-      "sha256": "f4ed1e4352d2358b48141c54f8ea209d327925ba2903acc1ab5372f40b3b2d9d"
+      "sha256": "1414bec52ffd72ae11d6b40c9d2fae27812aad0d87c5107cdc72e421a1014a81"
     },
     {
       "path": "CHANGELOG.md",
@@ -1105,9 +1105,9 @@
     },
     {
       "path": "runtime/asb_zygisk_park.sh",
-      "bytes": 1937,
+      "bytes": 3011,
       "mode": "0644",
-      "sha256": "54022f13f71dd9788d2591fe36483b511d96a7bf21bb009bd6404b369ca4b2e3"
+      "sha256": "8b7cf4b414b2bd58c5190d3cd2d8d5b02be1b2c44a5bb573ae2d8fa0404c0925"
     },
     {
       "path": "runtime/i18n/action_ar.sh",
@@ -1195,9 +1195,9 @@
     },
     {
       "path": "service.sh",
-      "bytes": 227853,
+      "bytes": 227822,
       "mode": "0755",
-      "sha256": "4a3a1d656217b698f22d2be4a1f239aaeaebd3474a4c1c83eeda7f2d4672d622"
+      "sha256": "2f23a9c806a5f583db6e3fc07d28aea3df4241b6c420bf007bfbfa29a0c69717"
     },
     {
       "path": "src/DSP/asb_dsp.c",
@@ -1405,9 +1405,9 @@
     },
     {
       "path": "system/bin/asbdiag",
-      "bytes": 336075,
+      "bytes": 336157,
       "mode": "0755",
-      "sha256": "e1fbf6e1434d173a25c8b925549db22231801dc97dd33a1c2782e9c213da8480"
+      "sha256": "59add18d20bf4342ab55f3507b5808498e53edb3c2ac9ebce94c7f9be82ffb05"
     },
     {
       "path": "system/bin/asbtrial",
@@ -1447,9 +1447,9 @@
     },
     {
       "path": "tests/asb_zygisk.sh",
-      "bytes": 156488,
+      "bytes": 157808,
       "mode": "0755",
-      "sha256": "96bc23981ad9aa289eaca397a0372e40dd14f1e9a1fc978d15991579583f2f56"
+      "sha256": "db61b7b6aa911dd6f21e129c1d2b87771b47315e3c24cc7b8a2dbd51e2076494"
     },
     {
       "path": "tools/asb_analyze.py",
@@ -1507,9 +1507,9 @@
     },
     {
       "path": "tools/asb_diag.sh",
-      "bytes": 336075,
+      "bytes": 336157,
       "mode": "0755",
-      "sha256": "e1fbf6e1434d173a25c8b925549db22231801dc97dd33a1c2782e9c213da8480"
+      "sha256": "59add18d20bf4342ab55f3507b5808498e53edb3c2ac9ebce94c7f9be82ffb05"
     },
     {
       "path": "tools/asb_discover.sh",
@@ -1671,7 +1671,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24873,
       "mode": "0644",
-      "sha256": "366d21645fe63f9339b8eaafb1bfd21e68f75a3c969fe43f33037b30052768e5"
+      "sha256": "e6990ffc3815b25214270e112fc2c073586caadd0f6ce7bb47ce3ca1ebfe163e"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1777,9 +1777,9 @@
     },
     {
       "path": "uninstall.sh",
-      "bytes": 39639,
+      "bytes": 39674,
       "mode": "0755",
-      "sha256": "9b4c46151cbd2382c60e8f014f53752202a0847cc3da3448d07267a255b3600d"
+      "sha256": "f6db5fe644930510f26e37534ebab4ab86699201096a130e77a5cb353d5f8b45"
     },
     {
       "path": "update.json",
@@ -1887,7 +1887,7 @@
       "path": "webroot/index.html",
       "bytes": 1802724,
       "mode": "0644",
-      "sha256": "5da6f14f9a57bdc8b1084b975e59c23da737ff678d8ad54a51602736f09fda5c"
+      "sha256": "b7ac3a8f4f9fee1fadfff7e379979f7c6f0ba6027c200c23f9d681d4cff1ff48"
     },
     {
       "path": "zygisk/arm64-v8a.so",

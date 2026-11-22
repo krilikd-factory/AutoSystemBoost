@@ -11,7 +11,7 @@ on:
       telegram_pin:
         description: 'Pin the Telegram post and notify the members'
         required: false
-        default: false
+        default: true
         type: boolean
       tg_probe_release:
         description: 'Only check which Telegram topic holds the Last Release anchor message (silent probe, deleted at once)'

@@ -13,7 +13,7 @@ t_zygisk_park_runtime() (
   M="$T/modules"; A="$M/AutoSystemBoost"
   mkdir -p "$A/zygisk" "$A/config"
   : > "$A/zygisk/arm64-v8a.so"; echo x > "$A/zygisk/policy"
-  run() { env -u KSU -u APATCH -u ZYGISK_ENABLED PATH="/usr/bin:/bin" MODDIR="$A" ASB_ZP_MODULES="$M" sh "$ROOT/runtime/asb_zygisk_park.sh" "$@"; }
+  run() { env -u KSU -u APATCH -u ZYGISK_ENABLED PATH="/usr/bin:/bin" MODDIR="$A" ASB_ZP_MODULES="$M" ASB_ZP_SEEN="$T/seen" sh "$ROOT/runtime/asb_zygisk_park.sh" "$@"; }
   out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "no provider: $out"
   [ ! -e "$A/zygisk" ] && [ -f "$A/zygisk.off/arm64-v8a.so" ] || fail 'libraries not parked'
   out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "second boot: $out"
@@ -29,6 +29,23 @@ t_zygisk_park_runtime() (
   out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "pending removal still counted: $out"
   rm -f "$M/zygisksu/remove" "$M/zygisksu/module.prop"; : > "$M/zygisksu/bin/zygiskd"
   out="$(run boot)"; [ "$out" = asb_libraries=active ] || fail "bin/zygiskd provider not seen: $out"
+  rm -rf "$M/zygisksu"; rm -f "$T/seen"
+  out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "provider gone: $out"
+  mkdir -p "$M/zn"; printf 'id=zygisksu\nname=Zygisk Next (fork)\n' > "$M/zn/module.prop"
+  out="$(run boot)"; [ "$out" = asb_libraries=active ] || fail "provider by module id not seen: $out"
+  rm -rf "$M/zn"; rm -f "$T/seen"; run boot >/dev/null
+  mkdir -p "$M/lsp/zygisk"; printf 'id=zygisk_lsposed\nname=LSPosed\n' > "$M/lsp/module.prop"; : > "$M/lsp/zygisk/arm64-v8a.so"
+  : > "$M/lsp/disable"
+  out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "disabled Zygisk module counted: $out"
+  rm -f "$M/lsp/disable"
+  out="$(run boot)"; [ "$out" = asb_libraries=active ] || fail "built-in provider with a Zygisk module not seen: $out"
+  [ -f "$T/seen" ] || fail 'provider sighting not remembered'
+  rm -rf "$M/lsp"
+  out="$(run boot)"; [ "$out" = asb_libraries=active ] || fail "remembered provider parked at boot: $out"
+  run status | grep -qx provider_seen=1 || fail 'status lacks the remembered sighting'
+  out="$(run unpark)"; [ "$out" = asb_libraries=active ] || fail "unpark parked: $out"
+  [ ! -e "$T/seen" ] || fail 'sighting kept without a provider'
+  out="$(run boot)"; [ "$out" = asb_libraries=parked ] || fail "stale sighting kept the libraries: $out"
   grep -q 'asb_zygisk_park.sh" boot' "$ROOT/post-fs-data.sh" || fail 'post-fs-data does not park'
   awk '/asb_zygisk_park.sh" boot/{p=NR} /asb_zygisk.sh" sync/{s=NR} END{exit !(p && s && p < s)}' "$ROOT/post-fs-data.sh" || fail 'park must run before the policy sync'
   grep -q 'asb_zygisk_park.sh" unpark' "$ROOT/service.sh" || fail 'service does not unpark'
