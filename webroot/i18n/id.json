@@ -4329,5 +4329,11 @@
   "cmp_pick_empty": "Tidak ada aplikasi pengguna yang cocok",
   "cmp_pick_components": "Komponen",
   "ldac_helper_missing": "Pembantu LDAC tidak ada di build ini; tidak ada yang diubah",
-  "wl_component_state_declared_manual": "Dideklarasikan dalam paket · tidak berjalan sekarang · bisa dinonaktifkan dengan ketukan kedua"
+  "wl_component_state_declared_manual": "Dideklarasikan dalam paket · tidak berjalan sekarang · bisa dinonaktifkan dengan ketukan kedua",
+  "cmp_card_summary": "Mematikan satu layar atau layanan tertentu dari aplikasi tanpa membekukan aplikasinya.",
+  "cmp_row_saved": "Dinonaktifkan ASB",
+  "cmp_row_restore": "Pemulihan",
+  "cmp_row_restore_v": "status asli yang tepat, satu ketukan",
+  "cmp_card_pick": "Pilih aplikasi",
+  "cmp_card_saved": "Tersimpan"
 }

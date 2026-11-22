@@ -11,6 +11,7 @@
       ".github/workflows/build-test.yml",
       "README.advanced.md",
       "README.advanced.ru.md",
+      "common/functions.sh",
       "common/install.sh",
       "config/governor.conf",
       "config/governor.conf.shipped",
@@ -50,7 +51,7 @@
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 34,
+      "changed": 35,
       "added": 3,
       "deleted": 0,
       "mode_changes": 0
@@ -252,9 +253,9 @@
     },
     {
       "path": ".github/workflows/build-test.yml",
-      "bytes": 42581,
+      "bytes": 45216,
       "mode": "0644",
-      "sha256": "a6aea632a3f383d0d19af0e29afd3c1c79d182b4f30e4f2d8607192fc3dfd028"
+      "sha256": "e32fa68cc471760ec41acc05f16ef4644cfac8e07cb668f2a6288978bdc64a7b"
     },
     {
       "path": "CHANGELOG.md",
@@ -366,9 +367,9 @@
     },
     {
       "path": "common/functions.sh",
-      "bytes": 13568,
+      "bytes": 13582,
       "mode": "0755",
-      "sha256": "08032b9bdec39b359082d41508436ffb3cb3de4f7ee08bab331aa8041218b025"
+      "sha256": "d02b49d9135020ac1e0f50ff3d2372834fcd02f9278eb303bb4b3240be93a689"
     },
     {
       "path": "common/germantext.sh",
@@ -486,9 +487,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 298934,
+      "bytes": 299702,
       "mode": "0644",
-      "sha256": "d00ae2ddf2f88bf679f3e14194f928282854fb620aa1f158d0c5a7c5963cf662"
+      "sha256": "66fe1f9d6860f19c8a2819cc4d5b94a8c2be4dec65627b2f0b08d7c908269823"
     },
     {
       "path": "docs/field_baseline/fix150.json",
@@ -1682,7 +1683,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24692,
       "mode": "0644",
-      "sha256": "46c3d2d22b4827e6fb82b806f9461b6a903367d396ae2194810c05fb84e09cf2"
+      "sha256": "07d40bb3da6587c59d2fff45e28481aa9f7c936d2fa224e545251831509e4624"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1812,81 +1813,81 @@
     },
     {
       "path": "webroot/i18n/ar.json",
-      "bytes": 429147,
+      "bytes": 429535,
       "mode": "0644",
-      "sha256": "8c8d8de17972664d01fe39abcccded740788da290310873296ad072b82afa557"
+      "sha256": "4a35df852e7621225e3269e58dcbdafdab7672b20123f8d9b98359dc42d49c6f"
     },
     {
       "path": "webroot/i18n/de.json",
-      "bytes": 345174,
+      "bytes": 345502,
       "mode": "0644",
-      "sha256": "da9deaf88824d1c4b858cbe6bcd25e0d643bcc1b9b8206e027f6a9ba0c956420"
+      "sha256": "7af91d1b66a54705fec2da5c13a73534056aa82f94104d29b56877ec63c50e34"
     },
     {
       "path": "webroot/i18n/en.json",
-      "bytes": 311956,
+      "bytes": 312254,
       "mode": "0644",
-      "sha256": "57a4cf82254c3011745b748d2b6d7ff7fe6a1ca0c5f4927a55c5c9c72ee78808"
+      "sha256": "68dab97c7988b7b478b35bc80f0b3936c1ff965e840566cedf0f877f1f51628b"
     },
     {
       "path": "webroot/i18n/es.json",
-      "bytes": 346496,
+      "bytes": 346805,
       "mode": "0644",
-      "sha256": "f2e5683950fbff64e10c340dd892d732befcb15fdfde442108d78a49f9ea76b2"
+      "sha256": "9d828aa0e1e2c9b73abd348db1bad1780130495843671124c244cae5553e33a2"
     },
     {
       "path": "webroot/i18n/fr.json",
-      "bytes": 361001,
+      "bytes": 361315,
       "mode": "0644",
-      "sha256": "f1d7df477435f355b7b3da35076ea4ddb63e6584910a5d8df4ef6dd670550b1a"
+      "sha256": "1e60d8c0c75b948b56e7e16a5f87ec6d31258e6dcdf3746b30ea3558ff3021e7"
     },
     {
       "path": "webroot/i18n/hy.json",
-      "bytes": 521691,
+      "bytes": 522154,
       "mode": "0644",
-      "sha256": "62d57be934a357deedfda549b1904e16acb29e2606d7040d0dd30a73b372833d"
+      "sha256": "3ede3d4ae81e4a619ae97689a6a78687322a7f8d378563cddd1da5ee2b46c8a6"
     },
     {
       "path": "webroot/i18n/id.json",
-      "bytes": 332075,
+      "bytes": 332394,
       "mode": "0644",
-      "sha256": "ebe55dd460eb2404b7ef865074c26c20fd280cd41d2146f20bb52947a2fac290"
+      "sha256": "77b741abd95dbd31026dc7348943af8fc88dcad712480e9835214d08ee654d36"
     },
     {
       "path": "webroot/i18n/it.json",
-      "bytes": 342073,
+      "bytes": 342385,
       "mode": "0644",
-      "sha256": "99d83b039f25d8bd5657d8a3f5def6121a4467447844641a1f556b63eeed62ab"
+      "sha256": "1b6de9414dd51ecb5c0c85cbbcbbb1303e4b9eb8cdacdb4647fbedb06a0b8cb3"
     },
     {
       "path": "webroot/i18n/pt.json",
-      "bytes": 341946,
+      "bytes": 342244,
       "mode": "0644",
-      "sha256": "752129fe4616e593fb30cd51126c92ec89ee543b360a04f3ee3d7ede275058c5"
+      "sha256": "068f8d07cec36a5e318ab8338c6aebf8f0c9c18b6ec45152471d6ffa4e022210"
     },
     {
       "path": "webroot/i18n/ru.json",
-      "bytes": 510092,
+      "bytes": 510580,
       "mode": "0644",
-      "sha256": "bd2ebe9da8bde152c9f9f1a0e761c2792aa64c1c540d0b4f764ab8a1d17e4dea"
+      "sha256": "198aefd861d641d9a673b35d3ceb1e698cbcb356941739c58a06755d08db0b68"
     },
     {
       "path": "webroot/i18n/tr.json",
-      "bytes": 343240,
+      "bytes": 343547,
       "mode": "0644",
-      "sha256": "6bf164674daa0c55a2999ca05c229901ff131b1dcc0e12c4adab3aa8782c3286"
+      "sha256": "b87508c962d463cec7748befa57dcd31df783a3b53bed50d170547f8c5f82cbc"
     },
     {
       "path": "webroot/i18n/uk.json",
-      "bytes": 493848,
+      "bytes": 494318,
       "mode": "0644",
-      "sha256": "01a6b3df10d428509d4092258238e2fac8f4403bd27962bec5934205bf31e129"
+      "sha256": "ff688de3f6de33f458bad8cb69d5fdd84ffbeadd4c391b93508d3d679e01ad5d"
     },
     {
       "path": "webroot/i18n/zh.json",
-      "bytes": 305150,
+      "bytes": 305443,
       "mode": "0644",
-      "sha256": "193587a4b7e39f449b4eefe20fe3900847146dedce4faabf6dabe9a1e1f6da33"
+      "sha256": "8e039aa04576273ac9e6fa587cf24b1d77ca5c4b9002b921fa5ea8eaafe798e3"
     },
     {
       "path": "webroot/icon.png",
@@ -1896,9 +1897,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1796802,
+      "bytes": 1799996,
       "mode": "0644",
-      "sha256": "c3a8ff4b267b10c5f844a3a320729c5b146a478b93bfbfb354f2517fa932e3f3"
+      "sha256": "5e13099d1655296ffdc9e42cb7951cfca64d6f0f36de22c922e537815b0bd06a"
     },
     {
       "path": "zygisk/arm64-v8a.so",

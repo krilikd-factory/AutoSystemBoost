@@ -4329,5 +4329,11 @@
   "cmp_pick_empty": "Keine passenden Nutzer-Apps",
   "cmp_pick_components": "Komponenten",
   "ldac_helper_missing": "Der LDAC-Helfer fehlt in diesem Build; nichts wurde geändert",
-  "wl_component_state_declared_manual": "Im Paket deklariert · läuft gerade nicht · mit einem zweiten Tipp deaktivierbar"
+  "wl_component_state_declared_manual": "Im Paket deklariert · läuft gerade nicht · mit einem zweiten Tipp deaktivierbar",
+  "cmp_card_summary": "Schaltet einen bestimmten Bildschirm oder Dienst einer App ab, ohne die App einzufrieren.",
+  "cmp_row_saved": "Von ASB deaktiviert",
+  "cmp_row_restore": "Wiederherstellen",
+  "cmp_row_restore_v": "exakter Originalzustand, ein Tipp",
+  "cmp_card_pick": "App wählen",
+  "cmp_card_saved": "Gespeicherte"
 }

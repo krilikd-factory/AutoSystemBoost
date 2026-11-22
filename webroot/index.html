@@ -2278,6 +2278,28 @@ html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-mo
   gap:8px; margin-top:10px; justify-content:stretch; }
 .zy-lsp-mod .zy-lsp-actions .dev-zygisk-btn { width:100%; min-height:38px; padding:7px 6px;
   border-radius:12px; font-size:12px; text-align:center; }
+
+/* Zygisk page: actions say what they do by colour, evidence folds read as folds, not buttons. */
+.zygisk-page .dev-zygisk-btn.zy-tone-go { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, var(--border));
+  background:color-mix(in srgb, var(--accent) 9%, transparent); }
+.zygisk-page .dev-zygisk-btn.zy-tone-stop { color:#ff8a7a; border-color:color-mix(in srgb, #ff6b5b 42%, var(--border));
+  background:color-mix(in srgb, #ff6b5b 7%, transparent); }
+.zygisk-page .dev-zygisk-btn.zy-tone-test { color:var(--fsm-heavy); border-color:color-mix(in srgb, var(--fsm-heavy) 45%, var(--border));
+  background:color-mix(in srgb, var(--fsm-heavy) 8%, transparent); }
+.zygisk-page .dev-zygisk-btn.zy-tone-warm { color:var(--bal); border-color:color-mix(in srgb, var(--bal) 45%, var(--border));
+  background:color-mix(in srgb, var(--bal) 8%, transparent); }
+html[data-asb-theme="light"] .zygisk-page .dev-zygisk-btn.zy-tone-stop { color:#b42318; }
+html[data-asb-theme="light"] .zygisk-page .dev-zygisk-btn.zy-tone-test { color:#6b4fd8; }
+html[data-asb-theme="light"] .zygisk-page .dev-zygisk-btn.zy-tone-warm { color:#8a5700; }
+.zygisk-page .dev-zygisk-btn.zy-refresh { border-style:dashed; background:transparent; color:var(--text-secondary); }
+.zygisk-page .dev-zygisk-btn.zy-refresh::before { content:'\21bb'; margin-inline-end:6px; color:var(--accent2); font-weight:700; }
+.zygisk-page .zy-evidence { border-color:color-mix(in srgb, var(--accent2) 22%, var(--border));
+  background:color-mix(in srgb, var(--accent2) 4%, transparent); border-inline-start:3px solid color-mix(in srgb, var(--accent2) 55%, transparent); }
+.zygisk-page .zy-evidence > summary { list-style:none; display:flex; align-items:center; justify-content:space-between; gap:10px; color:var(--text); }
+.zygisk-page .zy-evidence > summary::-webkit-details-marker { display:none; }
+.zygisk-page .zy-evidence > summary::after { content:'\203a'; color:var(--accent2); font-size:18px; line-height:1; transition:transform .18s ease; }
+.zygisk-page .zy-evidence[open] > summary::after { transform:rotate(90deg); }
+.zygisk-page .asb-disclosure > summary { color:color-mix(in srgb, var(--accent2) 70%, var(--text-secondary)); }
 html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
 @media (max-width: 400px) {
   .lgr-quality { padding: 10px; }
@@ -3896,6 +3918,8 @@ html[dir="rtl"] .bfx-bar > i { transform-origin: right center; }
 .bfx-primary[data-mode="reboot"] { color: #2a1b00; background: linear-gradient(135deg, #ffd27a, #ffb43c); border-color: rgba(255,200,90,.7); box-shadow: 0 4px 14px rgba(255,180,60,.22); }
 .bfx-secondary { color: var(--text-secondary); background: transparent; border: 1px solid var(--border-active); }
 .bfx-secondary[hidden] { display: none; }
+.cmp-actions .bfx-btn { flex: 1 1 0; min-width: 0; }
+.cmp-rows { margin: 2px 0 8px; }
 .bfx-note { margin-top: 8px; font-size: 11.5px; color: var(--text-tertiary); }
 .bfx-note:empty { display: none; }
 html[data-asb-theme="light"] .bfx-emblem { color: #08906c; }
@@ -11848,8 +11872,15 @@ function cfgRenderComponentManagerCard(list) {
   titles.appendChild(bfxEl('div', 'bfx-title', T('cmp_card_title', 'Activities & Services')));
   const chip = bfxEl('span', 'bfx-chip is-wait', '—'); chip.id = 'componentManagerChip'; titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
-  const actions = bfxEl('div', 'bfx-actions');
-  const open = bfxEl('button', 'bfx-btn bfx-primary', T('cmp_card_open', 'Manage components'));
+  card.appendChild(bfxEl('div', 'bfx-desc', T('cmp_card_summary', 'Turns off one exact screen or service of an app without freezing the app.')));
+  const rows = bfxEl('div', 'junk-cats cmp-rows');
+  soterRow(rows, T('cmp_row_saved', 'Disabled by ASB'), '—'); rows.lastChild.lastChild.id = 'componentManagerSaved';
+  soterRow(rows, T('cmp_row_restore', 'Restore'), T('cmp_row_restore_v', 'exact original state, one tap'));
+  card.appendChild(rows);
+  const actions = bfxEl('div', 'bfx-actions cmp-actions');
+  const pick = bfxEl('button', 'bfx-btn bfx-primary', T('cmp_card_pick', 'Choose an app'));
+  pick.type = 'button'; pick.id = 'componentManagerPick'; pick.onclick = wlCmpPickOpen; actions.appendChild(pick);
+  const open = bfxEl('button', 'bfx-btn bfx-secondary', T('cmp_card_saved', 'Saved changes'));
   open.type = 'button'; open.id = 'componentManagerOpen'; open.onclick = wlComponentsOpen; actions.appendChild(open);
   card.appendChild(actions);
   kernelMoreBlock(card, 'cmp', [bfxEl('div', 'bfx-desc', T('cmp_card_desc', 'Exact changes made from Infinite Log or added manually share one restoration ledger. Review disabled components, restore them, or add a declared Activity/Service yourself.'))]);
@@ -16982,7 +17013,8 @@ function wlServiceClose() {
   m.hidden = true; m.setAttribute('aria-hidden', 'true'); _wlService.tok++;
   _wlService.armed = ''; clearTimeout(_wlService.armTimer); navSyncSoon();
   const cm = _el('wlComponentsModal');
-  if (cm && !cm.hidden && !_wlComponents.busy) { wlComponentsLoad(); wlComponentCardLoad(); }
+  if (cm && !cm.hidden && !_wlComponents.busy) wlComponentsLoad();
+  if (_el('componentManagerCard')) wlComponentCardLoad();
 }
 async function wlServiceSet(a) {
   if (_wlService.busy) return;
@@ -17048,6 +17080,7 @@ async function wlComponentCardLoad() {
   const d = wlComponentsParse(runText(r));
   chip.className = 'bfx-chip ' + (d.selected ? 'is-off' : 'is-ready');
   chip.textContent = bfxT('cmp_card_count', '{n} saved', { n:String(d.selected) });
+  const sv = _el('componentManagerSaved'); if (sv) sv.textContent = String(d.selected);
 }
 function wlComponentsEnsure() {
   let m = _el('wlComponentsModal'); if (m) return m;
@@ -21827,10 +21860,10 @@ function lspLiteReasonText(r, m) {
   return T('lsp_r_' + r, fb[r] || r.replace(/_/g, ' '));
 }
 function lspLiteArmed(key) { return _lspArm === key && Date.now() - _lspArmAt < 5000; }
-function lspLiteButton(label, key, run, confirmText) {
+function lspLiteButton(label, key, run, confirmText, tone) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'dev-zygisk-btn';
+  b.className = 'dev-zygisk-btn' + (tone ? ' zy-tone-' + tone : '');
   b.textContent = lspLiteArmed(key) ? confirmText : label;
   b.onclick = function () {
     if (!lspLiteArmed(key)) {
@@ -21963,9 +21996,9 @@ function lspLiteCard() {
     const n = mc.length;
     const acts = document.createElement('div'); acts.className = 'zy-lsp-actions';
     if (!abBusy || g.ab.module !== m.pkg) {
-      if (m.on && n) acts.appendChild(lspLiteButton(T('lsp_lighten', 'Lighten (%s)').replace('%s', String(n)), 'trim:' + m.pkg, function () { lspLiteAct('trim', m.pkg); }, T('lsp_confirm', 'Tap again to confirm')));
-      acts.appendChild(lspLiteButton(m.on ? T('lsp_disable', 'Switch off') : T('lsp_enable', 'Switch on'), 'mod:' + m.pkg, function () { lspLiteAct(m.on ? 'disable' : 'enable', m.pkg); }, T('lsp_confirm', 'Tap again to confirm')));
-      if (m.on && !abBusy) acts.appendChild(lspLiteButton(T('lsp_ab_start', 'A/B test'), 'ab:' + m.pkg, function () { lspLiteAct('ab-start', m.pkg); }, T('lsp_ab_confirm', 'Tap again: 2 days, 2 reboots')));
+      if (m.on && n) acts.appendChild(lspLiteButton(T('lsp_lighten', 'Lighten (%s)').replace('%s', String(n)), 'trim:' + m.pkg, function () { lspLiteAct('trim', m.pkg); }, T('lsp_confirm', 'Tap again to confirm'), 'warm'));
+      acts.appendChild(lspLiteButton(m.on ? T('lsp_disable', 'Switch off') : T('lsp_enable', 'Switch on'), 'mod:' + m.pkg, function () { lspLiteAct(m.on ? 'disable' : 'enable', m.pkg); }, T('lsp_confirm', 'Tap again to confirm'), m.on ? 'stop' : 'go'));
+      if (m.on && !abBusy) acts.appendChild(lspLiteButton(T('lsp_ab_start', 'A/B test'), 'ab:' + m.pkg, function () { lspLiteAct('ab-start', m.pkg); }, T('lsp_ab_confirm', 'Tap again: 2 days, 2 reboots'), 'test'));
     }
     if (acts.childNodes.length) { acts.style.setProperty('--zy-lsp-n', String(acts.childNodes.length)); w.appendChild(acts); }
     card.appendChild(w);
@@ -21987,13 +22020,13 @@ function lspLiteCard() {
     });
     if (active.length > 1) {
       const w = document.createElement('div'); w.className = 'zy-ghost';
-      w.appendChild(lspLiteButton(T('lsp_undo_all', 'Undo all'), 'undoall', function () { lspLiteAct('undo-all'); }, T('lsp_confirm', 'Tap again to confirm')));
+      w.appendChild(lspLiteButton(T('lsp_undo_all', 'Undo all'), 'undoall', function () { lspLiteAct('undo-all'); }, T('lsp_confirm', 'Tap again to confirm'), 'stop'));
       det.appendChild(w);
     }
     card.appendChild(det);
   }
   const rw = document.createElement('div'); rw.className = 'zy-ghost';
-  const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'dev-zygisk-btn';
+  const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'dev-zygisk-btn zy-refresh';
   rb.textContent = T('lsp_refresh', 'Read the evidence again');
   rb.disabled = g.refreshing;
   rb.onclick = function () { lspLiteAct('refresh'); };
@@ -22290,13 +22323,13 @@ function smart7Card() {
     });
     if (active.length > 1) {
       const w = document.createElement('div'); w.className = 'zy-ghost';
-      w.appendChild(lspLiteButton(T('lsp_undo_all', 'Undo all'), 's7undoall', function () { smart7Act('undo-all'); }, T('lsp_confirm', 'Tap again to confirm')));
+      w.appendChild(lspLiteButton(T('lsp_undo_all', 'Undo all'), 's7undoall', function () { smart7Act('undo-all'); }, T('lsp_confirm', 'Tap again to confirm'), 'stop'));
       det.appendChild(w);
     }
     card.appendChild(det);
   }
   const rw = document.createElement('div'); rw.className = 'zy-ghost';
-  const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'dev-zygisk-btn';
+  const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'dev-zygisk-btn zy-refresh';
   rb.textContent = T('lsp_refresh', 'Read the evidence again'); rb.disabled = g.refreshing;
   rb.onclick = function () { smart7Act('refresh'); };
   rw.appendChild(rb); card.appendChild(rw);

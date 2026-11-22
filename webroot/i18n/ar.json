@@ -4329,5 +4329,11 @@
   "cmp_pick_empty": "لا توجد تطبيقات مستخدم مطابقة",
   "cmp_pick_components": "المكوّنات",
   "ldac_helper_missing": "مساعد LDAC غير موجود في هذا الإصدار؛ لم يتغير شيء",
-  "wl_component_state_declared_manual": "معلن في الحزمة · لا يعمل الآن · يمكن تعطيله بنقرة ثانية"
+  "wl_component_state_declared_manual": "معلن في الحزمة · لا يعمل الآن · يمكن تعطيله بنقرة ثانية",
+  "cmp_card_summary": "يوقف شاشة أو خدمة محددة واحدة في التطبيق دون تجميد التطبيق.",
+  "cmp_row_saved": "عطّلها ASB",
+  "cmp_row_restore": "الاستعادة",
+  "cmp_row_restore_v": "الحالة الأصلية بدقة، بنقرة واحدة",
+  "cmp_card_pick": "اختر تطبيقًا",
+  "cmp_card_saved": "المحفوظة"
 }

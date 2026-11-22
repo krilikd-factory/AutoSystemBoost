@@ -4329,5 +4329,11 @@
   "cmp_pick_empty": "Eşleşen kullanıcı uygulaması yok",
   "cmp_pick_components": "Bileşenler",
   "ldac_helper_missing": "LDAC yardımcısı bu derlemede yok; hiçbir şey değiştirilmedi",
-  "wl_component_state_declared_manual": "Pakette bildirilmiş · şu an çalışmıyor · ikinci dokunuşla devre dışı bırakılabilir"
+  "wl_component_state_declared_manual": "Pakette bildirilmiş · şu an çalışmıyor · ikinci dokunuşla devre dışı bırakılabilir",
+  "cmp_card_summary": "Uygulamayı dondurmadan tek bir ekranı veya hizmeti kapatır.",
+  "cmp_row_saved": "ASB tarafından kapatılan",
+  "cmp_row_restore": "Geri yükleme",
+  "cmp_row_restore_v": "tam orijinal durum, tek dokunuş",
+  "cmp_card_pick": "Uygulama seç",
+  "cmp_card_saved": "Kaydedilenler"
 }

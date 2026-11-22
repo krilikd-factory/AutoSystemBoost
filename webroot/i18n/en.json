@@ -4222,5 +4222,11 @@
   "cmp_pick_empty": "No matching user apps",
   "cmp_pick_components": "Components",
   "ldac_helper_missing": "LDAC helper is not available in this build; nothing was changed",
-  "wl_component_state_declared_manual": "Declared in the package · not running now · can be disabled with a second tap"
+  "wl_component_state_declared_manual": "Declared in the package · not running now · can be disabled with a second tap",
+  "cmp_card_summary": "Turns off one exact screen or service of an app without freezing the app.",
+  "cmp_row_saved": "Disabled by ASB",
+  "cmp_row_restore": "Restore",
+  "cmp_row_restore_v": "exact original state, one tap",
+  "cmp_card_pick": "Choose an app",
+  "cmp_card_saved": "Saved changes"
 }

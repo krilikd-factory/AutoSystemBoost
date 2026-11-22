@@ -4329,5 +4329,11 @@
   "cmp_pick_empty": "没有匹配的用户应用",
   "cmp_pick_components": "组件",
   "ldac_helper_missing": "此版本没有 LDAC 助手；未作任何更改",
-  "wl_component_state_declared_manual": "在包中声明 · 当前未运行 · 再点按一次即可禁用"
+  "wl_component_state_declared_manual": "在包中声明 · 当前未运行 · 再点按一次即可禁用",
+  "cmp_card_summary": "只关闭应用的某一个界面或服务，不冻结整个应用。",
+  "cmp_row_saved": "ASB 已禁用",
+  "cmp_row_restore": "恢复",
+  "cmp_row_restore_v": "精确恢复原状态，一次点按",
+  "cmp_card_pick": "选择应用",
+  "cmp_card_saved": "已保存"
 }

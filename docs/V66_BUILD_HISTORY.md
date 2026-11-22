@@ -14,6 +14,15 @@ test13 again: a run is not a new test number unless the owner says so. Base: V66
 Native code changed (Smart lab build id): CI rebuilds `bin/asb`. A new Java helper is built
 to `bin/asb_btcodec.dex` by CI with the runner's Android SDK.
 
+- **Activity/Service card:** a one-line summary, two status rows and two normal-size buttons
+  (Choose an app, Saved changes) instead of one full-width button; the long text stays under More.
+- **Zygisk page colours:** Switch on is green, Switch off and Undo all red, A/B test violet,
+  Lighten amber; Read again is a dashed refresh button; evidence folds (ASB changes, What Smart
+  learned) are tinted rows with a chevron, so they no longer look like the action buttons.
+- **Installer banner:** no list of five models; it now says OnePlus phones and tablets,
+  Snapdragon and Dimensity.
+- **Telegram:** Build Test can post the flashable zip to a Telegram channel when the
+  `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` secrets exist (input `telegram`, on by default).
 - **Infirmary:** the Activity/Service card description sits under "More".
 - **Components from the app list:** the component manager has "Choose from installed apps";
   an app opens its per-app list, where declared Activity/Service entries can now be disabled

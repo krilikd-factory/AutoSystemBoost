@@ -4329,5 +4329,11 @@
   "cmp_pick_empty": "No hay apps de usuario que coincidan",
   "cmp_pick_components": "Componentes",
   "ldac_helper_missing": "El asistente LDAC no está en esta compilación; no se cambió nada",
-  "wl_component_state_declared_manual": "Declarado en el paquete · no se ejecuta ahora · se puede desactivar con un segundo toque"
+  "wl_component_state_declared_manual": "Declarado en el paquete · no se ejecuta ahora · se puede desactivar con un segundo toque",
+  "cmp_card_summary": "Desactiva una pantalla o un servicio concreto de una app sin congelar la app.",
+  "cmp_row_saved": "Desactivados por ASB",
+  "cmp_row_restore": "Restaurar",
+  "cmp_row_restore_v": "estado original exacto, un toque",
+  "cmp_card_pick": "Elegir una app",
+  "cmp_card_saved": "Guardados"
 }
