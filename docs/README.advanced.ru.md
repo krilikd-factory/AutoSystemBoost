@@ -566,7 +566,7 @@ Budget не заменяет vendor thermal engine. Если платформа 
 | `bt_link_stability` | Bluetooth Link Stability | `stock` | Stable подавляет Wi-Fi scans во время звука на проблемных соединениях; новые сети могут появляться медленнее. |
 | `bt_a2dp_offload` | Bluetooth Audio Offload | `auto` | Auto/on/off hardware encoding route; off может помочь внешнему EQ, но переносит работу на CPU. |
 | `bt_ldac_quality` | LDAC Playback Quality | `auto` | Удерживает LDAC 990/660/330 кбит/с или адаптивный режим после каждого переподключения; действует только при активном LDAC. Пока выбрано фиксированное значение, в фоне работает небольшой помощник. |
-| `bt_ldac_rate` | LDAC Sample Rate | `auto` | Удерживает LDAC 44,1/48/88,2/96/192 кГц после каждого переподключения и перезагрузки; только частоты, которые наушники перечисляют как доступные, только пока кодек LDAC, с проверкой чтением. |
+| `bt_ldac_rate` | LDAC Sample Rate | `auto` | Удерживает LDAC 44,1/48/88,2/96/192 кГц после каждого переподключения и перезагрузки; только частоты, которые наушники перечисляют как доступные для активного кодека (LDAC, LHDC и другие), с проверкой чтением; LDAC узнаётся по имени кодека во фреймворке. |
 | `dsp_outputs` | DSP Outputs | `all` | Выбирает speaker/wired/Bluetooth сочетания или отключает DSP с сохранением значений параметров. |
 | `dsp_loudness` | DSP Loudness | `0` | Основной DSP enable/gain, 0–30 dB в текущем исходнике; значения выше 25 dB требуют новой сборки DSP-библиотек. Первое включение effect может требовать reboot. |
 | `dsp_bass` | DSP Bass Boost | `0` | Low-shelf boost; расходует headroom и приближает срабатывание limiter. |

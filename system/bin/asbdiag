@@ -2408,6 +2408,11 @@ if [ -n "$_btc" ]; then
       NOTE "a high-bitrate codec: if a dual-connection (multipoint) headset drops while its other device is near, try AAC or a lower quality in the headset's settings" ;;
   esac
 fi
+if [ -f "$MODDIR/runtime/asb_bt_codec.sh" ] && { [ "$(cfg bt_ldac_quality)" != auto ] || [ "$(cfg bt_ldac_rate)" != auto ]; } \
+   && [ -n "$(cfg bt_ldac_quality)$(cfg bt_ldac_rate)" ]; then
+  P "  LDAC/sample-rate helper (bt_ldac_quality=$(cfg bt_ldac_quality) bt_ldac_rate=$(cfg bt_ldac_rate)):"
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_bt_codec.sh" status probe 2>/dev/null | head -n 30 | while IFS= read -r _bl; do P "    $_bl"; done
+fi
 _rs_c="$(cfg audio_resampler)"
 _rs_live="$(gp ro.audio.resampler.psd.stopband)/$(gp ro.audio.resampler.psd.halflength)"
 [ "$_rs_live" = "/" ] && _rs_live=""

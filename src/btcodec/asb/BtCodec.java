@@ -23,8 +23,9 @@ import java.util.List;
  * Android forgets the Developer options LDAC choice on every reconnect, because the stack only
  * keeps a codec preference for the current link. This helper asks the framework for the same
  * preference the Developer options screen sets (codecSpecific1 1000/1001/1002/1003) and reads the
- * codec status back. It only acts when the active A2DP codec is already LDAC, never changes the
- * codec type, bit depth or channel mode, and never touches a non-LDAC headset. The sample rate
+ * codec status back. It never changes the codec type, bit depth or channel mode. The LDAC quality
+ * is set only while the active codec is LDAC (found by the framework's own codec name, so an
+ * OPlus build that numbers LHDC/LDAC differently is still recognised). The sample rate
  * is changed only when the owner picked one and the headset lists it among its selectable LDAC
  * rates (the same list Developer options greys out); otherwise the current rate is kept.
  *
@@ -38,7 +39,10 @@ import java.util.List;
  * to an uptime-based check (Handler uses uptime, so nothing runs while the phone is suspended).
  */
 public final class BtCodec {
-    private static final int SOURCE_CODEC_TYPE_LDAC = 4;
+    /* AOSP numbering; the ROM's own constant and codec names are preferred at run time, because
+     * an OPlus build that adds LHDC codecs can number them differently. */
+    private static final int AOSP_SOURCE_CODEC_TYPE_LDAC = 4;
+    private static int ldacType = -2;
     private static final long PRIORITY_HIGHEST = 1000000L;
     private static final String CODEC_CHANGED = "android.bluetooth.a2dp.profile.action.CODEC_CONFIG_CHANGED";
     private static final String ACTIVE_CHANGED = "android.bluetooth.a2dp.profile.action.ACTIVE_DEVICE_CHANGED";
@@ -80,9 +84,57 @@ public final class BtCodec {
             if (!"watch".equals(mode)) handler.postDelayed(() -> finish("result=timeout", 4), 8000);
             Looper.loop();
         } catch (Throwable t) {
-            out("result=failed\nreason=" + t.getClass().getSimpleName());
+            String why = reason(t);
+            state("failed", "reason=" + why);
+            out("result=failed\nreason=" + why);
             System.exit(5);
         }
+    }
+
+    private static String reason(Throwable t) {
+        Throwable c = t;
+        while (c instanceof java.lang.reflect.InvocationTargetException && c.getCause() != null) c = c.getCause();
+        String m = c.getMessage();
+        if (m != null) m = m.replace('\n', ' ');
+        if (m != null && m.length() > 120) m = m.substring(0, 120);
+        return c.getClass().getSimpleName() + (m == null || m.isEmpty() ? "" : ":" + m);
+    }
+
+    /* The ROM's LDAC codec type: its own constant if it has one, the AOSP number otherwise. */
+    private static int ldacType() {
+        if (ldacType != -2) return ldacType;
+        try {
+            ldacType = Class.forName("android.bluetooth.BluetoothCodecConfig").getField("SOURCE_CODEC_TYPE_LDAC").getInt(null);
+        } catch (Throwable t) {
+            ldacType = AOSP_SOURCE_CODEC_TYPE_LDAC;
+        }
+        return ldacType;
+    }
+
+    /* The name the framework itself gives a codec type ("LDAC", "LHDC V5", ...), or "" if none. */
+    private static String codecName(Object cfg) {
+        try {
+            Object n = cfg.getClass().getMethod("getCodecName").invoke(cfg);
+            if (n != null) return n.toString();
+        } catch (Throwable ignored) { }
+        try {
+            Object n = Class.forName("android.bluetooth.BluetoothCodecConfig").getMethod("getCodecName", int.class)
+                .invoke(null, (int) num(cfg, "getCodecType"));
+            if (n != null) return n.toString();
+        } catch (Throwable ignored) { }
+        return "";
+    }
+
+    /* LDAC by name when the framework names it, by type otherwise. */
+    private static boolean isLdac(Object cfg) {
+        String n = codecName(cfg).toUpperCase(java.util.Locale.ROOT);
+        if (!n.isEmpty()) return n.contains("LDAC");
+        return num(cfg, "getCodecType") == ldacType();
+    }
+
+    private static String label(Object cfg) {
+        String n = codecName(cfg);
+        return (n.isEmpty() ? "type" : n.replace(' ', '_')) + "/" + num(cfg, "getCodecType");
     }
 
     private static long quality(String s) {
@@ -115,8 +167,9 @@ public final class BtCodec {
         return bits < 0 ? "unknown" : String.valueOf(bits);
     }
 
-    /* The LDAC rates the headset and the phone both accept, as a bit mask; -1 when not readable. */
-    private static long selectableRates(Object dev) {
+    /* The rates the headset and the phone both accept for this codec type, as a bit mask; -1 when
+     * not readable. */
+    private static long selectableRates(Object dev, long type) {
         try {
             Object st = a2dp.getClass().getMethod("getCodecStatus", BluetoothDevice.class).invoke(a2dp, dev);
             if (st == null) return -1;
@@ -126,7 +179,7 @@ public final class BtCodec {
             else if (caps instanceof Object[]) list = java.util.Arrays.asList((Object[]) caps);
             if (list == null) return -1;
             for (Object c : list) {
-                if (c != null && num(c, "getCodecType") == SOURCE_CODEC_TYPE_LDAC) return num(c, "getSampleRate");
+                if (c != null && num(c, "getCodecType") == type) return num(c, "getSampleRate");
             }
             return 0;
         } catch (Throwable t) { return -1; }
@@ -175,7 +228,7 @@ public final class BtCodec {
 
     private static void tick() {
         applyOnce(false);
-        long next = events ? 600000 : (activeLdac() != null ? 30000 : 90000);
+        long next = events ? 600000 : (activeCodec() != null ? 30000 : 90000);
         if (retries > 0 && retries < 4) next = 3000;
         handler.postDelayed(BtCodec::tick, next);
     }
@@ -198,11 +251,9 @@ public final class BtCodec {
         } catch (Throwable t) { return null; }
     }
 
-    private static Object activeLdac() {
+    private static Object activeCodec() {
         Object dev = activeDevice();
-        if (dev == null) return null;
-        Object cfg = codecConfig(dev);
-        return cfg != null && num(cfg, "getCodecType") == SOURCE_CODEC_TYPE_LDAC ? cfg : null;
+        return dev == null ? null : codecConfig(dev);
     }
 
     private static String describe() {
@@ -211,9 +262,11 @@ public final class BtCodec {
         Object cfg = codecConfig(dev);
         if (cfg == null) return "result=no_codec";
         long type = num(cfg, "getCodecType");
-        boolean ldac = type == SOURCE_CODEC_TYPE_LDAC;
-        long sel = ldac ? selectableRates(dev) : -1;
+        boolean ldac = isLdac(cfg);
+        long sel = selectableRates(dev, type);
         return "result=ok\ncodec=" + (ldac ? "ldac" : String.valueOf(type))
+            + "\ncodec_name=" + label(cfg) + "\nldac_type=" + ldacType()
+            + "\nbits=" + num(cfg, "getBitsPerSample")
             + "\nquality=" + (ldac ? String.valueOf(num(cfg, "getCodecSpecific1")) : "none")
             + "\nrate=" + rateText(num(cfg, "getSampleRate"))
             + "\nrates_selectable=" + (sel < 0 ? "unknown" : String.valueOf(sel));
@@ -223,17 +276,18 @@ public final class BtCodec {
         Object dev = activeDevice();
         Object cfg = dev == null ? null : codecConfig(dev);
         if (dev == null || cfg == null) { retries = 0; done(exit, "result=no_device", 0); return; }
-        if (num(cfg, "getCodecType") != SOURCE_CODEC_TYPE_LDAC) { retries = 0; done(exit, "result=not_ldac", 0); return; }
-        final long q = want > 0 ? want : num(cfg, "getCodecSpecific1");
+        final boolean ldac = isLdac(cfg);
+        if (!ldac && wantRate == 0) { retries = 0; done(exit, "result=not_ldac\ncodec=" + label(cfg), 0); return; }
+        final long q = want > 0 && ldac ? want : num(cfg, "getCodecSpecific1");
         long r = num(cfg, "getSampleRate");
-        String rateNote = "";
+        String rateNote = ldac ? "" : "\nquality_skipped=not_ldac";
         if (wantRate > 0 && r != wantRate) {
-            long sel = selectableRates(dev);
+            long sel = selectableRates(dev, num(cfg, "getCodecType"));
             if (sel >= 0 && (sel & wantRate) == 0) rateNote = "\nrate_unsupported=" + rateText(wantRate);
             else r = wantRate;
         }
         final long rt = r;
-        final String ok = "result=applied\nquality=" + q + "\nrate=" + rateText(rt) + rateNote;
+        final String ok = "result=applied\ncodec=" + label(cfg) + "\nquality=" + q + "\nrate=" + rateText(rt) + rateNote;
         if (num(cfg, "getCodecSpecific1") == q && num(cfg, "getSampleRate") == rt) { retries = 0; done(exit, ok, 0); return; }
         long now = SystemClock.uptimeMillis();
         if (!exit && now - lastApply < 2500) return;
@@ -243,7 +297,7 @@ public final class BtCodec {
             a2dp.getClass().getMethod("setCodecConfigPreference", BluetoothDevice.class, next.getClass()).invoke(a2dp, dev, next);
         } catch (Throwable t) {
             retries = 0;
-            done(exit, "result=refused\nreason=" + t.getClass().getSimpleName(), 6);
+            done(exit, "result=refused\ncodec=" + label(cfg) + "\nreason=" + reason(t), 6);
             return;
         }
         handler.postDelayed(() -> {
@@ -251,8 +305,8 @@ public final class BtCodec {
             long got = after == null ? -1 : num(after, "getCodecSpecific1");
             long gotRate = after == null ? -1 : num(after, "getSampleRate");
             if (got == q && gotRate == rt) { retries = 0; done(exit, ok, 0); }
-            else if (exit) done(true, "result=not_kept\nquality=" + got + "\nrate=" + rateText(gotRate), 7);
-            else { retries++; state("pending", "quality=" + got + "\nrate=" + rateText(gotRate)); }
+            else if (exit) done(true, "result=not_kept\ncodec=" + label(cfg) + "\nquality=" + got + "\nrate=" + rateText(gotRate), 7);
+            else { retries++; state("pending", "codec=" + label(cfg) + "\nquality=" + got + "\nrate=" + rateText(gotRate) + "\nretries=" + retries); }
         }, 1500);
     }
 

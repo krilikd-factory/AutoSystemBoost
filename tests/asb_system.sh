@@ -10755,6 +10755,9 @@ t_bt_ldac_quality_runtime() (
   j="$ROOT/src/btcodec/asb/BtCodec.java"
   grep -q 'SOURCE_CODEC_TYPE_LDAC' "$j" && grep -q 'getCodecSpecific1' "$j" || fail 'helper does not check LDAC/read back'
   grep -q 'getCodecsSelectableCapabilities' "$j" && grep -q 'gotRate == rt' "$j" || fail 'rate not checked against the headset or read back'
+  grep -q 'getField("SOURCE_CODEC_TYPE_LDAC")' "$j" && grep -q 'n.contains("LDAC")' "$j" || fail 'LDAC found by a hard-coded number only (OPlus LHDC builds renumber codecs)'
+  grep -q 'if (!ldac && wantRate == 0)' "$j" || fail 'a fixed rate is still limited to LDAC'
+  grep -q 'state("failed"' "$j" || fail 'a helper that dies at start leaves no trace'
   grep -q 'bt_ldac_rate=auto' "$ROOT/config/governor.conf" || fail 'rate default missing'
   grep -q '^bt_ldac_rate|' "$ROOT/config/key_ownership.tsv" || fail 'rate ownership missing'
   grep -q 'bt_ldac_(quality|rate)=' "$ROOT/service.sh" || fail 'boot does not start the helper for a fixed rate'

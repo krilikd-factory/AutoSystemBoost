@@ -950,7 +950,7 @@
     },
     "bt_ldac_rate": {
       "name": "Frecuencia de muestreo LDAC",
-      "desc": "Mantiene la frecuencia de muestreo LDAC elegida tras cada reconexión y reinicio, en lugar de los 48 kHz a los que Android suele volver. Es la misma elección que en Opciones de desarrollador, pedida de nuevo cuando se conectan los auriculares o cambia el códec, y leída después. Una frecuencia que los auriculares no ofrecen (en gris en Opciones de desarrollador) nunca se fuerza: se mantiene la actual. Solo afecta a LDAC. 96 y 192 kHz necesitan más ancho de banda; si el sonido se corta, combínalas con calidad 660/606 o adaptativa. Auto quita el asistente si la calidad LDAC también está en Auto."
+      "desc": "Mantiene la frecuencia de muestreo LDAC elegida tras cada reconexión y reinicio, en lugar de los 48 kHz a los que Android suele volver. Es la misma elección que en Opciones de desarrollador, pedida de nuevo cuando se conectan los auriculares o cambia el códec, y leída después. Una frecuencia que los auriculares no ofrecen (en gris en Opciones de desarrollador) nunca se fuerza: se mantiene la actual. Funciona con LDAC y con cualquier otro códec que ofrezca esa frecuencia, como LHDC; los demás códecs mantienen la suya. 96 y 192 kHz necesitan más ancho de banda; si el sonido se corta, combínalas con calidad 660/606 o adaptativa. Auto quita el asistente si la calidad LDAC también está en Auto."
     },
     "cpu_vendor_unlock": {
       "name": "Techo de CPU del fabricante",

@@ -950,7 +950,7 @@
     },
     "bt_ldac_rate": {
       "name": "Taxa de amostragem LDAC",
-      "desc": "Mantém a taxa de amostragem LDAC escolhida após cada reconexão e reinício, em vez dos 48 kHz a que o Android costuma voltar. É a mesma escolha das Opções do desenvolvedor, pedida de novo quando o fone conecta ou o codec muda, e lida de volta depois. Uma taxa que o fone não oferece (em cinza nas Opções do desenvolvedor) nunca é forçada: a atual é mantida. Só afeta o LDAC. 96 e 192 kHz exigem mais banda; se o som falhar, combine-as com a qualidade 660/606 ou adaptativa. Auto remove o auxiliar quando a qualidade LDAC também está em Auto."
+      "desc": "Mantém a taxa de amostragem LDAC escolhida após cada reconexão e reinício, em vez dos 48 kHz a que o Android costuma voltar. É a mesma escolha das Opções do desenvolvedor, pedida de novo quando o fone conecta ou o codec muda, e lida de volta depois. Uma taxa que o fone não oferece (em cinza nas Opções do desenvolvedor) nunca é forçada: a atual é mantida. Funciona com LDAC e com qualquer outro codec que ofereça essa taxa, como LHDC; os demais codecs mantêm a sua. 96 e 192 kHz exigem mais banda; se o som falhar, combine-as com a qualidade 660/606 ou adaptativa. Auto remove o auxiliar quando a qualidade LDAC também está em Auto."
     },
     "cpu_vendor_unlock": {
       "name": "Teto de CPU do fabricante",

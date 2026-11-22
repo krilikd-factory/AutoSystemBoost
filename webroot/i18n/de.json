@@ -950,7 +950,7 @@
     },
     "bt_ldac_rate": {
       "name": "LDAC-Abtastrate",
-      "desc": "Behält die gewählte LDAC-Abtastrate nach jeder Neuverbindung und jedem Neustart bei, statt der 48 kHz, auf die Android oft zurückfällt. Es ist dieselbe Wahl wie in den Entwickleroptionen, erneut angefordert, wenn das Headset verbindet oder der Codec wechselt, und danach zurückgelesen. Eine Rate, die das Headset nicht anbietet (in den Entwickleroptionen ausgegraut), wird nie erzwungen: die aktuelle bleibt. Nur LDAC ist betroffen. 96 und 192 kHz brauchen mehr Bandbreite; stockt der Ton, kombiniere sie mit 660/606 oder adaptiver Qualität. Auto entfernt den Helfer, wenn auch die LDAC-Qualität auf Auto steht."
+      "desc": "Behält die gewählte LDAC-Abtastrate nach jeder Neuverbindung und jedem Neustart bei, statt der 48 kHz, auf die Android oft zurückfällt. Es ist dieselbe Wahl wie in den Entwickleroptionen, erneut angefordert, wenn das Headset verbindet oder der Codec wechselt, und danach zurückgelesen. Eine Rate, die das Headset nicht anbietet (in den Entwickleroptionen ausgegraut), wird nie erzwungen: die aktuelle bleibt. Wirkt bei LDAC und jedem anderen Codec, der diese Rate anbietet, etwa LHDC; andere Codecs behalten ihre Rate. 96 und 192 kHz brauchen mehr Bandbreite; stockt der Ton, kombiniere sie mit 660/606 oder adaptiver Qualität. Auto entfernt den Helfer, wenn auch die LDAC-Qualität auf Auto steht."
     },
     "cpu_vendor_unlock": {
       "name": "Hersteller-CPU-Obergrenze",

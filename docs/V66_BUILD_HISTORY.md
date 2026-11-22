@@ -5,6 +5,29 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## Next test build (in progress) - sample rate on OPlus LHDC builds, GPU trim hysteresis
+
+Input: the owner's OnePlus 15 (CPH2745, ColorOS 17): `bt_ldac_rate=96` did nothing; 96 kHz
+had to be picked by hand in Developer options. asbdiag showed the active link named
+`LHDC V5 96000 Hz / 24-bit` by the Bluetooth stack while Settings called it LDAC and greyed the
+LDAC quality item - the ROM numbers its codecs differently from AOSP.
+
+- `src/btcodec`: the helper compared the codec type with the AOSP number 4 and stopped with
+  `not_ldac` on this ROM. It now finds LDAC by the framework's own codec name (the ROM's
+  `SOURCE_CODEC_TYPE_LDAC` constant when there is no name), and a fixed sample rate is asked for
+  on whatever codec is active (LDAC, LHDC, ...) when the headset lists that rate for it; the
+  LDAC quality still applies only to LDAC. Every result names the codec; a helper that dies at
+  start writes the reason to its state file, its output goes to `bt_ldac.out`.
+- `runtime/asb_bt_codec.sh` status shows the helper output and log; asbdiag prints the helper
+  status with a live probe whenever either LDAC key is set. Card text (13 locales) and the
+  advanced guides say the rate works on other codecs too.
+- `src/asb_fsm.h`: the idle GPU trim lowers the GPU ceiling, which raises the load percentage
+  of the same work; a single 12 % "interactive" threshold could flip the trim every poll near
+  it. Now 12 % enters, the work stays interactive until the load falls below 9 % or 10 s pass.
+- Telegram: the run link uses 🔗; release posts take sections (`@title`, `## header`, bullets,
+  `@footer`) from docs/TELEGRAM_RELEASE.txt and are fitted to the 1024 visible-character caption
+  limit by dropping bullets, never by cutting text; test posts are fitted the same way.
+
 ## V66-test16 - vendor CPU ceiling, LDAC sample rate, built-in Zygisk providers, tidier repository
 
 Input: the owner's requests on top of V66-test15 - take the best of a third-party "factory

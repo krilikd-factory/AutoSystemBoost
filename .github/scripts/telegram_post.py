@@ -14,8 +14,12 @@ text:  docs/TELEGRAM_POST.txt (test) or docs/TELEGRAM_RELEASE.txt (release); one
 import html
 import json
 import os
+import re
 import subprocess
 import sys
+
+
+CAPTION_LIMIT = 1024   # Telegram counts the visible text of a document caption, tags excluded
 
 
 def items(path):
@@ -24,29 +28,79 @@ def items(path):
         with open(path, encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#'):
+                if line and (not line.startswith('#') or line.startswith('## ')):
                     out.append(html.escape(line))
     except OSError:
         pass
     return out
 
 
+def visible(cap):
+    """Length Telegram checks: the text without HTML tags, entities decoded."""
+    return len(html.unescape(re.sub(r'<[^>]+>', '', cap)))
+
+
+def release_blocks(lines):
+    """docs/TELEGRAM_RELEASE.txt: '@title ...', '## <emoji> Section', plain lines = bullets,
+    '@footer ...'. Returns (title, [(header, [bullets])], footer)."""
+    title, footer, blocks = '', '', []
+    for ln in lines:
+        if ln.startswith('@title '):
+            title = ln[7:].strip()
+        elif ln.startswith('@footer '):
+            footer = ln[8:].strip()
+        elif ln.startswith('## '):
+            blocks.append((ln[3:].strip(), []))
+        else:
+            if not blocks:
+                blocks.append(('', []))
+            blocks[-1][1].append(ln[2:].strip() if ln.startswith(('- ', '• ')) else ln)
+    return title, blocks, footer
+
+
+def render_release(ver, title, blocks, footer, link):
+    cap = '<b>' + (title or '🚀 ' + html.escape(ver) + ' в релизе!') + '</b>\n'
+    for head, bullets in blocks:
+        if not bullets:
+            continue
+        cap += '\n' + ('<b>' + head + '</b>\n' if head else '')
+        cap += '\n'.join('• ' + b for b in bullets) + '\n'
+    cap += '\n' + (footer or '⚠️ Благодарю всех тестировщиков! Без вас ничего бы не получилось!')
+    return cap + link
+
+
 def caption(kind, ver, run_url=''):
+    link = ''
+    if run_url:
+        link = '\n🔗 <a href="' + html.escape(run_url, quote=True) + '">' + ('Релиз на GitHub' if kind == 'release' else 'Сборка на GitHub') + '</a>'
     if kind == 'release':
-        lines = items('docs/TELEGRAM_RELEASE.txt') or ['Стабильная версия со всеми исправлениями тестовых сборок.']
-        cap = '🚀 <b>AutoSystemBoost ' + html.escape(ver) + '</b>\n'
-        cap += 'Новый релиз!\n\n'
-        cap += '\n'.join('✅ ' + x for x in lines[:14])
-        cap += '\n\n🔄 Настройки сохраняются при обновлении.'
-    else:
-        lines = items('docs/TELEGRAM_POST.txt') or ['Подправил оптимизацию.', 'Подправил WebUI.']
+        title, blocks, footer = release_blocks(items('docs/TELEGRAM_RELEASE.txt'))
+        if not any(b for _, b in blocks):
+            blocks = [('', ['Стабильная версия со всеми исправлениями тестовых сборок.', 'Настройки сохраняются при обновлении.'])]
+        cap = render_release(ver, title, blocks, footer, link)
+        # Over the limit: drop bullets from the end of the longest section, never the title,
+        # the footer or the link, so the post never ends in a cut word.
+        while visible(cap) > CAPTION_LIMIT:
+            longest = max(range(len(blocks)), key=lambda i: len(blocks[i][1]))
+            if len(blocks[longest][1]) <= 1:
+                blocks.pop()
+                if not blocks:
+                    break
+            else:
+                blocks[longest][1].pop()
+            cap = render_release(ver, title, blocks, footer, link)
+        return cap
+    lines = items('docs/TELEGRAM_POST.txt') or ['Подправил оптимизацию.', 'Подправил WebUI.']
+    lines = lines[:12]
+    while True:
         cap = '🛸 <b>AutoSystemBoost ' + html.escape(ver) + '</b>\n'
         cap += 'Новая тестовая сборка!\n\n'
-        cap += '\n'.join('✅ ' + x for x in lines[:12])
+        cap += '\n'.join('✅ ' + x for x in lines)
         cap += '\n\n🧪 Это тестовая сборка. При проблемах пришлите asbdiag и Вечный лог.'
-    if run_url:
-        cap += '\n⚙️ <a href="' + html.escape(run_url, quote=True) + '">' + ('Релиз на GitHub' if kind == 'release' else 'Сборка на GitHub') + '</a>'
-    return cap[:1024]
+        cap += link
+        if visible(cap) <= CAPTION_LIMIT or len(lines) <= 1:
+            return cap
+        lines.pop()
 
 
 def main():

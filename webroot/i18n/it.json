@@ -950,7 +950,7 @@
     },
     "bt_ldac_rate": {
       "name": "Frequenza di campionamento LDAC",
-      "desc": "Mantiene la frequenza di campionamento LDAC scelta dopo ogni riconnessione e riavvio, invece dei 48 kHz a cui Android spesso ritorna. È la stessa scelta delle Opzioni sviluppatore, richiesta di nuovo quando le cuffie si collegano o il codec cambia, e poi riletta. Una frequenza che le cuffie non offrono (grigia nelle Opzioni sviluppatore) non viene mai forzata: resta quella attuale. Riguarda solo LDAC. 96 e 192 kHz richiedono più banda; se l'audio si interrompe, abbinale alla qualità 660/606 o adattiva. Auto rimuove l'helper se anche la qualità LDAC è su Auto."
+      "desc": "Mantiene la frequenza di campionamento LDAC scelta dopo ogni riconnessione e riavvio, invece dei 48 kHz a cui Android spesso ritorna. È la stessa scelta delle Opzioni sviluppatore, richiesta di nuovo quando le cuffie si collegano o il codec cambia, e poi riletta. Una frequenza che le cuffie non offrono (grigia nelle Opzioni sviluppatore) non viene mai forzata: resta quella attuale. Funziona con LDAC e con qualsiasi altro codec che offra quella frequenza, come LHDC; gli altri codec mantengono la propria. 96 e 192 kHz richiedono più banda; se l'audio si interrompe, abbinale alla qualità 660/606 o adattiva. Auto rimuove l'helper se anche la qualità LDAC è su Auto."
     },
     "cpu_vendor_unlock": {
       "name": "Tetto CPU del produttore",

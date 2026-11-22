@@ -950,7 +950,7 @@
     },
     "bt_ldac_rate": {
       "name": "Laju sampel LDAC",
-      "desc": "Mempertahankan laju sampel LDAC pilihan Anda setelah setiap sambung ulang dan mulai ulang, bukan 48 kHz yang sering dipakai kembali oleh Android. Ini pilihan yang sama dengan di Opsi pengembang, diminta lagi saat headset tersambung atau codec berubah, lalu dibaca ulang. Laju yang tidak ditawarkan headset (abu-abu di Opsi pengembang) tidak pernah dipaksakan: laju saat ini dipertahankan. Hanya LDAC yang terpengaruh. 96 dan 192 kHz butuh bandwidth lebih; jika suara tersendat, padukan dengan kualitas 660/606 atau adaptif. Otomatis menghapus helper bila kualitas LDAC juga Otomatis."
+      "desc": "Mempertahankan laju sampel LDAC pilihan Anda setelah setiap sambung ulang dan mulai ulang, bukan 48 kHz yang sering dipakai kembali oleh Android. Ini pilihan yang sama dengan di Opsi pengembang, diminta lagi saat headset tersambung atau codec berubah, lalu dibaca ulang. Laju yang tidak ditawarkan headset (abu-abu di Opsi pengembang) tidak pernah dipaksakan: laju saat ini dipertahankan. Berlaku untuk LDAC dan codec lain yang menawarkan laju itu, seperti LHDC; codec lain mempertahankan lajunya. 96 dan 192 kHz butuh bandwidth lebih; jika suara tersendat, padukan dengan kualitas 660/606 atau adaptif. Otomatis menghapus helper bila kualitas LDAC juga Otomatis."
     },
     "cpu_vendor_unlock": {
       "name": "Batas CPU pabrikan",

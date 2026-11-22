@@ -6,6 +6,7 @@ DEX="$MODDIR/bin/asb_btcodec.dex"
 PIDF="$STATE_DIR/bt_ldac.pid"
 STF="$STATE_DIR/bt_ldac.state"
 LOG="$STATE_DIR/bt_ldac.log"
+OUT="$STATE_DIR/bt_ldac.out"
 
 _has() { command -v "$1" >/dev/null 2>&1; }
 _cfg() { grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'; }
@@ -76,9 +77,9 @@ case "${1:-status}" in
     rm -f "$STF" 2>/dev/null
     _ap_bin="$(_ap)"
     if _has setsid; then
-      CLASSPATH="$DEX" setsid "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" </dev/null >/dev/null 2>&1 &
+      CLASSPATH="$DEX" setsid "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" </dev/null >"$OUT" 2>&1 &
     else
-      CLASSPATH="$DEX" nohup "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" </dev/null >/dev/null 2>&1 &
+      CLASSPATH="$DEX" nohup "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" </dev/null >"$OUT" 2>&1 &
     fi
     _np=$!
     printf '%s|%s|%s\n' "$_np" "$_w" "$_wr" > "$PIDF"
@@ -96,7 +97,7 @@ case "${1:-status}" in
     ;;
   stop)
     _stop
-    rm -f "$STF" 2>/dev/null
+    rm -f "$STF" "$OUT" 2>/dev/null
     echo "result=stopped"
     ;;
   status)
@@ -106,6 +107,8 @@ case "${1:-status}" in
     if [ -f "$DEX" ]; then echo "helper=1"; else echo "helper=0"; fi
     if _alive; then echo "watch=1"; else echo "watch=0"; fi
     [ -s "$STF" ] && sed 's/^/live_/' "$STF" 2>/dev/null
+    [ -s "$OUT" ] && tail -n 3 "$OUT" 2>/dev/null | sed 's/^/out_/'
+    [ -s "$LOG" ] && tail -n 3 "$LOG" 2>/dev/null | sed 's/^/log_/'
     if [ "${2:-}" = probe ] && _ready >/dev/null 2>&1; then
       _run status 2>/dev/null | sed 's/^/probe_/'
     fi

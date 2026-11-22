@@ -2075,10 +2075,23 @@ static int asb_perf_thermal_lead(int cpu_c, int enter_c, time_t now) {
     return lead > 0 ? lead : 0;
 }
 
+/* The idle GPU trim lowers the GPU ceiling, which by itself raises the load percentage of the
+ * same work. With a single 12 % threshold a light animation sitting near it could flip the trim
+ * off (load 12-13 % at the trimmed ceiling), then back on once the full ceiling brought the load
+ * under 12 %, every poll. Once a poll has seen 12 %, the work counts as interactive until the
+ * load falls below 9 % or 10 s pass without another 12 % poll. */
+#define ASB_GPU_TRIM_BUSY_PCT     12
+#define ASB_GPU_TRIM_RELEASE_PCT   9
+#define ASB_GPU_TRIM_HOLD_S       10
+static time_t g_gpu_trim_busy_ts = 0;
+
 static int asb_gpu_idle_trim_interactive(const asb_metrics_t *m) {
     if (!m->misc.screen_on || m->misc.camera_active) return 0;
-    if (m->gpu.load_pct >= 12) return 1;
-    return g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S;
+    time_t now = time(NULL);
+    if (m->gpu.load_pct >= ASB_GPU_TRIM_BUSY_PCT) { g_gpu_trim_busy_ts = now; return 1; }
+    if (g_gpu_trim_busy_ts > 0 && m->gpu.load_pct >= ASB_GPU_TRIM_RELEASE_PCT &&
+        now - g_gpu_trim_busy_ts <= ASB_GPU_TRIM_HOLD_S) return 1;
+    return g_touch_last_ts > 0 && now - g_touch_last_ts <= ASB_TOUCH_RECENT_S;
 }
 
 static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {

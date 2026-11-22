@@ -950,7 +950,7 @@
     },
     "bt_ldac_rate": {
       "name": "LDAC örnekleme hızı",
-      "desc": "Seçtiğiniz LDAC örnekleme hızını her yeniden bağlanma ve yeniden başlatmadan sonra korur; Android'in sık sık döndüğü 48 kHz'e düşmez. Geliştirici seçeneklerindeki aynı seçimdir; kulaklık bağlandığında veya codec değiştiğinde yeniden istenir ve ardından geri okunur. Kulaklığın sunmadığı bir hız (Geliştirici seçeneklerinde gri) asla zorlanmaz: mevcut hız kalır. Yalnızca LDAC etkilenir. 96 ve 192 kHz daha fazla bant genişliği ister; ses takılırsa 660/606 veya uyarlanabilir kaliteyle birlikte kullanın. LDAC kalitesi de Otomatik ise Otomatik yardımcıyı kaldırır."
+      "desc": "Seçtiğiniz LDAC örnekleme hızını her yeniden bağlanma ve yeniden başlatmadan sonra korur; Android'in sık sık döndüğü 48 kHz'e düşmez. Geliştirici seçeneklerindeki aynı seçimdir; kulaklık bağlandığında veya codec değiştiğinde yeniden istenir ve ardından geri okunur. Kulaklığın sunmadığı bir hız (Geliştirici seçeneklerinde gri) asla zorlanmaz: mevcut hız kalır. LDAC ve bu hızı sunan LHDC gibi diğer codec'lerle çalışır; diğer codec'ler kendi hızını korur. 96 ve 192 kHz daha fazla bant genişliği ister; ses takılırsa 660/606 veya uyarlanabilir kaliteyle birlikte kullanın. LDAC kalitesi de Otomatik ise Otomatik yardımcıyı kaldırır."
     },
     "cpu_vendor_unlock": {
       "name": "Üretici CPU tavanı",

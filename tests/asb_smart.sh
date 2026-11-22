@@ -8016,7 +8016,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 python3 - "$ROOT/src/asb_fsm.h" "$T/helper.c" <<'PY'
 import re,sys
 from pathlib import Path
-s=Path(sys.argv[1]).read_text(); m=re.search(r'static int asb_gpu_idle_trim_interactive\(const asb_metrics_t \*m\) \{.*?\n\}',s,re.S)
+s=Path(sys.argv[1]).read_text(); m=re.search(r'#define ASB_GPU_TRIM_BUSY_PCT.*?static int asb_gpu_idle_trim_interactive\(const asb_metrics_t \*m\) \{.*?\n\}',s,re.S)
 assert m
 fixture='''#include <stdio.h>
 #include <time.h>
@@ -8028,10 +8028,13 @@ int main(void) {
  asb_metrics_t m={0}; m.misc.screen_on=1; g_touch_last_ts=0;
  if (asb_gpu_idle_trim_interactive(&m)) return 1;
  m.gpu.load_pct=12; if (!asb_gpu_idle_trim_interactive(&m)) return 2;
+ m.gpu.load_pct=10; if (!asb_gpu_idle_trim_interactive(&m)) return 6;
+ m.gpu.load_pct=8; if (asb_gpu_idle_trim_interactive(&m)) return 7;
+ m.gpu.load_pct=10; g_gpu_trim_busy_ts=time(0)-11; if (asb_gpu_idle_trim_interactive(&m)) return 8;
  m.gpu.load_pct=0; g_touch_last_ts=time(0); if (!asb_gpu_idle_trim_interactive(&m)) return 3;
  m.misc.camera_active=1; if (asb_gpu_idle_trim_interactive(&m)) return 4;
  m.misc.camera_active=0; m.misc.screen_on=0; if (asb_gpu_idle_trim_interactive(&m)) return 5;
- puts("PASS GPU idle trim: idle retained, visible load/touch guarded, camera/screen-off unchanged"); return 0;
+ puts("PASS GPU idle trim: idle retained, visible load/touch guarded with 12/9 % hysteresis, camera/screen-off unchanged"); return 0;
 }
 '''
 Path(sys.argv[2]).write_text(fixture)
