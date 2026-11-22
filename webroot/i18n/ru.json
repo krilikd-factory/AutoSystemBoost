@@ -4375,5 +4375,13 @@
   "console_grp_changed": "изменено · %n",
   "console_grp_stock": "сток",
   "console_sum_changed": "изменено · %n",
-  "console_sum_stock": "сток · %n"
+  "console_sum_stock": "сток · %n",
+  "dbg_send_btn": "Отправить логи в Bugs",
+  "dbg_send_confirm": "Нажмите ещё раз: соберу asbdiag и бесконечный лог и открою Bugs",
+  "dbg_send_diag_first": "Сначала делаю свежий asbdiag · подождите",
+  "dbg_send_none": "Нет ни asbdiag, ни бесконечного лога",
+  "dbg_send_big": "Архив больше 19 МБ — бот логов его не примет",
+  "dbg_send_failed": "Не удалось упаковать логи",
+  "dbg_send_saved": "Сохранено: %s — прикрепите файл в теме Bugs",
+  "dbg_send_reused": "Новых логов нет с %s — прикрепите его, если ещё не отправляли"
 }

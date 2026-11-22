@@ -4375,5 +4375,13 @@
   "console_grp_changed": "modifié · %n",
   "console_grp_stock": "d’origine",
   "console_sum_changed": "modifié · %n",
-  "console_sum_stock": "d’origine · %n"
+  "console_sum_stock": "d’origine · %n",
+  "dbg_send_btn": "Envoyer les journaux à Bugs",
+  "dbg_send_confirm": "Touchez encore : asbdiag et le journal infini sont emballés, puis Bugs s’ouvre",
+  "dbg_send_diag_first": "Création d’un asbdiag récent · patientez",
+  "dbg_send_none": "Aucun asbdiag ni journal infini à envoyer",
+  "dbg_send_big": "L’archive dépasse 19 Mo, trop lourde pour le bot",
+  "dbg_send_failed": "Impossible d’emballer les journaux",
+  "dbg_send_saved": "Enregistré : %s – joignez-le dans le sujet Bugs",
+  "dbg_send_reused": "Aucun nouveau journal depuis %s – joignez-le s’il n’a pas été envoyé"
 }

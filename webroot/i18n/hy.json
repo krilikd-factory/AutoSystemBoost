@@ -4375,5 +4375,13 @@
   "console_grp_changed": "փոխված · %n",
   "console_grp_stock": "գործարանային",
   "console_sum_changed": "փոխված · %n",
-  "console_sum_stock": "գործարանային · %n"
+  "console_sum_stock": "գործարանային · %n",
+  "dbg_send_btn": "Ուղարկել լոգերը Bugs",
+  "dbg_send_confirm": "Սեղմեք կրկին՝ կփաթեթավորեմ asbdiag-ը և անվերջ լոգը ու կբացեմ Bugs",
+  "dbg_send_diag_first": "Նախ ստեղծում եմ թարմ asbdiag · սպասեք",
+  "dbg_send_none": "Չկա ոչ asbdiag, ոչ անվերջ լոգ",
+  "dbg_send_big": "Արխիվը 19 ՄԲ-ից մեծ է, բոտի համար չափազանց մեծ",
+  "dbg_send_failed": "Չհաջողվեց փաթեթավորել լոգերը",
+  "dbg_send_saved": "Պահված է՝ %s – կցեք այն Bugs թեմայում",
+  "dbg_send_reused": "%s-ից հետո նոր լոգեր չկան – կցեք այն, եթե դեռ չեք ուղարկել"
 }

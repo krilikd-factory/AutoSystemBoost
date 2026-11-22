@@ -10855,6 +10855,53 @@ t_vendor_cap_runtime() (
   echo 'PASS vendor cap: Performance-only by default, hardware maximum, locked, game ceiling off, exact hand-back, no fight with another owner'
 )
 
+t_debug_log_bundle_runtime() (
+  fail() { echo "FAIL debug log bundle: $1"; exit 1; }
+  ROOT="${ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  mkdir -p "$T/mod" "$T/logs" "$T/out"
+  echo 'id=AutoSystemBoost' > "$T/mod/module.prop"
+  run() { ASB_DEBUG_SUPPORT_MODDIR="$T/mod" ASB_DEBUG_SUPPORT_STATE_DIR="$T/st" ASB_DEBUG_SUPPORT_DIAG_OUTDIR="$T/logs" \
+    ASB_DEBUG_SUPPORT_BUNDLE_DIR="$T/out" sh "$ROOT/runtime/asb_debug_support.sh" "$@"; }
+  out="$(run bundle)"; printf '%s\n' "$out" | grep -qx 'error=nothing_to_send' || fail 'an empty log folder must not produce an archive'
+  out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag=' || fail 'no asbdiag must read as missing'
+  mkdir -p "$T/logs/asb_log_full_day_7"; echo 'model: X' > "$T/logs/asb_log_full_day_7/env.txt"
+  echo old > "$T/logs/asbdiag_20260101_000000.txt"; touch -d '-5 hours' "$T/logs/asbdiag_20260101_000000.txt"
+  echo new > "$T/logs/asbdiag_20260102_000000.txt"; touch -d '-1 hours' "$T/logs/asbdiag_20260102_000000.txt"
+  echo part > "$T/logs/asbdiag_20260103_000000.txt.tmp.9"
+  out="$(run bundle-check)"
+  printf '%s\n' "$out" | grep -q '^diag=.*asbdiag_20260102_000000.txt$' || fail 'the newest asbdiag is not chosen'
+  age="$(printf '%s\n' "$out" | sed -n 's/^diag_age_s=//p')"
+  [ "$age" -ge 3500 ] && [ "$age" -le 3700 ] || fail "asbdiag age is $age"
+  out="$(run bundle)"
+  p="$(printf '%s\n' "$out" | sed -n 's/^path=//p')"
+  [ -s "$p" ] || fail 'no archive written'
+  case "$p" in "$T/out/ASB_logs_"*.tar.gz|"$T/out/ASB_logs_"*.tar) ;; *) fail "unexpected archive $p" ;; esac
+  l="$(tar -tf "$p")"
+  printf '%s\n' "$l" | grep -qx 'asbdiag_20260102_000000.txt' || fail 'asbdiag missing from the archive'
+  printf '%s\n' "$l" | grep -qx 'asb_log_full_day_7/env.txt' || fail 'infinite log missing from the archive'
+  printf '%s\n' "$l" | grep -q 'asbdiag_20260101\|\.tmp' && fail 'old or partial files packed'
+  ls "$T/out" | grep -q '\.tmp' && fail 'temporary archive left behind'
+  id1="$(printf '%s\n' "$out" | sed -n 's/^id=//p')"
+  case "$id1" in [0-9]*_[0-9]*-[0-9a-f]*) ;; *) fail "bad bundle id $id1" ;; esac
+  case "$p" in *"$id1"*) ;; *) fail 'the archive name does not carry its id' ;; esac
+  tar -xOf "$p" asb_bundle.txt | grep -qx "bundle_id=$id1" || fail 'the archive does not carry its id inside'
+  [ -e "$T/logs/asb_bundle.txt" ] && fail 'the id file stays in the log folder'
+  out2="$(run bundle)"
+  printf '%s\n' "$out2" | grep -qx "id=$id1" && printf '%s\n' "$out2" | grep -qx 'reused=1' || fail 'unchanged logs got a second archive'
+  [ "$(ls "$T/out" | wc -l)" -eq 1 ] || fail 'a second archive of the same logs was written'
+  echo newer > "$T/logs/asbdiag_20260104_000000.txt"
+  out3="$(run bundle)"
+  id3="$(printf '%s\n' "$out3" | sed -n 's/^id=//p')"
+  [ -n "$id3" ] && [ "$id3" != "$id1" ] || fail 'new logs reused the old id'
+  echo more >> "$T/logs/asb_log_full_day_7/env.txt"; dd if=/dev/zero of="$T/logs/asb_log_full_day_7/big" bs=1024 count=8 2>/dev/null
+  id4="$(run bundle | sed -n 's/^id=//p')"
+  [ -n "$id4" ] && [ "$id4" != "$id3" ] || fail 'a grown infinite log reused the old id'
+  grep -q "'send'" "$ROOT/webroot/index.html" && grep -q 'bundle-check' "$ROOT/webroot/index.html" || fail 'WebUI does not offer sending'
+  grep -qF "https://t.me/AutoSystemBoost/3" "$ROOT/webroot/index.html" || fail 'WebUI does not open the Bugs topic'
+  echo 'PASS debug log bundle: newest asbdiag and infinite log packed into Download, partial files skipped, empty folder refused'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

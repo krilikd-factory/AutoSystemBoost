@@ -8741,6 +8741,48 @@ async function asbDebugStopFullDay() {
   }
 }
 
+/* Logs for the developer leave the phone only by the user's own hand: the module carries no
+ * token, so it packs the newest asbdiag (a fresh one if none is under two hours old), the newest
+ * infinite-log folder and report into Download, then opens the group's Bugs topic, where the
+ * user attaches the archive. A bot collects archives from Bugs and General for analysis. */
+const ASB_BUGS_URL = 'https://t.me/AutoSystemBoost/3';
+let _asbSendArmed = 0;
+async function asbSendLogs() {
+  if (_asbDebugActionBusy) return;
+  _asbDebugActionBusy = true;
+  let waitOpen = false;
+  try {
+    const chk = debugActionText(await run('sh ' + MD + '/runtime/asb_debug_support.sh bundle-check 2>/dev/null'));
+    const age = Number(chk.diag_age_s);
+    if (!chk.diag || !(age >= 0 && age < 7200)) {
+      debugActionWaitOpen('diag'); waitOpen = true;
+      await debugFrame();
+      toast(T('dbg_send_diag_first', 'Making a fresh asbdiag first · please wait'), 'warn');
+      const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh diag-start 2>/dev/null');
+      const i = debugActionText(r);
+      if (r && r.errno === 0 && !i.error) await debugDiagPoll();
+      debugActionWaitClose(); waitOpen = false;
+    }
+    const b = debugActionText(await run('sh ' + MD + '/runtime/asb_debug_support.sh bundle 2>/dev/null'));
+    if (b.status !== 'saved' || !b.path) {
+      uiSound('error');
+      toast(b.error === 'nothing_to_send' ? T('dbg_send_none', 'No asbdiag or infinite log to send') :
+            b.error === 'too_big' ? T('dbg_send_big', 'The archive is over 19 MB, too big for the log bot') :
+            T('dbg_send_failed', 'Could not pack the logs'), 'bad');
+      return;
+    }
+    uiSound('success');
+    if (b.reused === '1') toast(T('dbg_send_reused', 'No new logs since %s - attach it if it was not sent yet').replace('%s', b.path.replace(/^\/(sdcard|storage\/emulated\/0)\//, '')), 'warn');
+    else toast(T('dbg_send_saved', 'Saved %s - attach it in the Bugs topic').replace('%s', b.path.replace(/^\/(sdcard|storage\/emulated\/0)\//, '')), 'good');
+    run("sh -c 'am start -a android.intent.action.VIEW -d \"" + ASB_BUGS_URL + "\" >/dev/null 2>&1'");
+  } catch (e) {
+    toast(T('dbg_send_failed', 'Could not pack the logs'), 'bad');
+  } finally {
+    if (waitOpen) debugActionWaitClose();
+    _asbDebugActionBusy = false;
+  }
+}
+
 async function asbDebugAction(action) {
   if (_asbDebugActionBusy) return;
   const allowed = action === 'diag' || action === 'full-day';
@@ -25359,6 +25401,23 @@ function asbLogMenuPick(action) {
     asbDebugStopFullDay();
     return;
   }
+  if (action === 'send') {
+    const label = document.getElementById('logMenuSendLabel');
+    if (!_asbSendArmed || Date.now() - _asbSendArmed >= 4000) {
+      _asbSendArmed = Date.now();
+      if (label) { label.removeAttribute('data-i18n'); label.textContent = T('dbg_send_confirm', 'Tap again: pack asbdiag and the infinite log, then open Bugs'); }
+      if (typeof uiSound === 'function') uiSound('option');
+      setTimeout(function () {
+        if (Date.now() - _asbSendArmed >= 4000 && label) label.textContent = T('dbg_send_btn', 'Send logs to Bugs');
+      }, 4100);
+      return;
+    }
+    _asbSendArmed = 0;
+    if (label) label.textContent = T('dbg_send_btn', 'Send logs to Bugs');
+    asbCloseLogMenu();
+    asbSendLogs();
+    return;
+  }
   asbCloseLogMenu();
   /* The report is read-only - it re-reads files the capture already wrote - so it is NOT
      behind the debug-build gate that protects STARTING a capture. */
@@ -28500,6 +28559,9 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
   </button>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('report')">
     <span data-i18n="lr_menu">Infinite log report</span>
+  </button>
+  <button class="log-menu-item" id="logMenuSend" role="menuitem" type="button" onclick="asbLogMenuPick('send')">
+    <span id="logMenuSendLabel" data-i18n="dbg_send_btn">Send logs to Bugs</span>
   </button>
 </div>
 <nav class="asb-tabbar" id="asbTabbar" role="tablist" aria-label="Sections">

@@ -4375,5 +4375,13 @@
   "console_grp_changed": "معدّل · %n",
   "console_grp_stock": "افتراضي",
   "console_sum_changed": "معدّل · %n",
-  "console_sum_stock": "افتراضي · %n"
+  "console_sum_stock": "افتراضي · %n",
+  "dbg_send_btn": "إرسال السجلات إلى Bugs",
+  "dbg_send_confirm": "انقر مرة أخرى: أحزم asbdiag والسجل اللانهائي ثم أفتح Bugs",
+  "dbg_send_diag_first": "أنشئ asbdiag جديدًا أولًا · انتظر",
+  "dbg_send_none": "لا يوجد asbdiag ولا سجل لانهائي",
+  "dbg_send_big": "الأرشيف أكبر من 19 ميغابايت، كبير على البوت",
+  "dbg_send_failed": "تعذّر حزم السجلات",
+  "dbg_send_saved": "تم الحفظ: %s – أرفقه في موضوع Bugs",
+  "dbg_send_reused": "لا سجلات جديدة منذ %s – أرفقه إن لم يُرسل بعد"
 }

@@ -4375,5 +4375,13 @@
   "console_grp_changed": "değişti · %n",
   "console_grp_stock": "varsayılan",
   "console_sum_changed": "değişti · %n",
-  "console_sum_stock": "varsayılan · %n"
+  "console_sum_stock": "varsayılan · %n",
+  "dbg_send_btn": "Logları Bugs’a gönder",
+  "dbg_send_confirm": "Tekrar dokunun: asbdiag ve sonsuz log paketlenir, Bugs açılır",
+  "dbg_send_diag_first": "Önce yeni bir asbdiag hazırlanıyor · bekleyin",
+  "dbg_send_none": "Gönderilecek asbdiag veya sonsuz log yok",
+  "dbg_send_big": "Arşiv 19 MB’tan büyük, log botu için fazla",
+  "dbg_send_failed": "Loglar paketlenemedi",
+  "dbg_send_saved": "Kaydedildi: %s – Bugs konusuna ekleyin",
+  "dbg_send_reused": "%s sonrası yeni log yok – gönderilmediyse onu ekleyin"
 }

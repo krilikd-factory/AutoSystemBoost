@@ -4375,5 +4375,13 @@
   "console_grp_changed": "已修改 · %n",
   "console_grp_stock": "原厂",
   "console_sum_changed": "已修改 · %n",
-  "console_sum_stock": "原厂 · %n"
+  "console_sum_stock": "原厂 · %n",
+  "dbg_send_btn": "发送日志到 Bugs",
+  "dbg_send_confirm": "再点一次：打包 asbdiag 和无限日志并打开 Bugs",
+  "dbg_send_diag_first": "先生成新的 asbdiag · 请稍候",
+  "dbg_send_none": "没有可发送的 asbdiag 或无限日志",
+  "dbg_send_big": "压缩包超过 19 MB，日志机器人无法接收",
+  "dbg_send_failed": "无法打包日志",
+  "dbg_send_saved": "已保存：%s – 请在 Bugs 话题中附上",
+  "dbg_send_reused": "自 %s 以来没有新日志——如尚未发送请附上它"
 }

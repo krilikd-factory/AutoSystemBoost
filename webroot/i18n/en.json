@@ -4268,5 +4268,13 @@
   "console_grp_changed": "changed · %n",
   "console_grp_stock": "stock",
   "console_sum_changed": "changed · %n",
-  "console_sum_stock": "stock · %n"
+  "console_sum_stock": "stock · %n",
+  "dbg_send_btn": "Send logs to Bugs",
+  "dbg_send_confirm": "Tap again: pack asbdiag and the infinite log, then open Bugs",
+  "dbg_send_diag_first": "Making a fresh asbdiag first · please wait",
+  "dbg_send_none": "No asbdiag or infinite log to send",
+  "dbg_send_big": "The archive is over 19 MB, too big for the log bot",
+  "dbg_send_failed": "Could not pack the logs",
+  "dbg_send_saved": "Saved %s - attach it in the Bugs topic",
+  "dbg_send_reused": "No new logs since %s - attach it if it was not sent yet"
 }

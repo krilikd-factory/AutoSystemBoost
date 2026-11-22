@@ -4375,5 +4375,13 @@
   "console_grp_changed": "geändert · %n",
   "console_grp_stock": "Standard",
   "console_sum_changed": "geändert · %n",
-  "console_sum_stock": "Standard · %n"
+  "console_sum_stock": "Standard · %n",
+  "dbg_send_btn": "Logs an Bugs senden",
+  "dbg_send_confirm": "Nochmals tippen: asbdiag und Endlos-Log packen, dann Bugs öffnen",
+  "dbg_send_diag_first": "Erstelle zuerst ein frisches asbdiag · bitte warten",
+  "dbg_send_none": "Kein asbdiag und kein Endlos-Log vorhanden",
+  "dbg_send_big": "Das Archiv ist größer als 19 MB, zu groß für den Log-Bot",
+  "dbg_send_failed": "Logs konnten nicht gepackt werden",
+  "dbg_send_saved": "Gespeichert: %s – im Thema Bugs anhängen",
+  "dbg_send_reused": "Keine neuen Logs seit %s – anhängen, falls noch nicht gesendet"
 }

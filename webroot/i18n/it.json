@@ -4375,5 +4375,13 @@
   "console_grp_changed": "modificato · %n",
   "console_grp_stock": "di serie",
   "console_sum_changed": "modificato · %n",
-  "console_sum_stock": "di serie · %n"
+  "console_sum_stock": "di serie · %n",
+  "dbg_send_btn": "Invia i log a Bugs",
+  "dbg_send_confirm": "Tocca di nuovo: impacchetto asbdiag e il log infinito e apro Bugs",
+  "dbg_send_diag_first": "Prima creo un asbdiag aggiornato · attendi",
+  "dbg_send_none": "Nessun asbdiag né log infinito da inviare",
+  "dbg_send_big": "L’archivio supera 19 MB, troppo grande per il bot",
+  "dbg_send_failed": "Impossibile impacchettare i log",
+  "dbg_send_saved": "Salvato: %s – allegalo nell’argomento Bugs",
+  "dbg_send_reused": "Nessun log nuovo da %s – allegalo se non l’hai ancora inviato"
 }

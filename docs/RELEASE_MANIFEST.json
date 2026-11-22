@@ -1,32 +1,32 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-test17-source",
-  "base": "AutoSystemBoost-V66-test16-source.zip",
+  "release": "AutoSystemBoost-V66-test18-source",
+  "base": "AutoSystemBoost-V66-test17-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 287,
   "inventory_vs_base": {
     "changed": [
-      "config/governor.conf",
-      "config/governor.conf.shipped",
+      ".github/scripts/telegram_post.py",
+      "CHANGELOG.md",
       "docs/README.advanced.md",
       "docs/README.advanced.ru.md",
       "docs/TELEGRAM_POST.txt",
-      "docs/TELEGRAM_RELEASE.txt",
       "docs/V66_BUILD_HISTORY.md",
-      "runtime/asb_bt_codec.sh",
+      "module.prop",
+      "runtime/asb_debug_support.sh",
       "runtime/asb_wakelock_watch.sh",
       "service.sh",
-      "src/asb_fsm.h",
       "src/btcodec/asb/BtCodec.java",
       "system/bin/asbdiag",
       "tests/asb_features.sh",
-      "tests/asb_smart.sh",
       "tests/asb_system.sh",
       "tests/asb_ui.sh",
+      "tests/asb_zygisk.sh",
       "tools/asb_diag.sh",
       "tools/asb_tree.sha256",
       "uninstall.sh",
+      "update.json",
       "webroot/i18n/ar.json",
       "webroot/i18n/de.json",
       "webroot/i18n/en.json",
@@ -42,14 +42,12 @@
       "webroot/i18n/zh.json",
       "webroot/index.html"
     ],
-    "added": [
-      ".github/scripts/telegram_post.py"
-    ],
+    "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
       "changed": 34,
-      "added": 1,
+      "added": 0,
       "deleted": 0,
       "mode_changes": 0
     }
@@ -233,9 +231,9 @@
     },
     {
       "path": ".github/scripts/telegram_post.py",
+      "bytes": 9667,
       "mode": "0644",
-      "bytes": 9571,
-      "sha256": "9626bd3f690febfa212b6660e81f8dd790ae448f3f13e68edb357a944aebc772"
+      "sha256": "4ce7938c60d2adf23ab37f1033b46506e5764d77500522d9c2499d37abdc3eb5"
     },
     {
       "path": ".github/workflows/build-dsp-aidl.yml",
@@ -263,9 +261,9 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 23533,
+      "bytes": 12541,
       "mode": "0644",
-      "sha256": "0b6c185d8074cae6104d4370a4858c47263cd9db11419edaec886ab301099c83"
+      "sha256": "d6b05ae01902563378c0e1480a3c9527c521452387b20c996ef315b5d02ab813"
     },
     {
       "path": "LICENSE",
@@ -455,27 +453,27 @@
     },
     {
       "path": "docs/README.advanced.md",
+      "bytes": 185702,
       "mode": "0644",
-      "bytes": 185697,
-      "sha256": "6a7233e8e85380eeed18bf741747aa0ae5c524d30039a659c85e67056db80082"
+      "sha256": "5e0bfe1713e5bf6d01bfe906bd404940facbc162c78672723a879562aea3834c"
     },
     {
       "path": "docs/README.advanced.ru.md",
+      "bytes": 303947,
       "mode": "0644",
-      "bytes": 303942,
-      "sha256": "e4427f33f68708d6f8dc720abd02c300eae6f695a5cab8baad51d8881038bada"
+      "sha256": "351722c521bafd0531a32e7aada425b406d548d8d381d0aed4de475ea10ad999"
     },
     {
       "path": "docs/README.ru.md",
-      "mode": "0644",
       "bytes": 52215,
+      "mode": "0644",
       "sha256": "a1a4d062244fa9e1db68157a58b17a4fb8a08080f97358d8cbae64bae3bc01d6"
     },
     {
       "path": "docs/TELEGRAM_POST.txt",
-      "bytes": 1163,
+      "bytes": 1462,
       "mode": "0644",
-      "sha256": "c96ce1563feeda89af0fa8398e6036638862d89df63143db2111333e2e2a725d"
+      "sha256": "f38148b698be7d75bc36e071eff4f360805e638fa9f2075178dd9de07242bda0"
     },
     {
       "path": "docs/TELEGRAM_RELEASE.txt",
@@ -497,14 +495,14 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 311111,
+      "bytes": 314235,
       "mode": "0644",
-      "sha256": "70d94234d9da54c04372b941fb881f980a234eee05b099da3f6198d7a19abedb"
+      "sha256": "c0013b573c82f39133a8ab6da3c0371672ee1ae1bf8c276d4cc4f4861ac1a346"
     },
     {
       "path": "docs/assets/banner.png",
-      "mode": "0644",
       "bytes": 1041289,
+      "mode": "0644",
       "sha256": "86844e9d4eb44a2ca187c3b8210813f50b7eb6021b9c57dc82e1c2b2d04b00a5"
     },
     {
@@ -539,9 +537,9 @@
     },
     {
       "path": "module.prop",
-      "bytes": 354,
+      "bytes": 367,
       "mode": "0644",
-      "sha256": "8e20ce3f4b6cc00bbc4ebc36a14142bb1aec4d5df0d44838c353f9ff5d0a3dc5"
+      "sha256": "bc2870b8efaf255b5662490999fdf1c3fe883faa3606e8e32fecb4d537786d6e"
     },
     {
       "path": "post-fs-data.sh",
@@ -701,9 +699,9 @@
     },
     {
       "path": "runtime/asb_debug_support.sh",
-      "bytes": 41336,
+      "bytes": 45416,
       "mode": "0755",
-      "sha256": "57886583efd08501546b35f7d971c5d7755d8eb56ad853522828c486d22b01b3"
+      "sha256": "074d7559194b495348100854224321e434b08bc7248688667a4f09007b0b5302"
     },
     {
       "path": "runtime/asb_device_bounds.sh",
@@ -1073,8 +1071,8 @@
     },
     {
       "path": "runtime/asb_vendor_cap.sh",
-      "mode": "0755",
       "bytes": 5936,
+      "mode": "0755",
       "sha256": "dbf98c323e7e4f298c14873afdef4a2aef88eefc6bbae246d2d1f9a2acacdea0"
     },
     {
@@ -1085,9 +1083,9 @@
     },
     {
       "path": "runtime/asb_wakelock_watch.sh",
-      "bytes": 74527,
+      "bytes": 75957,
       "mode": "0755",
-      "sha256": "188f05f7814bf709ed2983df9c02a749a9ff0cd0641a9acac8f9acba267cf040"
+      "sha256": "16600957c655cb87d57ee0cb8730d399812722df5842d941c5a34309933a9efc"
     },
     {
       "path": "runtime/asb_wakeup_blocker.sh",
@@ -1229,9 +1227,9 @@
     },
     {
       "path": "service.sh",
-      "bytes": 228369,
+      "bytes": 229004,
       "mode": "0755",
-      "sha256": "8a002209c988c3a0911714183908506bc48fd81590e185194f376e9093a5c376"
+      "sha256": "e1ef33587793aaf3a94dac7adde8ad63d00a090f8102a9b735375f265c58b090"
     },
     {
       "path": "src/DSP/asb_dsp.c",
@@ -1379,9 +1377,9 @@
     },
     {
       "path": "src/btcodec/asb/BtCodec.java",
-      "bytes": 17770,
+      "bytes": 19312,
       "mode": "0644",
-      "sha256": "f0a690ff0a05b96b3fa00543fb1f23913798b15a893efb6f9cf7ea7941b90206"
+      "sha256": "83cad8c4c432b08f77110ba4ba03eed4c1e9f69054119be764b1dd36def02fed"
     },
     {
       "path": "src/btcodec/build.sh",
@@ -1439,9 +1437,9 @@
     },
     {
       "path": "system/bin/asbdiag",
-      "bytes": 338204,
+      "bytes": 338208,
       "mode": "0755",
-      "sha256": "8af2917cb57ee380ef9a94a1d94920a2f49aa4ec3072c91deaf4422465b21f20"
+      "sha256": "a2b93cc90774548a7bc335b559fb60cf4399f40b76efd43432c8c52165421cfa"
     },
     {
       "path": "system/bin/asbtrial",
@@ -1451,9 +1449,9 @@
     },
     {
       "path": "tests/asb_features.sh",
-      "bytes": 814841,
+      "bytes": 815658,
       "mode": "0755",
-      "sha256": "2621752bd66a92a1109a6d78bf9fe0fc7eb8a855c4d9d1c3060140d9963dd397"
+      "sha256": "27df6916256f3afd19f7d930bbc648f2e72f7300d8d5b04e15ad4273b1bc7eae"
     },
     {
       "path": "tests/asb_package_tweaks.sh",
@@ -1469,21 +1467,21 @@
     },
     {
       "path": "tests/asb_system.sh",
-      "bytes": 687137,
+      "bytes": 691415,
       "mode": "0755",
-      "sha256": "8554ddd3003dc73d0821bff1c56683d198c2dfeb2734339b0e12cc67a30c1373"
+      "sha256": "f482222cc61b46fe09e9a61ab3801c246eafbe8f41d03222d979353e2a57ea7d"
     },
     {
       "path": "tests/asb_ui.sh",
-      "bytes": 1291514,
+      "bytes": 1291565,
       "mode": "0755",
-      "sha256": "e8bf646be51c060e72fac66177830e8db6b5cd32dc494553a63b64cb31d61983"
+      "sha256": "f69628ed031d9d545639a34d0088bef0f40f9614a22599767b42a43b929323db"
     },
     {
       "path": "tests/asb_zygisk.sh",
-      "bytes": 157808,
+      "bytes": 157935,
       "mode": "0755",
-      "sha256": "db61b7b6aa911dd6f21e129c1d2b87771b47315e3c24cc7b8a2dbd51e2076494"
+      "sha256": "a7e4e844d5885a9586cc84f5eeb51cbdc3a9842ba802167abb34bf105bce0cce"
     },
     {
       "path": "tools/asb_analyze.py",
@@ -1541,9 +1539,9 @@
     },
     {
       "path": "tools/asb_diag.sh",
-      "bytes": 338204,
+      "bytes": 338208,
       "mode": "0755",
-      "sha256": "8af2917cb57ee380ef9a94a1d94920a2f49aa4ec3072c91deaf4422465b21f20"
+      "sha256": "a2b93cc90774548a7bc335b559fb60cf4399f40b76efd43432c8c52165421cfa"
     },
     {
       "path": "tools/asb_discover.sh",
@@ -1705,7 +1703,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24992,
       "mode": "0644",
-      "sha256": "d53430f3bb3dcb7316e5ba123c8dce3f5536f407259cd663f05cbab5436f0a84"
+      "sha256": "febccd8fbefcdf0abe19f81d76737e4c75482ac883b7ebb37fc9b210250d1472"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1811,15 +1809,15 @@
     },
     {
       "path": "uninstall.sh",
-      "bytes": 40305,
+      "bytes": 40309,
       "mode": "0755",
-      "sha256": "e30837a3111c6b151a47d100806c1dc33aca670f0ca00487f4fca766d60d06f7"
+      "sha256": "8ba1b89e977f42ae175531175224fd8dfb9de76e7e0331b152d6f4827b2986ab"
     },
     {
       "path": "update.json",
-      "bytes": 246,
+      "bytes": 238,
       "mode": "0644",
-      "sha256": "7f48125d5f45658629b6a6df36c0a2bb0681ec911845f72d8ac71bc8aa178d1d"
+      "sha256": "0f5f01f4e182cf408d4df4d065cede3b892da04181525b063e528305d19508b3"
     },
     {
       "path": "webroot/config.json",
@@ -1835,81 +1833,81 @@
     },
     {
       "path": "webroot/i18n/ar.json",
-      "bytes": 434186,
+      "bytes": 435042,
       "mode": "0644",
-      "sha256": "16e4bd9bf23302f86498599001c0ede6adf59a343913a229ca0de3d0c4940a5c"
+      "sha256": "9a77e21a72e99453311a6ac0461626221a3455f92ab1e4ac2be5eceb304fa997"
     },
     {
       "path": "webroot/i18n/de.json",
-      "bytes": 349061,
+      "bytes": 349805,
       "mode": "0644",
-      "sha256": "89bee0dd7aaa91219b9d2298d9495655d7ce45c1cd4b959fe35e87c91775122d"
+      "sha256": "df30a0a315118fe6961d09c59b51a7793409a3590d84803c99d2bfe928bc7543"
     },
     {
       "path": "webroot/i18n/en.json",
-      "bytes": 315506,
+      "bytes": 316181,
       "mode": "0644",
-      "sha256": "d661e9e2348f52db74da4a2de7db8046d26d00d9a7d6cc8c61dfb9dba3d3d142"
+      "sha256": "cc1d2bdd47deb4d8e1c84be982eb77b87c628a28d5840463a832262444d73d3e"
     },
     {
       "path": "webroot/i18n/es.json",
-      "bytes": 350346,
+      "bytes": 351081,
       "mode": "0644",
-      "sha256": "c216f680e85e70333a8a73d99eada571d0b25e0ebfe0f85fc0d2fa7b0d7a8328"
+      "sha256": "b3c266c11549998d2e9137eb8052749ab07c293ace027e344754376bb4b09a03"
     },
     {
       "path": "webroot/i18n/fr.json",
-      "bytes": 364981,
+      "bytes": 365760,
       "mode": "0644",
-      "sha256": "159a74af218cbe3853eb77a565f3b0127fc14b356a091b30964a3d9d3395fa9d"
+      "sha256": "c3b620d30dd6e8d0cc59ed31ab89a4a3e1d8bb48a5c014260ecb21db71e59ef4"
     },
     {
       "path": "webroot/i18n/hy.json",
-      "bytes": 528271,
+      "bytes": 529221,
       "mode": "0644",
-      "sha256": "b0dd660603a41554003c19f92bde042a3e065252bdbaacf28a774b5a6195caeb"
+      "sha256": "a744c72c74f55a930211631ab1a17664b174754d7374f6e671673bb0440227e7"
     },
     {
       "path": "webroot/i18n/id.json",
-      "bytes": 335769,
+      "bytes": 336441,
       "mode": "0644",
-      "sha256": "f24a9b4eb406be49ae05aedd9d1af4fbd36f2f8eb761410d69a4fe5beea970c9"
+      "sha256": "82a5ed960fd0db8b86f1bb28d8248fc2426232debb7d05601df32688ea7ffe77"
     },
     {
       "path": "webroot/i18n/it.json",
-      "bytes": 345853,
+      "bytes": 346581,
       "mode": "0644",
-      "sha256": "c78601e5e7105b0be6a8e45c61cca234c5a9992b8f34c305c4d3cde2f8c27142"
+      "sha256": "8d96a37a9145cf6b332c14cf102e0c71cc932c20c244c5094545d2660812566d"
     },
     {
       "path": "webroot/i18n/pt.json",
-      "bytes": 345644,
+      "bytes": 346356,
       "mode": "0644",
-      "sha256": "cf04aadf0d7d6e8b749fa72fb993651ccdbe7917d0e8a15ebe26018805f8ee73"
+      "sha256": "bbdc5321b086662b5aece70a88328da97365188c1fffdaf9456dc20cfe5f96fc"
     },
     {
       "path": "webroot/i18n/ru.json",
-      "bytes": 516394,
+      "bytes": 517346,
       "mode": "0644",
-      "sha256": "5457e58c59348b3565bfcf5c1578f460c452cc87428ff504b236d391ffbbc719"
+      "sha256": "09df4c24823de26b94cdb5427cc347bb0a8624b1d1072d47dfa9298161520707"
     },
     {
       "path": "webroot/i18n/tr.json",
-      "bytes": 347097,
+      "bytes": 347812,
       "mode": "0644",
-      "sha256": "e1051d78e3ca1993ed0e21721116483a54e5502912f994d65cc81a25cba57ca4"
+      "sha256": "f9b4808e205386c6a1c897edd2ef88402dffb01d31f9a5dc60979ebe1c49039d"
     },
     {
       "path": "webroot/i18n/uk.json",
-      "bytes": 499887,
+      "bytes": 500858,
       "mode": "0644",
-      "sha256": "fe30ed1cda078d6704b60561fad58042c018d5ead4c045d99c2b128935eda829"
+      "sha256": "963c7f87e429898a764aa653bb18488266411bbc022fbcda990dbed2705fcbf5"
     },
     {
       "path": "webroot/i18n/zh.json",
-      "bytes": 308538,
+      "bytes": 309232,
       "mode": "0644",
-      "sha256": "2dcd4690889cbca0abf2cc83fb2f0ed01a3358d7ea97305564e27d6e66018fda"
+      "sha256": "93886d55f73b435dfe57e686153f43df713fed8c3b421c18ebd42eaac26d88f5"
     },
     {
       "path": "webroot/icon.png",
@@ -1919,9 +1917,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1811489,
+      "bytes": 1822389,
       "mode": "0644",
-      "sha256": "0b870a32a9704540c5c632928ef333f44a720917c38b6ac4c64ee803964eab4b"
+      "sha256": "fb723e1e8b2e05496dc33a4473d1084219e453c5d37c2cde48f599e98c88214c"
     },
     {
       "path": "zygisk/arm64-v8a.so",

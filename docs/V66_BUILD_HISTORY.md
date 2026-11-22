@@ -5,7 +5,7 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
-## Next test build (in progress)
+## V66-test18 - LDAC/LHDC rate on Android 16, logs to Bugs, console panels
 
 Input: the owner's asbdiag captures of 20:40 and 20:46 (OnePlus 15, LHDC link, 96 kHz picked by
 hand) and the AnyKernel3 install log of the KRILIKD kernel.
@@ -21,6 +21,18 @@ hand) and the AnyKernel3 install log of the KRILIKD kernel.
   rate is set. The helper's safety re-check runs every 30 min with broadcasts and every
   2 min (headphones) / 5 min (none) without them, on the uptime clock (no wakeups in sleep).
 - The option is named "LDAC/LHDC sample rate" in all 13 locales and both advanced READMEs.
+
+### Logs from users
+- Log menu → "Send logs to Bugs": two taps; makes a fresh asbdiag when none is under two hours
+  old, packs it with the newest infinite-log folder and report into
+  `Download/ASB_logs_<time>.tar.gz` (19 MB ceiling, partial files skipped) and opens the group's
+  Bugs topic. The module carries no token; the user attaches the file.
+- Each archive has its own id (`YYYYMMDD_HHMMSS-<random>`, in the name and in
+  `asb_bundle.txt` inside). While the logs are unchanged the button returns the same archive and
+  id instead of a new one; the bot refuses a received id and a repack of logs it already has.
+- A bot in the private log repository collects ASB logs from Bugs and General every 3 hours,
+  checks them without extracting, stores them with a short summary (no sender identity) and
+  replies in the thread.
 
 ### Fitness apps & wakelocks
 - A lock taken before the restriction no longer counts as "the ROM ignores it": the verdicts

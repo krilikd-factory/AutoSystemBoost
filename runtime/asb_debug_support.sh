@@ -953,6 +953,103 @@ revive_full_day() {
   start_full_day 1 "$_vd" restart
 }
 
+bundle_newest() {
+  _bn_best=""; _bn_t=0
+  for _bn_f in "$DIAG_OUTDIR"/$1; do
+    [ -e "$_bn_f" ] || continue
+    case "$_bn_f" in *.tmp|*.tmp.*) continue ;; esac
+    if [ "$2" = d ]; then [ -d "$_bn_f" ] || continue; else [ -f "$_bn_f" ] || continue; fi
+    _bn_m="$(stat -c %Y "$_bn_f" 2>/dev/null || echo 0)"
+    case "$_bn_m" in ''|*[!0-9]*) _bn_m=0 ;; esac
+    if [ -z "$_bn_best" ] || [ "$_bn_m" -gt "$_bn_t" ]; then _bn_best="$_bn_f"; _bn_t="$_bn_m"; fi
+  done
+  [ -n "$_bn_best" ] || return 1
+  printf '%s %s' "$_bn_t" "$_bn_best"
+}
+
+bundle_check() {
+  _now="$(date +%s 2>/dev/null || echo 0)"
+  _d="$(bundle_newest 'asbdiag_*.txt' f 2>/dev/null || true)"
+  _l="$(bundle_newest 'asb_log_full_day_*' d 2>/dev/null || true)"
+  if [ -n "$_d" ]; then _dt="${_d%% *}"; echo "diag=${_d#* }"; echo "diag_age_s=$(( _now - _dt ))"; else echo 'diag='; fi
+  if [ -n "$_l" ]; then echo "log=${_l#* }"; else echo 'log='; fi
+  echo 'status=ok'
+}
+
+bundle_id_new() {
+  _bir="$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -dc '0-9a-f')"
+  [ -n "$_bir" ] || _bir="$(printf '%08x' "$(( $$ * 2654435761 % 4294967296 ))")"
+  printf '%s-%s' "$(date '+%Y%m%d_%H%M%S' 2>/dev/null || echo now)" "$_bir"
+}
+
+bundle_logs() {
+  _bo="${ASB_DEBUG_SUPPORT_BUNDLE_DIR:-/sdcard/Download}"
+  _d="$(bundle_newest 'asbdiag_*.txt' f 2>/dev/null || true)"
+  _l="$(bundle_newest 'asb_log_full_day_*' d 2>/dev/null || true)"
+  _r="$(bundle_newest 'asb_report_*.txt' f 2>/dev/null || true)"
+  [ -n "$_d" ] && _d="${_d#* }"; [ -n "$_l" ] && _l="${_l#* }"; [ -n "$_r" ] && _r="${_r#* }"
+  [ -n "$_d$_l" ] || { echo 'error=nothing_to_send'; return 3; }
+  mkdir -p "$_bo" 2>/dev/null
+  [ -d "$_bo" ] || { echo 'error=bundle_dir_failed'; return 5; }
+  _lb=0
+  [ -n "$_l" ] && _lb="$(du -sk "$_l" 2>/dev/null | cut -f1 | tr -dc '0-9')"
+  _key="${_d##*/}/${_l##*/}/${_lb:-0}/${_r##*/}/$(wc -c < "${_d:-/dev/null}" 2>/dev/null | tr -dc '0-9')"
+  _last="$STATE_DIR/bundle.last"
+  _id=""
+  if [ -r "$_last" ] && [ "$(sed -n 's/^key=//p' "$_last" | head -n 1)" = "$_key" ]; then
+    _id="$(sed -n 's/^id=//p' "$_last" | head -n 1 | tr -dc '0-9a-f_-')"
+    _old="$(sed -n 's/^path=//p' "$_last" | head -n 1)"
+    if [ -n "$_id" ] && [ -s "$_old" ]; then
+      echo "path=$_old"
+      echo "id=$_id"
+      echo 'reused=1'
+      echo 'status=saved'
+      return 0
+    fi
+  fi
+  [ -n "$_id" ] || _id="$(bundle_id_new)"
+  _mf="$DIAG_OUTDIR/asb_bundle.txt"
+  {
+    echo "bundle_id=$_id"
+    echo "created=$(date '+%Y-%m-%d %H:%M:%S %z' 2>/dev/null)"
+    echo "asb_version=$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -n 1)"
+    echo "device=$(prop_get ro.product.model)"
+    echo "diag=${_d##*/}"
+    echo "log=${_l##*/}"
+    echo "log_kb=${_lb:-0}"
+    echo "report=${_r##*/}"
+  } > "$_mf" 2>/dev/null || { echo 'error=bundle_failed'; return 6; }
+  set -- asb_bundle.txt
+  for _bi in "$_d" "$_l" "$_r"; do [ -n "$_bi" ] && set -- "$@" "${_bi##*/}"; done
+  _bf="$_bo/ASB_logs_${_id}.tar.gz"
+  rm -f "$_bf.tmp" 2>/dev/null
+  tar -czf "$_bf.tmp" -C "$DIAG_OUTDIR" "$@" >/dev/null 2>&1
+  if [ ! -s "$_bf.tmp" ]; then
+    rm -f "$_bf.tmp" 2>/dev/null
+    _bf="$_bo/ASB_logs_${_id}.tar"
+    tar -cf "$_bf.tmp" -C "$DIAG_OUTDIR" "$@" >/dev/null 2>&1
+  fi
+  rm -f "$_mf" 2>/dev/null
+  [ -s "$_bf.tmp" ] || { rm -f "$_bf.tmp" 2>/dev/null; echo 'error=bundle_failed'; return 6; }
+  _bb="$(wc -c < "$_bf.tmp" 2>/dev/null | tr -dc '0-9')"
+  case "$_bb" in ''|*[!0-9]*) _bb=0 ;; esac
+  if [ "$_bb" -gt 19000000 ]; then
+    rm -f "$_bf.tmp" 2>/dev/null
+    echo 'error=too_big'; echo "bytes=$_bb"; return 7
+  fi
+  mv -f "$_bf.tmp" "$_bf" 2>/dev/null || { rm -f "$_bf.tmp" 2>/dev/null; echo 'error=bundle_failed'; return 6; }
+  mkdir -p "$STATE_DIR" 2>/dev/null
+  { echo "key=$_key"; echo "id=$_id"; echo "path=$_bf"; } > "$_last" 2>/dev/null || true
+  echo "path=$_bf"
+  echo "id=$_id"
+  echo "bytes=$_bb"
+  [ -n "$_d" ] && echo "diag=${_d##*/}"
+  [ -n "$_l" ] && echo "log=${_l##*/}"
+  [ -n "$_r" ] && echo "report=${_r##*/}"
+  echo 'status=saved'
+  return 0
+}
+
 case "${1:-status}" in
   status) full_day_status ;;
   diag) write_diag ;;
@@ -963,5 +1060,7 @@ case "${1:-status}" in
   full-day-stop) stop_full_day ;;
   full-day-resume) resume_full_day ;;
   full-day-revive) revive_full_day ;;
+  bundle-check) bundle_check ;;
+  bundle) bundle_logs ;;
   *) echo 'error=bad_action'; exit 64 ;;
 esac

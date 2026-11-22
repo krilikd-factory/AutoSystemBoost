@@ -4375,5 +4375,13 @@
   "console_grp_changed": "diubah · %n",
   "console_grp_stock": "bawaan",
   "console_sum_changed": "diubah · %n",
-  "console_sum_stock": "bawaan · %n"
+  "console_sum_stock": "bawaan · %n",
+  "dbg_send_btn": "Kirim log ke Bugs",
+  "dbg_send_confirm": "Ketuk lagi: kemas asbdiag dan log tanpa batas, lalu buka Bugs",
+  "dbg_send_diag_first": "Membuat asbdiag baru dulu · tunggu",
+  "dbg_send_none": "Tidak ada asbdiag atau log tanpa batas",
+  "dbg_send_big": "Arsip lebih dari 19 MB, terlalu besar untuk bot",
+  "dbg_send_failed": "Gagal mengemas log",
+  "dbg_send_saved": "Tersimpan: %s – lampirkan di topik Bugs",
+  "dbg_send_reused": "Tidak ada log baru sejak %s – lampirkan jika belum dikirim"
 }
