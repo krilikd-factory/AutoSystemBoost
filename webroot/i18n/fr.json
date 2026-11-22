@@ -943,6 +943,10 @@
     "dsp_dc_protect": {
       "name": "Protection DSP contre DC et infrasons",
       "desc": "Filtre passe-haut 20 Hz avant les étages de tonalité. Nécessite DSP advanced-v1."
+    },
+    "bt_ldac_quality": {
+      "name": "Qualité de lecture LDAC",
+      "desc": "Conserve la qualité LDAC choisie après chaque reconnexion, au lieu de revenir au débit adaptatif. C’est le même réglage que dans les options pour développeurs, réappliqué quand le casque se connecte ou que le codec change, puis relu. Rien ne change pour AAC, aptX, SBC, LHDC ni pour les casques sans LDAC. 990/909 kbit/s exige une liaison radio propre ; en cas d’interférences, le son peut saccader – choisissez alors 660/606 ou adaptatif. Tant qu’une qualité fixe est choisie, un petit assistant reste en arrière-plan ; Auto le retire."
     }
   },
   "cfg_after_reboot": "s’applique après redémarrage",
@@ -3500,6 +3504,13 @@
       "0": "plus souvent",
       "1": "moins souvent",
       "auto": "stock"
+    },
+    "bt_ldac_quality": {
+      "auto": "Auto",
+      "990": "990/909",
+      "660": "660/606",
+      "330": "330/303",
+      "abr": "Adaptatif"
     }
   },
   "page_save": "Enregistrer",
@@ -3832,7 +3843,7 @@
   "wb_therm": "Un seuil bas bride la vitesse en permanence, pas seulement sous charge",
   "wb_vol": "L’avertissement de volume sûr est désactivé — risque pour l’audition",
   "wl_component_activity": "Activity",
-  "wl_component_copy": "Une seule Activity/Service, pas toute l’app. Jusqu’à Restaurer ; sans automatisation ni gel. Manifeste en lecture seule ; Worker ≠ Service. La présence ne prouve pas la consommation.",
+  "wl_component_copy": "Une Activity/Service exacte, pas toute l’app. Reste jusqu’à Restaurer ; aucun mode automatique ni gel. Les composants déclarés peuvent être désactivés après un second appui ; un Worker n’est pas un Service. Sa présence ne prouve pas une consommation.",
   "wl_component_disable": "Désactiver le composant",
   "wl_component_empty": "Aucune donnée Activity/Service n’est actuellement exposée pour cette application. Cela ne prouve pas qu’aucun composant n’est déclaré ; ouvrez ou utilisez l’écran concerné, puis actualisez. Les composants déjà désactivés via ASB restent listés pour être restaurés.",
   "wl_component_loading": "Lecture des données Activity/Service actuelles, déclarées et de l’historique des tâches…",
@@ -4310,5 +4321,13 @@
   "lr_nav_asb": "Coût d’ASB",
   "lr_nav_crash": "Erreurs",
   "lr_nav_trend": "Tendance",
-  "lr_nav_more": "Plus"
+  "lr_nav_more": "Plus",
+  "cmp_pick_open": "Choisir parmi les apps installées",
+  "cmp_pick_title": "Choisir une app",
+  "cmp_pick_copy": "Choisissez une app pour voir ses composants Activity/Service déclarés, actifs et vus dans l’historique des tâches. La désactivation demande toujours un second appui, une relecture et le journal de restauration commun.",
+  "cmp_pick_loading": "Lecture des apps utilisateur installées…",
+  "cmp_pick_empty": "Aucune app utilisateur correspondante",
+  "cmp_pick_components": "Composants",
+  "ldac_helper_missing": "L’assistant LDAC est absent de cette version ; rien n’a été modifié",
+  "wl_component_state_declared_manual": "Déclaré dans le paquet · inactif pour l’instant · désactivable par un second appui"
 }

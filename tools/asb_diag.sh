@@ -3695,8 +3695,13 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
     else
       _fnow=unknown; _fuidm=unknown
     fi
-    case "$_fuidm" in ''|default) : ;; *) _fnow="$_fuidm (uid mode)" ;; esac
+    case "$_fuidm" in ''|default|unknown) : ;; *) _fnow="$_fuidm (uid mode)" ;; esac
     _fuid="$(pm list packages -U "$_fp" 2>/dev/null | sed -n "s/^package:$_fp uid:\([0-9]*\).*/\1/p" | head -1)"
+    if [ -z "$_fuid" ] && [ -z "$(pm path "$_fp" 2>/dev/null | head -1)" ]; then
+      P "    WAKE_LOCK ignored: $_fp  (was: ${_fo:-default}; app is no longer installed)"
+      NOTE "  stale ledger entry - the wakelock watcher drops it on its next fitness pass; nothing is applied to an absent app"
+      continue
+    fi
     _fheld=""; _fdis=""
     if [ -n "$_fuid" ]; then
       _fheld="$(dumpsys power 2>/dev/null | grep -c "PARTIAL_WAKE_LOCK.*uid=$_fuid")"

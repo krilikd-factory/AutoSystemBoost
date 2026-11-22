@@ -5,6 +5,38 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test13 (rebuild) - component picker, single dock, instant Infirmary, LDAC quality, log-driven fixes
+
+Input: six requests on top of V66-test15 (Infirmary description fold, double dock on the Zygisk
+page, choosing Activity/Service from the app list, an instant Infirmary, a forced LDAC quality,
+then module improvements from the 22.11 logs). The owner asked for this build to be numbered
+test13 again: a run is not a new test number unless the owner says so. Base: V66-test15.
+Native code changed (Smart lab build id): CI rebuilds `bin/asb`. A new Java helper is built
+to `bin/asb_btcodec.dex` by CI with the runner's Android SDK.
+
+- **Infirmary:** the Activity/Service card description sits under "More".
+- **Components from the app list:** the component manager has "Choose from installed apps";
+  an app opens its per-app list, where declared Activity/Service entries can now be disabled
+  (second tap, read-back, the same restore ledger) through the manual path.
+- **Docks:** only the top page shows its dock (Settings < report < device < Zygisk), and a
+  second dock of the same kind is removed when a page renders again.
+- **Infirmary opens at once:** the four status reads (cleanup, Battery Fix, SOTER, the log
+  digest) were synchronous root calls inside the render; they now run one by one after the
+  page is on screen, the digest last. Battery Fix polls only while the Infirmary is open and
+  visible, every 15 s instead of 8 s when idle.
+- **LDAC playback quality:** new `bt_ldac_quality` (auto|990|660|330|abr). A small
+  `app_process` helper (`runtime/asb_bt_codec.sh`, `src/btcodec`) sets the same codec
+  preference as Developer options, only while the active codec is already LDAC, and reads it
+  back; it stays resident and re-applies after reconnect/codec events. Auto stops it.
+- **Fitness ledger:** apps that are no longer installed are dropped from the WAKE_LOCK
+  ledgers instead of being retried and reported as "appops transport unavailable".
+- **Display/UI keys:** explicit values are re-asserted once more 90 s after boot, because the
+  ROM resets `oost_navigation_handle_auto_hide` after ASB's early pass.
+- **Smart lab:** a rebuilt kernel of the same version no longer reopens every decided
+  setting; a new kernel version or ROM fingerprint still does. Stores written with the old
+  id are migrated without a retest.
+
+
 ## V66-test15 - every OnePlus by model code, Zygisk and report panels
 
 Input: the owner's list of OnePlus phones and tablets that must be recognised, the Zygisk

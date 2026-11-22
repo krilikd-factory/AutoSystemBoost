@@ -943,6 +943,10 @@
     "dsp_dc_protect": {
       "name": "Protezione DSP da DC e infrasuoni",
       "desc": "Passa-alto a 20 Hz prima degli stadi di tono. Richiede DSP advanced-v1."
+    },
+    "bt_ldac_quality": {
+      "name": "Qualità di riproduzione LDAC",
+      "desc": "Mantiene la qualità LDAC scelta dopo ogni riconnessione, invece di tornare al bitrate adattivo. È la stessa impostazione delle Opzioni sviluppatore, riapplicata quando le cuffie si collegano o il codec cambia, e poi riletta. Nulla cambia per AAC, aptX, SBC, LHDC o cuffie senza LDAC. 990/909 kbps richiede un collegamento radio pulito; con interferenze può scattare: allora scegli 660/606 o adattivo. Finché è scelta una qualità fissa, resta attivo un piccolo assistente in background; Auto lo rimuove."
     }
   },
   "cfg_after_reboot": "si applica dopo il riavvio",
@@ -3500,6 +3504,13 @@
       "0": "senza limiti",
       "1": "limita",
       "auto": "stock"
+    },
+    "bt_ldac_quality": {
+      "auto": "Auto",
+      "990": "990/909",
+      "660": "660/606",
+      "330": "330/303",
+      "abr": "Adattivo"
     }
   },
   "page_save": "Salva",
@@ -3832,7 +3843,7 @@
   "wb_therm": "Una soglia bassa limita la velocità sempre, non solo sotto carico",
   "wb_vol": "L’avviso di volume sicuro è disattivato: un rischio per l’udito",
   "wl_component_activity": "Activity",
-  "wl_component_copy": "Una sola Activity/Service, non tutta l’app. Fino a Ripristina; senza automazioni o congelamento. Manifest in sola lettura; Worker ≠ Service. La presenza non prova consumo.",
+  "wl_component_copy": "Una Activity/Service esatta, non l’intera app. Resta fino a Ripristina; nessuna modalità automatica né congelamento. I componenti dichiarati si possono disattivare con un secondo tocco; un Worker non è un Service. La presenza non prova consumo.",
   "wl_component_disable": "Disattiva componente",
   "wl_component_empty": "Al momento non sono esposti dati Activity/Service per questa app. Ciò non dimostra che non ne siano dichiarati; apri o usa la schermata interessata, poi aggiorna. I componenti già disattivati tramite ASB restano elencati per il ripristino.",
   "wl_component_loading": "Lettura dei dati Activity/Service attuali, dichiarati e della cronologia dei job…",
@@ -4310,5 +4321,13 @@
   "lr_nav_asb": "Costo di ASB",
   "lr_nav_crash": "Errori",
   "lr_nav_trend": "Andamento",
-  "lr_nav_more": "Altro"
+  "lr_nav_more": "Altro",
+  "cmp_pick_open": "Scegli tra le app installate",
+  "cmp_pick_title": "Scegli un’app",
+  "cmp_pick_copy": "Scegli un’app per vedere i suoi componenti Activity/Service dichiarati, in esecuzione e visti nella cronologia dei job. Disattivarne uno richiede comunque un secondo tocco, una rilettura e il registro di ripristino condiviso.",
+  "cmp_pick_loading": "Lettura delle app utente installate…",
+  "cmp_pick_empty": "Nessuna app utente corrispondente",
+  "cmp_pick_components": "Componenti",
+  "ldac_helper_missing": "L’assistente LDAC non è presente in questa build; nulla è stato modificato",
+  "wl_component_state_declared_manual": "Dichiarato nel pacchetto · non in esecuzione ora · disattivabile con un secondo tocco"
 }

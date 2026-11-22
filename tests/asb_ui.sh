@@ -7617,6 +7617,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 let MD = '/m', ASB_LANG = 'en';
 function shQuote(v) { return "'" + String(v) + "'"; }
 function T(k, d) { return d; }
+function cfgInfLater(k, fn) { fn(); }
 function uiSound() {}
 const toasts = [];
 function toast(m, t) { toasts.push({ m: m, t: t }); }
@@ -7633,6 +7634,7 @@ function mk(tag) {
   return e;
 }
 let onScreen = true;
+let _cfgOpen = true, _cfgGroup = 'infirmary';
 function kernelMoreBlock(card,id,nodes){const btn=mk('button');btn.className='kernel-more';card.appendChild(btn);const body=mk('div');body.className='kernel-more-body';body.hidden=true;nodes.forEach(n=>{if(n)body.appendChild(n);});card.appendChild(body);return body;}
 global.document = { createElement: mk, body: { contains: function () { return onScreen; } } };
 function _el(id) { return reg[id] || null; }
@@ -7705,7 +7707,7 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
   chk(step('bfxStepCond').cls === 'bfx-step is-off' && step('bfxStepCond').text === '57% · not on charge', 'condition not shown: ' + step('bfxStepCond').text);
   chk(reg.bfxChip.className === 'bfx-chip is-off' && reg.bfxNote.textContent !== '', 'unavailable state not explained');
   chk(step('bfxStepArt').text === 'Not run yet' && reg.bfxBarWrap.hidden, 'idle compile state wrong');
-  chk(reg.bfxCancel.hidden && lastTimer() === 8000, 'idle poll should be slow');
+  chk(reg.bfxCancel.hidden && lastTimer() === 15000, 'idle poll should be slow');
 
   await paint(B + idle + tail);
   chk(!reg.bfxRun.disabled && reg.bfxChip.className === 'bfx-chip is-ready' && step('bfxStepCond').cls === 'bfx-step is-ok', 'full on charge not ready');
@@ -7739,7 +7741,7 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
   await paint(B + 'reset=pending compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-ok' && step('bfxStepArt').text === 'Done: 297 succeeded, failed: 3 · 10 min', 'compile result wrong: ' + step('bfxStepArt').text);
   chk(reg.bfxChip.className === 'bfx-chip is-wait' && reg.bfxRun.dataset.mode === 'reboot' && !reg.bfxCancel.hidden, 'pending state does not ask for a reboot');
-  chk(reg.bfxArtNow.textContent === '' && lastTimer() === 8000, 'stale current app or fast poll after compile');
+  chk(reg.bfxArtNow.textContent === '' && lastTimer() === 15000, 'stale current app or fast poll after compile');
   const rb = cmds.length;
   await batteryFixRun();
   chk(cmds.slice(rb).some(function (c) { return /reboot/.test(c); }), 'reboot mode did not reboot');
@@ -11745,6 +11747,7 @@ function shQuote(v){ return "'"+String(v)+"'"; }
 function T(k,d){ return d; }
 function bfxT(k,d,v){ return String(d).replace(/\{([^}]+)\}/g,function(m,n){ return v[n] == null ? m : v[n]; }); }
 function techIcon(){ return '<svg></svg>'; }
+function cfgInfLater(k,fn){ fn(); }
 function uiSound(){}
 const toasts=[]; function toast(m,t){ toasts.push({m:m,t:t}); }
 const reg={};
@@ -12282,6 +12285,7 @@ global.document={createElement:el};
 const T=(k,f)=>f;
 function bfxEl(tag,cls,text){const e=el(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
 function kernelMoreBlock(card,id,nodes){const btn=el('button');btn.className='kernel-more';card.appendChild(btn);const body=el('div');body.className='kernel-more-body';body.hidden=true;nodes.forEach(n=>{if(n)body.appendChild(n);});card.appendChild(body);return body;}
+function cfgInfLater(k,fn){fn();}
 function techIcon(){return '<svg/>';} function uiSound(){} let toasts=[];function toast(t,k){toasts.push([t,k]);}
 function shQuote(v){return "'"+v+"'";} const MD='/m';
 let cmds=[],replies={};async function run(c){cmds.push(c);return {stdout:replies[c.split(' ').pop()]||''};}
@@ -16925,6 +16929,38 @@ JS
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS webui buildfix44: camera/kernel/profile reads detached from the page thread, Zygisk dot keeps pulsing, drain follows the profile with charging left out, DSP console, framed-less profile loader, component icon, docks share width with a scrim, 13 locales'
+)
+
+t_webui_components_picker_dock_infirmary() (
+  # Components can be picked from installed apps and declared ones disabled through the manual
+  # path; only the top page shows its dock; Infirmary statuses load after the page is shown.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  H="$ROOT/webroot/index.html"
+  fail() { echo "FAIL webui picker/dock/infirmary: $*" >&2; exit 1; }
+  grep -q "function wlCmpPickOpen" "$H" || fail 'no app picker'
+  grep -q "id: 'wlCmpPickModal'" "$H" || fail 'picker not on the back stack'
+  grep -q "(a.manual ? ' manual' : '')" "$H" || fail 'declared components do not use the manual path'
+  grep -q "body.zygisk-active > .dev-page-nav { display: none; }" "$H" || fail 'lower docks stay visible under Zygisk'
+  grep -q "querySelectorAll('body > .' + kind)" "$H" || fail 'duplicate docks are not removed'
+  grep -q "function cfgInfLater(key, fn)" "$H" || fail 'no deferred infirmary queue'
+  for k in bfx advice soter junk; do grep -q "cfgInfLater('$k'" "$H" || fail "$k still loads synchronously"; done
+  grep -q "kernelMoreBlock(card, 'cmp'" "$H" || fail 'component card description is not folded'
+  grep -q "bt_ldac_quality" "$H" || fail 'no LDAC card'
+  python3 - "$ROOT/webroot/i18n" <<'P' || fail 'i18n'
+import json, os, sys
+d = sys.argv[1]
+en = json.load(open(os.path.join(d, 'en.json'), encoding='utf-8'))
+keys = ['cmp_pick_open', 'cmp_pick_title', 'cmp_pick_copy', 'cmp_pick_loading', 'cmp_pick_empty', 'cmp_pick_components', 'ldac_helper_missing']
+for n in sorted(os.listdir(d)):
+    if not n.endswith('.json'): continue
+    j = json.load(open(os.path.join(d, n), encoding='utf-8'))
+    for k in keys:
+        assert j.get(k), (n, k)
+        if n != 'en.json': assert j[k] != en[k], (n, k)
+    assert j['cfg']['bt_ldac_quality']['name'] and set(j['optFor']['bt_ldac_quality']) == {'auto', '990', '660', '330', 'abr'}, n
+P
+  echo 'PASS webui picker/dock/infirmary: app picker, single dock, deferred Infirmary loads, LDAC card'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

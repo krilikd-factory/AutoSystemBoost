@@ -944,6 +944,21 @@ static unsigned long asb_build_hash(void) {
     }
     return h;
 }
+/* Smart lab verdicts depend on the ROM and on the kernel version, not on the local build
+ * suffix of a custom kernel (-g<sha>, build number, date). Rebuilding the same kernel version
+ * no longer reopens every decided setting; a new kernel version or ROM fingerprint still does. */
+static unsigned long asb_lab_build_hash(void) {
+    struct utsname u;
+    unsigned long h = 2166136261UL;
+    if (uname(&u) == 0)
+        for (const char *c = u.release; *c && *c != '-' && *c != '+' && *c != '_'; c++) { h ^= (unsigned char)*c; h = (h * 16777619UL) & 0xffffffffUL; }
+    if (g_asb_fingerprint_fn) {
+        char fp[256] = "";
+        if (g_asb_fingerprint_fn(fp, sizeof(fp)) > 0)
+            for (const char *c = fp; *c; c++) { h ^= (unsigned char)*c; h = (h * 16777619UL) & 0xffffffffUL; }
+    }
+    return h;
+}
 static unsigned long asb_surface_pin_build(void) { return asb_build_hash(); }
 /* What a fresh daemon start sees; the file is the only thing carried over. */
 static inline void asb_surface_pin_reset(void) {

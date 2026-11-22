@@ -943,6 +943,10 @@
     "dsp_dc_protect": {
       "name": "DSP-DC-/Infraschallschutz",
       "desc": "20-Hz-Hochpass vor den Klangstufen. Erfordert Advanced-v1-DSP."
+    },
+    "bt_ldac_quality": {
+      "name": "LDAC-Wiedergabequalität",
+      "desc": "Behält die gewählte LDAC-Qualität nach jedem erneuten Verbinden, statt auf adaptive Bitrate zurückzufallen. Es ist dieselbe Einstellung wie in den Entwickleroptionen, erneut angewendet, wenn sich das Headset verbindet oder der Codec wechselt, und danach zurückgelesen. Für AAC, aptX, SBC, LHDC oder Headsets ohne LDAC ändert sich nichts. 990/909 kbit/s braucht eine saubere Funkverbindung; bei Störungen kann es stocken – dann 660/606 oder adaptiv wählen. Solange eine feste Qualität gewählt ist, bleibt ein kleiner Hintergrundhelfer aktiv; Auto entfernt ihn."
     }
   },
   "cfg_after_reboot": "gilt nach Neustart",
@@ -3500,6 +3504,13 @@
       "0": "ungedrosselt",
       "1": "drosseln",
       "auto": "Stock"
+    },
+    "bt_ldac_quality": {
+      "auto": "Auto",
+      "990": "990/909",
+      "660": "660/606",
+      "330": "330/303",
+      "abr": "Adaptiv"
     }
   },
   "page_save": "Speichern",
@@ -3832,7 +3843,7 @@
   "wb_therm": "Eine niedrige Schwelle begrenzt die Leistung dauerhaft, nicht nur unter Last",
   "wb_vol": "Die Warnung vor sicherer Lautstärke ist aus - ein Risiko für das Gehör",
   "wl_component_activity": "Activity",
-  "wl_component_copy": "Nur eine Activity/ein Service, nicht die ganze App. Bis „Wiederherstellen“; keine Automatik oder Prozesssperre. Manifest-Einträge sind schreibgeschützt; Worker ≠ Service. Vorhandensein beweist keinen Verbrauch.",
+  "wl_component_copy": "Eine exakte Activity/Service, nicht die ganze App. Bleibt bis Wiederherstellen; kein Automatikmodus, kein Einfrieren. Deklarierte Komponenten lassen sich nach einem zweiten Tipp deaktivieren; ein Worker ist kein Service. Vorhandensein beweist keinen Akkuverbrauch.",
   "wl_component_disable": "Komponente deaktivieren",
   "wl_component_empty": "Für diese App sind derzeit keine Activity/Service-Daten verfügbar. Dies beweist nicht, dass keine deklariert sind; öffnen oder verwenden Sie den betreffenden Bildschirm und aktualisieren Sie danach. Bereits über ASB deaktivierte Komponenten bleiben zur Wiederherstellung aufgeführt.",
   "wl_component_loading": "Aktuelle, deklarierte und im Job-Verlauf gefundene Activity/Service-Daten werden gelesen…",
@@ -4310,5 +4321,13 @@
   "lr_nav_asb": "ASB-Kosten",
   "lr_nav_crash": "Fehler",
   "lr_nav_trend": "Verlauf",
-  "lr_nav_more": "Mehr"
+  "lr_nav_more": "Mehr",
+  "cmp_pick_open": "Aus installierten Apps wählen",
+  "cmp_pick_title": "App auswählen",
+  "cmp_pick_copy": "Wähle eine App, um ihre deklarierten, laufenden und im Job-Verlauf gesehenen Activity/Service-Komponenten zu sehen. Das Deaktivieren braucht weiterhin einen zweiten Tipp, eine Rücklesung und das gemeinsame Wiederherstellungsprotokoll.",
+  "cmp_pick_loading": "Installierte Nutzer-Apps werden gelesen…",
+  "cmp_pick_empty": "Keine passenden Nutzer-Apps",
+  "cmp_pick_components": "Komponenten",
+  "ldac_helper_missing": "Der LDAC-Helfer fehlt in diesem Build; nichts wurde geändert",
+  "wl_component_state_declared_manual": "Im Paket deklariert · läuft gerade nicht · mit einem zweiten Tipp deaktivierbar"
 }

@@ -943,6 +943,10 @@
     "dsp_dc_protect": {
       "name": "DSP DC / İnfrasonik Koruması",
       "desc": "Ton katmanlarından önce 20 Hz yüksek geçiren filtre. Advanced-v1 DSP gerektirir."
+    },
+    "bt_ldac_quality": {
+      "name": "LDAC Oynatma Kalitesi",
+      "desc": "Seçtiğiniz LDAC kalitesini her yeniden bağlanmadan sonra korur, uyarlanabilir bit hızına dönmez. Geliştirici seçeneklerindeki ayarın aynısıdır; kulaklık bağlandığında veya codec değiştiğinde yeniden uygulanır ve ardından geri okunur. AAC, aptX, SBC, LHDC veya LDAC kullanmayan kulaklıklar için hiçbir şey değişmez. 990/909 kbps temiz bir radyo bağlantısı ister; parazitte takılabilir, o zaman 660/606 veya uyarlanabilir seçin. Sabit kalite seçiliyken küçük bir arka plan yardımcısı çalışır; Otomatik onu kaldırır."
     }
   },
   "cfg_after_reboot": "yeniden başlatmadan sonra uygulanır",
@@ -3500,6 +3504,13 @@
       "0": "sınırsız",
       "1": "kısıtla",
       "auto": "stok"
+    },
+    "bt_ldac_quality": {
+      "auto": "Otomatik",
+      "990": "990/909",
+      "660": "660/606",
+      "330": "330/303",
+      "abr": "Uyarlanabilir"
     }
   },
   "page_save": "Kaydet",
@@ -3832,7 +3843,7 @@
   "wb_therm": "Düşük eşik hızı yalnızca yük altında değil her zaman kısıtlar",
   "wb_vol": "Güvenli ses uyarısı kapalı — işitme için risk",
   "wl_component_activity": "Activity",
-  "wl_component_copy": "Yalnızca bir Activity/Service, tüm uygulama değil. Geri Yükle’ye kadar; otomatik mod veya dondurma yok. Manifest salt okunur; Worker ≠ Service. Bulunması tüketimi kanıtlamaz.",
+  "wl_component_copy": "Uygulamanın tamamı değil, tek bir Activity/Service. Geri Yükle’ye kadar kalır; otomatik mod veya dondurma yok. Bildirilen bileşenler ikinci dokunuşla devre dışı bırakılabilir; Worker bir Service değildir. Varlığı pil tüketimini kanıtlamaz.",
   "wl_component_disable": "Bileşeni devre dışı bırak",
   "wl_component_empty": "Şu anda bu uygulama için açığa çıkan Activity/Service kanıtı yok. Bu, hiçbir bileşen bildirilmediğini kanıtlamaz; ilgili ekranı açın veya kullanın, ardından yenileyin. ASB ile daha önce devre dışı bırakılan bileşenler geri yükleme için listede kalır.",
   "wl_component_loading": "Mevcut, bildirilen ve iş geçmişindeki Activity/Service kanıtları okunuyor…",
@@ -4310,5 +4321,13 @@
   "lr_nav_asb": "ASB maliyeti",
   "lr_nav_crash": "Hatalar",
   "lr_nav_trend": "Eğilim",
-  "lr_nav_more": "Daha fazla"
+  "lr_nav_more": "Daha fazla",
+  "cmp_pick_open": "Yüklü uygulamalardan seç",
+  "cmp_pick_title": "Bir uygulama seçin",
+  "cmp_pick_copy": "Bildirilen, çalışan ve iş geçmişinde görülen Activity/Service bileşenlerini görmek için bir uygulama seçin. Devre dışı bırakmak yine ikinci dokunuş, geri okuma ve ortak geri yükleme kaydı gerektirir.",
+  "cmp_pick_loading": "Yüklü kullanıcı uygulamaları okunuyor…",
+  "cmp_pick_empty": "Eşleşen kullanıcı uygulaması yok",
+  "cmp_pick_components": "Bileşenler",
+  "ldac_helper_missing": "LDAC yardımcısı bu derlemede yok; hiçbir şey değiştirilmedi",
+  "wl_component_state_declared_manual": "Pakette bildirilmiş · şu an çalışmıyor · ikinci dokunuşla devre dışı bırakılabilir"
 }

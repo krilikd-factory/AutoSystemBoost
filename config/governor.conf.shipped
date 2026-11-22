@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=e8f9efe20c38
+# CONFIG_SHAPE=7e5756044b4c
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -832,6 +832,9 @@ bt_link_stability=stock
 # BUT audio effect engines (ViPER4Android, JamesDSP, etc.) CANNOT process Bluetooth audio while
 # it is offloaded — the stream bypasses the effect chain in the DSP.
 bt_a2dp_offload=auto
+# LDAC playback quality kept across reconnects: auto|990|660|330|abr. auto = the ROM/Developer options decide;
+# other values re-apply the same LDAC quality the Developer options set, only while the active codec is LDAC.
+bt_ldac_quality=auto
 
 # Region: allow system locale as a last-resort source for Wi-Fi country code
 # when no SIM/operator country is available. 0=off (safest), 1=allow locale.

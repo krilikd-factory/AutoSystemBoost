@@ -733,8 +733,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "278" ] || fail "expected 278 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "278" ] || fail "expected 278 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "279" ] || fail "expected 279 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "279" ] || fail "expected 279 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -766,7 +766,7 @@ for _route in speaker wired bt; do
 done >> "$TMP/cards"
 printf 'dsp_eq_target\n' >> "$TMP/cards"
 sort -u "$TMP/cards" > "$TMP/cards.all"; mv "$TMP/cards.all" "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "146" ] || fail "expected 146 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "147" ] || fail "expected 147 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -810,7 +810,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (278 keys; 50 user, 96 advanced, 132 internal)'
+echo 'PASS config ownership registry contract (279 keys; 50 user, 97 advanced, 132 internal)'
 )
 
 t_config_metadata_coherence_buildfix1() (
@@ -837,7 +837,7 @@ cmp -s "$CONF" "$SHIPPED" || fail 'active and shipped config copies differ'
 shape="$(cd "$ROOT" && grep -oE "key:'[a-zA-Z0-9_]+'[^}]*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
   | sed -E "s/.*key:'([a-zA-Z0-9_]+)'.*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)/\1=\2/" \
   | sort | md5sum | cut -c1-12)"
-[ "$shape" = e8f9efe20c38 ] || fail "unexpected computed WebUI shape: $shape"
+[ "$shape" = 7e5756044b4c ] || fail "unexpected computed WebUI shape: $shape"
 grep -Fqx "# CONFIG_SHAPE=$shape" "$CONF" || fail 'governor.conf shape is stale'
 grep -Fqx "# CONFIG_SHAPE=$shape" "$SHIPPED" || fail 'shipped config shape is stale'
 schema="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' "$ROOT/common/install.sh" \
@@ -871,7 +871,7 @@ for rel in ('config/governor.conf', 'config/governor.conf.shipped', 'config/key_
             kept.append(line)
     text = ''.join(kept)
     if separator == '=':
-        text = text.replace('# CONFIG_SHAPE=e8f9efe20c38',
+        text = text.replace('# CONFIG_SHAPE=7e5756044b4c',
                             '# CONFIG_SHAPE=928eea600217', 1)
     path.write_text(text, encoding='utf-8')
 PY
@@ -879,7 +879,7 @@ if (cd "$TMP/stale" && MODE=RELEASE_STRICT bash tools/asb_lint.sh) > "$TMP/befor
   fail 'stale 237-key metadata with dev64 WebUI cards passed lint'
 fi
 need "$TMP/before.log" 'internal-or-unregistered-cards=[feel_dc_dimming feel_game_memc feel_gesture_mistouch feel_pointer_speed ui_nav_handle_autohide ui_recents_corner_radius ui_recents_memory ui_smooth_corners ] stale-public-keys=[]' 'ownership drift no longer reproduces the CI failure'
-need "$TMP/before.log" 'config shape changed (928eea600217 -> e8f9efe20c38) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
+need "$TMP/before.log" 'config shape changed (928eea600217 -> 7e5756044b4c) but nothing says the schema moved.' 'shape drift no longer reproduces the CI failure'
 if ! grep -Fq 'Lint: ❌ 2 errors  ⚠️  0 warnings' "$TMP/before.log"; then cat "$TMP/before.log" >&2; fail 'stale fixture has unexpected additional lint findings'; fi
 
 cp "$CONF" "$TMP/stale/config/governor.conf"
@@ -891,7 +891,7 @@ cp "$REG" "$TMP/stale/config/key_ownership.tsv"
 }
 need "$TMP/after.log" 'config shape matches the recorded fingerprint (schema 4)' 'schema 4 coherence was not reported'
 need "$TMP/after.log" 'Lint: ❌ 0 errors  ⚠️  0 warnings' 'corrected fixture is not lint-clean'
-echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 278-key configs, shape e8f9efe20c38/schema 4, exact stale-CI failure and three-file repair'
+echo 'PASS config metadata coherence buildfix1: eight public dev64 cards, synchronized 279-key configs, shape 7e5756044b4c/schema 4, exact stale-CI failure and three-file repair'
 )
 
 t_config_restore_outcome_runtime() (
@@ -10727,6 +10727,31 @@ t_device_db_runtime() (
   grep -q 'asb_db_model "$ASB_MODEL_RAW"' "$ROOT/common/install.sh" || fail 'installer does not use the table'
   grep -q 'asb_device_db.sh' "$ROOT/tools/asb_device_info.sh" || fail 'device page does not use the table'
   echo 'PASS device db: listed OnePlus models, tablets and MediaTek chips resolve; PJZ110 is a OnePlus 13'
+)
+
+t_bt_ldac_quality_runtime() (
+  # LDAC quality: Auto stops and removes the helper; a fixed value needs the dex helper and
+  # refuses cleanly without it; the helper only acts on LDAC and reads the value back.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL bt ldac quality: $*" >&2; exit 1; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  mkdir -p "$T/m/config" "$T/m/bin" "$T/s"
+  sc="$ROOT/runtime/asb_bt_codec.sh"
+  printf 'bt_ldac_quality=auto\n' > "$T/m/config/governor.conf"
+  MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" apply | grep -qx 'result=stock' || fail 'auto is not stock'
+  printf 'bt_ldac_quality=990\n' > "$T/m/config/governor.conf"
+  out="$(MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" apply || true)"
+  case "$out" in (*result=unavailable*reason=no_helper*) ;; (*) fail "no helper: $out" ;; esac
+  MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" status | grep -qx 'want=990' || fail 'status want'
+  printf 'bt_ldac_quality=bogus\n' > "$T/m/config/governor.conf"
+  MODDIR="$T/m" ASB_CONFIG_STATE="$T/s" sh "$sc" status | grep -qx 'want=auto' || fail 'bad value is not auto'
+  j="$ROOT/src/btcodec/asb/BtCodec.java"
+  grep -q 'SOURCE_CODEC_TYPE_LDAC' "$j" && grep -q 'getCodecSpecific1' "$j" || fail 'helper does not check LDAC/read back'
+  grep -q 'bt_ldac_quality=auto' "$ROOT/config/governor.conf" || fail 'default missing'
+  grep -q '^bt_ldac_quality|' "$ROOT/config/key_ownership.tsv" || fail 'ownership missing'
+  grep -q 'asb_bt_codec.sh" stop' "$ROOT/uninstall.sh" || fail 'uninstall does not stop the helper'
+  echo 'PASS bt ldac quality: auto removes the helper, a fixed value needs it, LDAC-only with read-back'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

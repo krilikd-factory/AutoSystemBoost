@@ -225,6 +225,7 @@ static const char *const g_lab_verdict_text[LAB_V_N] = {
     "no clear saving", "costs more than when it won", "three weeks since the verdict", "another ROM or kernel"
 };
 static uint32_t g_lab_build_id = 0;      /* set by the governor before asb_lab_load; 0 = unknown */
+static uint32_t g_lab_build_prev = 0;    /* the older full-release hash: a store written with it is migrated, not retested */
 static int      g_lab_build_retests = 0; /* knobs re-opened at load because the build changed */
 /* V66 dev13: short blocks by kind, and screen-on blocks that waited out a pause. */
 static unsigned long g_lab_short_kind[4] = {0, 0, 0, 0};   /* on, app, off, lift */
@@ -991,6 +992,7 @@ static void asb_lab_build_check(void) {
     if (!g_lab_build_id) return;
     if (!g_lab.build) { g_lab.build = g_lab_build_id; g_lab_dirty = 1; return; }
     if (g_lab.build == g_lab_build_id) return;
+    if (g_lab_build_prev && g_lab.build == g_lab_build_prev) { g_lab.build = g_lab_build_id; g_lab_dirty = 1; return; }
     for (int k = 0; k < LAB_N; k++) {
         asb_lab_knob_t *kn = &g_lab.k[k];
         if (asb_lab_is_app(k) && !kn->key) continue;

@@ -8565,7 +8565,8 @@ static int asb_smart_init(void) {
         asb_rec_summary_write();
         int _el = asb_en_load();
         asb_en_summary_write();
-        g_lab_build_id = (uint32_t)asb_build_hash();
+        g_lab_build_id = (uint32_t)asb_lab_build_hash();
+        g_lab_build_prev = (uint32_t)asb_build_hash();
         int _ll = asb_lab_load();
         asb_lab_summary_write(NULL);
         if (g_lab_build_retests > 0)

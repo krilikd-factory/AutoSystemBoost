@@ -697,6 +697,16 @@ asb_migrate_governor_conf
     fi
   fi
 ) >/dev/null 2>&1 &
+case "$(grep -E '^[[:space:]]*bt_ldac_quality=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')" in
+  990|660|330|abr)
+    ( exec </dev/null >/dev/null 2>&1
+      _ld_i=0
+      while [ "$(getprop sys.boot_completed 2>/dev/null)" != 1 ] && [ "$_ld_i" -lt 120 ]; do sleep 5; _ld_i=$((_ld_i + 1)); done
+      sleep 40
+      [ -f "$MODDIR/runtime/asb_bt_codec.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_bt_codec.sh" apply
+    ) &
+    ;;
+esac
 
 # Force-LTPO rebind, outside the audio/camera gate above: a device with DSP and camera
 # off still owns its display. Same late-bind reasoning as the /odm manifest - a root
@@ -4267,6 +4277,14 @@ esac
 # the owner, so a normal boot neither captures nor rewrites unrelated user Settings.
 if [ -f "$MODDIR/runtime/asb_display_ui_apply.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_display_ui_apply.sh" boot >/dev/null 2>&1 || true
+  if grep -qE '^[[:space:]]*(ui_recents_memory|ui_recents_corner_radius|ui_smooth_corners|ui_nav_handle_autohide|feel_pointer_speed|feel_gesture_mistouch|feel_game_memc|feel_dc_dimming)=[[:space:]]*[^s[:space:]]' "$MODDIR/config/governor.conf" 2>/dev/null; then
+    ( exec </dev/null >/dev/null 2>&1
+      _du_i=0
+      while [ "$(getprop sys.boot_completed 2>/dev/null)" != 1 ] && [ "$_du_i" -lt 120 ]; do sleep 5; _du_i=$((_du_i + 1)); done
+      sleep 90
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_display_ui_apply.sh" boot || true
+    ) &
+  fi
 fi
 
 if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then

@@ -1,0 +1,106 @@
+#!/system/bin/sh
+MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+STATE_DIR="${ASB_CONFIG_STATE:-/data/adb/asb}"
+CONF="$MODDIR/config/governor.conf"
+DEX="$MODDIR/bin/asb_btcodec.dex"
+PIDF="$STATE_DIR/bt_ldac.pid"
+STF="$STATE_DIR/bt_ldac.state"
+LOG="$STATE_DIR/bt_ldac.log"
+
+_has() { command -v "$1" >/dev/null 2>&1; }
+_cfg() { grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'; }
+_log() {
+  mkdir -p "$STATE_DIR" 2>/dev/null
+  printf '%s bt_ldac: %s\n' "$(date '+%F %T' 2>/dev/null || echo now)" "$*" >> "$LOG" 2>/dev/null
+  tail -n 30 "$LOG" > "$LOG.tmp" 2>/dev/null && mv -f "$LOG.tmp" "$LOG" 2>/dev/null || true
+}
+_want() {
+  case "$(_cfg bt_ldac_quality)" in
+    990) echo 990 ;;
+    660) echo 660 ;;
+    330) echo 330 ;;
+    abr) echo abr ;;
+    *) echo auto ;;
+  esac
+}
+_ap() {
+  if [ -x /system/bin/app_process64 ]; then echo /system/bin/app_process64
+  elif [ -x /system/bin/app_process ]; then echo /system/bin/app_process
+  else echo ""
+  fi
+}
+_alive() {
+  [ -s "$PIDF" ] || return 1
+  _p=""; _q=""
+  IFS='|' read -r _p _q < "$PIDF" 2>/dev/null || return 1
+  case "$_p" in ''|*[!0-9]*) return 1 ;; esac
+  [ -r "/proc/$_p/cmdline" ] || return 1
+  tr '\0' ' ' < "/proc/$_p/cmdline" 2>/dev/null | grep -qE 'asb_btcodec|asb\.BtCodec' || return 1
+  return 0
+}
+_stop() {
+  if _alive; then kill "$_p" 2>/dev/null; sleep 1; kill -9 "$_p" 2>/dev/null; fi
+  rm -f "$PIDF" 2>/dev/null
+}
+_ready() {
+  [ -f "$DEX" ] || { echo "result=unavailable"; echo "reason=no_helper"; return 1; }
+  [ -n "$(_ap)" ] || { echo "result=unavailable"; echo "reason=no_app_process"; return 1; }
+  chmod 0444 "$DEX" 2>/dev/null
+  return 0
+}
+_run() {
+  CLASSPATH="$DEX" "$(_ap)" /system/bin asb.BtCodec "$@"
+}
+
+case "${1:-status}" in
+  apply)
+    _w="$(_want)"
+    if [ "$_w" = auto ]; then
+      _stop
+      rm -f "$STF" 2>/dev/null
+      echo "result=stock"
+      exit 0
+    fi
+    _ready || exit 1
+    if _alive && [ "$_q" = "$_w" ]; then echo "result=running"; echo "quality=$_w"; exit 0; fi
+    _stop
+    mkdir -p "$STATE_DIR" 2>/dev/null
+    rm -f "$STF" 2>/dev/null
+    _ap_bin="$(_ap)"
+    if _has setsid; then
+      CLASSPATH="$DEX" setsid "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" </dev/null >/dev/null 2>&1 &
+    else
+      CLASSPATH="$DEX" nohup "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" </dev/null >/dev/null 2>&1 &
+    fi
+    _np=$!
+    printf '%s|%s\n' "$_np" "$_w" > "$PIDF"
+    _log "watch started quality=$_w pid=$_np"
+    echo "result=started"
+    echo "quality=$_w"
+    ;;
+  once)
+    _w="$(_want)"
+    [ "$_w" = auto ] && { echo "result=stock"; exit 0; }
+    _ready || exit 1
+    _run apply "$_w"
+    ;;
+  stop)
+    _stop
+    rm -f "$STF" 2>/dev/null
+    echo "result=stopped"
+    ;;
+  status)
+    echo "version=1"
+    echo "want=$(_want)"
+    if [ -f "$DEX" ]; then echo "helper=1"; else echo "helper=0"; fi
+    if _alive; then echo "watch=1"; else echo "watch=0"; fi
+    [ -s "$STF" ] && sed 's/^/live_/' "$STF" 2>/dev/null
+    if [ "${2:-}" = probe ] && _ready >/dev/null 2>&1; then
+      _run status 2>/dev/null | sed 's/^/probe_/'
+    fi
+    ;;
+  *)
+    echo "usage: asb_bt_codec.sh apply|once|stop|status [probe]" >&2
+    exit 2
+    ;;
+esac

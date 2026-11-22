@@ -943,6 +943,10 @@
     "dsp_dc_protect": {
       "name": "DSP 直流与次声保护",
       "desc": "音色处理前的 20 Hz 高通滤波器。需要 advanced-v1 DSP。"
+    },
+    "bt_ldac_quality": {
+      "name": "LDAC 播放质量",
+      "desc": "每次重新连接后保持你选择的 LDAC 质量，而不是退回自适应码率。这与开发者选项中的设置相同，在耳机连接或编解码器变化时重新应用并回读确认。对 AAC、aptX、SBC、LHDC 或不使用 LDAC 的耳机不做任何更改。990/909 kbps 需要干净的无线链路；干扰较多时可能断续，此时请选择 660/606 或自适应。选择固定质量时，会有一个小型后台助手常驻；选择“自动”即可移除。"
     }
   },
   "cfg_after_reboot": "重启后生效",
@@ -3500,6 +3504,13 @@
       "0": "不限制",
       "1": "限制",
       "auto": "原生"
+    },
+    "bt_ldac_quality": {
+      "auto": "自动",
+      "990": "990/909",
+      "660": "660/606",
+      "330": "330/303",
+      "abr": "自适应"
     }
   },
   "page_save": "保存",
@@ -3832,7 +3843,7 @@
   "wb_therm": "低阈值会持续限制速度，而非仅在高负载时",
   "wb_vol": "安全音量警告已关闭——存在听力风险",
   "wl_component_activity": "Activity",
-  "wl_component_copy": "仅一个 Activity/Service，不是整个应用。持续至“恢复”；无自动模式或进程冻结。清单项只读；Worker ≠ Service。存在不代表耗电。",
+  "wl_component_copy": "只针对一个确切的 Activity/Service，而非整个应用。保持到点按“恢复”为止；无自动模式，也不冻结进程。已声明的组件可在第二次点按后禁用；Worker 不是 Service。出现在列表中不代表耗电。",
   "wl_component_disable": "禁用组件",
   "wl_component_empty": "目前没有此应用公开的 Activity/Service 证据。这并不证明没有声明组件；请打开或使用相关界面后刷新。已通过 ASB 禁用的组件仍会列出，以便恢复。",
   "wl_component_loading": "正在读取当前、声明及任务历史中的 Activity/Service 证据…",
@@ -4310,5 +4321,13 @@
   "lr_nav_asb": "ASB 开销",
   "lr_nav_crash": "错误",
   "lr_nav_trend": "趋势",
-  "lr_nav_more": "更多"
+  "lr_nav_more": "更多",
+  "cmp_pick_open": "从已安装应用中选择",
+  "cmp_pick_title": "选择应用",
+  "cmp_pick_copy": "选择一个应用，查看其已声明、正在运行以及在任务历史中出现过的 Activity/Service 组件。禁用仍需第二次点按、回读验证和共享的恢复记录。",
+  "cmp_pick_loading": "正在读取已安装的用户应用…",
+  "cmp_pick_empty": "没有匹配的用户应用",
+  "cmp_pick_components": "组件",
+  "ldac_helper_missing": "此版本没有 LDAC 助手；未作任何更改",
+  "wl_component_state_declared_manual": "在包中声明 · 当前未运行 · 再点按一次即可禁用"
 }

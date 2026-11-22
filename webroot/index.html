@@ -2020,7 +2020,9 @@ body.config-category-active #configPage.cfg-short-fit .cfg-list { padding-bottom
 
 .wl-manual-sheet { min-height:min(48vh,560px); min-width:0; overflow-x:hidden; box-sizing:border-box; }
 #wlServiceModal .cfg-profile-copy, #wlServiceModal .wl-manual-meta, #wlServiceModal .wl-manual-list,
-#wlComponentsModal .cfg-profile-copy, #wlComponentsModal .wl-manual-meta, #wlComponentsModal .wl-manual-list { min-width:0; max-width:100%; box-sizing:border-box; }
+#wlComponentsModal .cfg-profile-copy, #wlComponentsModal .wl-manual-meta, #wlComponentsModal .wl-manual-list,
+#wlCmpPickModal .cfg-profile-copy, #wlCmpPickModal .wl-manual-list { min-width:0; max-width:100%; box-sizing:border-box; }
+.wl-components-pick { display:block; width:100%; margin:12px 0 0; }
 .wl-components-add { margin:14px 0 12px; padding:11px 12px; border:1px solid var(--border); border-radius:13px; }
 .wl-components-add summary { min-height:32px; cursor:pointer; color:var(--text-secondary); font-size:12px; font-weight:700; }
 .wl-components-add[open] summary { margin-bottom:9px; }
@@ -2421,6 +2423,9 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 #reportPage .lgr-body, #zygiskPage .lgr-body, #devicePage .lgr-body, #configPage .cfg-list { gap: 10px; }
 body.report-active > .report-nav, body.zygisk-active > .zy-page-nav,
 body.device-active > .dev-page-nav, body.config-active > .cfg-page-nav { display: flex; }
+body:is(.report-active,.device-active,.zygisk-active) > .cfg-page-nav,
+body:is(.device-active,.zygisk-active) > .report-nav,
+body.zygisk-active > .dev-page-nav { display: none; }
 #reportPage .lgr-body, #zygiskPage .lgr-body, #devicePage .lgr-body,
 body.config-category-active #configPage .cfg-list {
   padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px)); }
@@ -7597,6 +7602,7 @@ const TECH_ICON_PATHS = {
   soft_restart: '<path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.1"/><path d="M19.4 4.4v3.8h-3.8"/><path d="M12.7 8.6 10.6 12.3h3l-2.1 3.6"/>',
   volume_sync: '<path d="M4 10v4h2.8l4 3.4V6.6L6.8 10z"/><path d="M13.6 8.6a5 5 0 0 1 0 6.8"/><path d="M17.6 5.4v13.2M17.6 5.4 15.8 7.2M17.6 5.4l1.8 1.8M17.6 18.6l-1.8-1.8M17.6 18.6l1.8-1.8"/>',
   bluetooth_offload: '<path d="M7.2 7.6l9.6 8-4.8 3.9V4.5l4.8 3.9-9.6 8"/><rect x="14.6" y="14.6" width="6.4" height="6.4" rx="1.6"/>',
+  ldac_quality: '<path d="M4.2 7.6l7.2 6-3.6 2.9V4.5l3.6 2.9-7.2 6"/><path d="M15 19v-3M18 19v-6M21 19V9"/>',
   loudness: '<path d="M4.5 9.6v4.8h3L12 18.4V5.6L7.5 9.6z"/><path d="M15.5 12h5M18 9.5v5"/>',
   /* voice: a speech bubble carrying a soft wave - the tone of a voice, not its level. */
   voice: '<path d="M5 5.8h14v9.4h-6.6L8.2 18.6v-3.4H5z"/><path d="M8.3 10.6c.8-1.5 1.3-1.5 2 0s1.3 1.5 2 0 1.3-1.5 2 0"/>',
@@ -9274,6 +9280,7 @@ const NAV_OVERLAYS = [
   { id: 'logMenu',          close: function () { asbCloseLogMenu(); } },
   { id: 'liveDrainSheet',   close: function () { liveDrainClose(); } },
   { id: 'liveInfoSheet',    close: function () { liveInfoClose(); } },
+  { id: 'wlCmpPickModal',   close: function () { wlCmpPickClose(); } },
   { id: 'wlServiceModal',   close: function () { wlServiceClose(); } },
   { id: 'wlComponentsModal', close: function () { wlComponentsClose(); } },
   { id: 'kernelWakeupSourcesModal', close: function () { kernelWakeupSourceDialogClose(); } },
@@ -10973,6 +10980,7 @@ const SNAP_KEYS = [
   'smart_records_balanced',
   'bt_absvol_mode',
   'bt_link_stability',
+  'bt_ldac_quality',
   'BG_TRIM_LEVEL',
   'mglru_hold',
   'mglru_mode',
@@ -11078,6 +11086,8 @@ const CFG_ITEMS = [
     desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
   { key:'bt_link_stability', type:'seg', def:'stock', stock:'stock', opts:['stock','stable'], name:'Bluetooth Link Stability',
     desc:'Optional workaround for Bluetooth audio dropouts during playback. Stable suppresses Wi-Fi scanning while audio plays, which can help on devices where the two radios interfere. New networks may appear more slowly. No codec is forced and pairing is unchanged. Leave this off if your connection is already stable.' },
+  { key:'bt_ldac_quality', type:'seg', def:'auto', stock:'auto', opts:['auto','990','660','330','abr'], name:'LDAC Playback Quality',
+    desc:'Keeps the LDAC quality you pick after every reconnect, instead of falling back to adaptive bitrate. It is the same setting as Developer options, applied again when the headset connects or the codec changes, and read back afterwards. Nothing changes for AAC, aptX, SBC or LHDC, or for headsets that do not use LDAC. 990/909 kbps needs a clean radio link; on a busy link it can stutter, then choose 660/606 or adaptive. A small background helper stays resident while a fixed quality is selected; Auto removes it.' },
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
     desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU.\n\n🔋 Battery life: Auto or On\n🎛️ Bluetooth equaliser apps: Off\n✋ Not sure: Auto' },
   { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['off','all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
@@ -11443,7 +11453,7 @@ const CFG_CAT = {
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', dsp_true_peak:'audio', dsp_lookahead:'audio', dsp_dc_protect:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', dsp_true_peak:'audio', dsp_lookahead:'audio', dsp_dc_protect:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio', bt_ldac_quality:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_PREVIEW_TNR:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
   smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
@@ -11533,7 +11543,7 @@ const CFG_GROUP_OF = {
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', lsposed_verbose:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', dsp_true_peak:'audio', dsp_lookahead:'audio', dsp_dc_protect:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
-  bt_absvol_mode:'audio', bt_link_stability:'audio',
+  bt_absvol_mode:'audio', bt_link_stability:'audio', bt_ldac_quality:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera', CAMERA_PREVIEW_TNR:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
@@ -11560,7 +11570,7 @@ const CFG_GROUP_SECTIONS = {
       keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect'], card:'dspeq' },
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth',
-      keys:['audio_profile','audio_dac_hifi','media_loudness','media_vol_steps','audio_resampler','bt_absvol_mode','bt_a2dp_offload','bt_link_stability'] },
+      keys:['audio_profile','audio_dac_hifi','media_loudness','media_vol_steps','audio_resampler','bt_absvol_mode','bt_a2dp_offload','bt_ldac_quality','bt_link_stability'] },
     { id:'safety', icon:'ear_safe', titleKey:'cfg_audio_section_safety',
       title:'Listening Safety',
       keys:['audio_remove_volume_limit'] }
@@ -11828,7 +11838,7 @@ function cfgRenderBatteryFixCard(list) {
    * and the first condition row where the control visually collided with it. */
   kernelMoreBlock(card, 'bfx', [bfxEl('div', 'bfx-desc', T('bfx_desc', 'Two steps. First every app is recompiled in place (speed-profile), with progress shown below app by app. Then, on the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and the learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.'))]);
   list.appendChild(card);
-  batteryFixPaint();
+  cfgInfLater('bfx', batteryFixPaint);
 }
 function cfgRenderComponentManagerCard(list) {
   const card = bfxEl('div', 'cfg-row bfx-card component-manager-card'); card.id = 'componentManagerCard';
@@ -11838,11 +11848,11 @@ function cfgRenderComponentManagerCard(list) {
   titles.appendChild(bfxEl('div', 'bfx-title', T('cmp_card_title', 'Activities & Services')));
   const chip = bfxEl('span', 'bfx-chip is-wait', '—'); chip.id = 'componentManagerChip'; titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', T('cmp_card_desc', 'Exact changes made from Infinite Log or added manually share one restoration ledger. Review disabled components, restore them, or add a declared Activity/Service yourself.')));
   const actions = bfxEl('div', 'bfx-actions');
   const open = bfxEl('button', 'bfx-btn bfx-primary', T('cmp_card_open', 'Manage components'));
   open.type = 'button'; open.id = 'componentManagerOpen'; open.onclick = wlComponentsOpen; actions.appendChild(open);
   card.appendChild(actions);
+  kernelMoreBlock(card, 'cmp', [bfxEl('div', 'bfx-desc', T('cmp_card_desc', 'Exact changes made from Infinite Log or added manually share one restoration ledger. Review disabled components, restore them, or add a declared Activity/Service yourself.'))]);
   list.appendChild(card);
   cfgAfterEnter(function () { if (_el('componentManagerCard')) wlComponentCardLoad(); });
 }
@@ -11956,7 +11966,7 @@ async function batteryFixPaint() {
   const mode = bfxPaintFrom(bfxParse(txt));
   const card = _el('bfxCard');
   const onScreen = !!(card && (typeof document === 'undefined' || !document.body || !document.body.contains || document.body.contains(card)));
-  if (onScreen) _bfxTimer = setTimeout(batteryFixPaint, mode === 'running' ? 2000 : 8000);
+  if (onScreen && _cfgOpen && _cfgGroup === 'infirmary' && !document.hidden) _bfxTimer = setTimeout(batteryFixPaint, mode === 'running' ? 2000 : 15000);
 }
 async function batteryFixRun() {
   const runBtn = _el('bfxRun');
@@ -12010,6 +12020,25 @@ function asbPharmacyCross(gid) {
     + '<path d="M9.6 4.4h4.8M4.6 9.4" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-linecap="round"/></svg>';
 }
 function cfgOpenInfirmary() { uiSound('nav'); cfgShowGroup('infirmary'); }
+const _cfgInfQueue = { fns:[], armed:false, gen:0 };
+function cfgInfLater(key, fn) {
+  _cfgInfQueue.fns = _cfgInfQueue.fns.filter(function (x) { return x.key !== key; });
+  const tail = _cfgInfQueue.fns.findIndex(function (x) { return x.key === 'advice'; });
+  if (key !== 'advice' && tail >= 0) _cfgInfQueue.fns.splice(tail, 0, { key:key, fn:fn });
+  else _cfgInfQueue.fns.push({ key:key, fn:fn });
+  if (_cfgInfQueue.armed) return;
+  _cfgInfQueue.armed = true;
+  const gen = ++_cfgInfQueue.gen;
+  cfgAfterEnter(async function () {
+    while (_cfgInfQueue.fns.length && gen === _cfgInfQueue.gen) {
+      await asbPaintYield();
+      if (gen !== _cfgInfQueue.gen || !_cfgOpen || document.hidden) break;
+      const next = _cfgInfQueue.fns.shift();
+      try { await next.fn(); } catch (e) {}
+    }
+    if (gen === _cfgInfQueue.gen) { _cfgInfQueue.fns = []; _cfgInfQueue.armed = false; }
+  }, function () { if (gen === _cfgInfQueue.gen) { _cfgInfQueue.fns = []; _cfgInfQueue.armed = false; } });
+}
 
 /* Evidence-backed Infinite Log recommendations. The card reuses the report snapshot;
  * only its explicit Refresh button reads a new digest. Applying is a two-tap preview,
@@ -12150,7 +12179,8 @@ function cfgRenderInfirmaryAdvice(list) {
   refresh.type = 'button'; refresh.id = 'infAdviceRefresh'; refresh.onclick = function (e) { e.stopPropagation(); infAdviceLoad(true); }; actions.appendChild(refresh);
   card.appendChild(actions);
   card.appendChild(bfxEl('div', 'bfx-note', T('inf_advice_note', 'Read-back verifies the saved value, not battery or smoothness gains.')));
-  list.appendChild(card); infAdviceLoad(false);
+  list.appendChild(card);
+  if (_infAdviceData) infAdvicePaint(); else cfgInfLater('advice', function () { infAdviceLoad(false); });
 }
 
 /* Infirmary → System Repairs → SOTER Repair (dev47). Tencent SOTER is the TEE-backed key
@@ -12358,7 +12388,7 @@ function cfgRenderSoterFixCard(list) {
   auto.appendChild(sw);
   card.appendChild(auto);
   list.appendChild(card);
-  soterFixLoad(false);
+  cfgInfLater('soter', function () { soterFixLoad(false); });
 }
 async function soterFixLoad(manual) {
   if (!_el('soterCard') || _soterBusy) return;
@@ -12508,7 +12538,7 @@ function cfgRenderJunkCleanupCard(list) {
   const cats = bfxEl('div', 'junk-cats'); cats.id = 'junkCats'; disclosure.appendChild(cats); card.appendChild(disclosure);
   const note = bfxEl('div', 'bfx-note'); note.id = 'junkNote'; card.appendChild(note);
   list.appendChild(card);
-  junkCleanupPaint(false);
+  cfgInfLater('junk', function () { junkCleanupPaint(false); });
 }
 async function junkCleanupPaint(manual) {
   if (!_el('junkCard') || _junkBusy) return;
@@ -13922,7 +13952,7 @@ const CFG_ICONS = {
   io_scheduler:'kernel', mglru_mode:'mglru_mode', kernel_mglru_min_ttl:'mglru_ttl', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
   kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend', kernel_rt_boost:'rt_boost', kernel_bore:'bore_scheduler',
-  audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
+  audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload', bt_ldac_quality:'ldac_quality',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', dsp_true_peak:'true_peak', dsp_lookahead:'lookahead_delay', dsp_dc_protect:'dc_protect', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', CAMERA_PREVIEW_TNR:'camera_preview', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
@@ -14711,7 +14741,7 @@ const APPLY_MODE = {
   kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE, kernel_rt_boost: APPLY_LIVE, kernel_bore: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE, dsp_clarity:APPLY_LIVE, dsp_rumble:APPLY_LIVE,
-  dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, dsp_true_peak:APPLY_LIVE, dsp_lookahead:APPLY_LIVE, dsp_dc_protect:APPLY_LIVE, dsp_eq_target:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
+  dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, dsp_true_peak:APPLY_LIVE, dsp_lookahead:APPLY_LIVE, dsp_dc_protect:APPLY_LIVE, dsp_eq_target:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_ldac_quality:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
@@ -16089,6 +16119,16 @@ async function cfgSet(key, val, ctl) {
         if (ctl) ctl.classList.remove('busy');
         return;
       }
+      if (key === 'bt_ldac_quality') {
+        let lr = null;
+        try { lr = await run('sh ' + MD + '/runtime/asb_bt_codec.sh apply 2>/dev/null'); } catch (e) {}
+        const lres = (/^result=([a-z_]+)/m.exec(lr ? runText(lr) : '') || [])[1] || 'failed';
+        if (lres === 'started' || lres === 'running' || lres === 'stock') toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        else toast(T('ldac_helper_missing', 'LDAC helper is not available in this build; nothing was changed'), 'warn');
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
       if (key === 'bt_a2dp_offload') {
         try { await run('sh ' + MD + '/runtime/asb_audio_apply.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
@@ -16854,7 +16894,7 @@ function wlServiceParse(out, pkg) {
     const kind = legacy ? 'service' : f[1];
     const origin = !legacy && f.length === 8 ? f[6] : (f[legacy ? 4 : 5] === '1' ? 'running' : 'saved');
     const actionable = legacy || f.length === 6 ? (f[legacy ? 4 : 5] === '1' || f[legacy ? 2 : 3] === '1') : f[7] === '1';
-    d.rows.push({ kind:/^(activity|service|component)$/.test(kind) ? kind : 'component', comp:comp, selected:f[legacy ? 2 : 3] === '1', state:/^(default|enabled|disabled)$/.test(f[legacy ? 3 : 4]) ? f[legacy ? 3 : 4] : 'unknown', running:f[legacy ? 4 : 5] === '1', origin:origin, actionable:actionable });
+    d.rows.push({ kind:/^(activity|service|component)$/.test(kind) ? kind : 'component', comp:comp, selected:f[legacy ? 2 : 3] === '1', state:/^(default|enabled|disabled)$/.test(f[legacy ? 3 : 4]) ? f[legacy ? 3 : 4] : 'unknown', running:f[legacy ? 4 : 5] === '1', origin:origin, actionable:actionable || (origin === 'declared' && (kind === 'activity' || kind === 'service')), manual:!actionable && origin === 'declared' });
   });
   return d;
 }
@@ -16863,6 +16903,7 @@ function wlServiceState(a) {
   if (a.selected) return T('wl_service_state_lapsed', 'Selected, but not disabled now · use Restore to finish restoring it');
   if (a.running) return T('wl_service_state_running', 'Running now · the app package remains enabled');
   if (a.origin === 'job_history') return T('wl_component_state_job', 'Observed in Android job history · the job/Worker name is not a separate Service');
+  if (a.origin === 'declared' && a.manual && a.actionable) return T('wl_component_state_declared_manual', 'Declared in the package · not running now · can be disabled with a second tap');
   if (a.origin === 'declared') return T('wl_component_state_declared', 'Declared in the package · not running now · read only');
   return T('wl_service_state_unknown', 'Current component state is not exposed');
 }
@@ -16914,7 +16955,7 @@ async function wlServiceLoad() {
   const serviceLabels = dozeKeepLabels([pkg]);
   if (serviceLabels[pkg]) _wlManual.labels[pkg] = serviceLabels[pkg];
   _el('wlServiceTitle').textContent = T('wl_component_title', 'Activities and services · %s').replace('%s', _wlManual.labels[pkg] || pkg);
-  _el('wlServiceCopy').textContent = T('wl_component_copy', 'Disable one exact Android Activity or Service component, not the whole app. Disable persists until you tap Restore; there is no automatic screen-off component mode. This is not a process freezer. The list combines current records, declared package components and exact Android job history. Declared-only components are read only; a Worker name is not a separate Service. Presence here does not prove energy cost. Restore returns the recorded default/enabled state.');
+  _el('wlServiceCopy').textContent = T('wl_component_copy', 'Disable one exact Android Activity or Service component, not the whole app. Disable persists until you tap Restore; there is no automatic screen-off component mode. This is not a process freezer. The list combines current records, declared package components and exact Android job history. Declared components can be disabled after a second tap; a Worker name is not a separate Service. Presence here does not prove energy cost. Restore returns the recorded default/enabled state.');
   _el('wlServiceSearch').placeholder = '🔍  ' + T('wl_component_search', 'Search class or component');
   _el('wlServiceDone').textContent = T('doze_keep_done', 'Done');
   _el('wlServiceMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
@@ -16940,6 +16981,8 @@ function wlServiceClose() {
   const m = _el('wlServiceModal'); if (!m || m.hidden) return;
   m.hidden = true; m.setAttribute('aria-hidden', 'true'); _wlService.tok++;
   _wlService.armed = ''; clearTimeout(_wlService.armTimer); navSyncSoon();
+  const cm = _el('wlComponentsModal');
+  if (cm && !cm.hidden && !_wlComponents.busy) { wlComponentsLoad(); wlComponentCardLoad(); }
 }
 async function wlServiceSet(a) {
   if (_wlService.busy) return;
@@ -16960,7 +17003,7 @@ async function wlServiceSet(a) {
   _el('wlServiceRefresh').disabled = true;
   wlServicePaint({ scan: 'ok', selected: _wlService.rows.filter(function (x) { return x.selected; }).length, rows: _wlService.rows });
   let r = null;
-  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' component-set ' + shQuote(pkg) + ' ' + (a.selected ? 'restore ' : 'disable ') + shQuote(a.comp) + (a.selected ? '' : ' ' + shQuote(a.kind || 'service'))); } catch (e) {}
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' component-set ' + shQuote(pkg) + ' ' + (a.selected ? 'restore ' : 'disable ') + shQuote(a.comp) + (a.selected ? '' : ' ' + shQuote(a.kind || 'service') + (a.manual ? ' manual' : ''))); } catch (e) {}
   const out = r ? runText(r) : '', res = (/^result=([a-z_]+)/m.exec(out) || [])[1] || 'failed';
   if (tok === _wlService.tok) {
     let msg;
@@ -17021,12 +17064,14 @@ function wlComponentsEnsure() {
     + '<select class="cfg-profile-name" id="wlComponentsKind"><option value="activity"></option><option value="service"></option></select>'
     + '<button class="wl-manual-action" id="wlComponentsDisable" type="button"></button></div>'
     + '<div class="wl-components-add-note" id="wlComponentsAddNote"></div></details>'
+    + '<button class="wl-manual-action wl-components-pick" id="wlComponentsPick" type="button"></button>'
     + '<button class="cfg-profile-primary" id="wlComponentsDone" type="button"></button></div>';
   document.body.appendChild(m);
   m.addEventListener('click', function (e) { if (e.target === m) wlComponentsClose(); });
   _el('wlComponentsX').onclick = wlComponentsClose; _el('wlComponentsDone').onclick = wlComponentsClose;
   _el('wlComponentsRefresh').onclick = function () { if (!_wlComponents.busy) wlComponentsLoad(); };
   _el('wlComponentsDisable').onclick = wlComponentsManualSet;
+  _el('wlComponentsPick').onclick = wlCmpPickOpen;
   _el('wlComponentsName').oninput = function () { _wlComponents.armed = ''; wlComponentsManualPaint(); };
   _el('wlComponentsKind').onchange = function () { _wlComponents.armed = ''; wlComponentsManualPaint(); };
   return m;
@@ -17074,6 +17119,7 @@ async function wlComponentsLoad() {
   _el('wlComponentsCopy').textContent = T('cmp_dialog_copy', 'Restore returns the exact recorded default/enabled state. Entries changed from the Infinite Log report and entries added here share the same list; presence is not proof of battery cost. No automatic component freezing or polling is used.');
   _el('wlComponentsDone').textContent = T('doze_keep_done', 'Done');
   _el('wlComponentsAdd').querySelector('summary').textContent = T('cmp_add_title', 'Add an Activity/Service manually');
+  _el('wlComponentsPick').textContent = T('cmp_pick_open', 'Choose from installed apps');
   _el('wlComponentsName').placeholder = T('cmp_add_placeholder', 'package.name/full.ClassName');
   _el('wlComponentsName').setAttribute('aria-label', _el('wlComponentsName').placeholder);
   _el('wlComponentsKind').options[0].text = T('wl_component_activity', 'Activity');
@@ -17091,6 +17137,68 @@ async function wlComponentsOpen() {
   _wlComponents.armed = ''; navSyncSoon();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { const x = _el('wlComponentsX'); if (x) x.focus(); });
   await wlComponentsLoad();
+}
+const _wlCmpPick = { tok:0, apps:[], query:'' };
+function wlCmpPickEnsure() {
+  let m = _el('wlCmpPickModal'); if (m) return m;
+  m = document.createElement('div'); m.className = 'cfg-profile-modal'; m.id = 'wlCmpPickModal';
+  m.hidden = true; m.setAttribute('aria-hidden', 'true');
+  m.innerHTML = '<div class="cfg-profile-sheet wl-manual-sheet" role="dialog" aria-modal="true" aria-labelledby="wlCmpPickTitle">'
+    + '<div class="cfg-profile-head"><div class="cfg-profile-title" id="wlCmpPickTitle"></div><div class="wl-manual-head-actions">'
+    + '<button class="cfg-profile-close" id="wlCmpPickX" type="button" aria-label="Close">×</button></div></div>'
+    + '<div class="cfg-profile-copy wl-manual-copy" id="wlCmpPickCopy"></div>'
+    + '<input class="cfg-profile-name doze-keep-search" id="wlCmpPickSearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false">'
+    + '<div class="wl-manual-list" id="wlCmpPickList"></div></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', function (e) { if (e.target === m) wlCmpPickClose(); });
+  _el('wlCmpPickX').onclick = wlCmpPickClose;
+  _el('wlCmpPickSearch').oninput = function () { _wlCmpPick.query = String(this.value || '').trim().toLowerCase(); wlCmpPickPaint(); };
+  return m;
+}
+function wlCmpPickPaint() {
+  const list = _el('wlCmpPickList'); if (!list) return; list.textContent = '';
+  const q = _wlCmpPick.query, apps = _wlCmpPick.apps.filter(function (a) { return !q || a.pkg.toLowerCase().indexOf(q) >= 0 || a.label.toLowerCase().indexOf(q) >= 0; });
+  if (!apps.length) { list.appendChild(bfxEl('div', 'cfg-profile-empty', T('cmp_pick_empty', 'No matching user apps'))); return; }
+  apps.slice(0, 160).forEach(function (a) {
+    const row = bfxEl('div', 'wl-manual-row'), tx = bfxEl('div');
+    tx.appendChild(bfxEl('div', 'wl-manual-name', a.label || a.pkg));
+    tx.appendChild(bfxEl('div', 'wl-manual-sub', a.pkg));
+    row.appendChild(tx);
+    const b = bfxEl('button', 'wl-manual-action', T('cmp_pick_components', 'Components'));
+    b.type = 'button'; b.onclick = function () { wlCmpPickChoose(a.pkg); }; row.appendChild(b);
+    list.appendChild(row);
+  });
+}
+async function wlCmpPickOpen() {
+  const m = wlCmpPickEnsure(), tok = ++_wlCmpPick.tok;
+  document.body.appendChild(m);
+  _el('wlCmpPickTitle').textContent = T('cmp_pick_title', 'Choose an app');
+  _el('wlCmpPickCopy').textContent = T('cmp_pick_copy', 'Pick an app to see its declared, running and job-history Activity/Service components. Disabling one still needs a second tap, read-back and the shared restore ledger.');
+  _el('wlCmpPickSearch').placeholder = T('doze_keep_search', 'Search apps');
+  _el('wlCmpPickSearch').value = ''; _wlCmpPick.query = '';
+  m.hidden = false; m.setAttribute('aria-hidden', 'false'); navSyncSoon();
+  const list = _el('wlCmpPickList'); list.textContent = '';
+  list.appendChild(bfxEl('div', 'wl-manual-loading', T('cmp_pick_loading', 'Reading installed user apps…')));
+  await asbPaintYield();
+  let r = null;
+  try { r = await run('pm list packages -3 2>/dev/null'); } catch (e) {}
+  if (tok !== _wlCmpPick.tok || m.hidden) return;
+  const pkgs = [];
+  runText(r || {}).split('\n').forEach(function (ln) { const p = ln.replace(/^package:/, '').trim(); if (dozePkgOk(p) && pkgs.indexOf(p) < 0) pkgs.push(p); });
+  const labels = dozeKeepLabels(pkgs);
+  _wlCmpPick.apps = pkgs.map(function (p) { return { pkg:p, label:labels[p] || '' }; }).sort(function (x, y) {
+    return (x.label || x.pkg).toLowerCase() < (y.label || y.pkg).toLowerCase() ? -1 : 1;
+  });
+  wlCmpPickPaint();
+}
+function wlCmpPickClose() {
+  const m = _el('wlCmpPickModal'); if (!m || m.hidden) return;
+  m.hidden = true; m.setAttribute('aria-hidden', 'true'); _wlCmpPick.tok++; navSyncSoon();
+}
+function wlCmpPickChoose(pkg) {
+  wlCmpPickClose();
+  const sm = wlServiceEnsure(); document.body.appendChild(sm);
+  wlServiceOpen(pkg);
 }
 function wlComponentsClose() {
   const m = _el('wlComponentsModal'); if (!m || m.hidden) return;
@@ -19673,7 +19781,15 @@ function asbPageJumpWatch(nav, items) {
   /* A transformed, self-scrolling overlay is the containing block for fixed
    * descendants in Chromium/WebView. Portal bottom docks to body; ownership stays
    * with the source page so back/close/render removes both DOM and scroll listener. */
-  if (document.body) document.body.appendChild(nav);
+  if (document.body) {
+    const kind = ['report-nav', 'zy-page-nav', 'dev-page-nav', 'cfg-page-nav'].filter(function (c) { return nav.classList.contains(c); })[0];
+    if (kind && document.querySelectorAll) Array.prototype.forEach.call(document.querySelectorAll('body > .' + kind), function (o) {
+      if (o !== nav && o.parentNode && (!o.closest || o.closest('body') === document.body)) {
+        o.parentNode.removeChild(o);
+      }
+    });
+    document.body.appendChild(nav);
+  }
   page._asbJumpNav = nav;
   let queued = false;
   function update() {

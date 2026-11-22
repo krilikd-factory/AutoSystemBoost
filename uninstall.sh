@@ -12,6 +12,9 @@ MODDIR=${0%/*}
 if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_kernel_controls.sh" restore >/dev/null 2>&1 || true
 fi
+if [ -f "$MODDIR/runtime/asb_bt_codec.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_bt_codec.sh" stop >/dev/null 2>&1 || true
+fi
 if [ -f "$MODDIR/runtime/asb_wakeup_blocker.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakeup_blocker.sh" clear >/dev/null 2>&1 || true
 fi

@@ -943,6 +943,10 @@
     "dsp_dc_protect": {
       "name": "Perlindungan DC/Infrasonik DSP",
       "desc": "High-pass 20 Hz sebelum tahap nada. Memerlukan DSP advanced-v1."
+    },
+    "bt_ldac_quality": {
+      "name": "Kualitas Pemutaran LDAC",
+      "desc": "Mempertahankan kualitas LDAC yang Anda pilih setelah setiap penyambungan ulang, alih-alih kembali ke bitrate adaptif. Ini pengaturan yang sama dengan Opsi pengembang, diterapkan lagi saat headset tersambung atau codec berubah, lalu dibaca ulang. Tidak ada yang berubah untuk AAC, aptX, SBC, LHDC, atau headset tanpa LDAC. 990/909 kbps butuh tautan radio yang bersih; saat ada gangguan suara bisa tersendat, pilih 660/606 atau adaptif. Selama kualitas tetap dipilih, pembantu kecil tetap berjalan di latar belakang; Otomatis menghapusnya."
     }
   },
   "cfg_after_reboot": "berlaku setelah mulai ulang",
@@ -3500,6 +3504,13 @@
       "0": "tanpa batas",
       "1": "batasi",
       "auto": "stok"
+    },
+    "bt_ldac_quality": {
+      "auto": "Otomatis",
+      "990": "990/909",
+      "660": "660/606",
+      "330": "330/303",
+      "abr": "Adaptif"
     }
   },
   "page_save": "Simpan",
@@ -3832,7 +3843,7 @@
   "wb_therm": "Ambang rendah membatasi kecepatan setiap saat, bukan hanya saat berbeban",
   "wb_vol": "Peringatan volume aman nonaktif — risiko bagi pendengaran",
   "wl_component_activity": "Activity",
-  "wl_component_copy": "Satu Activity/Service tepat, bukan seluruh aplikasi. Hingga Pulihkan; tanpa otomatisasi atau pembekuan. Manifest hanya-baca; Worker ≠ Service. Kehadiran tidak membuktikan konsumsi.",
+  "wl_component_copy": "Satu Activity/Service yang tepat, bukan seluruh aplikasi. Bertahan sampai Pulihkan; tanpa mode otomatis atau pembekuan. Komponen yang dideklarasikan dapat dinonaktifkan setelah ketukan kedua; Worker bukan Service. Keberadaannya tidak membuktikan konsumsi baterai.",
   "wl_component_disable": "Nonaktifkan komponen",
   "wl_component_empty": "Saat ini tidak ada bukti Activity/Service yang tersedia untuk aplikasi ini. Ini tidak membuktikan bahwa tidak ada komponen yang dideklarasikan; buka atau gunakan layar terkait, lalu segarkan. Komponen yang sudah dinonaktifkan melalui ASB tetap tercantum untuk dipulihkan.",
   "wl_component_loading": "Membaca bukti Activity/Service saat ini, yang dideklarasikan, dan dari riwayat job…",
@@ -4310,5 +4321,13 @@
   "lr_nav_asb": "Biaya ASB",
   "lr_nav_crash": "Galat",
   "lr_nav_trend": "Tren-nya",
-  "lr_nav_more": "Lainnya"
+  "lr_nav_more": "Lainnya",
+  "cmp_pick_open": "Pilih dari aplikasi terpasang",
+  "cmp_pick_title": "Pilih aplikasi",
+  "cmp_pick_copy": "Pilih aplikasi untuk melihat komponen Activity/Service yang dideklarasikan, sedang berjalan, dan terlihat di riwayat job. Menonaktifkan tetap memerlukan ketukan kedua, pembacaan ulang, dan log pemulihan bersama.",
+  "cmp_pick_loading": "Membaca aplikasi pengguna yang terpasang…",
+  "cmp_pick_empty": "Tidak ada aplikasi pengguna yang cocok",
+  "cmp_pick_components": "Komponen",
+  "ldac_helper_missing": "Pembantu LDAC tidak ada di build ini; tidak ada yang diubah",
+  "wl_component_state_declared_manual": "Dideklarasikan dalam paket · tidak berjalan sekarang · bisa dinonaktifkan dengan ketukan kedua"
 }

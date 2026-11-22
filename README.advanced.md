@@ -564,6 +564,7 @@ A valid network test identifies the exact route and interface. Wi-Fi results mus
 | `bt_absvol_mode` | Bluetooth Volume Control | `stock` | Shared headset/phone scale or independent phone gain; lowest-step behaviour varies by headset. |
 | `bt_link_stability` | Bluetooth Link Stability | `stock` | Stable mode suppresses Wi-Fi scans during audio on affected links; new networks can appear more slowly. |
 | `bt_a2dp_offload` | Bluetooth Audio Offload | `auto` | Auto/on/off hardware encoding route; off can help some external EQs but moves work to the CPU. |
+| `bt_ldac_quality` | LDAC Playback Quality | `auto` | Keeps 990/660/330 kbps or adaptive LDAC after every reconnect; only acts while the active codec is LDAC. A small helper stays resident while a fixed value is set. |
 | `dsp_outputs` | DSP Outputs | `all` | Selects speaker/wired/Bluetooth combinations or disables DSP while preserving its parameter values. |
 | `dsp_loudness` | DSP Loudness | `0` | Main DSP enable/gain control, 0–30 dB in current source; values above 25 dB require newly rebuilt DSP libraries. First effect enable can require reboot. |
 | `dsp_bass` | DSP Bass Boost | `0` | Low-shelf boost; consumes headroom and causes the limiter to engage sooner. |

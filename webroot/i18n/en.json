@@ -837,6 +837,10 @@
     "dsp_dc_protect": {
       "name": "DSP DC / Infrasonic Protection",
       "desc": "20 Hz high-pass before tone stages. Requires advanced-v1 DSP."
+    },
+    "bt_ldac_quality": {
+      "name": "LDAC Playback Quality",
+      "desc": "Keeps the LDAC quality you pick after every reconnect, instead of falling back to adaptive bitrate. It is the same setting as Developer options, applied again when the headset connects or the codec changes, and read back afterwards. Nothing changes for AAC, aptX, SBC or LHDC, or for headsets that do not use LDAC. 990/909 kbps needs a clean radio link; on a busy link it can stutter, then choose 660/606 or adaptive. A small background helper stays resident while a fixed quality is selected; Auto removes it."
     }
   },
   "cfg_after_reboot": "applies after reboot",
@@ -3393,6 +3397,13 @@
       "0": "More often",
       "1": "Less often",
       "auto": "Stock"
+    },
+    "bt_ldac_quality": {
+      "auto": "Auto",
+      "990": "990/909",
+      "660": "660/606",
+      "330": "330/303",
+      "abr": "Adaptive"
     }
   },
   "page_save": "Save",
@@ -3725,7 +3736,7 @@
   "wb_therm": "A low threshold limits speed all the time, not only under load",
   "wb_vol": "The safe-volume warning is off - a risk to hearing",
   "wl_component_activity": "Activity",
-  "wl_component_copy": "One exact Activity/Service, not the whole app. Persists until Restore; no automatic mode or process freezing. Declared-only items are read-only; a Worker is not a Service. Presence does not prove battery cost.",
+  "wl_component_copy": "One exact Activity/Service, not the whole app. Persists until Restore; no automatic mode or process freezing. Declared components can be disabled after a second tap; a Worker is not a Service. Presence does not prove battery cost.",
   "wl_component_disable": "Disable component",
   "wl_component_empty": "No Activity/Service evidence is exposed for this app right now. This does not prove that none are declared; open or use the relevant screen, then refresh. Components already disabled through ASB remain listed for Restore.",
   "wl_component_loading": "Reading current, declared and job-history Activity/Service evidence…",
@@ -4203,5 +4214,13 @@
   "lr_nav_asb": "ASB cost",
   "lr_nav_crash": "Errors",
   "lr_nav_trend": "Trend",
-  "lr_nav_more": "More"
+  "lr_nav_more": "More",
+  "cmp_pick_open": "Choose from installed apps",
+  "cmp_pick_title": "Choose an app",
+  "cmp_pick_copy": "Pick an app to see its declared, running and job-history Activity/Service components. Disabling one still needs a second tap, read-back and the shared restore ledger.",
+  "cmp_pick_loading": "Reading installed user apps…",
+  "cmp_pick_empty": "No matching user apps",
+  "cmp_pick_components": "Components",
+  "ldac_helper_missing": "LDAC helper is not available in this build; nothing was changed",
+  "wl_component_state_declared_manual": "Declared in the package · not running now · can be disabled with a second tap"
 }

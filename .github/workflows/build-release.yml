@@ -193,6 +193,9 @@ jobs:
             runtime/asb_zygisk_link.sh \
             runtime/asb_zygisk_park.sh \
             runtime/asb_device_db.sh \
+            runtime/asb_bt_codec.sh \
+            src/btcodec/asb/BtCodec.java \
+            src/btcodec/build.sh \
             runtime/asb_ltpo_video.sh \
             runtime/asb_odm_rebind.sh \
             runtime/asb_io_scheduler.sh \
@@ -360,6 +363,14 @@ jobs:
             fi
           done
 
+      - name: Build Bluetooth codec helper (dex)
+        run: |
+          if sh src/btcodec/build.sh; then
+            test -s bin/asb_btcodec.dex
+          else
+            echo "::warning::asb_btcodec.dex was not built - the LDAC quality card will report the helper as missing"
+          fi
+
       - name: Build RELEASE binary (unified diagnostics)
         # The AIDL effect prebuilt (src/DSP_AIDL/prebuilt/<abi>/libasbdsp_aidl.so) is used
         # automatically when present - build_ndk_release.sh detects the file and prefers it
@@ -516,6 +527,10 @@ jobs:
             exit 1
           fi
           install -m 0755 bin/arm64-v8a/asb_dsp_attach "${PKG_REL}/bin/asb_dsp_attach"
+          if [ -s bin/asb_btcodec.dex ]; then
+            install -m 0444 bin/asb_btcodec.dex "${PKG_REL}/bin/asb_btcodec.dex"
+            echo "  + bin/asb_btcodec.dex"
+          fi
           if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
             if ls src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v*.so >/dev/null 2>&1; then
               echo "  = skipping generic bin/libasbdsp_32.so (versioned builds cover it)"
@@ -725,6 +740,7 @@ jobs:
             "runtime/asb_zygisk_link.sh" \
             "runtime/asb_zygisk_park.sh" \
             "runtime/asb_device_db.sh" \
+            "runtime/asb_bt_codec.sh" \
             "runtime/asb_ltpo_video.sh" \
             "runtime/asb_odm_rebind.sh" \
             "runtime/asb_io_scheduler.sh" \

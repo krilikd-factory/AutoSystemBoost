@@ -655,6 +655,28 @@ _wl_fit_limit() {
   echo "wakelock: $1 may no longer hold the CPU awake (wakelock_fitness=limit)"
   return 0
 }
+_wl_fit_forget() {
+  for _ff in "$FIT" "$FIT_UID" "$FIT_RA"; do
+    [ -s "$_ff" ] || continue
+    grep -v "^$1|" "$_ff" > "$_ff.tmp" 2>/dev/null
+    if [ -s "$_ff.tmp" ]; then mv -f "$_ff.tmp" "$_ff"; else rm -f "$_ff.tmp" "$_ff"; fi
+  done
+  for _ff in "$FIT_IGN" "$FIT_REF"; do
+    [ -s "$_ff" ] || continue
+    grep -vxF "$1" "$_ff" > "$_ff.tmp" 2>/dev/null
+    if [ -s "$_ff.tmp" ]; then mv -f "$_ff.tmp" "$_ff"; else rm -f "$_ff.tmp" "$_ff"; fi
+  done
+}
+_wl_fit_prune() {
+  [ -s "$FIT" ] || return 0
+  _has pm || return 0
+  for _fpp in $(cut -d'|' -f1 "$FIT" 2>/dev/null); do
+    case "$_fpp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    [ -n "$(pm path "$_fpp" 2>/dev/null | head -1)" ] && continue
+    _wl_fit_forget "$_fpp"
+    echo "wakelock: $_fpp is no longer installed - its fitness ledger entry was dropped"
+  done
+}
 _wl_fit_release() {
   rm -f "$FIT_REF" 2>/dev/null
   [ -s "$FIT" ] || return 0
@@ -1295,6 +1317,7 @@ if [ "${1:-}" = fitness ]; then
   _map="$(_wl_pkgmap)"
   [ -n "$_map" ] || exit 0
   rm -f "$FIT.reapplied" 2>/dev/null
+  _wl_fit_prune >/dev/null
   printf '%s\n' "$_map" | while read -r _fu _fp; do
     [ -n "$_fp" ] && _wl_fitness "$_fp" && _wl_fit_limit "$_fp" >/dev/null
   done
@@ -1383,6 +1406,7 @@ esac
 rm -f "$FIT.reapplied" 2>/dev/null
 case "$(_wl_fit_mode)" in
   limit)
+    _wl_fit_prune
     if [ -n "$_map" ]; then
       printf '%s\n' "$_map" | while read -r _fu _fp; do
         [ -n "$_fp" ] && _wl_fitness "$_fp" && _wl_fit_limit "$_fp" >/dev/null
