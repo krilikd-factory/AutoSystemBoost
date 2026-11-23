@@ -297,7 +297,7 @@ On other models, feature availability depends on firmware, kernel, exposed inter
 
 ### 🐧 With the KRILIKD kernel
 
-[KRILIKD](https://github.com/krilikd-factory/GKI_KernelSU_SUSFS) is a companion GKI kernel for the OnePlus 15. ASB discovers its extra standard Linux controls at runtime, captures the stock value first, reads every write back and restores the baseline in Stock mode or on uninstall. On a stock kernel the same cards stay hidden or report the control as not exposed.
+[KRILIKD](https://github.com/krilikd-factory/KRILIKD-kernel) is a companion GKI kernel for the OnePlus 15. ASB discovers its extra standard Linux controls at runtime, captures the stock value first, reads every write back and restores the baseline in Stock mode or on uninstall. On a stock kernel the same cards stay hidden or report the control as not exposed.
 
 ### 🗺 Project status
 

@@ -5,7 +5,7 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
-## V66 after test19 - an app store is never a game
+## V66-test20 - an app store is never a game, kernel repository renamed
 
 Input: the owner's asbdiag of 2026-11-23 12:40 on test18: "GPU-bound rendering: GAMING reached
 1 time ... last for com.heytap.market".
@@ -17,6 +17,9 @@ Input: the owner's asbdiag of 2026-11-23 12:40 on test18: "GPU-bound rendering: 
   GPU ceilings for an app that only needed a calm frame.
 - **Test:** `t_gpu_bound_gaming_runtime` checks the list (exact names only) and that a saturated
   GPU in an app store stays out of GAMING.
+- **Docs:** the KRILIKD kernel repository was renamed to `krilikd-factory/KRILIKD-kernel`; the
+  links in `README.md` and `docs/README.ru.md` follow it.
+- Not posted to Telegram.
 
 
 ## V66-test19 - late notifications from rarely opened apps, wake rules on stock kernels, logs to Telegram
