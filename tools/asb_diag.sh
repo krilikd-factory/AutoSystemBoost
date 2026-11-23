@@ -4433,6 +4433,11 @@ NOTE "doze_trim_whitelist = $(cfg doze_trim_whitelist) · trimmed by ASB: $(_dzn
 [ -s /data/adb/asb/doze_whitelist_added ] && NOTE "  made exempt by ASB: $(grep . /data/adb/asb/doze_whitelist_added | tr '\n' ' ')"
 
 # =====================================================================
+if [ -s /data/adb/asb/notif_fix ] && [ -f "$MODDIR/runtime/asb_notif_fix.sh" ]; then
+  NOTE "Notification fix readback: row|package|ok|doze|run_any_bg|run_bg|wake_lock|post_notification|standby|data|screen_off_starts"
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_notif_fix.sh" status
+fi
+
 SEC "8b. INTERFACE / SYSTEM TWEAKS"
 if [ "$(cfg disable_blur)" = "1" ]; then
   V "  window blur disabled" "1" "$(settings get global disable_window_blurs 2>/dev/null)" eq

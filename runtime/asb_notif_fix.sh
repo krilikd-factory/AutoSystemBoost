@@ -18,7 +18,8 @@ _pkgok() {
 _users() {
   pm list packages -3 -U 2>/dev/null | sed -n 's/^package:\([A-Za-z0-9_.]*\) uid:\([0-9]*\).*/\1 \2/p'
 }
-_ops() { appops get "$1" 2>/dev/null; }
+. "$MODDIR/runtime/asb_appops.sh" || exit 1
+_ops() { asb_appops get "$1" 2>/dev/null; }
 _pmode() {
   printf '%s\n' "$1" | grep -v 'Uid mode' | sed -n "s/^[[:space:]]*$2: \([a-z_]*\).*/\1/p" | head -1
 }
@@ -75,7 +76,7 @@ _keep_del() {
   mv -f "$KEEP.tmp" "$KEEP" 2>/dev/null
 }
 _record() {
-  _ro="$(_ops "$1")"
+  _ro="$(_ops "$1")" || return 1
   _rw="$(_wlist)"
   _rd=0; [ "$(_wl_kind "$_rw" "$1")" = user ] && _rd=1
   _rdn=0; _np_list deny | grep -qx "$2" && _rdn=1
@@ -93,8 +94,8 @@ _apply() {
   [ "$(_wl_kind "$(_wlist)" "$_ap")" = none ] && dumpsys deviceidle whitelist "+$_ap" >/dev/null 2>&1
   _ao="$(_ops "$_ap")"
   for _aop in RUN_ANY_IN_BACKGROUND RUN_IN_BACKGROUND WAKE_LOCK; do
-    case "$(_pmode "$_ao" "$_aop")" in ignore|deny|errored) appops set "$_ap" "$_aop" allow >/dev/null 2>&1 ;; esac
-    case "$(_umode "$_ao" "$_aop")" in ignore|deny|errored) appops set --uid "$_ap" "$_aop" allow >/dev/null 2>&1 ;; esac
+    case "$(_pmode "$_ao" "$_aop")" in ignore|deny|errored) asb_appops set "$_ap" "$_aop" allow >/dev/null 2>&1 ;; esac
+    case "$(_umode "$_ao" "$_aop")" in ignore|deny|errored) asb_appops set --uid "$_ap" "$_aop" allow >/dev/null 2>&1 ;; esac
   done
   _np_list deny | grep -qx "$_au" && _np_cmd remove deny "$_au" >/dev/null 2>&1
   if [ "$(_np_saver)" = on ] && ! _np_list allow | grep -qx "$_au"; then
@@ -109,14 +110,16 @@ _apply() {
   fi
 }
 _check() {
-  _co="$(_ops "$1")"
+  _co="$(_ops "$1")" || _co=unavailable
   _cd="$(_wl_kind "$(_wlist)" "$1")"
   _cra="$(_eff "$_co" RUN_ANY_IN_BACKGROUND)"; _crb="$(_eff "$_co" RUN_IN_BACKGROUND)"; _cwk="$(_eff "$_co" WAKE_LOCK)"
   _cpn="$(_eff "$_co" POST_NOTIFICATION)"
+  [ "$_co" != unavailable ] || _cpn=unknown
   _cbg=ok
   _np_list deny | grep -qx "$2" && _cbg=denied
   [ "$_cbg" = ok ] && [ "$(_np_saver)" = on ] && ! _np_list allow | grep -qx "$2" && _cbg=saver
   _cok=1
+  case "$_cpn" in ignore|deny|errored|unknown) _cok=0 ;; esac
   [ "$_cd" = none ] && _cok=0
   case "$_cra$_crb$_cwk" in *ignore*|*deny*|*errored*) _cok=0 ;; esac
   [ "$_cbg" = ok ] || _cok=0
@@ -126,8 +129,8 @@ _check() {
   printf 'row|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$1" "$_cok" "$_cd" "$_cra" "$_crb" "$_cwk" "$_cpn" "$_cbk" "$_cbg" "${_czo:--}"
 }
 _rop() {
-  [ "$(_pmode "$_ro" "$1" | sed 's/^$/default/')" = "$2" ] || appops set "$_rp" "$1" "$2" >/dev/null 2>&1
-  [ "$(_umode "$_ro" "$1" | sed 's/^$/default/')" = "$3" ] || appops set --uid "$_rp" "$1" "$3" >/dev/null 2>&1
+  [ "$(_pmode "$_ro" "$1" | sed 's/^$/default/')" = "$2" ] || asb_appops set "$_rp" "$1" "$2" >/dev/null 2>&1
+  [ "$(_umode "$_ro" "$1" | sed 's/^$/default/')" = "$3" ] || asb_appops set --uid "$_rp" "$1" "$3" >/dev/null 2>&1
 }
 _restore() {
   _l="$(_line "$1")"
@@ -169,7 +172,7 @@ _findings() {
 }
 _status() {
   echo 'version=1'
-  _has appops && _has dumpsys && _has pm || { echo 'tools=missing'; return 0; }
+  { _has appops || _has cmd; } && _has dumpsys && _has pm || { echo 'tools=missing'; return 0; }
   _findings
   _sn=0; [ -s "$LED" ] && _sn="$(grep -c '|' "$LED" 2>/dev/null)"
   echo "selected=${_sn:-0}"
@@ -182,7 +185,7 @@ _status() {
   done < "$LED"
 }
 _set() {
-  _has appops && _has dumpsys && _has pm || { echo 'result=unavailable'; return 1; }
+  { _has appops || _has cmd; } && _has dumpsys && _has pm || { echo 'result=unavailable'; return 1; }
   _su="$(_users)"
   [ -n "$_su" ] || { echo 'result=unavailable'; return 1; }
   _want=""
@@ -199,7 +202,7 @@ _set() {
   _n=0
   for _wp in $_want; do
     _wu="$(printf '%s\n' "$_su" | awk -v p="$_wp" '$1 == p { print $2; exit }')"
-    [ -n "$(_line "$_wp")" ] || _record "$_wp" "$_wu"
+    [ -n "$(_line "$_wp")" ] || _record "$_wp" "$_wu" || { echo result=unavailable; return 1; }
     _apply "$_wp" "$_wu"
     _n=$((_n + 1))
   done
@@ -211,7 +214,7 @@ _set() {
 }
 _reapply() {
   [ -s "$LED" ] || return 0
-  _has appops && _has dumpsys && _has pm || return 0
+  { _has appops || _has cmd; } && _has dumpsys && _has pm || return 0
   _su="$(_users)"
   [ -n "$_su" ] || return 0
   _gone=""

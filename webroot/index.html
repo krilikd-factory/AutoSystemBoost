@@ -18232,6 +18232,8 @@ function nfParse(out) {
 function nfRowProblems(r) {
   const out = [];
   if (!r) return out;
+  if (/^(ignore|deny|errored)$/.test(r.post)) out.push(T('nf_post_off', 'notifications are switched off for this app in Android - turn them on in its settings'));
+  if (r.post === 'unknown') out.push(T('nf_row_pending', 'not read yet'));
   if (r.doze === 'none') out.push(T('nf_part_doze', 'no Doze exemption'));
   if (/ignore|deny|errored/.test(r.ra + r.rb + r.wk)) out.push(T('nf_part_bg', 'background restricted'));
   if (r.bg === 'denied' || r.bg === 'saver') out.push(T('nf_part_data', 'background data blocked'));
@@ -18539,7 +18541,6 @@ function nfPanel() {
       let w = !r ? T('nf_row_pending', 'not read yet') : r.doze === 'gone' ? T('nf_tag_gone', 'uninstalled')
         : (probs.length ? T('nf_row_part', 'not fully applied: %s').replace('%s', probs.join(', ')) : T('nf_row_ok', 'fixed · read back from Android'));
       if (r && r.zoff >= 0) w += ' · ' + T('nf_zoff', 'Zygisk: started %s time(s) with the screen off since boot - each is a push or job waking it').replace('%s', String(r.zoff));
-      if (r && r.post === 'ignore') w += ' · ' + T('nf_post_off', 'notifications are switched off for this app in Android - turn them on in its settings');
       why.textContent = w;
       tx.appendChild(why);
       line.appendChild(tx);
