@@ -4287,7 +4287,6 @@
   "pd_stage_readback": "回读",
   "lv_scr_on_avg": "亮屏 · 配置平均",
   "lv_drain_cmp_avg": "按配置 - 各自的平均值",
-  "lv_drain_note_src": "亮屏：当本次启动中活动配置的耗电（自启动或自选择该配置以来）覆盖的亮屏时间不少于其最近一次会话时，显示该值；否则显示最近一次完整会话（电量下降两格，或 30 分钟内下降一格），再否则显示配置平均值；标题会说明是哪一种。不计充电时间。下表是各配置的平均值，因此活动配置所在行可能与上方数字不同。“当前”仅为最近一段连续时间。息屏优先采用最近一次确认的夜间数据。所有数字都来自电量，而非电流传感器。",
   "lv_scr_on_switch": "亮屏 · 自切换配置以来",
   "lv_drain_on_switch_tip": "本次启动中自选择此配置以来亮屏时按电量计算的耗电：%s 分钟。不含充电和电量重置。",
   "dsp_console_title": "引擎控制",
@@ -4427,5 +4426,16 @@
   "log_menu_log_sub_on": "正在记录 · 点两次停止",
   "log_menu_log_sub_stop": "正在写入报告",
   "log_menu_report_sub": "在此查看已保存的无限日志",
-  "log_menu_send_sub": "打包 asbdiag 与无限日志，打开 Telegram"
+  "log_menu_send_sub": "打包 asbdiag 与无限日志，打开 Telegram",
+  "lvi_trend_wait_window": "正在测量：测量 30 秒后显示图表（约剩 %1 秒）。",
+  "lvi_trend_graph_rate": "图中每分钟 %1 °C · %2",
+  "lvi_trend_disagree": "标题是 governor 信号（每分钟 %1 °C）：它在更长时间内平滑，反应晚于本图，因此两者可能暂时指向不同方向。",
+  "lvi_trend_axis_start": "−%1",
+  "lvi_trend_axis_range": "%1–%2 °C",
+  "lvi_trend_axis_now": "现在",
+  "lvi_trend_sec": "%1 秒",
+  "st_only_perf": "未生效：仅在“性能”中",
+  "st_off_in_stock": "在“原厂”中未生效",
+  "st_only_battery": "未生效：仅在“省电”中",
+  "st_cool_gaming_battery": "在“省电”中未生效：游戏不进入游戏模式"
 }

@@ -1879,6 +1879,7 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
 .lvt-chart .lvt-overall { fill: none; stroke-width: 1.5; stroke-dasharray: 6 4; opacity: .85; vector-effect: non-scaling-stroke; }
 .lvt-chart .lvt-end { stroke: var(--bg); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .lvt-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; color: var(--text-tertiary); font: 600 10px/1.3 var(--mono); }
+.lvt-note { margin-top: 10px; color: var(--text-secondary); }
 .lvh-extra { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--text); white-space: pre-line; }
 html[data-asb-theme="light"] .live-info-hist { background: #fbfcfc; }
 html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 8px currentColor; }
@@ -6709,6 +6710,16 @@ html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-smart-owner { displa
   white-space:normal; overflow-wrap:anywhere; vertical-align:middle; }
 html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-status:is(.off,.neutral),
 html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-status:empty { display:none !important; }
+html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-status.asb-dup { display:none !important; }
+html .dsp-console .dsp-console-panel .cfg-status-row.cfg-status-row:not(:has(> :not(.off):not(.neutral):not(:empty):not(.asb-dup))) { display:none !important; }
+/* The option list: one flat surface (the glass wash drew a diagonal two-tone band behind the
+ * items) and items as inset rounded rows, the current one tinted in the category colour. */
+html:not([data-asb-theme="light"]) .cfg-row .cfg-sel-pop.cfg-sel-pop { background:#0d1114 !important; padding:5px !important; }
+html:root[data-asb-glass="1"]:not([data-asb-theme="light"]) .cfg-row .cfg-sel-pop.cfg-sel-pop { background:rgba(13,17,20,.96) !important; }
+html[data-asb-theme="light"] .cfg-row .cfg-sel-pop.cfg-sel-pop { padding:5px !important; }
+.cfg-row .cfg-sel-pop.cfg-sel-pop button { border-radius:9px; }
+html .cfg-row[class*="cat-"] .cfg-sel-pop.cfg-sel-pop button.active { color:var(--cat-ink,var(--cat,var(--accent))) !important;
+  background:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 13%,transparent) !important; }
 .dsp-console .dsp-console-panel .cfg-name { line-height:1.3; }
 /* Segment labels stay on one line; a row whose labels do not fit is moved to a full-width line
  * by cfgConsoleFitLater, where the labels may wrap. */
@@ -6727,7 +6738,6 @@ html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-status:empty { displ
 .asb-console-head-bare .asb-console-sum { margin:0; flex:1 1 auto; min-width:0; }
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row { display:flex !important; flex-wrap:wrap; margin-top:3px; }
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row:empty { display:none !important; }
-.dsp-console.asb-console-status .dsp-console-panel .cfg-status:not(.warn):not(.bad):not(.na) { display:none; }
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row .cfg-status,
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row .cfg-smart-owner { font-size:10px; white-space:normal; }
 .asb-console-chip { display:inline-flex; align-items:center; min-height:22px; padding:2px 9px; border-radius:11px;
@@ -6738,6 +6748,8 @@ html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-status:empty { displ
 .dsp-console .asb-console-mod { margin:10px 0 0; padding:11px 12px 4px; border-radius:16px;
   background:color-mix(in srgb,var(--surface) 70%,transparent); transition:border-color .2s ease; }
 .dsp-console .asb-console-mod[hidden] { display:none; }
+.cfg-search-card { display:block; width:100%; margin:0 0 10px; padding:14px 16px; border:1px solid var(--border); border-radius:16px;
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface)); color:var(--text); font:650 14px/1.35 var(--sans); text-align:start; cursor:pointer; }
 .dsp-console .asb-console-mod.is-tuned { border-color:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 45%,var(--border)); }
 .asb-console-mhead { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:0 0 8px;
   border-bottom:1px solid var(--border); }
@@ -10225,7 +10237,6 @@ function liveDrainPaint() {
     (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : ''));
   const cmp = liveDrainCompare();
   if (cmp) body.appendChild(cmp);
-  body.appendChild(liveDrainExplanation(T('lv_drain_note_src', 'Screen on: the active profile’s drain in this boot (since boot, or since the profile was selected) once it covers at least as much screen-on time as its latest session, otherwise the latest complete session (two battery-level steps, or 30 min with one), otherwise the profile average; the heading names which one. Charging time is left out. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor.'), 'live-drain-note'));
 }
 function liveDrainCompare() {
   const p = _lvMeter.p || {};
@@ -10843,28 +10854,39 @@ function lviTrendSlope(h) {
   h.forEach(function (x) { num += (x.t - mt) * (x.n - mv); den += (x.t - mt) * (x.t - mt); });
   return den > 0 ? num / den * 60000 : 0;
 }
+function lviTrendDur(ms) {
+  const sec = Math.max(1, Math.round(ms / 1000));
+  return sec < 90 ? T('lvi_trend_sec', '%1 s').replace('%1', String(sec)) : logReportDur(Math.round(sec / 60));
+}
+/* The chart, its dashed line and the rate under the heading all describe the same measured
+ * window. The governor's control signal (the tile's word) is a separate, longer-smoothed
+ * figure and is printed as such below the chart; when the two disagree in direction the sheet
+ * says why instead of pairing a "warming" heading with a falling line. A window shorter than
+ * 30 s is not drawn: three readings in six seconds were stretched over a "1 min" axis. */
 function lviTrendRender(box, key, color) {
   box.textContent = '';
   const h = lviTrendData(key);
   const t0 = h.length ? h[0].t : 0, t1 = h.length ? h[h.length - 1].t : 0;
-  if (h.length < 2 || t1 <= t0) {
+  if (h.length < 3 || t1 - t0 < 30000) {
     const wait = document.createElement('div'); wait.className = 'lvh-line';
-    wait.textContent = T('lvi_trend_chart_wait', 'The diagram appears after two temperature readings in the same window.');
+    const left = Math.max(1, Math.ceil((30000 - Math.max(0, t1 - t0)) / 1000));
+    wait.textContent = T('lvi_trend_wait_window', 'Collecting readings: the chart appears after 30 s of measurements (about %1 s to go).').replace('%1', String(left));
     box.appendChild(wait); box.hidden = false; return;
   }
   const mt = h.reduce(function (p, x) { return p + x.t; }, 0) / h.length;
   const mv = h.reduce(function (p, x) { return p + x.n; }, 0) / h.length;
-  const smartSignal = key === 'trend' && _selectedProfile === 'smart' && Number.isFinite(_smartTrendSlopePerMin);
-  const perMin = smartSignal ? _smartTrendSlopePerMin : lviTrendSlope(h);
+  const perMin = lviTrendSlope(h);
   const slope = perMin / 60000;
   const fit0 = mv + (t0 - mt) * slope, fit1 = mv + (t1 - mt) * slope;
-  const values = h.map(function (x) { return x.n; }).concat([fit0, fit1]);
-  const lo = Math.min.apply(null, values), hi = Math.max.apply(null, values), range = (hi - lo) || 1;
+  const meas = h.map(function (x) { return x.n; });
+  let lo = Math.min.apply(null, meas.concat([fit0, fit1])), hi = Math.max.apply(null, meas.concat([fit0, fit1]));
+  if (hi - lo < 2) { const mid = (hi + lo) / 2; lo = mid - 1; hi = mid + 1; }
+  const range = hi - lo;
+  const sign = function (v) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1); };
   const rangeText = T('lvi_trend_chart_range', '%1 °C → %2 °C')
     .replace('%1', lviFmt(h[0].n)).replace('%2', lviFmt(h[h.length - 1].n));
-  const rateText = T('lvi_trend_rate', '%1 °C per minute over the last %2 s')
-    .replace('%1', (perMin >= 0 ? '+' : '−') + Math.abs(perMin).toFixed(1))
-    .replace('%2', String(Math.round((t1 - t0) / 1000)));
+  const rateText = T('lvi_trend_graph_rate', '%1 °C per minute on this chart · %2')
+    .replace('%1', sign(perMin)).replace('%2', lviTrendDur(t1 - t0));
   const summary = document.createElement('div'); summary.className = 'lvh-line';
   summary.textContent = rangeText + ' · ' + rateText; box.appendChild(summary);
   if (document.createElementNS) {
@@ -10898,10 +10920,23 @@ function lviTrendRender(box, key, color) {
     box.appendChild(svg);
   }
   const axis = document.createElement('div'); axis.className = 'lvt-axis';
-  [lviFmt(lo) + ' °C', logReportDur(Math.max(1, Math.round((t1 - t0) / 60000))), lviFmt(hi) + ' °C'].forEach(function (text) {
-    const s = document.createElement('span'); s.textContent = text; axis.appendChild(s);
+  [T('lvi_trend_axis_start', '−%1').replace('%1', lviTrendDur(t1 - t0)),
+   T('lvi_trend_axis_range', '%1–%2 °C').replace('%1', lviFmt(Math.min.apply(null, meas))).replace('%2', lviFmt(Math.max.apply(null, meas))),
+   T('lvi_trend_axis_now', 'now')].forEach(function (text) {
+    const sp = document.createElement('span'); sp.textContent = text; axis.appendChild(sp);
   });
-  box.appendChild(axis); box.hidden = false;
+  box.appendChild(axis);
+  const smartSignal = key === 'trend' && _selectedProfile === 'smart' && Number.isFinite(_smartTrendSlopePerMin);
+  if (smartSignal) {
+    const g = _smartTrendSlopePerMin;
+    const dir = function (v) { return v > 0.3 ? 1 : (v < -0.3 ? -1 : 0); };
+    if (dir(g) !== dir(perMin)) {
+      const note = document.createElement('div'); note.className = 'lvh-line lvt-note';
+      note.textContent = T('lvi_trend_disagree', 'The heading is the governor signal (%1 °C per minute): it is smoothed over a longer time and reacts later than this chart, so for a while the two can point different ways.').replace('%1', sign(g));
+      box.appendChild(note);
+    }
+  }
+  box.hidden = false;
 }
 function lviHistRender(box, key, color, extra) {
   box.textContent = '';
@@ -13054,6 +13089,26 @@ function cfgConsoleFitLater(card) {
     });
   });
 }
+/* A status pill earns its place in a console row only when it says something the control does
+ * not: the live kernel value under "Auto" (kyber, 1, 32), a read-back that differs, "after
+ * reboot", unavailable. A pill that repeats the selected segment, the menu value, the slider
+ * value or a switch's on/off is hidden (it stays in the DOM for the verify and kernel paths). */
+function cfgConsolePillNorm(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''); }
+function cfgConsoleDedupe(row) {
+  if (!row || !row.querySelector || !row.classList) return;
+  const badge = row.querySelector('.cfg-status-row > .cfg-status');
+  if (!badge || !badge.classList) return;
+  if (badge.classList.contains('na') || badge.classList.contains('bad')) { badge.classList.remove('asb-dup'); return; }
+  const on = row.querySelector('.cfg-seg button.on'), sel = row.querySelector('.cfg-sel-btn'),
+    val = row.querySelector('.cfg-range-val'), sw = row.querySelector('.cfg-switch');
+  const ctl = on ? on.textContent : sel ? sel.textContent : val ? val.textContent : '';
+  const b = cfgConsolePillNorm(badge.textContent), c = cfgConsolePillNorm(ctl);
+  const bn = String(badge.textContent || '').match(/-?\d+(?:[.,]\d+)?/), cn = String(ctl || '').match(/-?\d+(?:[.,]\d+)?/);
+  const dup = !!b && ((!!c && (b === c || c.indexOf(b) === 0 || b.indexOf(c) === 0)) ||
+    (!!bn && !!cn && bn[0] === cn[0] && /^-?\d+(?:[.,]\d+)?$/.test(String(badge.textContent).trim())) ||
+    (!!sw && !ctl && !badge.classList.contains('warn')));
+  badge.classList[dup ? 'add' : 'remove']('asb-dup');
+}
 function cfgRenderConsole(list, sectionItems, o) {
   const by = Object.create(null);
   sectionItems.forEach(function (it) { by[it.key] = it; });
@@ -13080,10 +13135,12 @@ function cfgRenderConsole(list, sectionItems, o) {
     const gp = cfgConsoleGroupPanel(card, g[0] ? T(g[0], g[1]) : '', items, function (panel, it) {
       cfgRenderRow(panel, it, false);
       cfgConsoleWideControl(panel.lastChild);
+      cfgConsoleDedupe(panel.lastChild);
       if (typeof o.decorate === 'function') {
         o.decorate(panel.lastChild, it);
         const r = panel.lastChild;
         if (r && r.classList && r.classList.contains && r.classList.contains('kernel-absent-hidden')) gone[it.key] = true;
+        cfgConsoleDedupe(r);
       }
       if (!o.strip) return;
       const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
@@ -14878,6 +14935,17 @@ function cfgStatus(it, cur) {
     if (_ltpoState === 'unsupported') return { cls:'neutral', text:T('st_unavail', 'not supported') };
     return { cls:'neutral', text:T('st_off', 'Disabled') };
   }
+  /* Profile-scoped tweaks say when the selected profile leaves them idle: "Performance
+   * profile" does nothing while Smart is selected, the Battery-only switch does nothing outside
+   * Battery, and in Battery with games kept out of GAMING the game-only cooling never starts. */
+  if (it.key === 'cpu_vendor_unlock' && cur === 'perf' && _selectedProfile !== 'performance')
+    return { cls:'warn', text:T('st_only_perf', 'idle: works only in Performance') };
+  if (it.key === 'cpu_vendor_unlock' && cur === 'always' && _selectedProfile === 'stock')
+    return { cls:'warn', text:T('st_off_in_stock', 'idle in Stock') };
+  if (it.key === 'bat_suppress_gaming' && cur === '1' && _selectedProfile !== 'battery')
+    return { cls:'warn', text:T('st_only_battery', 'idle: works only in Battery') };
+  if (it.key === 'cool_gaming' && cur === '1' && _selectedProfile === 'battery' && _cfgVals.bat_suppress_gaming !== '0')
+    return { cls:'warn', text:T('st_cool_gaming_battery', 'idle in Battery: games stay out of game mode') };
   const _packageBadge = packageTweakBadge(it.key, cur);
   if (_packageBadge) return _packageBadge;
   // mmfeed_off: same badge contract as ltpo_force - active / pending-boot / absent.
@@ -15297,6 +15365,7 @@ function cfgVerifyPaint(key, badge) {
     badge.textContent = badge.textContent + ' \u00b7 ' + T('t_not_applied', 'not applied');
     badge.title = T('t_not_applied_hint',
       'The setting is saved but the device has not taken it. Reboot, then reinstall the module.');
+    if (badge.closest && typeof cfgConsoleDedupe === 'function') cfgConsoleDedupe(badge.closest('.cfg-row'));
   }
 }
 
@@ -15951,8 +16020,43 @@ function cfgRenderSearch(list) {
   tools.insertBefore(wrap, tools.firstChild);
 }
 
+/* Cards that are not ordinary tweaks (the Infirmary tools) are found by search too: a user
+ * looking for the Activity/Service manager typed "Activity" and got "Nothing matches". A hit
+ * is a jump row that opens the card's category and scrolls to it. */
+const CFG_SEARCH_CARDS = [
+  { id:'componentManagerCard', group:'infirmary', title:['cmp_card_title', 'Activities & Services'], words:'activity activities service services component компонент активност сервис' },
+  { id:'bfxCard', group:'infirmary', title:['bfx_title', 'Battery Fix'], words:'battery fix батаре' },
+  { id:'soterCard', group:'infirmary', title:['soter_title', 'SOTER Repair'], words:'soter fingerprint отпечат' },
+  { id:'junkCard', group:'infirmary', title:['junk_title', 'Junk Cleanup'], words:'junk cache clean мусор шлак очист' }
+];
+function cfgSearchCardHits() {
+  const q = _cfgSearch.toLowerCase();
+  if (!q) return [];
+  return CFG_SEARCH_CARDS.filter(function (c) {
+    return String(T(c.title[0], c.title[1])).toLowerCase().indexOf(q) >= 0 || c.words.indexOf(q) >= 0;
+  });
+}
+function cfgOpenCardFromSearch(c) {
+  _cfgSearch = '';
+  const inp = document.querySelector('.cfg-search'); if (inp) inp.value = '';
+  cfgShowGroup(c.group);
+  let tries = 0;
+  (function seek() {
+    const el = _el(c.id);
+    if (el && el.scrollIntoView) { el.scrollIntoView({ block:'center', behavior:'smooth' }); return; }
+    if (++tries < 30) setTimeout(seek, 100);
+  })();
+}
 function cfgRenderMatches(list) {
   const hits = cfgSearchMatches();
+  cfgSearchCardHits().forEach(function (c) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'cfg-search-card';
+    b.textContent = T(c.title[0], c.title[1]) + ' \u2192 ' + T('grp_infirmary', 'Infirmary');
+    b.onclick = function () { uiSound('nav'); cfgOpenCardFromSearch(c); };
+    list.appendChild(b);
+  });
+  if (!hits.length && cfgSearchCardHits().length) return;
   if (!hits.length) {
     const empty = document.createElement('div');
     empty.className = 'cfg-search-empty';

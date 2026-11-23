@@ -4287,7 +4287,6 @@
   "pd_stage_readback": "Relecture",
   "lv_scr_on_avg": "Écran allumé · moyenne du profil",
   "lv_drain_cmp_avg": "Par profil – moyenne de chacun",
-  "lv_drain_note_src": "Écran allumé : la consommation du profil actif dans ce démarrage (depuis le démarrage ou depuis le choix du profil) dès qu’elle couvre au moins autant de temps écran allumé que sa dernière session ; sinon la dernière session complète (deux pas de niveau de batterie, ou 30 min avec un), sinon la moyenne du profil ; le titre indique laquelle. Le temps de charge est exclu. Le tableau ci-dessous donne la moyenne de chaque profil, la ligne du profil actif peut donc différer du chiffre ci-dessus. « Maintenant » n’est que la dernière période continue. Écran éteint privilégie la dernière nuit confirmée. Tous les chiffres viennent du niveau de batterie, pas du capteur de courant.",
   "lv_scr_on_switch": "Écran allumé · depuis le changement de profil",
   "lv_drain_on_switch_tip": "Consommation selon le niveau de batterie, écran allumé, depuis la sélection de ce profil dans ce démarrage : %s min. La charge et les réinitialisations du niveau sont exclues.",
   "dsp_console_title": "Réglages du moteur",
@@ -4427,5 +4426,16 @@
   "log_menu_log_sub_on": "Enregistrement en cours · deux appuis pour arrêter",
   "log_menu_log_sub_stop": "Le rapport est en cours d’écriture",
   "log_menu_report_sub": "Lire ici un journal infini enregistré",
-  "log_menu_send_sub": "Regroupe asbdiag et le journal infini, ouvre Telegram"
+  "log_menu_send_sub": "Regroupe asbdiag et le journal infini, ouvre Telegram",
+  "lvi_trend_wait_window": "Mesure en cours : le graphique apparaît après 30 s de relevés (encore environ %1 s).",
+  "lvi_trend_graph_rate": "%1 °C par minute sur ce graphique · %2",
+  "lvi_trend_disagree": "Le titre est le signal du governor (%1 °C par minute) : lissé sur une durée plus longue, il réagit après ce graphique, donc les deux peuvent un moment indiquer des sens différents.",
+  "lvi_trend_axis_start": "−%1",
+  "lvi_trend_axis_range": "%1–%2 °C",
+  "lvi_trend_axis_now": "maintenant",
+  "lvi_trend_sec": "%1 s",
+  "st_only_perf": "inactif : seulement en Performance",
+  "st_off_in_stock": "inactif en Stock",
+  "st_only_battery": "inactif : seulement en Économie",
+  "st_cool_gaming_battery": "inactif en Économie : les jeux restent hors mode jeu"
 }

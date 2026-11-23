@@ -4287,7 +4287,6 @@
   "pd_stage_readback": "Baca ulang",
   "lv_scr_on_avg": "Layar nyala · rata-rata profil",
   "lv_drain_cmp_avg": "Per profil – rata-rata masing-masing",
-  "lv_drain_note_src": "Layar menyala: konsumsi profil aktif pada boot ini (sejak boot atau sejak profil dipilih) setelah mencakup waktu layar menyala setidaknya sebanyak sesi terakhirnya; jika tidak, sesi lengkap terakhir (dua langkah level baterai, atau 30 mnt dengan satu), jika tidak, rata-rata profil; judul menyebut yang mana. Waktu pengisian tidak dihitung. Tabel di bawah berisi rata-rata tiap profil, jadi baris profil aktif bisa berbeda dari angka di atas. «Sekarang» hanya rentang kontinu terakhir. Layar mati mengutamakan malam terkonfirmasi terakhir. Semua angka berasal dari level baterai, bukan sensor arus.",
   "lv_scr_on_switch": "Layar menyala · sejak ganti profil",
   "lv_drain_on_switch_tip": "Konsumsi berdasarkan level baterai dengan layar menyala sejak profil ini dipilih pada boot ini: %s mnt. Pengisian dan reset level dikecualikan.",
   "dsp_console_title": "Kontrol mesin",
@@ -4427,5 +4426,16 @@
   "log_menu_log_sub_on": "Sedang merekam · dua ketukan untuk berhenti",
   "log_menu_log_sub_stop": "Laporan sedang ditulis",
   "log_menu_report_sub": "Baca log tanpa batas yang tersimpan di sini",
-  "log_menu_send_sub": "Mengemas asbdiag dan log tanpa batas, membuka Telegram"
+  "log_menu_send_sub": "Mengemas asbdiag dan log tanpa batas, membuka Telegram",
+  "lvi_trend_wait_window": "Mengukur: grafik muncul setelah 30 dtk pengukuran (sekitar %1 dtk lagi).",
+  "lvi_trend_graph_rate": "%1 °C per menit pada grafik · %2",
+  "lvi_trend_disagree": "Judul adalah sinyal governor (%1 °C per menit): dihaluskan dalam waktu lebih lama dan bereaksi lebih lambat dari grafik ini, jadi untuk sementara keduanya bisa menunjukkan arah berbeda.",
+  "lvi_trend_axis_start": "−%1",
+  "lvi_trend_axis_range": "%1–%2 °C",
+  "lvi_trend_axis_now": "sekarang",
+  "lvi_trend_sec": "%1 dtk",
+  "st_only_perf": "tidak aktif: hanya di Performa",
+  "st_off_in_stock": "tidak aktif di Stok",
+  "st_only_battery": "tidak aktif: hanya di Hemat",
+  "st_cool_gaming_battery": "tidak aktif di Hemat: game tanpa mode game"
 }

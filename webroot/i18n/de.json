@@ -4287,7 +4287,6 @@
   "pd_stage_readback": "Rücklesen",
   "lv_scr_on_avg": "Bildschirm an · Profildurchschnitt",
   "lv_drain_cmp_avg": "Nach Profil – Durchschnitt jedes Profils",
-  "lv_drain_note_src": "Bildschirm an: der Verbrauch des aktiven Profils in diesem Start (seit dem Start oder seit der Profilwahl), sobald er mindestens so viel Bildschirmzeit abdeckt wie die letzte Sitzung; sonst die letzte vollständige Sitzung (zwei Prozentschritte, oder 30 Min mit einem), sonst der Profildurchschnitt; die Überschrift nennt, welcher. Ladezeit zählt nicht. Die Tabelle unten zeigt den Durchschnitt jedes Profils, daher kann die Zeile des aktiven Profils von der Zahl oben abweichen. „Jetzt“ ist nur der letzte durchgehende Abschnitt. Bildschirm aus bevorzugt die letzte bestätigte Nacht. Alle Werte stammen aus dem Akkustand, nicht aus dem Stromsensor.",
   "lv_scr_on_switch": "Bildschirm an · seit Profilwechsel",
   "lv_drain_on_switch_tip": "Akkustand-Verbrauch bei eingeschaltetem Bildschirm, seit dieses Profil in diesem Start gewählt wurde: %s Min. Laden und Akkustand-Resets sind ausgenommen.",
   "dsp_console_title": "Engine-Steuerung",
@@ -4427,5 +4426,16 @@
   "log_menu_log_sub_on": "Läuft gerade · zweimal tippen zum Stoppen",
   "log_menu_log_sub_stop": "Der Bericht wird geschrieben",
   "log_menu_report_sub": "Ein gespeichertes Endlos-Log hier lesen",
-  "log_menu_send_sub": "Packt asbdiag und das Endlos-Log, öffnet Telegram"
+  "log_menu_send_sub": "Packt asbdiag und das Endlos-Log, öffnet Telegram",
+  "lvi_trend_wait_window": "Messwerte werden gesammelt: das Diagramm erscheint nach 30 s Messung (noch etwa %1 s).",
+  "lvi_trend_graph_rate": "%1 °C pro Minute im Diagramm · %2",
+  "lvi_trend_disagree": "Die Überschrift ist das Governor-Signal (%1 °C pro Minute): es ist über längere Zeit geglättet und reagiert später als das Diagramm, daher können beide eine Weile in verschiedene Richtungen zeigen.",
+  "lvi_trend_axis_start": "−%1",
+  "lvi_trend_axis_range": "%1–%2 °C",
+  "lvi_trend_axis_now": "jetzt",
+  "lvi_trend_sec": "%1 s",
+  "st_only_perf": "inaktiv: nur im Profil Leistung",
+  "st_off_in_stock": "inaktiv im Profil Standard",
+  "st_only_battery": "inaktiv: nur im Profil Akku",
+  "st_cool_gaming_battery": "inaktiv im Akkuprofil: Spiele ohne Spielmodus"
 }

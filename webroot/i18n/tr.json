@@ -4287,7 +4287,6 @@
   "pd_stage_readback": "Geri okuma",
   "lv_scr_on_avg": "Ekran açık · profil ortalaması",
   "lv_drain_cmp_avg": "Profile göre – her birinin ortalaması",
-  "lv_drain_note_src": "Ekran açık: etkin profilin bu açılıştaki tüketimi (açılıştan ya da profil seçildiğinden beri), son oturumu kadar ekran açık süreyi kapsadığında; aksi halde son tamamlanan oturum (iki pil seviyesi adımı veya bir adımla 30 dk), aksi halde profil ortalaması; başlık hangisi olduğunu söyler. Şarj süresi sayılmaz. Aşağıdaki tablo her profilin ortalamasını gösterir, bu yüzden etkin profilin satırı yukarıdaki değerden farklı olabilir. «Şimdi» yalnızca son kesintisiz bölümdür. Ekran kapalı, son doğrulanmış geceyi tercih eder. Tüm değerler akım sensöründen değil, pil seviyesinden gelir.",
   "lv_scr_on_switch": "Ekran açık · profil değişiminden beri",
   "lv_drain_on_switch_tip": "Bu açılışta bu profil seçildiğinden beri ekran açıkken pil seviyesine göre tüketim: %s dk. Şarj ve seviye sıfırlamaları hariçtir.",
   "dsp_console_title": "Motor denetimleri",
@@ -4427,5 +4426,16 @@
   "log_menu_log_sub_on": "Kayıt sürüyor · durdurmak için iki kez dokunun",
   "log_menu_log_sub_stop": "Rapor yazılıyor",
   "log_menu_report_sub": "Kayıtlı sonsuz günlüğü burada okuyun",
-  "log_menu_send_sub": "asbdiag ve sonsuz günlüğü paketler, Telegram’ı açar"
+  "log_menu_send_sub": "asbdiag ve sonsuz günlüğü paketler, Telegram’ı açar",
+  "lvi_trend_wait_window": "Ölçülüyor: grafik 30 sn ölçümden sonra görünür (yaklaşık %1 sn kaldı).",
+  "lvi_trend_graph_rate": "Grafikte dakikada %1 °C · %2",
+  "lvi_trend_disagree": "Başlık governor sinyalidir (dakikada %1 °C): daha uzun sürede yumuşatılır ve bu grafikten sonra tepki verir; bu yüzden bir süre farklı yönler gösterebilirler.",
+  "lvi_trend_axis_start": "−%1",
+  "lvi_trend_axis_range": "%1–%2 °C",
+  "lvi_trend_axis_now": "şimdi",
+  "lvi_trend_sec": "%1 sn",
+  "st_only_perf": "etkin değil: yalnız Performans’ta",
+  "st_off_in_stock": "Stok’ta etkin değil",
+  "st_only_battery": "etkin değil: yalnız Tasarruf’ta",
+  "st_cool_gaming_battery": "Tasarruf’ta etkin değil: oyunlar oyun moduna girmez"
 }

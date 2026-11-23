@@ -1825,7 +1825,7 @@ async function back() { if (!hist.canGoBack()) { exited++; return; } hist.go(-1)
   _el('liveEtaOn').textContent = '8h 56m'; _el('liveEtaOff').textContent = '> 72h';
   liveDrainPaint();
   const blocks = _el('liveDrainBody').children;
-  chk(blocks.length === 3, 'sheet: two figures and a note, have ' + blocks.length);
+  chk(blocks.length === 2, 'sheet: two figures (the long source note was removed), have ' + blocks.length);
   const nodeText = function (n) { return n.textContent + (n.children || []).map(nodeText).join(' '); };
   const txt = function (b) { return b.children[1].children.map(function (c) { return c.className + '=' + nodeText(c); }).join(' | '); };
   const on = txt(blocks[0]), off = txt(blocks[1]);
@@ -13852,11 +13852,10 @@ assert '--glass-surface-strong:rgba(10,15,13,.90);' in h
 assert '--glass-surface-strong:rgba(250,252,251,.90);' in h
 for p in sorted((r/'webroot/i18n').glob('*.json')):
     d = json.loads(p.read_text(encoding='utf-8'))
-    for k in ('lvp_system_band','lvi_trend_chart_wait','lvi_trend_chart_range'):
+    for k in ('lvp_system_band','lvi_trend_wait_window','lvi_trend_chart_range','lvi_trend_graph_rate','lvi_trend_disagree','lvi_trend_axis_now','lvi_trend_sec'):
         assert d.get(k) and '{band}' in d[k] if k == 'lvp_system_band' else d.get(k), (p.name,k)
 en = json.loads((r/'webroot/i18n/en.json').read_text(encoding='utf-8'))
 assert en['lvp_system_band'] == 'System: {band}'
-assert en['lvi_trend_chart_wait'] == 'The diagram appears after two temperature readings in the same window.'
 assert en['lvi_trend_chart_range'] == '%1 °C → %2 °C'
 PY
 command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI dev66 navigation/trend/material runtime: no node'; exit 0; }
@@ -13894,21 +13893,23 @@ const find=(e,cls)=>e.className===cls?e:(e.children||[]).map(c=>find(c,cls)).fin
  chk(find(b,'lvt-line').attrs.points.split(' ').length===3,'Smart did not chart CPU history');
  chk(find(b,'lvt-overall').attrs.x2==='296.0','overall regression line missing');
  chk(b.textContent.includes('30 °C → 32 °C')&&b.textContent.includes('+2.0'),'Smart summary: '+b.textContent);
- /* The badge and dashed line share the native control slope even when the shorter visible
-  * WebUI series moves the other way. SVG Y grows downwards: warming means y2 < y1. */
+ /* V66-test22: the chart, its dashed line and the rate describe one measured window; the
+  * governor signal (the heading) is printed apart, with a note when the two disagree. SVG Y
+  * grows downwards: a cooling chart has y2 > y1 whatever the governor says. */
  _lviHist['smart:cpu']=[{t:1000,n:42},{t:31000,n:40},{t:61000,n:38}];
  _smartTrendSlopePerMin=2.5;b=mk('div');lviTrendRender(b,'trend','green');
  let overall=find(b,'lvt-overall').attrs;
- chk(Number(overall.y2)<Number(overall.y1)&&b.textContent.includes('+2.5'),'warming badge would still have a cooling dashed line');
+ chk(Number(overall.y2)>Number(overall.y1)&&b.textContent.includes('−4.0')&&b.textContent.includes('+2.5')&&find(b,'lvh-line lvt-note'),'a cooling chart must keep its own falling line and explain the warming governor signal: '+b.textContent);
  _smartTrendSlopePerMin=-2.5;b=mk('div');lviTrendRender(b,'trend','green');
- overall=find(b,'lvt-overall').attrs;
- chk(Number(overall.y2)>Number(overall.y1)&&b.textContent.includes('−2.5'),'cooling badge would still have a warming dashed line');
+ chk(!find(b,'lvh-line lvt-note'),'agreeing signals still got a note');
  _smartTrendSlopePerMin=null;
  b=mk('div');lviTrendRender(b,'strend','amber');
  chk(b.textContent.includes('40 °C → 41 °C'),'Stock samples not used: '+b.textContent);
  chk(find(b,'lvt-chart').attrs.role==='img','chart has no accessible name');
  const empty=mk('div');lviTrendData=()=>[{t:1000,n:35}];lviTrendRender(empty,'trend','green');
- chk(!find(empty,'lvt-chart')&&empty.textContent.includes('after two temperature readings'),'one point drew a chart');
+ chk(!find(empty,'lvt-chart')&&empty.textContent.includes('after 30 s of measurements'),'one point drew a chart');
+ const short=mk('div');lviTrendData=()=>[{t:1000,n:57},{t:4000,n:55},{t:7000,n:54}];lviTrendRender(short,'trend','green');
+ chk(!find(short,'lvt-chart'),'six seconds of readings were stretched over a chart');
 }
 /* Real categorical history: a lightweight proportional colour strip and complete legend. */
 {
@@ -16349,7 +16350,7 @@ fold=body('function liveDrainExplanation(text, bodyClass) {')
 assert "document.createElement('details')" not in fold and "document.createElement('summary')" not in fold
 assert 'body.textContent = text;' in fold
 paint=body('function liveDrainPaint() {')
-assert "liveDrainExplanation(T('lv_drain_note_src'" in paint
+assert "lv_drain_note_src" not in paint, 'the long drain-source footnote was removed on the owner request'
 assert 'data-drain-fold' not in paint and 'openFolds' not in paint
 # Existing startup/intro work primes hidden static DOM; no new shell, worker or polling owner.
 load=body('function cfgLoad(force) {')
@@ -16790,7 +16791,7 @@ assert 'job.prio > 0 ? ASB_LATER_IDLE_MS : ASB_LATER_QUIET_MS' in pump and 'cons
 assert 'asbTouchReadDelay(ASB_POLL_TOUCH_GAP_MS)' in fn('function liveMonitorSchedule(delay) {')
 assert 'asbTouchReadDelay(ASB_LATER_IDLE_MS)' in fn('function liveBackgroundSchedule(delay) {')
 paint = fn('function liveDrainPaint() {')
-assert "T('lv_scr_on_avg', 'Screen on · profile average')" in paint and "T('lv_drain_note_src'" in paint
+assert "T('lv_scr_on_avg', 'Screen on · profile average')" in paint
 assert "T('lv_drain_cmp_avg', 'By profile - average of each')" in h
 assert "_lvDrain.on = lvOnKind(bootOn);" in h and "onEl.title = lvOnTip(bootOn);" in h
 assert "const onTip = on ? lvOnTip(on) : '';" in h
@@ -16803,14 +16804,13 @@ assert re.search(r'rgba\(75,243,200,\.(\d+)\)', scan) and max(float('0.' + x) fo
 L = 'en ru uk de fr es it pt tr id zh ar hy'.split()
 D = {l: json.loads((root / f'webroot/i18n/{l}.json').read_text(encoding='utf-8')) for l in L}
 keys = ['lv_drain_on_avg_tip', 'pd_loading_title', 'pd_stage_intent', 'pd_stage_owner', 'pd_stage_readback',
-        'pd_epoch_unavailable', 'lv_scr_on_avg', 'lv_drain_cmp_avg', 'lv_drain_note_src']
+        'pd_epoch_unavailable', 'lv_scr_on_avg', 'lv_drain_cmp_avg']
 for l in L:
     for key in keys:
         assert D[l].get(key), (l, key)
         if l != 'en': assert D[l][key] != D['en'][key], (l, key)
     assert '%s' in D[l]['lv_drain_on_avg_tip'], l
-    assert 'с момента загрузки' not in D[l]['lv_drain_note_src'] or 'иначе' in D[l]['lv_drain_note_src'], l
-for key in ('lv_drain_on_avg_tip', 'pd_epoch_unavailable', 'lv_scr_on_avg', 'lv_drain_cmp_avg', 'lv_drain_note_src'):
+for key in ('lv_drain_on_avg_tip', 'pd_epoch_unavailable', 'lv_scr_on_avg', 'lv_drain_cmp_avg'):
     m = re.search(r"T\('" + key + r"', '((?:[^'\\]|\\.)*)'\)", h)
     assert m and m.group(1) == D['en'][key], 'fallback differs: ' + key
 for key, pair in (('pd_loading_title', "titleKey:'pd_loading_title', title:'"), ('pd_loading', "subKey:'pd_loading', sub:'")):
@@ -16891,7 +16891,7 @@ for loc, d in D.items():
         assert d.get(k), (loc, k)
         if loc != 'en': assert d[k] != D['en'][k], ('untranslated', loc, k)
     assert d['lv_drain_on_switch_tip'].count('%s') == 1, loc
-for k in keys[:5] + ('lv_drain_note_src',):
+for k in keys[:5]:
     m = re.search(r"T\('" + k + r"', '((?:[^'\\]|\\.)*)'\)", h)
     assert m and m.group(1) == D['en'][k], 'fallback differs: ' + k
 for k in keys[5:]:

@@ -4287,7 +4287,6 @@
   "pd_stage_readback": "Releitura",
   "lv_scr_on_avg": "Tela ligada · média do perfil",
   "lv_drain_cmp_avg": "Por perfil – média de cada um",
-  "lv_drain_note_src": "Ecrã ligado: o consumo do perfil ativo neste arranque (desde o arranque ou desde a escolha do perfil) quando cobre pelo menos tanto tempo de ecrã ligado como a sua última sessão; senão a última sessão completa (dois passos do nível da bateria, ou 30 min com um), senão a média do perfil; o título indica qual. O tempo de carregamento fica de fora. A tabela abaixo mostra a média de cada perfil, por isso a linha do perfil ativo pode diferir do valor acima. «Agora» é só o último troço contínuo. Ecrã desligado prefere a última noite confirmada. Todos os valores vêm do nível da bateria, não do sensor de corrente.",
   "lv_scr_on_switch": "Ecrã ligado · desde a troca de perfil",
   "lv_drain_on_switch_tip": "Consumo pelo nível da bateria com o ecrã ligado desde que este perfil foi escolhido neste arranque: %s min. Carregamento e reposições do nível excluídos.",
   "dsp_console_title": "Controlos do motor",
@@ -4427,5 +4426,16 @@
   "log_menu_log_sub_on": "A gravar · dois toques para parar",
   "log_menu_log_sub_stop": "O relatório está a ser escrito",
   "log_menu_report_sub": "Ler aqui um log infinito guardado",
-  "log_menu_send_sub": "Junta o asbdiag e o log infinito, abre o Telegram"
+  "log_menu_send_sub": "Junta o asbdiag e o log infinito, abre o Telegram",
+  "lvi_trend_wait_window": "A medir: o gráfico aparece após 30 s de leituras (faltam cerca de %1 s).",
+  "lvi_trend_graph_rate": "%1 °C por minuto neste gráfico · %2",
+  "lvi_trend_disagree": "O título é o sinal do governor (%1 °C por minuto): é suavizado durante mais tempo e reage depois deste gráfico, por isso durante algum tempo podem apontar sentidos diferentes.",
+  "lvi_trend_axis_start": "−%1",
+  "lvi_trend_axis_range": "%1–%2 °C",
+  "lvi_trend_axis_now": "agora",
+  "lvi_trend_sec": "%1 s",
+  "st_only_perf": "inativo: só em Desempenho",
+  "st_off_in_stock": "inativo em Stock",
+  "st_only_battery": "inativo: só em Poupança",
+  "st_cool_gaming_battery": "inativo em Poupança: os jogos ficam sem modo de jogo"
 }

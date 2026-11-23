@@ -999,7 +999,7 @@ bundle_check() {
 
 bundle_am() {
   _ba_o="$(am start "$@" 2>&1)" || return 1
-  case "$_ba_o" in *Error*|*error:*|*'unable to resolve'*|*'does not exist'*) return 1 ;; esac
+  case "$_ba_o" in *Error*|*error:*|*'unable to resolve'*|*'does not exist'*|*Security*|*denied*) return 1 ;; esac
   return 0
 }
 
@@ -1050,6 +1050,17 @@ bundle_share() {
     sleep 1
   done
   [ -n "$_bid" ] && echo "media_id=$_bid"
+  case "$_bp" in
+    /storage/emulated/0/*)
+      _bdoc="$(printf '%s' "primary:${_bp#/storage/emulated/0/}" | sed 's/%/%25/g; s/:/%3A/g; s#/#%2F#g; s/ /%20/g')"
+      if bundle_am -a android.intent.action.SEND -d "content://com.android.externalstorage.documents/document/$_bdoc" -t application/gzip \
+           --eu android.intent.extra.STREAM "content://com.android.externalstorage.documents/document/$_bdoc" --grant-read-uri-permission -f 0x10000001; then
+        echo 'share_uri=document'
+        echo 'opened=share'
+        return 0
+      fi
+      ;;
+  esac
   if [ -n "$_bid" ] && bundle_am -a android.intent.action.SEND -d "content://media/external/file/$_bid" -t application/gzip \
        --eu android.intent.extra.STREAM "content://media/external/file/$_bid" --grant-read-uri-permission -f 0x10000001; then
     echo 'opened=share'

@@ -4180,7 +4180,6 @@
   "pd_stage_readback": "Readback",
   "lv_scr_on_avg": "Screen on · profile average",
   "lv_drain_cmp_avg": "By profile - average of each",
-  "lv_drain_note_src": "Screen on: the active profile’s drain in this boot (since boot, or since the profile was selected) once it covers at least as much screen-on time as its latest session, otherwise the latest complete session (two battery-level steps, or 30 min with one), otherwise the profile average; the heading names which one. Charging time is left out. The table below holds each profile’s average, so the active profile’s row can differ from the figure above. Right now is only the latest continuous stretch. Screen off prefers the latest confirmed night. All figures come from the battery level, not from the current sensor.",
   "lv_scr_on_switch": "Screen on · since profile switch",
   "lv_drain_on_switch_tip": "Battery-level drain with the screen on since this profile was selected in this boot: %s min. Charging and battery-level resets are excluded.",
   "dsp_console_title": "Engine controls",
@@ -4320,5 +4319,16 @@
   "log_menu_log_sub_on": "Recording now · two taps stop it",
   "log_menu_log_sub_stop": "The report is being written",
   "log_menu_report_sub": "Read a saved infinite log here",
-  "log_menu_send_sub": "Packs asbdiag and the infinite log, opens Telegram"
+  "log_menu_send_sub": "Packs asbdiag and the infinite log, opens Telegram",
+  "lvi_trend_wait_window": "Collecting readings: the chart appears after 30 s of measurements (about %1 s to go).",
+  "lvi_trend_graph_rate": "%1 °C per minute on this chart · %2",
+  "lvi_trend_disagree": "The heading is the governor signal (%1 °C per minute): it is smoothed over a longer time and reacts later than this chart, so for a while the two can point different ways.",
+  "lvi_trend_axis_start": "−%1",
+  "lvi_trend_axis_range": "%1–%2 °C",
+  "lvi_trend_axis_now": "now",
+  "lvi_trend_sec": "%1 s",
+  "st_only_perf": "idle: works only in Performance",
+  "st_off_in_stock": "idle in Stock",
+  "st_only_battery": "idle: works only in Battery",
+  "st_cool_gaming_battery": "idle in Battery: games stay out of game mode"
 }

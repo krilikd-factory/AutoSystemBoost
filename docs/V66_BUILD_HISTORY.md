@@ -5,6 +5,51 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test22 - kernel values next to SMART, no duplicate pills, profile-scoped tweaks say when idle, an honest Trend sheet
+
+Input: the owner's screenshots of test21 (the Kernel consoles showed SMART but no kyber, 1 or 0
+next to it; the Trend sheet said "warming" over a falling or flat line, "57 °C -> 54 °C · +2.6 °C
+per minute over the last 6 s" under a "1 min" axis).
+
+- **Console pills:** an older rule still hid every status pill that was not a warning, so the
+  live kernel values (kyber, 1, 0, 32) stayed hidden although the row decorated them. It is gone:
+  the applied value now stands next to SMART in every console row.
+- **Trend sheet:** the chart, its dashed line and the rate under the heading now describe one
+  measured window (least squares over the plotted readings); the governor's control signal,
+  which is what the heading and the tile show, is smoothed over a longer time and is named
+  apart, with a short note when the two point different ways. A window under 30 s is not
+  drawn (three readings in six seconds were stretched across a "1 min" axis), a flat series
+  gets a 2 °C scale instead of filling the chart with a 0.1 °C wiggle, and the axis reads
+  "-2 min · 34-44 °C · now" instead of min/max under the ends of the time axis.
+- **Send logs to Bugs, third attempt:** two testers still got "Unsupported attachment" on test21
+  while sending the same archive by hand from the system file picker worked. The share now hands
+  over the archive the way that picker does - a storage-documents URI
+  (content://com.android.externalstorage.documents/document/primary%3ADownload%2F...) with a
+  read grant - and falls back to the media-store URI only when that start is refused.
+- **Monitor:** the long footnote under the battery drain figures is removed.
+- **Profile-scoped tweaks say when they are idle** (a tester on Smart asked whether "Vendor CPU
+  ceiling: Performance profile" works there and whether it fits Cool Gaming): the vendor ceiling
+  set to "Performance profile" reads "idle: works only in Performance" under any other profile,
+  "Always" reads "idle in Stock" in Stock, "No game mode on Battery" reads "idle: works only in
+  Battery" elsewhere, and Cool Gaming reads "idle in Battery" when Battery keeps games out of
+  game mode (the game-only cooling never starts there). Lifting the vendor ceiling and Cool
+  Gaming do not conflict: ASB's own thermal limits, Cool Gaming included, keep working above a
+  lifted vendor ceiling; in games Cool Gaming simply starts cooling from about 40 C.
+- **Search finds the Infirmary tools:** "Activity", "Service", "SOTER", "junk" and the card names
+  now give a jump row that opens the Infirmary and scrolls to the card (the Activity/Service
+  manager lives in Infirmary -> Battery and search said "Nothing matches").
+- **Pills say only what the control does not:** a status pill that repeats the selected segment
+  ("Performance profile" under the same segment), the menu value, the slider value or a
+  switch's on/off is hidden; the live kernel value under "Auto" (kyber, 1, 32), a read-back that
+  differs ("· not applied"), "after reboot", "unavailable" and the firmware notes stay. The
+  check runs after the kernel decoration and again when the device read-back arrives.
+- **Option lists:** one flat surface instead of the glass wash, which drew a diagonal two-tone
+  band behind the items, and inset rounded items with the current one tinted in the
+  category colour.
+- **Tests:** the Trend runtime checks a cooling chart against a warming governor signal, the
+  note, and that six seconds of readings draw no chart.
+
+
 ## V66-test21 - what is applied is shown again, a disclosure caret that stays put, games by any capitalisation
 
 Input: the owner's screenshots of test20 (no live value next to the kernel controls, a caret
