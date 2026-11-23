@@ -2495,6 +2495,17 @@ int main(void) {
     for (int i = 0; i < 6; i++) any |= (fsm_desired_base(&m) == ASB_STATE_GAMING);
     CHECK(!any, "Battery with suppress_gaming latched GAMING");
 
+    g_asb_cfg.bat_suppress_gaming = 0;
+    CHECK(asb_smart_pkg_no_gpu_latch("com.heytap.market") && asb_smart_pkg_no_gpu_latch("com.android.vending") &&
+          asb_smart_pkg_no_gpu_latch("com.rifsxd.ksunext") && !asb_smart_pkg_no_gpu_latch("com.miHoYo.GenshinImpact") &&
+          !asb_smart_pkg_no_gpu_latch("com.heytap.marketing"), "the app-store and root-UI GPU latch list is wrong");
+    profile(PROFILE_SMART);
+    g_gpu_bound_need = ASB_GPU_BOUND_TICKS; g_gpu_bound_streak = 0;
+    m = scene(97); m.misc.app_no_gpu_latch = asb_smart_pkg_no_gpu_latch("com.heytap.market");
+    any = 0;
+    for (int i = 0; i < 6; i++) any |= (fsm_desired_base(&m) == ASB_STATE_GAMING);
+    CHECK(!any, "an app store latched GAMING");
+
     if (bad) return 1;
     printf("ok\n");
     return 0;

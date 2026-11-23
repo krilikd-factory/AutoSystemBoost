@@ -8991,7 +8991,7 @@ int main(int argc, char **argv) {
      * GPU next to a busy CPU reads as GAMING. */
     asb_fg_classify_tick(&metrics, &fsm);
     metrics.misc.app_hint = g_smart_rt.app_hint;
-            metrics.misc.app_no_gpu_latch = asb_smart_pkg_is_root_ui(g_smart_rt.app_pkg_cached);
+            metrics.misc.app_no_gpu_latch = asb_smart_pkg_no_gpu_latch(g_smart_rt.app_pkg_cached);
     fsm_update(&fsm, &metrics);
 
     /* detect initial user ID */
@@ -11022,7 +11022,7 @@ int main(int argc, char **argv) {
              * and any busy GPU next to a busy CPU reads as GAMING. */
             asb_fg_classify_tick(&metrics, &fsm);
             metrics.misc.app_hint = g_smart_rt.app_hint;
-            metrics.misc.app_no_gpu_latch = asb_smart_pkg_is_root_ui(g_smart_rt.app_pkg_cached);
+            metrics.misc.app_no_gpu_latch = asb_smart_pkg_no_gpu_latch(g_smart_rt.app_pkg_cached);
             /* Tell the writer whether anyone is looking, before it writes anything. */
             fsm_screen_is_on = metrics.misc.screen_on;
             /* Unlock lift (fix150): decided before the touch kick is answered below, because

@@ -308,6 +308,25 @@ static int asb_smart_pkg_is_root_ui(const char *pkg) {
     return 0;
 }
 
+/* App stores draw animated banners and install progress at a low GPU step; an OnePlus 15
+ * capture latched GAMING once in com.heytap.market. An app store is never a game. */
+static int asb_smart_pkg_is_app_store(const char *pkg) {
+    static const char *const S[] = {
+        "com.heytap.market", "com.oppo.market", "com.android.vending", "com.xiaomi.market",
+        "com.xiaomi.mipicks", "com.huawei.appmarket", "com.sec.android.app.samsungapps",
+        "com.bbk.appstore", "com.aurora.store", "org.fdroid.fdroid", "com.apkpure.aegon",
+        NULL
+    };
+    if (!pkg || !pkg[0]) return 0;
+    for (int i = 0; S[i]; i++)
+        if (strcmp(pkg, S[i]) == 0) return 1;
+    return 0;
+}
+
+static int asb_smart_pkg_no_gpu_latch(const char *pkg) {
+    return asb_smart_pkg_is_root_ui(pkg) || asb_smart_pkg_is_app_store(pkg);
+}
+
 /* A deliberately narrow, affirmative media list for the opt-in Smart Media Guard.
  * Unknown packages are NOT treated as media: reducing a new game's GPU headroom from a
  * generic name would violate the guard's safety contract. This only identifies apps whose
