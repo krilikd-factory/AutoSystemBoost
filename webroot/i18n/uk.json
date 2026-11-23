@@ -4413,5 +4413,6 @@
   "con_grp_shape": "Кути та навігація",
   "con_grp_oem": "Перемикачі OEM",
   "con_grp_processes": "Процеси",
-  "con_grp_logs": "Журнали"
+  "con_grp_logs": "Журнали",
+  "dbg_send_shared": "Архів прикріплено: виберіть Telegram, потім AutoSystemBoost і тему Bugs"
 }

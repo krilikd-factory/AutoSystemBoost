@@ -4413,5 +4413,6 @@
   "con_grp_shape": "Coins et navigation",
   "con_grp_oem": "Interrupteurs OEM",
   "con_grp_processes": "Processus système",
-  "con_grp_logs": "Journaux"
+  "con_grp_logs": "Journaux",
+  "dbg_send_shared": "Archive jointe : choisissez Telegram, puis AutoSystemBoost et le sujet Bugs"
 }

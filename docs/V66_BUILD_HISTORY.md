@@ -18,6 +18,17 @@ Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playin
   own `BluetoothServiceManager` before asking for the adapter, and a missing adapter carries its
   cause (`no_adapter:<why>`) into the state file and asbdiag.
 
+### Logs from users: the archive reaches Telegram
+- A tester pressed "Send logs to Bugs" and saw only a browser, no archive. The archive was
+  written as root, so the media index that Telegram's file picker reads did not know it, and
+  the t.me link opened in a browser on his phone. Now the archive is indexed first and the
+  share sheet opens with it already attached; without a media entry the Bugs topic opens in
+  the Telegram app (tg://), and the browser link is the last resort.
+- An infinite-log report still being written (`*.part`) is no longer packed.
+- First logs collected by the bot (two testers, Ace 6 on a WildKernel 6.6 and CPH2691, both on
+  test18): asbdiag FAIL=0 on both; nothing in the infinite logs points at ASB (app crashes
+  are MediaProvider and a third-party root service).
+
 ### WebUI: sections as consoles
 - Every settings section with more than one tweak is now one console in the DSP engine's
   language: Playback & Bluetooth (output and volume, Bluetooth link, codec quality); Battery -

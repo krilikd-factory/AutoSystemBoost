@@ -4413,5 +4413,6 @@
   "con_grp_shape": "Köşeler ve gezinme",
   "con_grp_oem": "OEM anahtarları",
   "con_grp_processes": "İşlemler",
-  "con_grp_logs": "Günlükler"
+  "con_grp_logs": "Günlükler",
+  "dbg_send_shared": "Arşiv eklendi: Telegram’ı, ardından AutoSystemBoost ve Bugs konusunu seçin"
 }

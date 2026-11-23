@@ -4413,5 +4413,6 @@
   "con_grp_shape": "Sudut & navigasi",
   "con_grp_oem": "Sakelar OEM",
   "con_grp_processes": "Proses",
-  "con_grp_logs": "Log sistem"
+  "con_grp_logs": "Log sistem",
+  "dbg_send_shared": "Arsip terlampir: pilih Telegram, lalu AutoSystemBoost dan topik Bugs"
 }

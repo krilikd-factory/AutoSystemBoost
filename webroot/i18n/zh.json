@@ -4413,5 +4413,6 @@
   "con_grp_shape": "圆角与导航",
   "con_grp_oem": "OEM 开关",
   "con_grp_processes": "进程",
-  "con_grp_logs": "日志"
+  "con_grp_logs": "日志",
+  "dbg_send_shared": "已附加压缩包：选择 Telegram，再选 AutoSystemBoost 和 Bugs 话题"
 }

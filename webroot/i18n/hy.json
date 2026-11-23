@@ -4413,5 +4413,6 @@
   "con_grp_shape": "Անկյուններ և նավիգացիա",
   "con_grp_oem": "OEM անջատիչներ",
   "con_grp_processes": "Պրոցեսներ",
-  "con_grp_logs": "Մատյաններ"
+  "con_grp_logs": "Մատյաններ",
+  "dbg_send_shared": "Արխիվը կցված է՝ ընտրեք Telegram, ապա AutoSystemBoost և Bugs թեման"
 }

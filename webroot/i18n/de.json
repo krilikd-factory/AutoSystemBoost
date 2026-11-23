@@ -4413,5 +4413,6 @@
   "con_grp_shape": "Ecken & Navigation",
   "con_grp_oem": "OEM-Schalter",
   "con_grp_processes": "Prozesse",
-  "con_grp_logs": "Protokolle"
+  "con_grp_logs": "Protokolle",
+  "dbg_send_shared": "Archiv angehängt: Telegram wählen, dann AutoSystemBoost und das Thema Bugs"
 }

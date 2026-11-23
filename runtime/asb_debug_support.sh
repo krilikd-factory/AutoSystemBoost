@@ -997,6 +997,47 @@ bundle_check() {
   echo 'status=ok'
 }
 
+bundle_am() {
+  _ba_o="$(am start "$@" 2>&1)" || return 1
+  case "$_ba_o" in *Error*|*error:*|*'unable to resolve'*|*'does not exist'*) return 1 ;; esac
+  return 0
+}
+
+bundle_share() {
+  _bp="$1"
+  [ -n "$_bp" ] && [ -s "$_bp" ] || { echo 'error=no_archive'; return 3; }
+  _bc="$(readlink -f "$_bp" 2>/dev/null)"
+  [ -n "$_bc" ] || _bc="$_bp"
+  case "$_bc" in /sdcard/*) _bc="/storage/emulated/0/${_bc#/sdcard/}" ;; /storage/self/primary/*) _bc="/storage/emulated/0/${_bc#/storage/self/primary/}" ;; /data/media/0/*) _bc="/storage/emulated/0/${_bc#/data/media/0/}" ;; esac
+  _bp="$_bc"
+  content call --uri content://media/external/file --method scan_file --arg "$_bp" >/dev/null 2>&1 \
+    || am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$_bp" >/dev/null 2>&1 || true
+  _bid=""
+  _bt=0
+  while [ "$_bt" -lt 6 ] && [ -z "$_bid" ]; do
+    _bid="$(content query --uri content://media/external/file --projection _id --where "_data='$_bp'" 2>/dev/null | sed -n 's/.*_id=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    [ -n "$_bid" ] && break
+    _bt=$((_bt + 1))
+    sleep 1
+  done
+  [ -n "$_bid" ] && echo "media_id=$_bid"
+  if [ -n "$_bid" ] && bundle_am -a android.intent.action.SEND -t application/octet-stream \
+       --eu android.intent.extra.STREAM "content://media/external/file/$_bid" -f 0x10000001; then
+    echo 'opened=share'
+    return 0
+  fi
+  if bundle_am -a android.intent.action.VIEW -d 'tg://resolve?domain=AutoSystemBoost&post=3&thread=3'; then
+    echo 'opened=telegram'
+    return 0
+  fi
+  if bundle_am -a android.intent.action.VIEW -d 'https://t.me/AutoSystemBoost/3'; then
+    echo 'opened=browser'
+    return 0
+  fi
+  echo 'opened=none'
+  return 0
+}
+
 bundle_id_new() {
   _bir="$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -dc '0-9a-f')"
   [ -n "$_bir" ] || _bir="$(printf '%08x' "$(( $$ * 2654435761 % 4294967296 ))")"
@@ -1051,14 +1092,14 @@ bundle_logs() {
       [ -n "$_r" ] && echo "${_r##*/}"
       if [ -n "$_l" ]; then
         if [ "$_pass" = all ]; then
-          (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' 2>/dev/null)
+          (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' ! -name '*.part' 2>/dev/null)
         else
-          (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' -size -4096k 2>/dev/null)
+          (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' ! -name '*.part' -size -4096k 2>/dev/null)
         fi
       fi
     } > "$_bl" 2>/dev/null
     if [ "$_pass" = trim ]; then
-      _all="$( (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' 2>/dev/null) | wc -l | tr -dc '0-9')"
+      _all="$( (cd "$DIAG_OUTDIR" && find "${_l##*/}" -type f ! -name '*.tmp' ! -name '*.part' 2>/dev/null) | wc -l | tr -dc '0-9')"
       _kept="$(grep -c "^${_l##*/}/" "$_bl" 2>/dev/null | tr -dc '0-9')"
       _skip=$(( ${_all:-0} - ${_kept:-0} ))
       echo "trimmed_files=$_skip" >> "$_mf"
@@ -1109,5 +1150,6 @@ case "${1:-status}" in
   full-day-revive) revive_full_day ;;
   bundle-check) bundle_check ;;
   bundle) bundle_logs ;;
+  bundle-share) bundle_share "${2:-}" ;;
   *) echo 'error=bad_action'; exit 64 ;;
 esac

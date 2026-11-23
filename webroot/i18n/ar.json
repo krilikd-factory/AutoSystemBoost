@@ -4413,5 +4413,6 @@
   "con_grp_shape": "الزوايا والتنقل",
   "con_grp_oem": "مفاتيح OEM",
   "con_grp_processes": "العمليات",
-  "con_grp_logs": "السجلات"
+  "con_grp_logs": "السجلات",
+  "dbg_send_shared": "تم إرفاق الأرشيف: اختر Telegram ثم AutoSystemBoost وموضوع Bugs"
 }

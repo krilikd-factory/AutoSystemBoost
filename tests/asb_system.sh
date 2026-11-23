@@ -10901,6 +10901,36 @@ t_debug_log_bundle_runtime() (
   [ -n "$id4" ] && [ "$id4" != "$id3" ] || fail 'a grown infinite log reused the old id'
   grep -q "'send'" "$ROOT/webroot/index.html" && grep -q 'bundle-check' "$ROOT/webroot/index.html" || fail 'WebUI does not offer sending'
   grep -qF "https://t.me/AutoSystemBoost/3" "$ROOT/webroot/index.html" || fail 'WebUI does not open the Bugs topic'
+  mkdir -p "$T/bin"
+  cat > "$T/bin/content" <<'STUB'
+#!/bin/sh
+echo "content $*" >> "$STUB_LOG"
+case "$*" in *query*) [ -f "$STUB_DIR/indexed" ] && echo "Row: 0 _id=4242" ;; *call*) touch "$STUB_DIR/indexed" ;; esac
+exit 0
+STUB
+  cat > "$T/bin/am" <<'STUB'
+#!/bin/sh
+echo "am $*" >> "$STUB_LOG"
+case "$*" in *SEND*) [ -f "$STUB_DIR/no_share" ] && { echo 'Error: Activity not started, unable to resolve Intent'; exit 0; } ;; esac
+echo 'Starting: Intent'
+exit 0
+STUB
+  cat > "$T/bin/sleep" <<'STUB'
+#!/bin/sh
+exit 0
+STUB
+  chmod 755 "$T/bin/content" "$T/bin/am" "$T/bin/sleep"
+  share() { STUB_LOG="$T/stub.log" STUB_DIR="$T" PATH="$T/bin:$PATH" run bundle-share "$@"; }
+  out="$(share "$p")"
+  printf '%s\n' "$out" | grep -qx 'opened=share' || fail "the share sheet was not opened: $out"
+  grep -q 'method scan_file' "$T/stub.log" || fail 'the archive was not indexed for the file picker'
+  grep -q 'android.intent.extra.STREAM content://media/external/file/4242' "$T/stub.log" || fail 'the share sheet did not carry the archive'
+  touch "$T/no_share"; rm -f "$T/stub.log"
+  out="$(share "$p")"
+  printf '%s\n' "$out" | grep -qx 'opened=telegram' || fail "no Telegram fallback: $out"
+  grep -q 'tg://resolve?domain=AutoSystemBoost' "$T/stub.log" || fail 'the Telegram app link was not tried first'
+  grep -q 'https://t.me' "$T/stub.log" && fail 'the browser was opened although Telegram took the link'
+  out="$(share "$T/none.tar.gz")"; printf '%s\n' "$out" | grep -qx 'error=no_archive' || fail 'sharing a missing archive'
   rm -rf "$T/logs" "$T/out" "$T/st"; mkdir -p "$T/logs" "$T/out"
   for n in 1 2 3; do mkdir -p "$T/logs/asb_log_full_day_$n"; echo x > "$T/logs/asb_log_full_day_$n/env.txt"; touch -d '-10 days' "$T/logs/asb_log_full_day_$n/env.txt" "$T/logs/asb_log_full_day_$n"; done
   echo old > "$T/logs/asbdiag_20250101_000000.txt"; touch -d '-9 days' "$T/logs/asbdiag_20250101_000000.txt"

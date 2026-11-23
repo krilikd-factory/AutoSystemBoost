@@ -4306,5 +4306,6 @@
   "con_grp_shape": "Corners & navigation",
   "con_grp_oem": "OEM switches",
   "con_grp_processes": "Processes",
-  "con_grp_logs": "Logs"
+  "con_grp_logs": "Logs",
+  "dbg_send_shared": "Archive attached: pick Telegram, then AutoSystemBoost and the Bugs topic"
 }
