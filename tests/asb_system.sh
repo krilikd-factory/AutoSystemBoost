@@ -10925,6 +10925,7 @@ STUB
   printf '%s\n' "$out" | grep -qx 'opened=share' || fail "the share sheet was not opened: $out"
   grep -q 'method scan_file' "$T/stub.log" || fail 'the archive was not indexed for the file picker'
   grep -q 'android.intent.extra.STREAM content://media/external/file/4242' "$T/stub.log" || fail 'the share sheet did not carry the archive'
+  grep 'SEND' "$T/stub.log" | grep -q -- '-d content://media/external/file/4242 .*--grant-read-uri-permission' || fail 'the receiving app gets no read grant for the archive (Telegram: unsupported attachment)'
   touch "$T/no_share"; rm -f "$T/stub.log"
   out="$(share "$p")"
   printf '%s\n' "$out" | grep -qx 'opened=telegram' || fail "no Telegram fallback: $out"

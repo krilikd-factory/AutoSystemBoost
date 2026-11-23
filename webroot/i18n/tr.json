@@ -4416,5 +4416,16 @@
   "con_grp_logs": "Günlükler",
   "dbg_send_shared": "Arşiv eklendi: Telegram’ı, ardından AutoSystemBoost ve Bugs konusunu seçin",
   "kernel_wb_unsupported": "Çekirdeğiniz uyandırma kaynaklarını adla engelleyemiyor. Bu, engelleyici içeren özel çekirdeklerin (örneğin KRILIKD) özelliğidir; stok çekirdeklerde yoktur, bu yüzden burada ayarlanacak bir şey yok ve ASB hiçbir şeyi değiştirmez.",
-  "nf_part_bucket": "Android onu nadir kullanılanlar grubunda tutuyor"
+  "nf_part_bucket": "Android onu nadir kullanılanlar grubunda tutuyor",
+  "con_grp_k_sched": "CPU zamanlayıcı",
+  "con_grp_k_mem": "Bellek ve depolama",
+  "con_grp_k_power": "Zamanlayıcılar ve güç",
+  "log_menu_head": "Kayıtlar",
+  "log_menu_head_sub": "geliştirici için",
+  "log_menu_diag_sub": "Ayarların ve etkin olanların anlık görüntüsü · yaklaşık bir dakika",
+  "log_menu_log_sub": "Siz durdurana kadar pil, ısı ve akıcılığı kaydeder",
+  "log_menu_log_sub_on": "Kayıt sürüyor · durdurmak için iki kez dokunun",
+  "log_menu_log_sub_stop": "Rapor yazılıyor",
+  "log_menu_report_sub": "Kayıtlı sonsuz günlüğü burada okuyun",
+  "log_menu_send_sub": "asbdiag ve sonsuz günlüğü paketler, Telegram’ı açar"
 }

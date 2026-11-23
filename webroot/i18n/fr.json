@@ -4416,5 +4416,16 @@
   "con_grp_logs": "Journaux",
   "dbg_send_shared": "Archive jointe : choisissez Telegram, puis AutoSystemBoost et le sujet Bugs",
   "kernel_wb_unsupported": "Votre noyau ne peut pas bloquer les sources de réveil par nom. C’est une fonction des noyaux personnalisés dotés d’un bloqueur (KRILIKD par exemple) ; les noyaux d’origine ne l’ont pas : rien à régler ici, ASB ne change rien.",
-  "nf_part_bucket": "Android la garde dans le groupe des applis rarement utilisées"
+  "nf_part_bucket": "Android la garde dans le groupe des applis rarement utilisées",
+  "con_grp_k_sched": "Ordonnanceur CPU",
+  "con_grp_k_mem": "Mémoire et stockage",
+  "con_grp_k_power": "Minuteries et énergie",
+  "log_menu_head": "Journaux",
+  "log_menu_head_sub": "pour le développeur",
+  "log_menu_diag_sub": "Instantané des réglages et de ce qui est actif · environ une minute",
+  "log_menu_log_sub": "Enregistre batterie, chauffe et fluidité jusqu’à l’arrêt",
+  "log_menu_log_sub_on": "Enregistrement en cours · deux appuis pour arrêter",
+  "log_menu_log_sub_stop": "Le rapport est en cours d’écriture",
+  "log_menu_report_sub": "Lire ici un journal infini enregistré",
+  "log_menu_send_sub": "Regroupe asbdiag et le journal infini, ouvre Telegram"
 }

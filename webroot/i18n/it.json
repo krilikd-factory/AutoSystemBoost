@@ -4416,5 +4416,16 @@
   "con_grp_logs": "Registri",
   "dbg_send_shared": "Archivio allegato: scegli Telegram, poi AutoSystemBoost e l’argomento Bugs",
   "kernel_wb_unsupported": "Il tuo kernel non può bloccare le sorgenti di risveglio per nome. È una funzione dei kernel personalizzati con un bloccatore integrato (ad esempio KRILIKD); i kernel di serie non ce l’hanno, quindi qui non c’è nulla da impostare e ASB non cambia nulla.",
-  "nf_part_bucket": "Android la tiene nel gruppo delle app usate di rado"
+  "nf_part_bucket": "Android la tiene nel gruppo delle app usate di rado",
+  "con_grp_k_sched": "Scheduler CPU",
+  "con_grp_k_mem": "Memoria e archiviazione",
+  "con_grp_k_power": "Timer ed energia",
+  "log_menu_head": "Log",
+  "log_menu_head_sub": "per lo sviluppatore",
+  "log_menu_diag_sub": "Istantanea delle impostazioni e di ciò che è attivo · circa un minuto",
+  "log_menu_log_sub": "Registra batteria, calore e fluidità finché non lo fermi",
+  "log_menu_log_sub_on": "Registrazione in corso · due tocchi per fermare",
+  "log_menu_log_sub_stop": "Il rapporto è in scrittura",
+  "log_menu_report_sub": "Leggi qui un log infinito salvato",
+  "log_menu_send_sub": "Impacchetta asbdiag e il log infinito, apre Telegram"
 }

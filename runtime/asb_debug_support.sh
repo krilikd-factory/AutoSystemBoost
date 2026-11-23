@@ -1021,8 +1021,8 @@ bundle_share() {
     sleep 1
   done
   [ -n "$_bid" ] && echo "media_id=$_bid"
-  if [ -n "$_bid" ] && bundle_am -a android.intent.action.SEND -t application/octet-stream \
-       --eu android.intent.extra.STREAM "content://media/external/file/$_bid" -f 0x10000001; then
+  if [ -n "$_bid" ] && bundle_am -a android.intent.action.SEND -d "content://media/external/file/$_bid" -t application/gzip \
+       --eu android.intent.extra.STREAM "content://media/external/file/$_bid" --grant-read-uri-permission -f 0x10000001; then
     echo 'opened=share'
     return 0
   fi

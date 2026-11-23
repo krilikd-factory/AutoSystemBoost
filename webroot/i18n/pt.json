@@ -4416,5 +4416,16 @@
   "con_grp_logs": "Registros",
   "dbg_send_shared": "Arquivo anexado: escolha o Telegram, depois AutoSystemBoost e o tópico Bugs",
   "kernel_wb_unsupported": "Seu kernel não consegue bloquear fontes de despertar pelo nome. É um recurso de kernels personalizados com bloqueador embutido (por exemplo, KRILIKD); kernels de fábrica não têm, então não há nada a ajustar aqui e o ASB não muda nada.",
-  "nf_part_bucket": "O Android a mantém no grupo de apps pouco usados"
+  "nf_part_bucket": "O Android a mantém no grupo de apps pouco usados",
+  "con_grp_k_sched": "Escalonador de CPU",
+  "con_grp_k_mem": "Memória e armazenamento",
+  "con_grp_k_power": "Temporizadores e energia",
+  "log_menu_head": "Logs",
+  "log_menu_head_sub": "para o desenvolvedor",
+  "log_menu_diag_sub": "Retrato das definições e do que está ativo · cerca de um minuto",
+  "log_menu_log_sub": "Regista bateria, calor e fluidez até o parar",
+  "log_menu_log_sub_on": "A gravar · dois toques para parar",
+  "log_menu_log_sub_stop": "O relatório está a ser escrito",
+  "log_menu_report_sub": "Ler aqui um log infinito guardado",
+  "log_menu_send_sub": "Junta o asbdiag e o log infinito, abre o Telegram"
 }

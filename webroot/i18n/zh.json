@@ -4416,5 +4416,16 @@
   "con_grp_logs": "日志",
   "dbg_send_shared": "已附加压缩包：选择 Telegram，再选 AutoSystemBoost 和 Bugs 话题",
   "kernel_wb_unsupported": "您的内核无法按名称屏蔽唤醒源。这是带唤醒屏蔽器的第三方内核（例如 KRILIKD）的功能；原厂内核没有，因此这里无需设置，ASB 也不做任何更改。",
-  "nf_part_bucket": "Android 将其留在“很少使用”待机分组"
+  "nf_part_bucket": "Android 将其留在“很少使用”待机分组",
+  "con_grp_k_sched": "CPU 调度器",
+  "con_grp_k_mem": "内存与存储",
+  "con_grp_k_power": "定时器与功耗",
+  "log_menu_head": "日志",
+  "log_menu_head_sub": "供开发者使用",
+  "log_menu_diag_sub": "设置与实际生效状态快照 · 约一分钟",
+  "log_menu_log_sub": "记录电池、发热与流畅度，直到你停止",
+  "log_menu_log_sub_on": "正在记录 · 点两次停止",
+  "log_menu_log_sub_stop": "正在写入报告",
+  "log_menu_report_sub": "在此查看已保存的无限日志",
+  "log_menu_send_sub": "打包 asbdiag 与无限日志，打开 Telegram"
 }

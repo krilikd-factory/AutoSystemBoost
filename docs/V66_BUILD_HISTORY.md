@@ -5,7 +5,7 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
-## V66-test20 - an app store is never a game, kernel repository renamed
+## V66-test20 - logs reach Telegram for every tester, tweak icons in every console, kernel consoles, a clearer logs menu
 
 Input: the owner's asbdiag of 2026-11-23 12:40 on test18: "GPU-bound rendering: GAMING reached
 1 time ... last for com.heytap.market".
@@ -19,7 +19,30 @@ Input: the owner's asbdiag of 2026-11-23 12:40 on test18: "GPU-bound rendering: 
   GPU in an app store stays out of GAMING.
 - **Docs:** the KRILIKD kernel repository was renamed to `krilikd-factory/KRILIKD-kernel`; the
   links in `README.md` and `docs/README.ru.md` follow it.
-- Not posted to Telegram.
+
+### Logs from users: "Attachment not supported" in Telegram
+- Some testers got Telegram's "Attachment not supported" after "Send logs to Bugs" while it worked
+  for others. The share intent carried the archive only as EXTRA_STREAM, and `am start` does not
+  move it into ClipData, so the read grant never reached the receiving app: a Telegram that may
+  read the shared storage itself (direct APK) opened it, a Play Store Telegram could not. The
+  intent now carries the archive as its data URI with `--grant-read-uri-permission` (and the
+  stream extra, type application/gzip), so the picked app gets a read grant for exactly that file.
+
+### WebUI
+- Every console row shows the tweak's own icon again, in a 30 px tile (26 px on narrow phones)
+  that takes the category colour when the tweak is changed; the console and its panels give back
+  width (card 10 px, panels 9 px), and the name column is wider, so names wrap less.
+- A segment row whose buttons still clip after layout (a longer translation, the Liquid Glass
+  skin's wider buttons) moves its control onto its own full-width line; measured after render,
+  not guessed from the label length. Checked in Chromium for every category at 340-412 px in
+  ru, uk, de, fr and hy, plain and Liquid Glass: no name, icon, status or control overlaps, no
+  clipped button, nothing past the screen edge.
+- Kernel: the controls are three consoles - CPU scheduler, Memory & storage, Timers & power -
+  each row still with its live kernel value and the reason when the kernel lacks the node; a
+  group whose every control this kernel lacks is not drawn. The wake-rules card follows.
+- Logs menu in the header: a titled panel; each entry has an icon and a one-line explanation,
+  the infinite log entry says when it is recording or finishing its report, and "Send logs to
+  Bugs" sits apart as the main action.
 
 
 ## V66-test19 - late notifications from rarely opened apps, wake rules on stock kernels, logs to Telegram

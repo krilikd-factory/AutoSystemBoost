@@ -4309,5 +4309,16 @@
   "con_grp_logs": "Logs",
   "dbg_send_shared": "Archive attached: pick Telegram, then AutoSystemBoost and the Bugs topic",
   "kernel_wb_unsupported": "Your kernel cannot block wakeup sources by name. It is a feature of custom kernels that ship a wakeup blocker (KRILIKD has one); stock kernels do not, so there is nothing to set here and ASB changes nothing.",
-  "nf_part_bucket": "Android keeps it in a rare-use standby bucket"
+  "nf_part_bucket": "Android keeps it in a rare-use standby bucket",
+  "con_grp_k_sched": "CPU scheduler",
+  "con_grp_k_mem": "Memory & storage",
+  "con_grp_k_power": "Timers & power",
+  "log_menu_head": "Logs",
+  "log_menu_head_sub": "for the developer",
+  "log_menu_diag_sub": "Snapshot of settings and what is live · about a minute",
+  "log_menu_log_sub": "Records battery, heat and smoothness until you stop it",
+  "log_menu_log_sub_on": "Recording now · two taps stop it",
+  "log_menu_log_sub_stop": "The report is being written",
+  "log_menu_report_sub": "Read a saved infinite log here",
+  "log_menu_send_sub": "Packs asbdiag and the infinite log, opens Telegram"
 }

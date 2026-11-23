@@ -4416,5 +4416,16 @@
   "con_grp_logs": "السجلات",
   "dbg_send_shared": "تم إرفاق الأرشيف: اختر Telegram ثم AutoSystemBoost وموضوع Bugs",
   "kernel_wb_unsupported": "لا يستطيع نواتك حظر مصادر الإيقاظ بالاسم. هذه ميزة الأنوية المخصصة التي تتضمن حاجبًا (مثل KRILIKD)؛ الأنوية الأصلية لا تملكها، لذا لا شيء لضبطه هنا ولا يغيّر ASB شيئًا.",
-  "nf_part_bucket": "يُبقيه Android في مجموعة التطبيقات نادرة الاستخدام"
+  "nf_part_bucket": "يُبقيه Android في مجموعة التطبيقات نادرة الاستخدام",
+  "con_grp_k_sched": "مجدول المعالج",
+  "con_grp_k_mem": "الذاكرة والتخزين",
+  "con_grp_k_power": "المؤقتات والطاقة",
+  "log_menu_head": "السجلات",
+  "log_menu_head_sub": "للمطوّر",
+  "log_menu_diag_sub": "لقطة للإعدادات وما هو فعّال · نحو دقيقة",
+  "log_menu_log_sub": "يسجّل البطارية والحرارة والسلاسة حتى توقفه",
+  "log_menu_log_sub_on": "التسجيل جارٍ · نقرتان للإيقاف",
+  "log_menu_log_sub_stop": "يُكتب التقرير الآن",
+  "log_menu_report_sub": "اقرأ سجلًا لانهائيًا محفوظًا هنا",
+  "log_menu_send_sub": "يحزم asbdiag والسجل اللانهائي ويفتح Telegram"
 }

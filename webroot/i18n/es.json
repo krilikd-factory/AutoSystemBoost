@@ -4416,5 +4416,16 @@
   "con_grp_logs": "Registros",
   "dbg_send_shared": "Archivo adjunto: elige Telegram, luego AutoSystemBoost y el tema Bugs",
   "kernel_wb_unsupported": "Tu kernel no puede bloquear fuentes de activación por nombre. Es una función de kernels personalizados con bloqueador integrado (por ejemplo, KRILIKD); los kernels de fábrica no la tienen, así que aquí no hay nada que ajustar y ASB no cambia nada.",
-  "nf_part_bucket": "Android la mantiene en el grupo de apps de uso poco frecuente"
+  "nf_part_bucket": "Android la mantiene en el grupo de apps de uso poco frecuente",
+  "con_grp_k_sched": "Planificador de CPU",
+  "con_grp_k_mem": "Memoria y almacenamiento",
+  "con_grp_k_power": "Temporizadores y energía",
+  "log_menu_head": "Registros",
+  "log_menu_head_sub": "para el desarrollador",
+  "log_menu_diag_sub": "Instantánea de ajustes y de lo que está activo · un minuto aprox.",
+  "log_menu_log_sub": "Registra batería, calor y fluidez hasta que lo detengas",
+  "log_menu_log_sub_on": "Grabando · dos toques para detener",
+  "log_menu_log_sub_stop": "Se está escribiendo el informe",
+  "log_menu_report_sub": "Leer aquí un registro infinito guardado",
+  "log_menu_send_sub": "Empaqueta asbdiag y el registro infinito, abre Telegram"
 }

@@ -4416,5 +4416,16 @@
   "con_grp_logs": "Protokolle",
   "dbg_send_shared": "Archiv angehängt: Telegram wählen, dann AutoSystemBoost und das Thema Bugs",
   "kernel_wb_unsupported": "Ihr Kernel kann Weckquellen nicht nach Namen sperren. Das können nur Custom-Kernel mit eingebautem Wecksperrer (z. B. KRILIKD); Stock-Kernel nicht – hier gibt es nichts einzustellen, ASB ändert nichts.",
-  "nf_part_bucket": "Android hält sie in der Standby-Gruppe für selten genutzte Apps"
+  "nf_part_bucket": "Android hält sie in der Standby-Gruppe für selten genutzte Apps",
+  "con_grp_k_sched": "CPU-Scheduler",
+  "con_grp_k_mem": "Speicher & Datenträger",
+  "con_grp_k_power": "Timer & Energie",
+  "log_menu_head": "Logs",
+  "log_menu_head_sub": "für den Entwickler",
+  "log_menu_diag_sub": "Momentaufnahme der Einstellungen und was aktiv ist · etwa eine Minute",
+  "log_menu_log_sub": "Zeichnet Akku, Wärme und Flüssigkeit auf, bis du stoppst",
+  "log_menu_log_sub_on": "Läuft gerade · zweimal tippen zum Stoppen",
+  "log_menu_log_sub_stop": "Der Bericht wird geschrieben",
+  "log_menu_report_sub": "Ein gespeichertes Endlos-Log hier lesen",
+  "log_menu_send_sub": "Packt asbdiag und das Endlos-Log, öffnet Telegram"
 }

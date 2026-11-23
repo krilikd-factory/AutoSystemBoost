@@ -4416,5 +4416,16 @@
   "con_grp_logs": "Log sistem",
   "dbg_send_shared": "Arsip terlampir: pilih Telegram, lalu AutoSystemBoost dan topik Bugs",
   "kernel_wb_unsupported": "Kernel Anda tidak bisa memblokir sumber bangun berdasarkan nama. Ini fitur kernel kustom dengan pemblokir bawaan (misalnya KRILIKD); kernel bawaan tidak memilikinya, jadi tidak ada yang perlu diatur dan ASB tidak mengubah apa pun.",
-  "nf_part_bucket": "Android menyimpannya di grup aplikasi yang jarang dipakai"
+  "nf_part_bucket": "Android menyimpannya di grup aplikasi yang jarang dipakai",
+  "con_grp_k_sched": "Penjadwal CPU",
+  "con_grp_k_mem": "Memori & penyimpanan",
+  "con_grp_k_power": "Timer & daya",
+  "log_menu_head": "Log",
+  "log_menu_head_sub": "untuk pengembang",
+  "log_menu_diag_sub": "Cuplikan pengaturan dan yang aktif · sekitar satu menit",
+  "log_menu_log_sub": "Merekam baterai, panas, dan kelancaran sampai dihentikan",
+  "log_menu_log_sub_on": "Sedang merekam · dua ketukan untuk berhenti",
+  "log_menu_log_sub_stop": "Laporan sedang ditulis",
+  "log_menu_report_sub": "Baca log tanpa batas yang tersimpan di sini",
+  "log_menu_send_sub": "Mengemas asbdiag dan log tanpa batas, membuka Telegram"
 }

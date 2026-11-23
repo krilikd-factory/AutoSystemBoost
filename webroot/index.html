@@ -5111,6 +5111,22 @@ html[data-asb-theme="light"] .log-menu {
   box-shadow: 0 18px 44px rgba(11,56,47,.24);
 }
 .log-menu[hidden] { display: none; }
+.log-menu { min-width: 260px; max-width: min(340px, calc(100vw - 24px)); padding: 8px; border-radius: 18px; }
+.log-menu-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 6px 10px 8px; }
+.log-menu-head-t { font: 700 11px/1.2 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.log-menu-head-s { font: 500 11px/1.2 var(--sans); color: var(--text-tertiary); }
+.log-menu-ico { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; margin-right: 12px;
+  border-radius: 11px; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
+.log-menu-txt { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.log-menu-title { font-size: 14.5px; font-weight: 600; line-height: 1.25; }
+.log-menu-sub { font-size: 11.5px; font-weight: 400; line-height: 1.3; color: var(--text-tertiary); white-space: normal; }
+.log-menu-sep { height: 1px; margin: 6px 8px; background: var(--border); }
+.log-menu-item.log-menu-send { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.log-menu-item.log-menu-send .log-menu-ico { color: #0b0f14; background: var(--accent); border-color: var(--accent); }
+.log-menu-item.is-recording .log-menu-ico { color: #ef4444; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.35); }
+.log-menu-item.is-armed .log-menu-ico { color: #f59e0b; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.35); }
+html[dir="rtl"] .log-menu-ico { margin-right: 0; margin-left: 12px; }
 .log-menu-item {
   display: flex; align-items: center;
   width: 100%;
@@ -6650,6 +6666,30 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row +
 .dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-row-top { grid-template-columns:minmax(0,1fr); row-gap:8px; padding-bottom:4px !important; }
 .dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-seg { justify-self:stretch; width:100%; max-width:100%; display:flex; }
 .dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-seg button { flex:1 1 auto; min-width:0; white-space:normal; overflow-wrap:break-word; line-height:1.2; }
+/* Tweak icons inside consoles: every row keeps its own glyph in a compact 30 px tile, and the
+ * console, its panels and the row grid give back the width the nesting took, so the name and
+ * the control keep their room. */
+.dsp-console.dsp-console { padding:10px !important; }
+.dsp-console .asb-console-mod.asb-console-mod { margin-top:8px; padding:10px 9px 4px; }
+.dsp-console .dsp-console-panel:not(.asb-console-mod) { padding:2px 9px; }
+.dsp-console .dsp-console-panel .cfg-row-top { grid-template-columns:30px minmax(92px,.62fr) minmax(0,1fr); gap:9px; }
+html .dsp-console .dsp-console-panel .cfg-row .cfg-icon.cfg-icon { display:flex !important; width:30px; height:30px; min-width:30px;
+  margin:0; border-radius:9px; align-self:center; justify-self:start; }
+.dsp-console .dsp-console-panel .cfg-icon .tech-icon { width:17px; height:17px; }
+html .dsp-console .dsp-console-panel .cfg-row.is-on .cfg-icon[class*="cat-"],
+html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.is-on .cfg-icon[class*="cat-"] {
+  background:color-mix(in srgb,var(--cat-ink,var(--cat)) 15%,transparent) !important;
+  border-color:color-mix(in srgb,var(--cat-ink,var(--cat)) 38%,transparent) !important; }
+.dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-row-top { grid-template-columns:30px minmax(0,1fr); }
+.dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-row-top > :not(.cfg-icon):not(.cfg-main) { grid-column:1 / -1; }
+@media (max-width:380px) {
+  .dsp-console.dsp-console { padding:8px !important; }
+  .dsp-console .asb-console-mod.asb-console-mod { padding:9px 7px 3px; }
+  .dsp-console .dsp-console-panel .cfg-row-top { grid-template-columns:26px minmax(80px,.62fr) minmax(0,1fr); gap:7px; }
+  html .dsp-console .dsp-console-panel .cfg-row .cfg-icon.cfg-icon { width:26px; height:26px; min-width:26px; border-radius:8px; }
+  .dsp-console .dsp-console-panel .cfg-icon .tech-icon { width:15px; height:15px; }
+  .dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-row-top { grid-template-columns:26px minmax(0,1fr); }
+}
 .dsp-console .dsp-console-panel .cfg-name { overflow-wrap:break-word; hyphens:auto; min-width:0; }
 .dsp-console .dsp-console-panel .cfg-range { grid-template-columns:minmax(0,1fr) minmax(52px,auto); }
 .dsp-console .dsp-console-panel .cfg-range-val { max-width:104px; white-space:normal; line-height:1.2; }
@@ -6666,6 +6706,7 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.cfg-row +
   border-color:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 35%,transparent); }
 .dsp-console .asb-console-mod { margin:10px 0 0; padding:11px 12px 4px; border-radius:16px;
   background:color-mix(in srgb,var(--surface) 70%,transparent); transition:border-color .2s ease; }
+.dsp-console .asb-console-mod[hidden] { display:none; }
 .dsp-console .asb-console-mod.is-tuned { border-color:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 45%,var(--border)); }
 .asb-console-mhead { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:0 0 8px;
   border-bottom:1px solid var(--border); }
@@ -12841,6 +12882,11 @@ const FEEL_CONSOLE_GROUPS = [
  * badge instead of one full card per tweak. A section keeps its own header above the console,
  * so these consoles carry no second title. Rows keep their status line when it says
  * something (unavailable, after reboot, a verification warning, Smart ownership). */
+const KERNEL_CONSOLE_GROUPS = [
+  ['con_grp_k_sched', 'CPU scheduler', ['kernel_bore', 'kernel_rt_boost', 'kernel_sched_nr_migrate', 'kernel_sched_autogroup', 'kernel_sched_child_runs_first', 'kernel_sched_stats']],
+  ['con_grp_k_mem', 'Memory & storage', ['mglru_mode', 'kernel_mglru_min_ttl', 'io_scheduler']],
+  ['con_grp_k_power', 'Timers & power', ['kernel_timer_migration', 'kernel_hrtimer_migration', 'kernel_lpm_prediction', 'kernel_usb_autosuspend']]
+];
 const CFG_SECTION_CONSOLES = {
   'audio/playback': [
     ['con_grp_audio_out', 'Output & volume', ['audio_profile', 'audio_dac_hifi', 'media_loudness', 'media_vol_steps', 'audio_resampler']],
@@ -12962,6 +13008,21 @@ function cfgConsoleWideControl(row) {
   const seg = row.querySelector('.cfg-seg');
   if (seg && String(seg.textContent || '').replace(/\s+/g, '').length > 24) row.classList.add('asb-wide-ctl');
 }
+/* After layout: a segment row whose labels still do not fit (a longer translation, the glass
+ * skin's wider buttons) moves its control onto its own full-width line. Measured, not guessed. */
+function cfgConsoleFitLater(card) {
+  if (typeof requestAnimationFrame !== 'function' || !card || !card.querySelectorAll) return;
+  requestAnimationFrame(function () {
+    Array.prototype.forEach.call(card.querySelectorAll('.cfg-row'), function (row) {
+      if (!row.classList || row.classList.contains('asb-wide-ctl')) return;
+      const seg = row.querySelector('.cfg-seg');
+      if (!seg || !seg.offsetParent) return;
+      let tight = seg.scrollWidth > seg.clientWidth + 1;
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { if (b.scrollWidth > b.clientWidth + 1) tight = true; });
+      if (tight) row.classList.add('asb-wide-ctl');
+    });
+  });
+}
 function cfgRenderConsole(list, sectionItems, o) {
   const by = Object.create(null);
   sectionItems.forEach(function (it) { by[it.key] = it; });
@@ -12984,17 +13045,28 @@ function cfgRenderConsole(list, sectionItems, o) {
     const items = g[2].map(function (k) { return used[k] ? null : by[k]; }).filter(Boolean);
     if (!items.length) return;
     items.forEach(function (it) { used[it.key] = true; });
-    cfgConsoleGroupPanel(card, g[0] ? T(g[0], g[1]) : '', items, function (panel, it) {
+    const gone = Object.create(null);
+    const gp = cfgConsoleGroupPanel(card, g[0] ? T(g[0], g[1]) : '', items, function (panel, it) {
       cfgRenderRow(panel, it, false);
       cfgConsoleWideControl(panel.lastChild);
+      if (typeof o.decorate === 'function') {
+        o.decorate(panel.lastChild, it);
+        const r = panel.lastChild;
+        if (r && r.classList && r.classList.contains && r.classList.contains('kernel-absent-hidden')) gone[it.key] = true;
+      }
       if (!o.strip) return;
       const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
       const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
       if (tx) tx.nodeValue = String(tx.nodeValue).replace(o.strip, '');
     });
+    if (gp && Object.keys(gone).length) {
+      gp._asbItems = items.filter(function (it) { return !gone[it.key]; });
+      if (!gp._asbItems.length) gp.hidden = true;
+    }
   });
   cfgConsoleRecount(card);
   list.appendChild(card);
+  cfgConsoleFitLater(card);
 }
 function cfgRenderParametricEqCard(list) {
   const card=document.createElement('section');
@@ -13098,10 +13170,13 @@ function cfgRenderGroup(list, groupId) {
     else if (section.card === 'wakeup') {
       // Kernel management is one reading flow: ordinary bounded controls first,
       // then their optional wakeup-list companion, without a second page section.
-      sectionItems.forEach(it => {
-        cfgRenderRow(list, it, false);
-        if (ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0) kernelDecorateControlRow(list.lastChild, it.key);
-      });
+      /* The kernel controls share the consoles of the other categories; each row still carries
+       * its live kernel value and the reason when the kernel lacks the node. */
+      const kdeco = function (row, it) { if (ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0) kernelDecorateControlRow(row, it.key); };
+      if (sectionItems.length > 1)
+        cfgRenderConsole(list, sectionItems, { cat: 'kernel', title: '', groups: KERNEL_CONSOLE_GROUPS, keepStatus: true, decorate: kdeco,
+          active: function () { return cfgConsoleNonDefault(sectionItems); }, on: T('console_on_tuned', 'TUNED'), off: T('console_off_stock', 'STOCK') });
+      else sectionItems.forEach(it => { cfgRenderRow(list, it, false); kdeco(list.lastChild, it); });
       cfgRenderWakeupBlockerCard(list);
     }
     else if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
@@ -25479,6 +25554,13 @@ function asbLogMenuPaint() {
   item.classList.toggle('is-recording', _asbLogRunning && !_asbLogStopping && !degraded);
   item.classList.toggle('is-stopping', _asbLogStopping);
   item.classList.toggle('is-armed', !!armed);
+  const sub = document.getElementById('logMenuSessionSub');
+  if (sub) {
+    sub.removeAttribute('data-i18n');
+    sub.textContent = _asbLogStopping ? T('log_menu_log_sub_stop', 'The report is being written') :
+      _asbLogRunning ? T('log_menu_log_sub_on', 'Recording now · two taps stop it') :
+      T('log_menu_log_sub', 'Records battery, heat and smoothness until you stop it');
+  }
   label.removeAttribute('data-i18n');
   label.textContent = _asbLogStopping ? T('dbg_log_stopping_menu', 'Stopping · finishing the report…') :
     !_asbLogRunning ? T('dbg_log_btn', 'Infinite log') :
@@ -28727,17 +28809,30 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
      appeared on those two pages, and the button looked broken. Same reasoning as the tab
      bar: an overlay that must work above every page cannot be parented to one of them. -->
 <div class="log-menu" id="logMenu" role="menu" hidden>
+  <div class="log-menu-head" aria-hidden="true">
+    <span class="log-menu-head-t" data-i18n="log_menu_head">Logs</span>
+    <span class="log-menu-head-s" data-i18n="log_menu_head_sub">for the developer</span>
+  </div>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('diag')">
-    <span data-i18n="dbg_diag_btn">asbdiag</span>
+    <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l1 3h3v15H5V6h3z"/><path d="M9 12l2 2 4-4"/></svg></span>
+    <span class="log-menu-txt"><span class="log-menu-title" data-i18n="dbg_diag_btn">asbdiag</span>
+    <span class="log-menu-sub" data-i18n="log_menu_diag_sub">Snapshot of settings and what is live · about a minute</span></span>
   </button>
   <button class="log-menu-item" id="logMenuSession" role="menuitem" type="button" onclick="asbLogMenuPick('full-day')">
-    <span id="logMenuSessionLabel" data-i18n="dbg_log_btn">Infinite log</span>
+    <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span>
+    <span class="log-menu-txt"><span class="log-menu-title" id="logMenuSessionLabel" data-i18n="dbg_log_btn">Infinite log</span>
+    <span class="log-menu-sub" id="logMenuSessionSub" data-i18n="log_menu_log_sub">Records battery, heat and smoothness until you stop it</span></span>
   </button>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('report')">
-    <span data-i18n="lr_menu">Infinite log report</span>
+    <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+    <span class="log-menu-txt"><span class="log-menu-title" data-i18n="lr_menu">Infinite log report</span>
+    <span class="log-menu-sub" data-i18n="log_menu_report_sub">Read a saved infinite log here</span></span>
   </button>
-  <button class="log-menu-item" id="logMenuSend" role="menuitem" type="button" onclick="asbLogMenuPick('send')">
-    <span id="logMenuSendLabel" data-i18n="dbg_send_btn">Send logs to Bugs</span>
+  <div class="log-menu-sep" aria-hidden="true"></div>
+  <button class="log-menu-item log-menu-send" id="logMenuSend" role="menuitem" type="button" onclick="asbLogMenuPick('send')">
+    <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg></span>
+    <span class="log-menu-txt"><span class="log-menu-title" id="logMenuSendLabel" data-i18n="dbg_send_btn">Send logs to Bugs</span>
+    <span class="log-menu-sub" data-i18n="log_menu_send_sub">Packs asbdiag and the infinite log, opens Telegram</span></span>
   </button>
 </div>
 <nav class="asb-tabbar" id="asbTabbar" role="tablist" aria-label="Sections">
