@@ -4414,5 +4414,7 @@
   "con_grp_oem": "Interruptores OEM",
   "con_grp_processes": "Procesos",
   "con_grp_logs": "Registros",
-  "dbg_send_shared": "Archivo adjunto: elige Telegram, luego AutoSystemBoost y el tema Bugs"
+  "dbg_send_shared": "Archivo adjunto: elige Telegram, luego AutoSystemBoost y el tema Bugs",
+  "kernel_wb_unsupported": "Tu kernel no puede bloquear fuentes de activación por nombre. Es una función de kernels personalizados con bloqueador integrado (por ejemplo, KRILIKD); los kernels de fábrica no la tienen, así que aquí no hay nada que ajustar y ASB no cambia nada.",
+  "nf_part_bucket": "Android la mantiene en el grupo de apps de uso poco frecuente"
 }

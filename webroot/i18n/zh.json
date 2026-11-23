@@ -4414,5 +4414,7 @@
   "con_grp_oem": "OEM 开关",
   "con_grp_processes": "进程",
   "con_grp_logs": "日志",
-  "dbg_send_shared": "已附加压缩包：选择 Telegram，再选 AutoSystemBoost 和 Bugs 话题"
+  "dbg_send_shared": "已附加压缩包：选择 Telegram，再选 AutoSystemBoost 和 Bugs 话题",
+  "kernel_wb_unsupported": "您的内核无法按名称屏蔽唤醒源。这是带唤醒屏蔽器的第三方内核（例如 KRILIKD）的功能；原厂内核没有，因此这里无需设置，ASB 也不做任何更改。",
+  "nf_part_bucket": "Android 将其留在“很少使用”待机分组"
 }

@@ -11101,7 +11101,10 @@ esac
 X
 cat > "$T/bin/am" <<'X'
 #!/bin/sh
-[ "$1" = get-standby-bucket ] && echo 40
+case "$1" in
+  get-standby-bucket) cat "$NF_ST/bucket.$2" 2>/dev/null || echo 40 ;;
+  set-standby-bucket) case "$3" in working_set) echo 20 > "$NF_ST/bucket.$2" ;; *) echo "$3" > "$NF_ST/bucket.$2" ;; esac ;;
+esac
 X
 cat > "$T/bin/settings" <<'X'
 #!/bin/sh
@@ -11114,7 +11117,8 @@ out="$(run apps)"
 printf '%s\n' "$out" | grep -x 'A org.telegram.messenger' >/dev/null && printf '%s\n' "$out" | grep -x 'A com.whatsapp' >/dev/null || fail "apps: $out"
 out="$(run set org.telegram.messenger com.whatsapp 'bad;pkg' com.not.installed)"
 printf '%s\n' "$out" | grep -x 'result=ok' >/dev/null && printf '%s\n' "$out" | grep -x 'selected=2' >/dev/null || fail "set: $out"
-printf '%s\n' "$out" | grep -x 'row|org.telegram.messenger|1|user|allow|default|allow|ignore|40|ok|-' >/dev/null || fail "telegram not fixed: $out"
+printf '%s\n' "$out" | grep -x 'row|org.telegram.messenger|1|user|allow|default|allow|ignore|20|ok|-' >/dev/null || fail "telegram not fixed (rare bucket must be lifted): $out"
+echo 45 > "$T/st/bucket.com.whatsapp.probe"
 printf '%s\n' "$out" | grep '^row|com.whatsapp|1|user|' >/dev/null || fail "whatsapp: $out"
 grep -qx 'user,org.telegram.messenger,10234' "$T/st/wl" || fail "no Doze exemption"
 [ "$(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)" = allow/default ] || fail "background restriction kept: $(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)"

@@ -101,6 +101,8 @@ _apply() {
     _np_cmd add allow "$_au" >/dev/null 2>&1
     _np_list allow | grep -qx "$_au" && _setf "$_ap" 11 1
   fi
+  case "$(_bucket "$_ap")" in 40|45|rare|restricted) am set-standby-bucket "$_ap" working_set >/dev/null 2>&1 ;; esac
+  am set-inactive "$_ap" false >/dev/null 2>&1
   _keep_add "$_ap" >/dev/null 2>&1
   if grep -q "^$_ap|" "$WLMAN" 2>/dev/null && [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ]; then
     MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" manual-set "$_ap" restore >/dev/null 2>&1
@@ -118,8 +120,10 @@ _check() {
   [ "$_cd" = none ] && _cok=0
   case "$_cra$_crb$_cwk" in *ignore*|*deny*|*errored*) _cok=0 ;; esac
   [ "$_cbg" = ok ] || _cok=0
+  _cbk="$(_bucket "$1")"
+  case "$_cbk" in 40|45|rare|restricted) _cok=0 ;; esac
   _czo="$(cat "${ASB_ZYGISK_RUN_DIR:-/dev/.asb/zygisk}"/state.*.tsv 2>/dev/null | awk -F'\t' -v p="$1" '$1 == "L" && $2 == p { s += $3; f = 1 } END { print (f ? s : "-") }')"
-  printf 'row|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$1" "$_cok" "$_cd" "$_cra" "$_crb" "$_cwk" "$_cpn" "$(_bucket "$1")" "$_cbg" "${_czo:--}"
+  printf 'row|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$1" "$_cok" "$_cd" "$_cra" "$_crb" "$_cwk" "$_cpn" "$_cbk" "$_cbg" "${_czo:--}"
 }
 _rop() {
   [ "$(_pmode "$_ro" "$1" | sed 's/^$/default/')" = "$2" ] || appops set "$_rp" "$1" "$2" >/dev/null 2>&1

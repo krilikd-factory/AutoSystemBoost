@@ -4414,5 +4414,7 @@
   "con_grp_oem": "Interruttori OEM",
   "con_grp_processes": "Processi",
   "con_grp_logs": "Registri",
-  "dbg_send_shared": "Archivio allegato: scegli Telegram, poi AutoSystemBoost e l’argomento Bugs"
+  "dbg_send_shared": "Archivio allegato: scegli Telegram, poi AutoSystemBoost e l’argomento Bugs",
+  "kernel_wb_unsupported": "Il tuo kernel non può bloccare le sorgenti di risveglio per nome. È una funzione dei kernel personalizzati con un bloccatore integrato (ad esempio KRILIKD); i kernel di serie non ce l’hanno, quindi qui non c’è nulla da impostare e ASB non cambia nulla.",
+  "nf_part_bucket": "Android la tiene nel gruppo delle app usate di rado"
 }

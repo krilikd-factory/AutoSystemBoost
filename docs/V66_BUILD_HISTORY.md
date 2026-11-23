@@ -5,6 +5,50 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test19 - late notifications from rarely opened apps, wake rules on stock kernels, logs to Telegram
+
+Input: the owner's report on test18 (Mail.ru pushes late although the notification fix read
+"fixed, confirmed by Android"), his own capture (asbdiag FAIL=0, day report, Zygisk report),
+and a tester's question with bot-collected logs (OnePlus 15R CPH2769, stock kernel): the
+wake-rules card read "the kernel does not expose the interface".
+
+### Notifications from rarely opened apps
+- Root cause: Android puts an app that is seldom opened into the rare or restricted standby
+  bucket, and there its high-priority pushes are deferred and its jobs wait for a window. The
+  fix checked Doze, background, data and ASB policy, but not the bucket, so it could read
+  "confirmed" while the bucket still held the push back.
+- Applying the fix (and the periodic re-apply) now lifts a rare/restricted app to the working
+  set and marks it active; the read-back fails while the bucket is still rare, and the app row
+  names it ("Android keeps it in a rare-use standby bucket"). Untick and removal are unchanged.
+
+### Wake rules on a stock kernel
+- When the kernel has no wakeup blocker (`not_exposed`), the card no longer shows an empty
+  editor: it says in plain words that blocking wakeup sources by name is a feature of custom
+  kernels that ship a blocker, that a stock kernel has none, and that ASB changes nothing.
+
+### Logs from users: the archive reaches Telegram
+- A tester pressed "Send logs to Bugs" and saw only a browser, no archive. The archive was
+  written as root, so the media index that Telegram's file picker reads did not know it, and
+  the t.me link opened in a browser on his phone. Now the archive is indexed first and the
+  share sheet opens with it already attached; without a media entry the Bugs topic opens in
+  the Telegram app (tg://), and the browser link is the last resort.
+- An infinite-log report still being written (`*.part`) is no longer packed.
+- First logs collected by the bot (two testers, Ace 6 on a WildKernel 6.6 and CPH2691, both on
+  test18): asbdiag FAIL=0 on both; nothing in the infinite logs points at ASB (app crashes
+  are MediaProvider and a third-party root service).
+
+### WebUI
+- A segment row with long labels (Factory CPU ceiling: Off · Performance profile · Always) put
+  its control over the name and covered the row's status line (owner's screenshot). Such a row
+  now shows its control on a full-width line under the name; long single-word names hyphenate
+  instead of running under a slider.
+
+### Tests
+- `t_notif_fix_runtime`: the `am` stub keeps a standby bucket per app; a rare bucket is lifted on
+  apply and the row reads back the working set.
+- `t_webui_kernel_panel_runtime`: one more kernel locale key.
+
+
 ## V66-test18 (second build) - LHDC helper reaches Bluetooth, every section as a console, scroll guard
 
 Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playing, rate set to
@@ -18,17 +62,6 @@ Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playin
   own `BluetoothServiceManager` before asking for the adapter, and a missing adapter carries its
   cause (`no_adapter:<why>`) into the state file and asbdiag.
 
-### Logs from users: the archive reaches Telegram
-- A tester pressed "Send logs to Bugs" and saw only a browser, no archive. The archive was
-  written as root, so the media index that Telegram's file picker reads did not know it, and
-  the t.me link opened in a browser on his phone. Now the archive is indexed first and the
-  share sheet opens with it already attached; without a media entry the Bugs topic opens in
-  the Telegram app (tg://), and the browser link is the last resort.
-- An infinite-log report still being written (`*.part`) is no longer packed.
-- First logs collected by the bot (two testers, Ace 6 on a WildKernel 6.6 and CPH2691, both on
-  test18): asbdiag FAIL=0 on both; nothing in the infinite logs points at ASB (app crashes
-  are MediaProvider and a third-party root service).
-
 ### WebUI: sections as consoles
 - Every settings section with more than one tweak is now one console in the DSP engine's
   language: Playback & Bluetooth (output and volume, Bluetooth link, codec quality); Battery -
@@ -40,11 +73,6 @@ Input: the owner's asbdiag of 22:45 on test18 (OnePlus 15, LHDC V5 48 kHz playin
   only when it says something (unavailable, after reboot, a warning, Smart ownership).
   Kernel management keeps its own rows (they carry live kernel evidence).
 - Long slider values (Wi-Fi scan rate) wrap inside the console instead of running off the edge.
-- A segment row with long labels (Factory CPU ceiling: Off · Performance profile · Always) put
-  its control over the name and covered the row's status line (owner's screenshot). Such a row
-  now shows its control on a full-width line under the name; long single-word names hyphenate
-  instead of running under a slider.
-
 ### WebUI: no settings changed by scrolling
 - Sliders move only for a deliberate sideways drag: the first 8 px of the finger decide, a
   mostly vertical move is a scroll (the thumb snaps back, nothing is saved, and the page scrolls

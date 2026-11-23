@@ -4414,5 +4414,7 @@
   "con_grp_oem": "Chaves OEM",
   "con_grp_processes": "Processos",
   "con_grp_logs": "Registros",
-  "dbg_send_shared": "Arquivo anexado: escolha o Telegram, depois AutoSystemBoost e o tópico Bugs"
+  "dbg_send_shared": "Arquivo anexado: escolha o Telegram, depois AutoSystemBoost e o tópico Bugs",
+  "kernel_wb_unsupported": "Seu kernel não consegue bloquear fontes de despertar pelo nome. É um recurso de kernels personalizados com bloqueador embutido (por exemplo, KRILIKD); kernels de fábrica não têm, então não há nada a ajustar aqui e o ASB não muda nada.",
+  "nf_part_bucket": "O Android a mantém no grupo de apps pouco usados"
 }

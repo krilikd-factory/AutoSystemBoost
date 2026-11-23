@@ -14043,6 +14043,14 @@ function cfgRenderWakeupBlockerCard(list) {
   head.appendChild(titles);
   head.appendChild(kernelStateBadge(wb ? (wb.node === 'writable' ? 'available' : (wb.node === 'not_writable' ? 'read_only' : wb.node)) : ((_kernelPanel.loading || _kernelPanel.queued) ? 'loading' : 'unknown')));
   card.appendChild(head);
+  /* A kernel without the blocker interface (every stock OnePlus kernel) cannot take these
+   * rules at all. A tester read the full editor under the badge as something he had to set
+   * up; such a kernel now gets one plain line and nothing to press. */
+  if (wb && wb.node === 'not_exposed') {
+    card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_unsupported', 'Your kernel cannot block wakeup sources by name. It is a feature of custom kernels that ship a wakeup blocker (KRILIKD has one); stock kernels do not, so there is nothing to set here and ASB changes nothing.')));
+    list.appendChild(card);
+    return;
+  }
   const details = kernelMoreBlock(card, 'wb', [bfxEl('div', 'kernel-card-sub', T('kernel_wb_sub', 'Up to 16 names, 1–63 printable ASCII characters each. No spaces, paths, patterns or automatic rules.')), bfxEl('div', 'kernel-note', T('kernel_wb_warning', 'Only add a name after diagnosing a concrete wakeup source. Blocking can delay notifications, networking or sensors. Existing locks are not force-released.'))]);
   if (wb) kernelWakeupObservedList(card, wb);
   const editor = bfxEl('div', 'kernel-editor');
@@ -18011,6 +18019,11 @@ function nfRowProblems(r) {
   if (r.doze === 'none') out.push(T('nf_part_doze', 'no Doze exemption'));
   if (/ignore|deny|errored/.test(r.ra + r.rb + r.wk)) out.push(T('nf_part_bg', 'background restricted'));
   if (r.bg === 'denied' || r.bg === 'saver') out.push(T('nf_part_data', 'background data blocked'));
+  /* Android parks apps you seldom open in the rare or restricted standby bucket, where pushes
+   * that are not high priority wait for a batch window. A rarely opened mail app stayed
+   * there while the card said "fixed"; the fix now lifts the app and the row says so if
+   * Android put it back. */
+  if (/^(40|45|rare|restricted)$/.test(String(r.bucket || ''))) out.push(T('nf_part_bucket', 'Android keeps it in a rare-use standby bucket'));
   return out;
 }
 function nfLedgerLoad(r) {

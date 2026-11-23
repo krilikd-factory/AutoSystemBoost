@@ -4414,5 +4414,7 @@
   "con_grp_oem": "OEM-Schalter",
   "con_grp_processes": "Prozesse",
   "con_grp_logs": "Protokolle",
-  "dbg_send_shared": "Archiv angehängt: Telegram wählen, dann AutoSystemBoost und das Thema Bugs"
+  "dbg_send_shared": "Archiv angehängt: Telegram wählen, dann AutoSystemBoost und das Thema Bugs",
+  "kernel_wb_unsupported": "Ihr Kernel kann Weckquellen nicht nach Namen sperren. Das können nur Custom-Kernel mit eingebautem Wecksperrer (z. B. KRILIKD); Stock-Kernel nicht – hier gibt es nichts einzustellen, ASB ändert nichts.",
+  "nf_part_bucket": "Android hält sie in der Standby-Gruppe für selten genutzte Apps"
 }

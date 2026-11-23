@@ -4414,5 +4414,7 @@
   "con_grp_oem": "مفاتيح OEM",
   "con_grp_processes": "العمليات",
   "con_grp_logs": "السجلات",
-  "dbg_send_shared": "تم إرفاق الأرشيف: اختر Telegram ثم AutoSystemBoost وموضوع Bugs"
+  "dbg_send_shared": "تم إرفاق الأرشيف: اختر Telegram ثم AutoSystemBoost وموضوع Bugs",
+  "kernel_wb_unsupported": "لا يستطيع نواتك حظر مصادر الإيقاظ بالاسم. هذه ميزة الأنوية المخصصة التي تتضمن حاجبًا (مثل KRILIKD)؛ الأنوية الأصلية لا تملكها، لذا لا شيء لضبطه هنا ولا يغيّر ASB شيئًا.",
+  "nf_part_bucket": "يُبقيه Android في مجموعة التطبيقات نادرة الاستخدام"
 }

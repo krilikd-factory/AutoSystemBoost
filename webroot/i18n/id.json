@@ -4414,5 +4414,7 @@
   "con_grp_oem": "Sakelar OEM",
   "con_grp_processes": "Proses",
   "con_grp_logs": "Log sistem",
-  "dbg_send_shared": "Arsip terlampir: pilih Telegram, lalu AutoSystemBoost dan topik Bugs"
+  "dbg_send_shared": "Arsip terlampir: pilih Telegram, lalu AutoSystemBoost dan topik Bugs",
+  "kernel_wb_unsupported": "Kernel Anda tidak bisa memblokir sumber bangun berdasarkan nama. Ini fitur kernel kustom dengan pemblokir bawaan (misalnya KRILIKD); kernel bawaan tidak memilikinya, jadi tidak ada yang perlu diatur dan ASB tidak mengubah apa pun.",
+  "nf_part_bucket": "Android menyimpannya di grup aplikasi yang jarang dipakai"
 }

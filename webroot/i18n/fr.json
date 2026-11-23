@@ -4414,5 +4414,7 @@
   "con_grp_oem": "Interrupteurs OEM",
   "con_grp_processes": "Processus système",
   "con_grp_logs": "Journaux",
-  "dbg_send_shared": "Archive jointe : choisissez Telegram, puis AutoSystemBoost et le sujet Bugs"
+  "dbg_send_shared": "Archive jointe : choisissez Telegram, puis AutoSystemBoost et le sujet Bugs",
+  "kernel_wb_unsupported": "Votre noyau ne peut pas bloquer les sources de réveil par nom. C’est une fonction des noyaux personnalisés dotés d’un bloqueur (KRILIKD par exemple) ; les noyaux d’origine ne l’ont pas : rien à régler ici, ASB ne change rien.",
+  "nf_part_bucket": "Android la garde dans le groupe des applis rarement utilisées"
 }

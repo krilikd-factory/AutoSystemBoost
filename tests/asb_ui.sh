@@ -8872,7 +8872,7 @@ for token in ('function kernelWakeupSourceDialogOpen', 'function kernelWakeupSou
 assert '.kernel-sources-scroll' in h and 'overflow-y:auto' in h and 'max-height:52vh' in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 138, len(new)
+assert len(new) == 139, len(new)
 assert 'kernel_wb_saved_toast' in new
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
