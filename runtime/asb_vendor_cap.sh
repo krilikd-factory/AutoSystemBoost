@@ -91,7 +91,7 @@ _lift_node() {
   fi
   if ! _node_lifted "$_want_v"; then
     chmod 0644 "$NODE" 2>/dev/null
-    echo "$_want_v" > "$NODE" 2>/dev/null
+    echo "$_want_v" 2>/dev/null > "$NODE"
     _node_lifted "$_want_v" || { _restore_node; return 1; }
     _log "vendor ceiling lifted: $_want_v"
   fi
@@ -99,16 +99,32 @@ _lift_node() {
   return 0
 }
 _restore_node() {
+  _vr_node=none
   [ "$(_own_get node)" = 1 ] || return 0
   _om="$(_own_get node_mode)"
   _ov="$(_own_get node_orig)"
-  if [ -e "$NODE" ]; then
+  case "$_om" in [0-7][0-7][0-7]) ;; *) _om=644 ;; esac
+  if [ ! -e "$NODE" ]; then
+    _vr_node=absent
+  else
     chmod 0644 "$NODE" 2>/dev/null
     if _valid_orig "$_ov"; then
-      echo "$_ov" > "$NODE" 2>/dev/null
-      _log "vendor ceiling handed back: $_ov"
+      echo "$_ov" 2>/dev/null > "$NODE"
+      if ! _node_lifted "$_ov"; then
+        chmod "$_om" "$NODE" 2>/dev/null
+        _vr_node=failed
+        _log "vendor ceiling hand-back refused: wanted $_ov, node reads $(_trim "$NODE"); ownership kept"
+        return 1
+      fi
     fi
-    case "$_om" in [0-7][0-7][0-7]) chmod "$_om" "$NODE" 2>/dev/null ;; *) chmod 0644 "$NODE" 2>/dev/null ;; esac
+    chmod "$_om" "$NODE" 2>/dev/null
+    if [ "$(_mode_of "$NODE")" != "$_om" ]; then
+      _vr_node=failed
+      _log "vendor ceiling mode not restored: wanted $_om, node is $(_mode_of "$NODE"); ownership kept"
+      return 1
+    fi
+    _vr_node=restored
+    _log "vendor ceiling handed back: ${_ov:-unchanged} mode $_om"
   fi
   _own_put node ""
   _own_put node_orig ""
@@ -125,7 +141,7 @@ _lift_game() {
     _own_put game 1
   fi
   [ "$_gv" = 1 ] && return 0
-  echo 1 > "$GDIS" 2>/dev/null
+  echo 1 2>/dev/null > "$GDIS"
   _gv=""
   read -r _gv < "$GDIS" 2>/dev/null
   [ "$_gv" = 1 ] || { _restore_game; return 1; }
@@ -133,11 +149,22 @@ _lift_game() {
   return 0
 }
 _restore_game() {
+  _vr_game=none
   [ "$(_own_get game)" = 1 ] || return 0
   _go="$(_own_get game_orig)"
   case "$_go" in 0|1) ;; *) _go=0 ;; esac
-  if [ -e "$GDIS" ]; then
-    echo "$_go" > "$GDIS" 2>/dev/null
+  if [ ! -e "$GDIS" ]; then
+    _vr_game=absent
+  else
+    echo "$_go" 2>/dev/null > "$GDIS"
+    _gr=""
+    read -r _gr < "$GDIS" 2>/dev/null
+    if [ "$_gr" != "$_go" ]; then
+      _vr_game=failed
+      _log "game scene ceiling hand-back refused: wanted $_go, reads ${_gr:-nothing}; ownership kept"
+      return 1
+    fi
+    _vr_game=restored
     _log "game scene ceiling handed back: $_go"
   fi
   _own_put game ""
@@ -145,23 +172,32 @@ _restore_game() {
   return 0
 }
 _restore_all() {
-  _restore_node
-  _restore_game
-  rm -f "$OWN" "$OWN.tmp" 2>/dev/null
+  _ra=0
+  _restore_node || _ra=1
+  _restore_game || _ra=1
+  [ "$_ra" = 0 ] && rm -f "$OWN" "$OWN.tmp" 2>/dev/null
+  return "$_ra"
+}
+_restore_report() {
+  echo "node_restore=${_vr_node:-none}"
+  echo "game_restore=${_vr_game:-none}"
+  [ "$1" = 0 ] || echo "ownership=retained"
 }
 
 case "${1:-status}" in
   apply|sync)
     if _o="$(_other_owner)"; then
-      _restore_all
-      echo "result=other_owner"
+      _restore_all; _rr=$?
+      if [ "$_rr" = 0 ]; then echo "result=other_owner"; else echo "result=restore_failed"; fi
       echo "owner=$_o"
-      exit 0
+      _restore_report "$_rr"
+      exit "$_rr"
     fi
     if ! _want; then
-      _restore_all
-      echo "result=stock"
-      exit 0
+      _restore_all; _rr=$?
+      if [ "$_rr" = 0 ]; then echo "result=stock"; else echo "result=restore_failed"; fi
+      _restore_report "$_rr"
+      exit "$_rr"
     fi
     _lift_node; _rn=$?
     _lift_game; _rg=$?
@@ -175,8 +211,10 @@ case "${1:-status}" in
     echo "game_scene=$([ "$_rg" = 0 ] && echo lifted || { [ "$_rg" = 2 ] && echo absent || echo refused; })"
     ;;
   restore|stop)
-    _restore_all
-    echo "result=restored"
+    _restore_all; _rr=$?
+    if [ "$_rr" = 0 ]; then echo "result=restored"; else echo "result=restore_failed"; fi
+    _restore_report "$_rr"
+    exit "$_rr"
     ;;
   status)
     echo "version=1"

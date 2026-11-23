@@ -14,9 +14,10 @@ on:
 # fails with "Resource not accessible by integration", marking the whole run red for a
 # release that was in fact built correctly. That is exactly what happened on the V60
 # run: the log shows "Found release ASB-V60" (read OK) followed by a 403 on the update.
-# contents: write is the least privilege that lets the step attach an asset.
+# contents: write is the least privilege that lets the step attach an asset; only the release
+# job gets it, the regression job reads.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   regression:
@@ -89,6 +90,8 @@ jobs:
     needs: regression
     runs-on: ubuntu-latest
     name: Release (unified diagnostics)
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout

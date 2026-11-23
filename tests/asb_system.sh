@@ -10755,6 +10755,10 @@ t_bt_ldac_quality_runtime() (
   j="$ROOT/src/btcodec/asb/BtCodec.java"
   grep -q 'SOURCE_CODEC_TYPE_LDAC' "$j" && grep -q 'getCodecSpecific1' "$j" || fail 'helper does not check LDAC/read back'
   grep -q 'getCodecsSelectableCapabilities' "$j" && grep -q 'gotRate == rt' "$j" || fail 'rate not checked against the headset or read back'
+  sed -n '/private static void applyOnce/,/final long rt = r;/p' "$j" > "$T/apply.java"
+  grep -q 'if (sel < 0) rateNote = rateNote + "\\nrate_support=unknown' "$T/apply.java" && ! grep -q 'sel >= 0 && (sel & wantRate) == 0' "$T/apply.java" \
+    || fail 'unreadable headset capabilities still lead to a rate write'
+  sed -n '/private static void state(String s, String extra)/,/^    }/p' "$j" | grep -q 'renameTo' || fail 'the helper state file is still truncated in place (a concurrent status read sees it empty)'
   grep -q 'getField("SOURCE_CODEC_TYPE_LDAC")' "$j" && grep -q 'n.contains("LDAC")' "$j" || fail 'LDAC found by a hard-coded number only (OPlus LHDC builds renumber codecs)'
   grep -q 'if (!ldac && wantRate == 0)' "$j" || fail 'a fixed rate is still limited to LDAC'
   grep -q 'state("failed"' "$j" || fail 'a helper that dies at start leaves no trace'
@@ -10844,6 +10848,17 @@ t_vendor_cap_runtime() (
   echo balanced > "$M/current_profile"; printf 'cpu_vendor_unlock=off\n' > "$M/config/governor.conf"
   run sync | grep -qx result=stock || fail 'off lifted'
   printf 'cpu_vendor_unlock=perf\n' > "$M/config/governor.conf"; echo performance > "$M/current_profile"
+  run sync | grep -qx result=lifted || fail 'Performance did not lift again'
+  chmod 0644 "$N"; rm -f "$N"; mkdir "$N"
+  echo balanced > "$M/current_profile"
+  rc=0; out="$(run sync)" || rc=$?
+  [ "$rc" != 0 ] && printf '%s\n' "$out" | grep -qx result=restore_failed && printf '%s\n' "$out" | grep -qx node_restore=failed \
+    || fail "a refused hand-back was reported as Stock (rc=$rc): $out"
+  grep -qx node=1 "$T/s/vendor_cap" && grep -q "^node_orig=$orig" "$T/s/vendor_cap" || fail 'a refused hand-back dropped the ownership and the baseline'
+  rmdir "$N"; echo '0:3532800 1:3532800 2:3532800 3:3532800 4:3532800 5:3532800 6:4473600 7:4473600' > "$N"; chmod 0444 "$N"
+  run sync | grep -qx result=stock || fail 'the retained baseline was not handed back on the next sync'
+  [ "$(tr -s ' ' < "$N" | sed 's/ $//')" = "$orig" ] && [ ! -e "$T/s/vendor_cap" ] || fail 'the retained baseline was not restored exactly'
+  echo performance > "$M/current_profile"
   mkdir -p "$T/mods/oplus-cloud-block"
   run sync | grep -qx result=other_owner || fail 'fought another ceiling module'
   [ "$(stat -c %a "$N")" = 644 ] || fail 'locked the node while another module owns it'
@@ -10854,7 +10869,7 @@ t_vendor_cap_runtime() (
   grep -q 'asb_vendor_cap.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall does not hand back'
   grep -q 'asb_vendor_cap.sh" sync' "$ROOT/apply_profile.sh" || fail 'profile switch does not follow'
   grep -q 'asb_vendor_cap.sh" sync' "$ROOT/service.sh" || fail 'boot does not apply'
-  echo 'PASS vendor cap: Performance-only by default, hardware maximum, locked, game ceiling off, exact hand-back, no fight with another owner'
+  echo 'PASS vendor cap: Performance-only by default, hardware maximum, locked, game ceiling off, exact hand-back with read-back, a refused hand-back keeps ownership and retries, no fight with another owner'
 )
 
 t_debug_log_bundle_runtime() (
@@ -10892,6 +10907,11 @@ t_debug_log_bundle_runtime() (
   out2="$(run bundle)"
   printf '%s\n' "$out2" | grep -qx "id=$id1" && printf '%s\n' "$out2" | grep -qx 'reused=1' || fail 'unchanged logs got a second archive'
   [ "$(ls "$T/out" | wc -l)" -eq 1 ] || fail 'a second archive of the same logs was written'
+  printf 'x' >> "$T/logs/asb_log_full_day_7/env.txt"; touch -d '-1 hour' "$T/logs/asb_log_full_day_7/env.txt" "$T/logs/asb_log_full_day_7"
+  out2b="$(run bundle)"
+  printf '%s\n' "$out2b" | grep -qx 'reused=1' && fail 'a log changed by one byte (same disk usage) reused the old archive'
+  tar -xOf "$(printf '%s\n' "$out2b" | sed -n 's/^path=//p')" asb_bundle.txt | grep -q '^source_fingerprint=[0-9]' || fail 'the archive carries no source fingerprint'
+  id1="$(printf '%s\n' "$out2b" | sed -n 's/^id=//p')"
   echo newer > "$T/logs/asbdiag_20260104_000000.txt"
   out3="$(run bundle)"
   id3="$(printf '%s\n' "$out3" | sed -n 's/^id=//p')"
@@ -10932,6 +10952,17 @@ STUB
   grep -q 'tg://resolve?domain=AutoSystemBoost' "$T/stub.log" || fail 'the Telegram app link was not tried first'
   grep -q 'https://t.me' "$T/stub.log" && fail 'the browser was opened although Telegram took the link'
   out="$(share "$T/none.tar.gz")"; printf '%s\n' "$out" | grep -qx 'error=no_archive' || fail 'sharing a missing archive'
+  mkdir -p "$T/sd/Download" "$T/fuse/Download" "$T/fb"
+  sed -n '/^bundle_media_own() {/,/^}/p' "$ROOT/runtime/asb_debug_support.sh" > "$T/fns.sh"
+  head -c 5000 /dev/urandom > "$T/sd/Download/a.tar.gz"; cp "$T/sd/Download/a.tar.gz" "$T/a.ref"
+  mo="$(ASB_MEDIA_PREFIX="$T/sd" ASB_FUSE_ROOT="$T/fuse" sh -c '. "$1"; bundle_media_own "$2"' x "$T/fns.sh" "$T/sd/Download/a.tar.gz")"
+  printf '%s\n' "$mo" | grep -qx media_owner=fuse && cmp -s "$T/fuse/Download/a.tar.gz" "$T/a.ref" || fail "the archive was not rewritten through the media view: $mo"
+  rm -f "$T/fuse/Download/a.tar.gz"
+  printf '#!/bin/sh\nhead -c 100 "$1"\n' > "$T/fb/cat"; chmod 755 "$T/fb/cat"
+  mo="$(PATH="$T/fb:$PATH" ASB_MEDIA_PREFIX="$T/sd" ASB_FUSE_ROOT="$T/fuse" sh -c '. "$1"; bundle_media_own "$2"' x "$T/fns.sh" "$T/sd/Download/a.tar.gz")"
+  printf '%s\n' "$mo" | grep -qx media_fuse=failed || fail "a truncated media-view copy was taken as success: $mo"
+  cmp -s "$T/sd/Download/a.tar.gz" "$T/a.ref" && [ ! -e "$T/fuse/Download/a.tar.gz" ] && [ ! -e "$T/fuse/Download/a.tar.gz.share.tmp" ] \
+    || fail 'a failed media-view rewrite lost or left a partial archive'
   rm -rf "$T/logs" "$T/out" "$T/st"; mkdir -p "$T/logs" "$T/out"
   for n in 1 2 3; do mkdir -p "$T/logs/asb_log_full_day_$n"; echo x > "$T/logs/asb_log_full_day_$n/env.txt"; touch -d '-10 days' "$T/logs/asb_log_full_day_$n/env.txt" "$T/logs/asb_log_full_day_$n"; done
   echo old > "$T/logs/asbdiag_20250101_000000.txt"; touch -d '-9 days' "$T/logs/asbdiag_20250101_000000.txt"

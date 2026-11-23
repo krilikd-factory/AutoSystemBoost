@@ -988,6 +988,18 @@ bundle_log_dir() {
   bundle_newest 'asb_log_full_day_*' d 259200
 }
 
+bundle_fingerprint() {
+  command -v cksum >/dev/null 2>&1 || return 0
+  {
+    [ -n "$1" ] && [ -d "$1" ] && find "$1" -type f ! -name '*.tmp' ! -name '*.part' 2>/dev/null | sort | while IFS= read -r _fpf; do
+      stat -c '%n %s %Y' "$_fpf" 2>/dev/null
+    done
+    for _fpf in "$2" "$3"; do
+      [ -n "$_fpf" ] && stat -c '%n %s %Y' "$_fpf" 2>/dev/null
+    done
+  } | cksum 2>/dev/null | cut -d' ' -f1
+}
+
 bundle_check() {
   _now="$(date +%s 2>/dev/null || echo 0)"
   _d="$(bundle_newest 'asbdiag_*.txt' f 259200 2>/dev/null || true)"
@@ -1005,21 +1017,21 @@ bundle_am() {
 
 bundle_media_own() {
   _mo="$1"
-  case "$_mo" in /storage/emulated/0/*) ;; *) return 0 ;; esac
-  _mr="${_mo#/storage/emulated/0/}"
+  _mp="${ASB_MEDIA_PREFIX:-/storage/emulated/0}"
+  case "$_mo" in "$_mp"/*) ;; *) return 0 ;; esac
+  _mr="${_mo#"$_mp"/}"
   _mf="${ASB_FUSE_ROOT:-/mnt/user/0/emulated/0}"
-  _mt="${ASB_MEDIA_TMP:-/data/local/tmp}/asb_share.$$"
   if [ -d "$_mf" ] && grep -q ' /mnt/user/0/emulated fuse' /proc/mounts 2>/dev/null || [ -n "${ASB_FUSE_ROOT:-}" ]; then
-    if cp -f "$_mo" "$_mt" 2>/dev/null; then
-      rm -f "$_mo" 2>/dev/null
-      if cat "$_mt" > "$_mf/$_mr" 2>/dev/null && [ -s "$_mf/$_mr" ]; then
-        rm -f "$_mt" 2>/dev/null
-        echo 'media_owner=fuse'
-        return 0
-      fi
-      cp -f "$_mt" "$_mo" 2>/dev/null
-      rm -f "$_mt" 2>/dev/null
+    _mt="$_mf/$_mr.share.tmp"
+    _msz="$(wc -c < "$_mo" 2>/dev/null | tr -dc '0-9')"
+    if cat "$_mo" > "$_mt" 2>/dev/null && [ -n "$_msz" ] && [ "$(wc -c < "$_mt" 2>/dev/null | tr -dc '0-9')" = "$_msz" ] \
+       && { ! command -v cmp >/dev/null 2>&1 || cmp -s "$_mo" "$_mt"; } \
+       && mv -f "$_mt" "$_mf/$_mr" 2>/dev/null && [ "$(wc -c < "$_mf/$_mr" 2>/dev/null | tr -dc '0-9')" = "$_msz" ]; then
+      echo 'media_owner=fuse'
+      return 0
     fi
+    rm -f "$_mt" 2>/dev/null
+    echo 'media_fuse=failed'
   fi
   _md="${_mo%/*}"
   _mug="$(stat -c '%u:%g' "$_md" 2>/dev/null)"
@@ -1095,10 +1107,15 @@ bundle_logs() {
   [ -d "$_bo" ] || { echo 'error=bundle_dir_failed'; return 5; }
   _lb=0
   [ -n "$_l" ] && _lb="$(du -sk "$_l" 2>/dev/null | cut -f1 | tr -dc '0-9')"
-  _key="${_d##*/}/${_l##*/}/${_lb:-0}/${_r##*/}/$(wc -c < "${_d:-/dev/null}" 2>/dev/null | tr -dc '0-9')"
+  _fp="$(bundle_fingerprint "$_l" "$_d" "$_r")"
+  _active=0
+  _ao=""
+  [ -r "$OUTPUTFILE" ] && _ao="$(tr -d '\r\n' < "$OUTPUTFILE" 2>/dev/null)"
+  [ -n "$_ao" ] && [ "$_ao" = "$_l" ] && _active=1
+  _key="${_d##*/}/${_l##*/}/${_r##*/}/$_fp"
   _last="$STATE_DIR/bundle.last"
   _id=""
-  if [ -r "$_last" ] && [ "$(sed -n 's/^key=//p' "$_last" | head -n 1)" = "$_key" ]; then
+  if [ -n "$_fp" ] && [ "$_active" = 0 ] && [ -r "$_last" ] && [ "$(sed -n 's/^key=//p' "$_last" | head -n 1)" = "$_key" ]; then
     _id="$(sed -n 's/^id=//p' "$_last" | head -n 1 | tr -dc '0-9a-f_-')"
     _old="$(sed -n 's/^path=//p' "$_last" | head -n 1)"
     if [ -n "$_id" ] && [ -s "$_old" ]; then
@@ -1120,6 +1137,8 @@ bundle_logs() {
     echo "log=${_l##*/}"
     echo "log_kb=${_lb:-0}"
     echo "report=${_r##*/}"
+    echo "source_fingerprint=${_fp:-unknown}"
+    echo "recorder_active=$_active"
   } > "$_mf" 2>/dev/null || { echo 'error=bundle_failed'; return 6; }
   _bl="$STATE_DIR/bundle.list"
   mkdir -p "$STATE_DIR" 2>/dev/null

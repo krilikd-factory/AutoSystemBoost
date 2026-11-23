@@ -8991,7 +8991,7 @@ int main(int argc, char **argv) {
      * GPU next to a busy CPU reads as GAMING. */
     asb_fg_classify_tick(&metrics, &fsm);
     metrics.misc.app_hint = g_smart_rt.app_hint;
-            metrics.misc.app_no_gpu_latch = asb_smart_pkg_no_gpu_latch(g_smart_rt.app_pkg_cached);
+    metrics.misc.app_no_gpu_latch = asb_smart_pkg_no_gpu_latch(g_smart_rt.app_pkg_cached);
     fsm_update(&fsm, &metrics);
 
     /* detect initial user ID */

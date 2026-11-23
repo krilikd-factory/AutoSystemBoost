@@ -5,6 +5,42 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test23 - failures handled honestly: Bluetooth rate, vendor ceiling hand-back, log archive freshness and integrity
+
+Input: an external audit of test22 (correctness of failure paths, not new tuning). Taken: the
+Bluetooth unknown-capability write, a transactional vendor-ceiling hand-back, a log-archive
+fingerprint, a verified media-view rewrite, an atomic helper state file, a two-phase console
+fit, release-job permissions. Left as they are, with the reasons in the owner's reply: the
+compare-and-restore of the vendor node (the "foreign" writer of that node is ASB's own governor,
+and Stock must get the vendor value back), restoring the old standby bucket on untick (Android
+re-ranks buckets itself; writing back a stale "rare" would hold pushes again), the 30-minute
+Bluetooth safety tick (broadcasts can be missed; one tick per half hour, uptime clock), action
+SHA pinning and a source/release manifest split (release process, next round).
+
+- **Bluetooth (helper, dex rebuilt in CI):** when the headset's selectable rates cannot be read,
+  the fixed sample rate is no longer written; the state says `rate_support=unknown` and the rate
+  that was kept. Absent bit: `rate_unsupported` as before. The helper's state file is written to
+  a temporary file and renamed, so a status read never sees it empty or half written.
+- **Vendor CPU ceiling:** the hand-back reads the node and the game-scene switch back; a refused
+  write keeps the ownership and the original values (`result=restore_failed`,
+  `node_restore`/`game_restore`, `ownership=retained`, exit 1) and the next sync tries again.
+  Before, the ledger was cleared even when the write failed and Stock was reported.
+- **Send logs:** an archive is reused only when a fingerprint of every packed file (name, size,
+  mtime, plus asbdiag and report) is unchanged, and never while the infinite log is recording;
+  the archive carries `source_fingerprint` and `recorder_active`. A one-byte change that kept the
+  disk usage reused the old archive before.
+- **Media-view rewrite:** the archive is copied to a temporary file in the FUSE view, compared
+  (size, content) and only then renamed over the original; a short or failed copy leaves the
+  original untouched (`media_fuse=failed`) and falls back to the ownership fix.
+- **WebUI:** the console fit reads every row first and writes the classes after.
+- **CI:** the release workflow grants `contents: write` to the release job only.
+- **Native:** indentation of the GPU-latch line (no behaviour change).
+- **Tests:** vendor hand-back refused by the node (ownership and baseline kept, retried on the
+  next sync); a one-byte log change gets a new archive with a fingerprint; a truncated
+  media-view copy keeps the original; unknown Bluetooth capabilities lead to no rate write;
+  atomic helper state.
+
+
 ## V66-test22 - kernel values next to SMART, no duplicate pills, profile-scoped tweaks say when idle, an honest Trend sheet
 
 Input: the owner's screenshots of test21 (the Kernel consoles showed SMART but no kyber, 1 or 0

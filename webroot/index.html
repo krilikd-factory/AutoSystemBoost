@@ -13079,14 +13079,18 @@ function cfgConsoleWideControl(row) {
 function cfgConsoleFitLater(card) {
   if (typeof requestAnimationFrame !== 'function' || !card || !card.querySelectorAll) return;
   requestAnimationFrame(function () {
+    /* Two phases: every size is read first, then the classes are written, so one console
+     * costs one layout instead of one per tight row. */
+    const wide = [];
     Array.prototype.forEach.call(card.querySelectorAll('.cfg-row'), function (row) {
       if (!row.classList || row.classList.contains('asb-wide-ctl')) return;
       const seg = row.querySelector('.cfg-seg');
       if (!seg || !seg.offsetParent) return;
       let tight = seg.scrollWidth > seg.clientWidth + 1;
       Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { if (b.scrollWidth > b.clientWidth + 1) tight = true; });
-      if (tight) row.classList.add('asb-wide-ctl');
+      if (tight) wide.push(row);
     });
+    wide.forEach(function (row) { row.classList.add('asb-wide-ctl'); });
   });
 }
 /* A status pill earns its place in a console row only when it says something the control does

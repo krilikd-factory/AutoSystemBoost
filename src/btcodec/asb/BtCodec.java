@@ -345,7 +345,8 @@ public final class BtCodec {
         String rateNote = ldac ? "" : "\nquality_skipped=not_ldac";
         if (wantRate > 0 && r != wantRate) {
             long sel = selectableRates(dev, num(cfg, "getCodecType"));
-            if (sel >= 0 && (sel & wantRate) == 0) rateNote = "\nrate_unsupported=" + rateText(wantRate);
+            if (sel < 0) rateNote = rateNote + "\nrate_support=unknown\nrate_kept=" + rateText(r);
+            else if ((sel & wantRate) == 0) rateNote = rateNote + "\nrate_unsupported=" + rateText(wantRate);
             else r = wantRate;
         }
         final long rt = r;
@@ -416,10 +417,13 @@ public final class BtCodec {
 
     private static void state(String s, String extra) {
         if (stateFile == null) return;
-        try (FileOutputStream f = new FileOutputStream(stateFile)) {
+        java.io.File tmp = new java.io.File(stateFile + ".tmp");
+        try (FileOutputStream f = new FileOutputStream(tmp)) {
             f.write(("state=" + s + "\nwant=" + want + "\nwant_rate=" + rateText(wantRate) + "\nevents=" + (events ? "broadcast" : "uptime")
                 + (extra.isEmpty() ? "" : "\n" + extra) + "\nts=" + (System.currentTimeMillis() / 1000) + "\n").getBytes("UTF-8"));
-        } catch (Throwable ignored) { }
+            f.getFD().sync();
+        } catch (Throwable ignored) { tmp.delete(); return; }
+        if (!tmp.renameTo(new java.io.File(stateFile))) tmp.delete();
     }
 
     private static void finish(String msg, int rc) {
