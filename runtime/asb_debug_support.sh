@@ -1003,6 +1003,34 @@ bundle_am() {
   return 0
 }
 
+bundle_media_own() {
+  _mo="$1"
+  case "$_mo" in /storage/emulated/0/*) ;; *) return 0 ;; esac
+  _mr="${_mo#/storage/emulated/0/}"
+  _mf="${ASB_FUSE_ROOT:-/mnt/user/0/emulated/0}"
+  _mt="${ASB_MEDIA_TMP:-/data/local/tmp}/asb_share.$$"
+  if [ -d "$_mf" ] && grep -q ' /mnt/user/0/emulated fuse' /proc/mounts 2>/dev/null || [ -n "${ASB_FUSE_ROOT:-}" ]; then
+    if cp -f "$_mo" "$_mt" 2>/dev/null; then
+      rm -f "$_mo" 2>/dev/null
+      if cat "$_mt" > "$_mf/$_mr" 2>/dev/null && [ -s "$_mf/$_mr" ]; then
+        rm -f "$_mt" 2>/dev/null
+        echo 'media_owner=fuse'
+        return 0
+      fi
+      cp -f "$_mt" "$_mo" 2>/dev/null
+      rm -f "$_mt" 2>/dev/null
+    fi
+  fi
+  _md="${_mo%/*}"
+  _mug="$(stat -c '%u:%g' "$_md" 2>/dev/null)"
+  [ -n "$_mug" ] && chown "$_mug" "$_mo" 2>/dev/null
+  chmod 0664 "$_mo" 2>/dev/null
+  _mc="$(ls -Zd "$_md" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^u:object_r:/) { print $i; exit } }')"
+  [ -n "$_mc" ] && chcon "$_mc" "$_mo" 2>/dev/null
+  echo "media_owner=${_mug:-unknown}"
+  return 0
+}
+
 bundle_share() {
   _bp="$1"
   [ -n "$_bp" ] && [ -s "$_bp" ] || { echo 'error=no_archive'; return 3; }
@@ -1010,6 +1038,7 @@ bundle_share() {
   [ -n "$_bc" ] || _bc="$_bp"
   case "$_bc" in /sdcard/*) _bc="/storage/emulated/0/${_bc#/sdcard/}" ;; /storage/self/primary/*) _bc="/storage/emulated/0/${_bc#/storage/self/primary/}" ;; /data/media/0/*) _bc="/storage/emulated/0/${_bc#/data/media/0/}" ;; esac
   _bp="$_bc"
+  bundle_media_own "$_bp"
   content call --uri content://media/external/file --method scan_file --arg "$_bp" >/dev/null 2>&1 \
     || am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$_bp" >/dev/null 2>&1 || true
   _bid=""

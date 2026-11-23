@@ -5,6 +5,64 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test21 - what is applied is shown again, a disclosure caret that stays put, games by any capitalisation
+
+Input: the owner's screenshots of test20 (no live value next to the kernel controls, a caret
+that sat on the name's line in one row and under it in another, the Audio profile buttons
+broken over two lines, a green flash on a blue card) and the logs the bot collected on
+23 November: a CPH2745 (OnePlus 15) with 170 minutes of Soul Knight and a CPH2691 on test18.
+
+### Smart: games the package table missed
+- `com.ChillyRoom.DungeonShooter` played for 170 minutes with 19 % late frames and reached GAMING
+  only five times through the GPU latch: the substring fallback compared ".shooter" with the
+  package name as written, and studios capitalise freely. The fallback now compares in lower
+  case and matches "shooter" anywhere; the publisher table gains ChillyRoom, Kuro Games, Level
+  Infinite, Proxima Beta, Krafton, Nexon, NCSoft, Bandai Namco, Square Enix, Ubisoft, Sega,
+  Lilith, Hypergryph, Yostar and Niantic as games, and Innersloth, Mojang, Playrix, Rovio,
+  Miniclip, Outfit7, Kiloo, Imangi and Halfbrick as heavy apps (native, CI rebuild of the
+  governor needed).
+- The CPH2691 capture shows a screen-off drain from a VPN transport (app.rawline.mobile,
+  `tun0`) and a third-party Telegram client moving hundreds of MiB, not from ASB.
+
+### Logs from users: "Unsupported attachment" on test20 as well
+- The read grant of test20 did not help one tester (Magisk/APatch-style root shell), and the
+  archive failed in every app he shared it to: the archive is written by a root shell straight
+  to the storage underneath (root:root, a root umask, no media label), so the media provider
+  that serves the shared URI could not open it. On phones whose root shell sees Download through
+  the FUSE view it worked, which is why it worked for some. The archive is now rewritten through
+  the FUSE view (/mnt/user/0/emulated/0) when it is mounted, so the media provider creates, owns
+  and indexes it itself; otherwise it takes the Download folder's owner, mode 0664 and SELinux
+  label before it is indexed and shared.
+
+### WebUI: console rows
+- Every console row shows its status pill again - the live kernel value, the device read-back,
+  "after reboot", unavailable - and the Smart owner pill reads just "SMART"; a row at stock
+  shows none. All pills share one height, radius and left edge, and long ones wrap instead of
+  being cut.
+- The disclosure caret leads the name (pointing right, down when the description is open),
+  glued to the first word, so it sits at the same place in every row and never on a line of
+  its own; the console prefix strip still finds the name's text.
+- Segment buttons stay on one line; a row whose buttons do not fit (Audio profile:
+  "for equaliser · stock · hi-fi") moves its control to a full-width line, measured after
+  layout, and the length heuristic now starts at 20 characters.
+- Liquid Glass: a pressed tweak card borders in its own category colour instead of the accent
+  green; a console card and the rows inside it no longer flash on a tap.
+- Checked in Chromium for every category at 340-412 px in ru, uk, de, fr, tr and ar, plain and
+  Liquid Glass: no overlap of name, caret, icon, pills and control, no caret off the first line,
+  no clipped button or pill.
+
+### Log bot and kernel repository
+- ASB-logs: GitHub dropped four of the five 3-hourly scheduled runs on 23 November. The intake
+  now fires every hour and only works when the last collection is 2 h 50 min old, so a dropped
+  hour no longer skips a window; Telegram connection resets and timeouts are retried.
+- KRILIKD-kernel: the upstream `increase_ext4_default_commit_age` patch is kept out (denylist):
+  /data is f2fs on these phones, ext4 holds /metadata and other small partitions, so it saves no
+  writes and only widens the window for losing metadata on a crash; the review issue closed.
+
+### Tests
+- `t_smart_session2`: Soul Knight, a capitalised shooter and Minecraft are classified.
+
+
 ## V66-test20 - logs reach Telegram for every tester, tweak icons in every console, kernel consoles, a clearer logs menu
 
 Input: the owner's asbdiag of 2026-11-23 12:40 on test18: "GPU-bound rendering: GAMING reached

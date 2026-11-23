@@ -3237,7 +3237,7 @@ html[data-asb-theme="light"] .cfg-smart-owner {
 .cfg-row-top { cursor: pointer; }
 .cfg-caret {
   display: inline-block;
-  margin-left: 7px;
+  margin-left: 3px;
   font-size: 9px;
   opacity: 0.3;
   transition: transform 0.25s ease, opacity 0.2s ease;
@@ -3246,6 +3246,15 @@ html[data-asb-theme="light"] .cfg-smart-owner {
   transform: rotate(180deg);
   opacity: 0.55;
 }
+/* The leading caret: a small disclosure triangle before the name, pointing right while the
+ * description is closed and down while it is open. */
+.cfg-caret.cfg-caret-lead { display:inline; margin:0; padding:0; padding-inline-end:3px; font-size:9px; line-height:1; vertical-align:1px;
+  opacity:.45; transform:none; transition:opacity .2s ease; }
+.cfg-caret.cfg-caret-lead::before { content:'\25B8'; }
+.cfg-row.desc-open .cfg-caret.cfg-caret-lead { transform:none; opacity:.7; }
+.cfg-row.desc-open .cfg-caret.cfg-caret-lead::before { content:'\25BE'; }
+html[dir="rtl"] .cfg-caret.cfg-caret-lead::before { content:'\25C2'; }
+html[dir="rtl"] .cfg-row.desc-open .cfg-caret.cfg-caret-lead::before { content:'\25BE'; }
 .cfg-switch {
   position: relative;
   flex: 0 0 auto;
@@ -6058,12 +6067,18 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] .toast:not(.stock-restorin
 }
 html:root[data-asb-glass="1"] .pbtn.pbtn:active,
 html:root[data-asb-glass="1"] .cfg-tile.cfg-tile:active,
-html:root[data-asb-glass="1"] .cfg-row.cfg-row:active,
 html:root[data-asb-glass="1"] .cfg-backup.cfg-backup:active,
 html:root[data-asb-glass="1"] .cfg-reboot-tile.cfg-reboot-tile:active,
 html:root[data-asb-glass="1"] .log-menu-item.log-menu-item:active,
 html:root[data-asb-glass="1"] .lgr-hero[role="button"]:active {
   border-color:var(--border-active) !important;
+  box-shadow:inset 0 2px 7px rgba(0,0,0,.16) !important;
+}
+/* A pressed tweak card answers in its own category colour, not the accent green: a blue
+ * network card flashed a green frame for a moment. A console card and the rows inside it do
+ * not flash at all - a tap there opens a description or moves a control, nothing else. */
+html:root[data-asb-glass="1"] .cfg-row.cfg-row:not(.dsp-console):not(.dsp-console .cfg-row):active {
+  border-color:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 45%,var(--glass-edge,var(--border))) !important;
   box-shadow:inset 0 2px 7px rgba(0,0,0,.16) !important;
 }
 /* ── Device-visual corrections (fix323) ───────────────────────────────────────
@@ -6682,6 +6697,22 @@ html:root[data-asb-glass="1"] .dsp-console .dsp-console-panel .cfg-row.is-on .cf
   border-color:color-mix(in srgb,var(--cat-ink,var(--cat)) 38%,transparent) !important; }
 .dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-row-top { grid-template-columns:30px minmax(0,1fr); }
 .dsp-console .dsp-console-panel .cfg-row.asb-wide-ctl .cfg-row-top > :not(.cfg-icon):not(.cfg-main) { grid-column:1 / -1; }
+/* What is really applied: every console row keeps its status pill (the live kernel value, the
+ * device read-back, "after reboot", unavailable) next to its Smart owner; a row at stock shows
+ * none. Pills share one height, radius and baseline, and start at the name's left edge. */
+html .dsp-console .dsp-console-panel .cfg-status-row.cfg-status-row { display:flex !important; flex-wrap:wrap; align-items:center;
+  gap:5px; margin:5px 0 0; max-width:100%; }
+html .dsp-console .dsp-console-panel .cfg-status-row.cfg-status-row:not(:has(> :not(.off):not(.neutral):not(:empty))) { display:none !important; }
+html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-status,
+html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-smart-owner { display:inline-flex; align-items:center; margin:0;
+  min-height:20px; max-width:100%; padding:3px 8px; border-radius:10px; font:750 10px/1.3 var(--sans); letter-spacing:.04em;
+  white-space:normal; overflow-wrap:anywhere; vertical-align:middle; }
+html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-status:is(.off,.neutral),
+html .dsp-console .dsp-console-panel .cfg-status-row > .cfg-status:empty { display:none !important; }
+.dsp-console .dsp-console-panel .cfg-name { line-height:1.3; }
+/* Segment labels stay on one line; a row whose labels do not fit is moved to a full-width line
+ * by cfgConsoleFitLater, where the labels may wrap. */
+.dsp-console .dsp-console-panel .cfg-row:not(.asb-wide-ctl) .cfg-seg button { white-space:nowrap; }
 @media (max-width:380px) {
   .dsp-console.dsp-console { padding:8px !important; }
   .dsp-console .asb-console-mod.asb-console-mod { padding:9px 7px 3px; }
@@ -11960,7 +11991,7 @@ function cfgRenderZygiskCard(list, items) {
     const panel = cfgConsoleGroupPanel(card, T(g[0], g[1]), g[2], function (p, it) {
       cfgRenderRow(p, it, false);
       const nm = p.lastChild && p.lastChild.querySelector ? p.lastChild.querySelector('.cfg-name') : null;
-      const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
+      const tx = nm && nm.childNodes ? Array.prototype.find.call(nm.childNodes, function (n) { return n.nodeType === 3 && /\S/.test(n.nodeValue); }) || null : null;
       if (tx) tx.nodeValue = String(tx.nodeValue).replace(/\s*\(Zygisk\)\s*$/, '');
     });
     panel.className += ' cfg-zygisk-panel';
@@ -13006,7 +13037,7 @@ function cfgConsoleRefreshFrom(el) {
 function cfgConsoleWideControl(row) {
   if (!row || !row.querySelector || !row.classList) return;
   const seg = row.querySelector('.cfg-seg');
-  if (seg && String(seg.textContent || '').replace(/\s+/g, '').length > 24) row.classList.add('asb-wide-ctl');
+  if (seg && String(seg.textContent || '').replace(/\s+/g, '').length > 20) row.classList.add('asb-wide-ctl');
 }
 /* After layout: a segment row whose labels still do not fit (a longer translation, the glass
  * skin's wider buttons) moves its control onto its own full-width line. Measured, not guessed. */
@@ -13056,7 +13087,7 @@ function cfgRenderConsole(list, sectionItems, o) {
       }
       if (!o.strip) return;
       const nm = panel.lastChild && panel.lastChild.querySelector ? panel.lastChild.querySelector('.cfg-name') : null;
-      const tx = nm && nm.firstChild && nm.firstChild.nodeType === 3 ? nm.firstChild : null;
+      const tx = nm && nm.childNodes ? Array.prototype.find.call(nm.childNodes, function (n) { return n.nodeType === 3 && /\S/.test(n.nodeValue); }) || null : null;
       if (tx) tx.nodeValue = String(tx.nodeValue).replace(o.strip, '');
     });
     if (gp && Object.keys(gone).length) {
@@ -15362,11 +15393,14 @@ function cfgRenderRow(list, it, showCat) {
     main.className = 'cfg-main';
     const nm = document.createElement('div');
     nm.className = 'cfg-name';
+    /* The disclosure caret leads the name: always on the first line, at the same spot in
+     * every row. Trailing the text it fell onto a line of its own under some names. */
     nm.textContent = Tcfg(it.key, "name", it.name);
     const caret = document.createElement('span');
-    caret.className = 'cfg-caret';
-    caret.textContent = '\u25BE';
-    nm.appendChild(caret);
+    caret.className = 'cfg-caret cfg-caret-lead';
+    caret.setAttribute('aria-hidden', 'true');
+    caret.textContent = '\u00A0';
+    if (nm.insertBefore) nm.insertBefore(caret, nm.firstChild || null); else nm.appendChild(caret);
     main.appendChild(nm);
     const st = cfgStatus(it, cur);
     const badge = document.createElement('div');
@@ -15421,9 +15455,8 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       so.className = 'cfg-smart-owner';
       const _smartLabel = _smartOwner === 'profile' ? 'cfg_smart_owner_profile' :
         (_smartOwner === 'limit' ? 'cfg_smart_owner_limit' : 'cfg_smart_owner');
-      so.textContent = T(_smartLabel,
-        _smartOwner === 'profile' ? 'SMART · PROFILE' :
-        (_smartOwner === 'limit' ? 'SMART · LIMIT' : 'SMART · AUTO'));
+      so.textContent = _smartLabel === 'cfg_smart_owner' ? 'SMART' : T(_smartLabel,
+        _smartOwner === 'profile' ? 'SMART · PROFILE' : 'SMART · LIMIT');
       const _smartWhy = {
         dynamic:'Smart dynamically changes this live value within the mode you selected. Do not force it manually: that would fight the governor. Choose a manual value or another profile to take ownership back.',
         radio:'Smart performs this opted-in radio transition with screen and traffic state. Keep the policy enabled rather than repeatedly toggling it; turn it off or leave Smart to take ownership back.',

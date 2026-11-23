@@ -231,6 +231,31 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
         { "com.callofduty.",           ASB_APP_GAMING },
         { "com.codm.",                 ASB_APP_GAMING },
         { "com.warzone.",              ASB_APP_GAMING },
+        { "com.ChillyRoom.",           ASB_APP_GAMING },
+        { "com.chillyroom.",           ASB_APP_GAMING },
+        { "com.kurogame.",             ASB_APP_GAMING },
+        { "com.levelinfinite.",        ASB_APP_GAMING },
+        { "com.proximabeta.",          ASB_APP_GAMING },
+        { "com.krafton.",              ASB_APP_GAMING },
+        { "com.nexon.",                ASB_APP_GAMING },
+        { "com.ncsoft.",               ASB_APP_GAMING },
+        { "com.bandainamcoent.",       ASB_APP_GAMING },
+        { "com.square_enix.",          ASB_APP_GAMING },
+        { "com.ubisoft.",              ASB_APP_GAMING },
+        { "com.sega.",                 ASB_APP_GAMING },
+        { "com.lilithgames.",          ASB_APP_GAMING },
+        { "com.hypergryph.",           ASB_APP_GAMING },
+        { "com.YoStarEN.",             ASB_APP_GAMING },
+        { "com.nianticlabs.",          ASB_APP_GAMING },
+        { "com.innersloth.",           ASB_APP_HEAVY  },
+        { "com.mojang.",               ASB_APP_HEAVY  },
+        { "com.playrix.",              ASB_APP_HEAVY  },
+        { "com.rovio.",                ASB_APP_HEAVY  },
+        { "com.miniclip.",             ASB_APP_HEAVY  },
+        { "com.outfit7.",              ASB_APP_HEAVY  },
+        { "com.kiloo.",                ASB_APP_HEAVY  },
+        { "com.imangi.",               ASB_APP_HEAVY  },
+        { "com.halfbrick.",            ASB_APP_HEAVY  },
         { "com.adobe.lrmobile",        ASB_APP_HEAVY  },
         { "com.adobe.psmobile",        ASB_APP_HEAVY  },
         { "com.adobe.premiere",        ASB_APP_HEAVY  },
@@ -272,7 +297,7 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
      * games. Searches anywhere in the package id (not just prefix). */
     static const struct map_entry SUB[] = {
         { "callofduty",   ASB_APP_GAMING },
-        { ".shooter",     ASB_APP_GAMING },
+        { "shooter",      ASB_APP_GAMING },
         { ".cod",         ASB_APP_GAMING },
         { ".codm",        ASB_APP_GAMING },
         { ".pubg",        ASB_APP_GAMING },
@@ -286,8 +311,14 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
         { ".browser",     ASB_APP_MEDIUM },
         { NULL, 0 }
     };
+    /* Case-insensitive: studios capitalise freely (com.ChillyRoom.DungeonShooter missed
+     * ".shooter" in a CPH2745 capture and played 170 min outside GAMING). */
+    char low[128];
+    size_t li = 0;
+    for (; pkg[li] && li < sizeof(low) - 1; li++) low[li] = (pkg[li] >= 'A' && pkg[li] <= 'Z') ? (char)(pkg[li] + 32) : pkg[li];
+    low[li] = 0;
     for (int i = 0; SUB[i].prefix; i++) {
-        if (strstr(pkg, SUB[i].prefix)) return SUB[i].hint;
+        if (strstr(low, SUB[i].prefix)) return SUB[i].hint;
     }
     return ASB_APP_MEDIUM;
 }

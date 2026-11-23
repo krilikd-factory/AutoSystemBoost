@@ -1,42 +1,25 @@
 {
   "schema": 1,
-  "release": "AutoSystemBoost-V66-test20-source",
-  "base": "AutoSystemBoost-V66-test19-source.zip",
+  "release": "AutoSystemBoost-V66-test21-source",
+  "base": "AutoSystemBoost-V66-test20-source.zip",
   "hash_algorithm": "SHA-256",
   "manifest_coverage": "Every regular source file except RELEASE_MANIFEST.json itself; no symlinks or other non-regular entries are present.",
   "file_count_excluding_manifest": 287,
   "inventory_vs_base": {
     "changed": [
-      "README.md",
-      "docs/README.ru.md",
       "docs/TELEGRAM_POST.txt",
       "docs/V66_BUILD_HISTORY.md",
       "runtime/asb_debug_support.sh",
-      "src/asb_governor.c",
       "src/asb_smart.h",
       "tests/asb_smart.sh",
-      "tests/asb_system.sh",
       "tools/asb_tree.sha256",
-      "webroot/i18n/ar.json",
-      "webroot/i18n/de.json",
-      "webroot/i18n/en.json",
-      "webroot/i18n/es.json",
-      "webroot/i18n/fr.json",
-      "webroot/i18n/hy.json",
-      "webroot/i18n/id.json",
-      "webroot/i18n/it.json",
-      "webroot/i18n/pt.json",
-      "webroot/i18n/ru.json",
-      "webroot/i18n/tr.json",
-      "webroot/i18n/uk.json",
-      "webroot/i18n/zh.json",
       "webroot/index.html"
     ],
     "added": [],
     "deleted": [],
     "mode_changes": [],
     "counts": {
-      "changed": 24,
+      "changed": 7,
       "added": 0,
       "deleted": 0,
       "mode_changes": 0
@@ -461,9 +444,9 @@
     },
     {
       "path": "docs/TELEGRAM_POST.txt",
-      "bytes": 1284,
+      "bytes": 1404,
       "mode": "0644",
-      "sha256": "58eb789a68e9eabb94286ef9fd179d8d7afaff043ae2a4e9e1834d210110a556"
+      "sha256": "c8e437e73315239ecee2dda73e19d63ca6a6cf98cfbc150c42119e913e674a8e"
     },
     {
       "path": "docs/TELEGRAM_RELEASE.txt",
@@ -485,9 +468,9 @@
     },
     {
       "path": "docs/V66_BUILD_HISTORY.md",
-      "bytes": 322815,
+      "bytes": 326840,
       "mode": "0644",
-      "sha256": "624ee17ff8e17084e0d2b4cac34f513b9040a734a06d318a470b7b47886df7ac"
+      "sha256": "0808e829402260f76527980878819a89423c2ebf0b4b6d5bbf418ebe0e6966a7"
     },
     {
       "path": "docs/assets/banner.png",
@@ -689,9 +672,9 @@
     },
     {
       "path": "runtime/asb_debug_support.sh",
-      "bytes": 49048,
+      "bytes": 50124,
       "mode": "0755",
-      "sha256": "0b8d7d47f73ad0da337e8be8a30cd4328649a2b477ad50ac4885502e37bb3af1"
+      "sha256": "d4e273cd024cd9af5496b8708a14f233483fc6f077dd889a2b2f9a1976ca7f96"
     },
     {
       "path": "runtime/asb_device_bounds.sh",
@@ -1343,9 +1326,9 @@
     },
     {
       "path": "src/asb_smart.h",
-      "bytes": 113036,
+      "bytes": 114812,
       "mode": "0644",
-      "sha256": "cf4b22a0b981d2e27a0b6e5dee8e420dc8cb19aac51ed58f8d0665d7aaa27dd8"
+      "sha256": "4e9c7d175dcb5a8383bb94f391a22827d5560f478c32ad4e4509318e534a038b"
     },
     {
       "path": "src/asb_smart_defs.h",
@@ -1451,9 +1434,9 @@
     },
     {
       "path": "tests/asb_smart.sh",
-      "bytes": 467386,
+      "bytes": 467736,
       "mode": "0755",
-      "sha256": "ac73b27ddd73f7a2ab9a87e1cd48e005f75f43dbd242329a13cec822ebb9e21e"
+      "sha256": "897c4c395a92ed2c25235543261c0d6f651d73ad87d5b54a2dc4ac96783312f5"
     },
     {
       "path": "tests/asb_system.sh",
@@ -1693,7 +1676,7 @@
       "path": "tools/asb_tree.sha256",
       "bytes": 24992,
       "mode": "0644",
-      "sha256": "46e2e8946b6f6129e5c8b5b4faf8e3948aca66ae495b6f12ef4630410b8f53c1"
+      "sha256": "a7b6740bf57622489545b8fd7a99f77909fa11cae699e7d80dab847bac6537d3"
     },
     {
       "path": "tools/asb_tree_check.sh",
@@ -1907,9 +1890,9 @@
     },
     {
       "path": "webroot/index.html",
-      "bytes": 1842383,
+      "bytes": 1845545,
       "mode": "0644",
-      "sha256": "f2811eeb1d9d30296f3a4739183729b3dddc5f820b39b961e82ebab906c1a43a"
+      "sha256": "7adb9f3a60a66b43d060f19033fbe36dcc7fb2b5a2c4303e0ecec4f8d0504f73"
     },
     {
       "path": "zygisk/arm64-v8a.so",

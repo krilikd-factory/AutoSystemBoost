@@ -159,6 +159,9 @@ static void test_app_hint(void) {
     EXPECT(asb_smart_app_hint_from_pkg("com.whatsapp") == ASB_APP_LIGHT, "whatsapp → light");
     EXPECT(asb_smart_app_hint_from_pkg("org.telegram.messenger") == ASB_APP_LIGHT, "telegram → light");
     EXPECT(asb_smart_app_hint_from_pkg("com.google.android.youtube") == ASB_APP_MEDIUM, "YT → medium");
+    EXPECT(asb_smart_app_hint_from_pkg("com.ChillyRoom.DungeonShooter") == ASB_APP_GAMING, "Soul Knight → gaming");
+    EXPECT(asb_smart_app_hint_from_pkg("com.example.SpaceShooterHD") == ASB_APP_GAMING, "a capitalised shooter → gaming");
+    EXPECT(asb_smart_app_hint_from_pkg("com.mojang.minecraftpe") == ASB_APP_HEAVY, "Minecraft → heavy");
     EXPECT(asb_smart_app_hint_from_pkg("com.adobe.lrmobile") == ASB_APP_HEAVY, "lightroom → heavy");
     EXPECT(asb_smart_app_hint_from_pkg("com.unknown.app.xyz") == ASB_APP_MEDIUM, "unknown → medium");
     EXPECT(asb_smart_app_hint_from_pkg("") == ASB_APP_IDLE, "empty → idle");
