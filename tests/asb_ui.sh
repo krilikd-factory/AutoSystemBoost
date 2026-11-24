@@ -15224,7 +15224,7 @@ printf '%s\n' "$_consistency" | grep "governor's gauge check" >/dev/null && { ec
 # fix179: the governor's own gauge factor is named (a CPH2747 read x0.35 over 61 windows).
 lk_state_kv() { case "$1" in current_scale_x100) echo 35 ;; current_scale_windows) echo 61 ;; esac; }
 _consistency="$(lk_emit_current_soc_consistency)"
-printf '%s\n' "$_consistency" | grep -F "governor's gauge check: on screen-on windows current_now integrates to x0.35 of the SOC-derived drain (61 windows) - multiply screen-on mA by about 2.9" >/dev/null || { echo "FAIL logkit capture-quality: governor gauge factor: $_consistency" >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -F "governor's gauge check: on screen-on windows current_now integrates to x0.35 of the SOC-derived drain (61 windows) - inverse ratio 2.9" >/dev/null || { echo "FAIL logkit capture-quality: governor gauge factor: $_consistency" >&2; exit 1; }
 lk_state_kv() { case "$1" in current_scale_x100) echo 135 ;; current_scale_windows) echo 61 ;; esac; }
 lk_emit_current_soc_consistency | grep -F 'integrates to x1.35 of' >/dev/null || { echo 'FAIL logkit capture-quality: gauge factor above 1' >&2; exit 1; }
 lk_state_kv() { case "$1" in current_scale_x100) echo 92 ;; current_scale_windows) echo 61 ;; esac; }

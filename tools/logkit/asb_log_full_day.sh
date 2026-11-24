@@ -950,20 +950,16 @@ lk_emit_current_soc_consistency() {
         if (D[ph] < 1800 || DP[ph] < 2) continue
         soc=DP[ph]*3600.0/D[ph]; cur=(MA[ph]/D[ph])*100.0/cap
         hi=(soc>cur)?soc:cur; diff=(hi>0)?(100.0*((soc>cur)?soc-cur:cur-soc)/hi):0
-        # Which way it is off matters: current BELOW the SOC rate is the known supply-path
-        # blind spot, current ABOVE it in a sleep block is the recorder sampling only the
-        # moments it woke the phone itself (a 585-min night read 2.23 %/h by current, 0.51 by %).
+        # Report the direction of disagreement without attributing a cause.
         verdict=(diff>30)?((cur<soc)?"CHECK low (>30%)":"CHECK high (>30%)"):"aligned"
         printf "%-17s %7.1f %6.2f %13.2f %9.1f%%  %s\n", ph,D[ph]/60.0,soc,cur,diff,verdict
         n++
         r=(soc>0)?cur/soc:0; R+=r; if(n==1||r<RL)RL=r; if(n==1||r>RH)RH=r
       }
       if(n==0) print "no phase type with >=30 min of discharge and >=2 SOC steps in this capture."
-      # One ratio across very different loads is a property of the gauge, not of any load.
-      # A sampling gap would differ between screen-on and idle; a scale does not. When at
-      # least two phase types agree within 35%, name the factor so mA columns can be read.
+      # A similar ratio across phases is an observation, not a calibrated correction.
       if (n>=2 && RL>0 && (RH-RL)/RL<=0.35 && (R/n<0.77 || R/n>1.3))
-        printf "~scale: current_now reads x%.2f of the SOC-derived drain in every phase type (%.2f-%.2f) - a gauge property (e.g. one cell of a dual-cell pack), not a load; multiply mA by %.1f to compare.\n", R/n, RL, RH, n/R
+        printf "~scale: current_now reads x%.2f of the SOC-derived drain in every phase type (%.2f-%.2f) - inverse ratio %.1f; correlation alone does not establish a correction factor.\n", R/n, RL, RH, n/R
     }
   ' "$_cc_led" | sort | sed 's/^~scale: /scale: /'
   # The governor's own gauge check (fix179): it integrates current_now against the SOC drop
@@ -975,16 +971,14 @@ lk_emit_current_soc_consistency() {
     *[!0-9:]*|:*|*:) : ;;
     *) if [ "$_cc_cn" -ge 10 ] && [ "$_cc_cs" -gt 0 ] && { [ "$_cc_cs" -lt 77 ] || [ "$_cc_cs" -gt 130 ]; }; then
          _cc_f=$(( (10000 / _cc_cs + 5) / 10 ))
-         echo "governor's gauge check: on screen-on windows current_now integrates to x$(( _cc_cs / 100 )).$(printf '%02d' $(( _cc_cs % 100 ))) of the SOC-derived drain ($_cc_cn windows) - multiply screen-on mA by about $(( _cc_f / 10 )).$(( _cc_f % 10 )); a gauge property, not the load"
+         echo "governor's gauge check: on screen-on windows current_now integrates to x$(( _cc_cs / 100 )).$(printf '%02d' $(( _cc_cs % 100 ))) of the SOC-derived drain ($_cc_cn windows) - inverse ratio $(( _cc_f / 10 )).$(( _cc_f % 10 )); this is not a calibrated current correction"
        fi ;;
   esac
   echo "current_pct/h uses the reported charge_full capacity and sampled discharge current."
   echo "A CHECK result is a measurement-consistency warning, not causal energy attribution."
-  echo "CHECK low (>30%): avg_mA under-reports - current_now sees the main supply path, while"
-  echo "  modem TX, display and peripherals draw partly outside it; take mA as a lower bound."
-  echo "CHECK high (>30%): avg_mA over-reports - in sleep/idle the recorder only samples while it has"
-  echo "  woken the phone itself, so every sample is an awake one; trust pct/h there."
-  echo "Either way the honest figure is d_pct x capacity / hours, which is what pct/h is."
+  echo "CHECK low/high compares sampled current and SOC-derived rates; it does not identify the cause."
+  echo "Current sampling, gauge scale, capacity and quantized SOC can all affect the comparison."
+  echo "pct/h is derived from SOC change and time; short intervals can have substantial quantization error."
   echo ""
 }
 
