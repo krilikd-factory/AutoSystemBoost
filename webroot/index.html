@@ -5131,32 +5131,30 @@ html[data-asb-theme="light"] .log-menu {
   box-shadow: 0 18px 44px rgba(11,56,47,.24);
 }
 .log-menu[hidden] { display: none; }
-.log-menu { min-width: 260px; max-width: min(340px, calc(100vw - 24px)); padding: 8px; border-radius: 18px; }
-.log-menu-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 6px 10px 8px; }
+.log-menu { min-width: 0; width: min(310px, calc(100vw - 24px)); max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; padding: 6px; border-radius: 16px; }
+.log-menu-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 5px 8px 4px; }
 .log-menu-head-t { font: 700 11px/1.2 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
 .log-menu-head-s { font: 500 11px/1.2 var(--sans); color: var(--text-tertiary); }
-.log-menu-ico { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; margin-right: 12px;
+.log-menu-ico { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-right: 9px;
   border-radius: 11px; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
 .log-menu-txt { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .log-menu-title { font-size: 14.5px; font-weight: 600; line-height: 1.25; }
 .log-menu-sub { font-size: 11.5px; font-weight: 400; line-height: 1.3; color: var(--text-tertiary); white-space: normal; }
-.log-menu-sep { height: 1px; margin: 6px 8px; background: var(--border); }
+.log-menu-sep { height: 1px; margin: 4px 8px; background: var(--border); }
 .log-menu-item.log-menu-send { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .log-menu-item.log-menu-send .log-menu-ico { color: #0b0f14; background: var(--accent); border-color: var(--accent); }
 .log-menu-item.is-recording .log-menu-ico { color: #ef4444; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.35); }
 .log-menu-item.is-armed .log-menu-ico { color: #f59e0b; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.35); }
-html[dir="rtl"] .log-menu-ico { margin-right: 0; margin-left: 12px; }
+html[dir="rtl"] .log-menu-ico { margin-right: 0; margin-left: 9px; }
 .log-menu-item {
   display: flex; align-items: center;
   width: 100%;
   min-height: 46px;
-  padding: 11px 14px;
+  padding: 5px 8px;
   border: 0; border-radius: 10px;
   background: transparent;
   color: var(--text);
-  /* 14.5px, not 13: these are two short labels with plenty of room, and the previous size
-     was the main reason the menu read as faint. */
   font: inherit; font-size: 14.5px; font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -19286,6 +19284,7 @@ function asbToggleLogMenu(ev) {
   m.hidden = false;
   /* Measure after unhiding, then keep the menu inside the viewport: right-anchored when
      the button sits in the right half, which is where it is on every layout so far. */
+  asbLogMenuSync();
   const w = m.offsetWidth || 168;
   /* Undo the body zoom before positioning.
    *
@@ -19303,10 +19302,13 @@ function asbToggleLogMenu(ev) {
   if (left + w > vw - 8) left = vw - w - 8;
   if (left < 8) left = 8;
   m.style.left = left + 'px';
-  m.style.top  = (r.bottom / z + 6) + 'px';
+  const vh = window.innerHeight / z;
+  const h = m.offsetHeight;
+  const below = r.bottom / z + 6;
+  const above = r.top / z - h - 6;
+  m.style.top = Math.max(8, Math.min(below + h <= vh - 8 ? below : above >= 8 ? above : vh - h - 8, vh - h - 8)) + 'px';
   b.setAttribute('aria-expanded', 'true');
   if (typeof uiSound === 'function') uiSound('option');
-  asbLogMenuSync();
 }
 
 /* ----- Session log report (fix194) ------------------------------------------------
@@ -25723,7 +25725,7 @@ function asbLogMenuPaint() {
     sub.removeAttribute('data-i18n');
     sub.textContent = _asbLogStopping ? T('log_menu_log_sub_stop', 'The report is being written') :
       _asbLogRunning ? T('log_menu_log_sub_on', 'Recording now · two taps stop it') :
-      T('log_menu_log_sub', 'Records battery, heat and smoothness until you stop it');
+      T('log_menu_log_sub', 'Battery, heat and smoothness');
   }
   label.removeAttribute('data-i18n');
   label.textContent = _asbLogStopping ? T('dbg_log_stopping_menu', 'Stopping · finishing the report…') :
@@ -28983,28 +28985,28 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('diag')">
     <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l1 3h3v15H5V6h3z"/><path d="M9 12l2 2 4-4"/></svg></span>
     <span class="log-menu-txt"><span class="log-menu-title" data-i18n="dbg_diag_btn">asbdiag</span>
-    <span class="log-menu-sub" data-i18n="log_menu_diag_sub">Snapshot of settings and what is live · about a minute</span></span>
+    <span class="log-menu-sub" data-i18n="log_menu_diag_sub">Settings snapshot · about a minute</span></span>
   </button>
   <button class="log-menu-item" id="logMenuSession" role="menuitem" type="button" onclick="asbLogMenuPick('full-day')">
     <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span>
     <span class="log-menu-txt"><span class="log-menu-title" id="logMenuSessionLabel" data-i18n="dbg_log_btn">Infinite log</span>
-    <span class="log-menu-sub" id="logMenuSessionSub" data-i18n="log_menu_log_sub">Records battery, heat and smoothness until you stop it</span></span>
+    <span class="log-menu-sub" id="logMenuSessionSub" data-i18n="log_menu_log_sub">Battery, heat and smoothness</span></span>
   </button>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('report')">
     <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
     <span class="log-menu-txt"><span class="log-menu-title" data-i18n="lr_menu">Infinite log report</span>
-    <span class="log-menu-sub" data-i18n="log_menu_report_sub">Read a saved infinite log here</span></span>
+    <span class="log-menu-sub" data-i18n="log_menu_report_sub">View the saved log</span></span>
   </button>
   <div class="log-menu-sep" aria-hidden="true"></div>
   <button class="log-menu-item log-menu-send" id="logMenuSend" role="menuitem" type="button" onclick="asbLogMenuPick('send')">
     <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg></span>
     <span class="log-menu-txt"><span class="log-menu-title" id="logMenuSendLabel" data-i18n="dbg_send_btn">Send logs to Bugs</span>
-    <span class="log-menu-sub" data-i18n="log_menu_send_sub">Packs asbdiag and the infinite log, opens Telegram</span></span>
+    <span class="log-menu-sub" data-i18n="log_menu_send_sub">Pack logs and open Telegram</span></span>
   </button>
   <button class="log-menu-item" id="logMenuSendManual" role="menuitem" type="button" onclick="asbLogMenuPick('send-manual')">
-    <span class="log-menu-ico" aria-hidden="true">📎</span>
+    <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2a3.5 3.5 0 0 1 5 5l-8.2 8.2a2 2 0 0 1-2.8-2.8l7.5-7.5"/></svg></span>
     <span class="log-menu-txt"><span class="log-menu-title" id="logMenuSendManualLabel" data-i18n="dbg_send_manual">Attach logs manually</span>
-    <span class="log-menu-sub" data-i18n="dbg_send_manual_sub">For clients that cannot open an automatically shared attachment</span></span>
+    <span class="log-menu-sub" data-i18n="dbg_send_manual_sub">If automatic attachment did not open</span></span>
   </button>
 </div>
 <nav class="asb-tabbar" id="asbTabbar" role="tablist" aria-label="Sections">
