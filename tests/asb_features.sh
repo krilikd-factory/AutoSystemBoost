@@ -1670,6 +1670,25 @@ grep -q 'dsp_effects_blocked' "$ROOT/uninstall.sh" || f "uninstall leaves the fu
 grep -q 'first $_dn in lookup order' "$ROOT/tools/asb_diag.sh" || f "asbdiag does not name the config the HAL reads"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || f "asbdiag copies differ"
 
+# A tripped fuse must clean cloned overlays before any registration.
+sed -n '/^asb_register_dsp_effect() {/,/^}/p' "$I" > "$T/register.sh"
+cat > "$T/effects.xml" <<'DSP_XML'
+<audio_effects_conf>
+<libraries>
+<library name="vendor" path="libvendor.so"/>
+<library name="asbdsp" path="libasbdsp.so"/>
+</libraries>
+<effects>
+<effect name="vendor_effect" library="vendor"/>
+<effect name="asb_loudness" library="asbdsp"/>
+</effects>
+</audio_effects_conf>
+DSP_XML
+sh -c '. "$1"; asb_register_dsp_effect "$2" blocked' sh "$T/register.sh" "$T/effects.xml" || f "blocked cleanup failed"
+grep -q 'asbdsp\|asb_loudness' "$T/effects.xml" && f "blocked config retains ASB registration"
+grep -q 'vendor_effect' "$T/effects.xml" || f "blocked cleanup removed unrelated effects"
+grep -q 'asb_register_dsp_effect "$_ec" "$_dsp_registration_mode"' "$I" || f "fuse mode not passed to registration"
+
 # --- runtime ---------------------------------------------------------------------------
 SH="${ASB_TEST_SH:-sh}"
 [ -x "$ROOT/../mksh_bin" ] && SH="$ROOT/../mksh_bin"

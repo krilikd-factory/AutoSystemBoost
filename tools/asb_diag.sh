@@ -2306,8 +2306,8 @@ elif [ "$_dsp_on" = "1" ]; then
         [ -f "$_dd/$_dn" ] && { _dwin="$_dd/$_dn"; break; }
       done
       [ -n "$_dwin" ] || continue
-      if grep -q 'asbdsp' "$_dwin" 2>/dev/null; then NOTE "  first $_dn in lookup order (read by the HAL): $_dwin - lists ASB"
-      else NOTE "  first $_dn in lookup order (read by the HAL): $_dwin - does NOT list ASB"; fi
+      if grep -q 'asbdsp' "$_dwin" 2>/dev/null; then NOTE "  first $_dn in lookup order (candidate): $_dwin - lists ASB"
+      else NOTE "  first $_dn in lookup order (candidate): $_dwin - does NOT list ASB"; fi
     done
     # The /odm copy is read before /vendor/etc (fix146). Before fix146 an install over a
     # running module dropped its runtime bind on non-reference phones (PLQ110: "effects
@@ -2316,10 +2316,12 @@ elif [ "$_dsp_on" = "1" ]; then
     for _dodm in /odm/etc/audio_effects_config.xml /odm/etc/audio_effects.xml; do
       [ -f "$_dodm" ] || continue
       grep -qE 'asbdsp|asb_loudness' "$_dodm" 2>/dev/null && continue
-      if grep -q "^$_dodm|" /data/adb/asb/odm_bind_manifest.txt 2>/dev/null; then
+      if [ -f /data/adb/asb/dsp_effects_blocked ]; then
+        NOTE "  $_dodm: ASB effects registration is blocked by the audio crash fuse"
+      elif grep -q "^$_dodm|" /data/adb/asb/odm_bind_manifest.txt 2>/dev/null; then
         NOTE "  $_dodm: a runtime bind is queued, but the live file is stock - the bind did not take this boot (odm_bind lines in vendor_mounts.log)"
       else
-        NOTE "  $_dodm: no ASB entry and no runtime bind queued - it is read before /vendor/etc, so the copies there do not count. Reinstall once (an install over a running module dropped this bind before fix146)"
+        NOTE "  $_dodm: no ASB entry and no runtime bind queued - check the active SKU and effects configuration before reinstalling"
       fi
     done
     if [ -f /data/adb/asb/dsp_effects_blocked ]; then

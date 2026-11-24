@@ -1819,6 +1819,9 @@ asb_register_dsp_effect() {
     fi
     rm -f "$_clean_ae" 2>/dev/null
   fi
+  # A previous audio crash fuse requires every cloned XML to be cleaned,
+  # including files copied from an already-mounted ASB overlay.
+  [ "${2:-}" = blocked ] && return 0
   # Either ABI is enough to justify registering the effect: audio_effects_config.xml
   # names the library by filename, and each process picks the soundfx dir matching its
   # own bitness.
@@ -2727,11 +2730,13 @@ asb_register_dsp_all_configs() {
 
   _dsp_reg=0
   _dsp_seen=0
+  _dsp_registration_mode=""
+  [ -f /data/adb/asb/dsp_effects_blocked ] && _dsp_registration_mode=blocked
   for _ec in $(find "$MODPATH/system" -type f -name 'audio_effects_config.xml' -o \
                     -type f -name 'audio_effects.xml' 2>/dev/null); do
     case "$_ec" in *_stub.xml) continue ;; esac
     _dsp_seen=$((_dsp_seen + 1))
-    asb_register_dsp_effect "$_ec"
+    asb_register_dsp_effect "$_ec" "$_dsp_registration_mode"
     if grep -q 'asb_loudness' "$_ec" 2>/dev/null; then
       _dsp_reg=$((_dsp_reg + 1))
       # Paths were printed one per file - four lines of /vendor/etc/audio/sku_*/... that
