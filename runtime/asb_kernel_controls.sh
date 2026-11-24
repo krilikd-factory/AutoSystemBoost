@@ -320,6 +320,11 @@ asb_kc_bore_auto_hold() {
   case "$_akb_now" in ''|*[!0-9]*) return 0 ;; esac
   _akb_epoch_age=$((_akb_now - _akb_epoch))
   [ "$_akb_epoch_age" -ge 0 ] && [ "$_akb_epoch_age" -le "${ASB_KC_BORE_STATUS_MAX_AGE_S:-120}" ] || return 0
+  _akb_secondary="$(asb_kc_json_num "$_akb_status" secondary_read_epoch)"
+  case "$_akb_secondary" in ''|*[!0-9]*) return 0 ;; esac
+  _akb_age=$((_akb_now - _akb_secondary))
+  [ "$_akb_age" -ge 0 ] && [ "$_akb_age" -le "${ASB_KC_BORE_STATUS_MAX_AGE_S:-120}" ] || return 0
+  [ "$(asb_kc_json_num "$_akb_status" surface_independent)" = 1 ] || return 0
   _akb_state="$(asb_kc_json_text "$_akb_status" state | tr 'a-z' 'A-Z')"
   case "$_akb_state" in MODERATE|HEAVY) ;; *) return 0 ;; esac
   [ "$(asb_kc_json_num "$_akb_status" thermal)" = 0 ] || return 0

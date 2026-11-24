@@ -140,6 +140,8 @@ typedef struct {
     int     skin_temp_c;           /* literal shell (front/frame/back) */
     int     surface_hotspot_c;     /* hottest body-adjacent zone (sys-therm-6 etc) */
     int     board_temp_c;          /* explicit board_temp for long-gaming heat analysis */
+    time_t  secondary_read_epoch; /* all three secondary channels sampled in one pass */
+    int     independent_surface;
     int     throttling;     /* real thermal: temp >= threshold */
     int     soft_clamp;     /* vendor advisory: headroom < soft_pct */
     int     hard_clamp;     /* vendor actionable: headroom < hard_pct */
@@ -1526,6 +1528,8 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
     t->skin_temp_c = 0;
     t->surface_hotspot_c = 0;
     t->board_temp_c = 0;
+    t->secondary_read_epoch = 0;
+    t->independent_surface = 0;
     t->throttling  = 0;
     t->soft_clamp  = 0;
     t->hard_clamp  = 0;
@@ -1833,6 +1837,11 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
         t->surface_hotspot_c = t->skin_temp_c;
         g_surface_from_skin = 1;
     }
+
+    t->secondary_read_epoch = time(NULL);
+    t->independent_surface = _surf_raw > 0 && !g_surface_pinned &&
+        g_thermal_surface_zone != g_thermal_skin_zone &&
+        g_thermal_surface_zone != g_thermal_board_zone;
 
     /* Consensus runs only after all current-tick non-CPU evidence is available. */
     /* Thermal consensus v2: cross-check the control temperature against the other

@@ -168,6 +168,7 @@ lk_dump_build_manifest() {
   # the module root, never found it, and fell through to synthesising one with an empty
   # hashes object every single time. Every capture we have carries that empty stub, which
   # is why a log cannot be tied back to a build.
+  [ ! -r "$MODDIR/release-manifest.json" ] || cp "$MODDIR/release-manifest.json" "$LK_OUT_DIR/release-manifest.json"
   _lk_bm=""
   # The release workflow writes release-manifest.json at the module root; it was never on
   # this list, so even release builds fell through to the synthesized stub.

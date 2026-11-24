@@ -554,11 +554,14 @@ jobs:
           DSP_RUNTIME_VERIFIED=false
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
           ASB_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
-          ASB_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+          ASB_COMMIT=$(git rev-parse HEAD)
           ASB_BIN_SHA=$(sha256sum "$PKG_REL/bin/asb" | awk '{print $1}')
           cat > "$PKG_REL/release-manifest.json" <<EOF
           {
-            "schema": 1,
+            "schema": 2,
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "channel": "release",
             "distribution": "flashable-module",
             "version": "${ASB_VER}",
             "versionCode": ${ASB_CODE},
@@ -583,7 +586,14 @@ jobs:
           # the same objects, rules and code (tools/asb_slim_package.py checks it and restores the
           # originals on any difference).
           python3 tools/asb_slim_package.py "$PKG_REL" || { echo "::error::package slimming check failed"; exit 1; }
+          # Hash the final staged payload. Exclude its manifest to avoid a self-reference.
+          content_sha=$(cd "$PKG_REL" && tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --exclude=./release-manifest.json --exclude='*.DS_Store' -cf - . | sha256sum | cut -d' ' -f1)
+          config_sha=$(sha256sum "$PKG_REL/config/governor.conf" | cut -d' ' -f1)
+          jq --arg payload "$content_sha" --arg config "$config_sha" '. + {payload_sha256:$payload, shipped_config_sha256:$config}' "$PKG_REL/release-manifest.json" > "$RUNNER_TEMP/asb-manifest.json"
+          cp "$RUNNER_TEMP/asb-manifest.json" "$PKG_REL/release-manifest.json"
           ( cd "$PKG_REL" && zip -rq "../$ZIP_REL" . -x "*.DS_Store" )
+          sha256sum "$ZIP_REL" > "$ZIP_REL.sha256"
+          cat "$ZIP_REL.sha256" >> "$GITHUB_STEP_SUMMARY"
           echo "ZIP_REL=$ZIP_REL"   >> $GITHUB_ENV
           echo "ASB_VER=$ASB_VER"   >> $GITHUB_ENV
           echo "Created: $ZIP_REL ($(du -sh $ZIP_REL | cut -f1))"
@@ -801,7 +811,9 @@ jobs:
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ZIP_REL }}
+          files: |
+            ${{ env.ZIP_REL }}
+            ${{ env.ZIP_REL }}.sha256
 
       # Only for a published release (a tag push alone would post twice), into the
       # "Last Release" topic of the owner's Telegram forum.

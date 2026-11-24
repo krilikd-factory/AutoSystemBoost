@@ -25,16 +25,8 @@ asb_pb_locked() (
 asb_pb_setting_read() {
   # Keep Android's literal null distinct from transport failure. The public
   # settings wrapper normalizes both to empty for historical display callers.
-  if command -v _asb_set_clean >/dev/null 2>&1; then
-    _pb_reply="$(command settings get "$1" "$2" 2>/dev/null)" &&
-      [ -n "$_pb_reply" ] && _asb_set_clean "$_pb_reply" >/dev/null &&
-      { _asb_set_bare "$_pb_reply"; return; }
-    _pb_reply="$(content query --uri "content://settings/$1" --where "name='$2'" 2>/dev/null)" || return 1
-    case "$_pb_reply" in
-      'No result found.'|'No result found') printf null ;;
-      'Row: 0 value='*) printf '%s' "${_pb_reply#Row: 0 value=}" ;;
-      *) return 1 ;;
-    esac
+  if command -v asb_setting_read_baseline >/dev/null 2>&1; then
+    asb_setting_read_baseline "$1" "$2"
   else
     settings get "$1" "$2"
   fi

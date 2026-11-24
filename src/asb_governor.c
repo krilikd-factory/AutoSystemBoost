@@ -5588,6 +5588,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "\"cpu_max\":[%d,%d,%d],"
         "\"thermal\":%d,\"temp\":%d,\"temp_valid\":%d,\"temp_age_s\":%d,\"temp_read_epoch\":%ld,\"temp_invalid_reason\":\"%s\","
         "\"skin_temp\":%d,\"surface_hotspot\":%d,\"board_temp\":%d,"
+        "\"secondary_read_epoch\":%ld,\"skin_zone\":%d,\"surface_zone\":%d,\"board_zone\":%d,\"surface_independent\":%d,"
         /* Confidence travels with the source. A temperature whose sensor could not be
          * cross-checked, or that came from a peer median after socd was rejected, is
          * not the same claim as one validated against twenty per-core zones - and the
@@ -5650,6 +5651,8 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         m->therm.skin_temp_c,
         m->therm.surface_hotspot_c,
         m->therm.board_temp_c,
+        (long)m->therm.secondary_read_epoch, g_thermal_skin_zone, g_thermal_surface_zone,
+        g_thermal_board_zone, m->therm.independent_surface,
         g_thermal_cpu_zone,
         g_thermal_cpu_type[0] ? g_thermal_cpu_type : "unknown",
         g_thermal_source_confidence,

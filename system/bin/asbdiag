@@ -159,6 +159,13 @@ _root_mgr="unknown"
 P " root    : $_root_mgr"
 P " module  : ${MODDIR:-NOT FOUND}"
 [ -n "$MODDIR" ] && P " version : $(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | cut -d= -f2)  ($(grep '^versionCode=' "$MODDIR/module.prop" 2>/dev/null | cut -d= -f2))"
+if [ -r "$MODDIR/release-manifest.json" ]; then
+  for _field in source_commit payload_sha256 run_id run_attempt channel shipped_config_sha256; do
+    _value="$(sed -n 's/.*"'"$_field"'"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_-]*\)".*/\1/p' "$MODDIR/release-manifest.json" | head -1)"
+    [ -z "$_value" ] || P " $_field : $_value"
+  done
+  P " live_config_sha256 : $(sha256sum "$MODDIR/config/governor.conf" 2>/dev/null | cut -d' ' -f1)"
+fi
 
 if [ -z "$MODDIR" ]; then
   P ""; P "  !! AutoSystemBoost module not found — is it installed & enabled?"

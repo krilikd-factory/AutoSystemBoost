@@ -379,7 +379,10 @@ printf 'radio_policy_enable=1\nnet_wifi_leave=off\n' > "$TMP/mod/config/governor
 run reconcile
 wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'stale watcher PID after OFF'
 wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'stale watcher lock after OFF'
-kill -0 "$WPID" 2>/dev/null && fail 'reconcile OFF did not stop watcher'
+if kill -0 "$WPID" 2>/dev/null; then
+  # A container init may not immediately reap an exited orphan.
+  [ "$(ps -o stat= -p "$WPID" | cut -c1)" = Z ] || fail 'reconcile OFF did not stop watcher'
+fi
 [ "$(grep -cx 'wifi disable' "$TMP/svc.log")" -eq 1 ] || fail 'fallback acted after explicit off'
 unset WPID
 
@@ -4542,13 +4545,13 @@ SH
 chmod 0755 "$T/bin/settings" "$T/bin/cat"
 write_status() {
   _now="$(date +%s)"; _epoch=$((_now - EPOCH_OFFSET))
-  printf '{"state":"%s","thermal":%s,"temp":%s,"temp_valid":%s,"temp_age_s":%s,"temp_read_epoch":%s,"skin_temp":%s,"surface_hotspot":%s,"board_temp":%s}\n' \
-    "$STATE" "$THERMAL" "$TEMP" "$TEMP_VALID" "$AGE" "$_epoch" "$SKIN" "$SURFACE" "$BOARD" > "$STATUS"
+  printf '{"state":"%s","thermal":%s,"temp":%s,"temp_valid":%s,"temp_age_s":%s,"temp_read_epoch":%s,"skin_temp":%s,"surface_hotspot":%s,"board_temp":%s,"secondary_read_epoch":%s,"surface_independent":%s}\n' \
+    "$STATE" "$THERMAL" "$TEMP" "$TEMP_VALID" "$AGE" "$_epoch" "$SKIN" "$SURFACE" "$BOARD" "$((_epoch - SECONDARY_OFFSET))" "$INDEPENDENT" > "$STATUS"
 }
 reset_fixture() {
   rm -f "$SAFE" "$RECOVERY" "$T/clamp" "$T/state/kernel_bore.prev" "$T/state/kernel_bore.prev.kid"
   PROFILE=performance; LOW_POWER=0; STATE=MODERATE; THERMAL=0; TEMP=40; TEMP_VALID=1
-  AGE=0; EPOCH_OFFSET=0; SKIN=35; SURFACE=36; BOARD=37; TEST_PATH="$T/bin:/usr/bin:/bin"
+  AGE=0; EPOCH_OFFSET=0; SECONDARY_OFFSET=0; INDEPENDENT=1; SKIN=35; SURFACE=36; BOARD=37; TEST_PATH="$T/bin:/usr/bin:/bin"
   printf '90\n' > "$CAP"; chmod 0644 "$NODE" 2>/dev/null || :; printf '0\n' > "$NODE"; write_status
 }
 run() {
@@ -4579,6 +4582,8 @@ set_case() {
     hot_cpu) TEMP=55; write_status ;;
     hot_skin) SKIN=47; write_status ;;
     hot_surface) SURFACE=50; write_status ;;
+    stale_skin) SECONDARY_OFFSET=180; write_status ;;
+    derived_surface) INDEPENDENT=0; write_status ;;
     missing_board) BOARD=0; write_status ;;
     missing_skin) SKIN=0; write_status ;;
     missing_surface) SURFACE=0; write_status ;;
@@ -4600,7 +4605,7 @@ reset_fixture; out="$(run)"; want_applied initial
 PROFILE=performance; STATE=HEAVY; write_status; out="$(run)"; want_applied heavy
 for c in battery balanced smart battery_saver low_power_unknown settings_missing low_charge missing_capacity invalid_capacity \
          safe_mode watchdog missing_status stale_age stale_epoch future_epoch malformed_status invalid_temp_valid \
-         missing_board missing_skin missing_surface hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
+         stale_skin derived_surface missing_board missing_skin missing_surface hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
   reset_fixture; out="$(run)"; want_applied "$c setup"
   set_case "$c"; out="$(run)"; want_restored "$c"
   reset_fixture; set_case "$c"; out="$(run)"; want_unowned "$c"

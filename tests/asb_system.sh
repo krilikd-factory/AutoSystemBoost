@@ -3483,7 +3483,13 @@ grep -q 'thermal_conf_promotions=%lu' "$ROOT/src/asb_governor.c" || fail "promot
 grep -q 'rejected before on this ROM build - not retried' "$L" || fail "refused settings retried every pass"
 grep -q '_lg_cr="$(printf' "$L" || fail "ledger note still forks per field"
 grep -q "printf '%s|%.120s|%.120s" "$L" || fail "ledger field cap lost"
-grep -q 'grep -Fq "setting|$_pb_ns:$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0' "$ROOT/runtime/asb_baseline.sh" || fail "baseline capture reads Android for recorded keys"
+# An already-recorded setting must be usable while the provider is unavailable.
+( . "$ROOT/runtime/asb_baseline.sh"
+  d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
+  ASB_PROFILE_BASELINE="$d/ledger"; printf 'setting|global:example|original\n' > "$ASB_PROFILE_BASELINE"
+  settings() { echo touched > "$d/read"; return 1; }
+  asb_profile_baseline_capture_setting global example && [ ! -e "$d/read" ]
+) || fail "baseline capture reads Android for recorded keys"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix129 contract"
 ) || exit 1

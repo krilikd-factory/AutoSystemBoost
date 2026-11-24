@@ -570,11 +570,14 @@ jobs:
           sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_TEST/module.prop"
           grep -qx "version=${ASB_VER}" "$PKG_TEST/module.prop"
           grep -qx "versionCode=${BASE_CODE}" "$PKG_TEST/module.prop"
-          ASB_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+          ASB_COMMIT=$(git rev-parse HEAD)
           ASB_BIN_SHA=$(sha256sum "$PKG_TEST/bin/asb" | awk '{print $1}')
           cat > "$PKG_TEST/release-manifest.json" <<EOF
           {
-            "schema": 1,
+            "schema": 2,
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "channel": "test",
             "distribution": "flashable-module",
             "version": "${ASB_VER}",
             "versionCode": ${ASB_CODE},
@@ -599,7 +602,14 @@ jobs:
           # the same objects, rules and code (tools/asb_slim_package.py checks it and restores the
           # originals on any difference).
           python3 tools/asb_slim_package.py "$PKG_TEST" || { echo "::error::package slimming check failed"; exit 1; }
+          # Hash the final staged payload. Exclude its manifest to avoid a self-reference.
+          content_sha=$(cd "$PKG_TEST" && tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --exclude=./release-manifest.json --exclude='*.DS_Store' -cf - . | sha256sum | cut -d' ' -f1)
+          config_sha=$(sha256sum "$PKG_TEST/config/governor.conf" | cut -d' ' -f1)
+          jq --arg payload "$content_sha" --arg config "$config_sha" '. + {payload_sha256:$payload, shipped_config_sha256:$config}' "$PKG_TEST/release-manifest.json" > "$RUNNER_TEMP/asb-manifest.json"
+          cp "$RUNNER_TEMP/asb-manifest.json" "$PKG_TEST/release-manifest.json"
           ( cd "$PKG_TEST" && zip -rq "../$ZIP_TEST" . -x "*.DS_Store" )
+          sha256sum "$ZIP_TEST" > "$ZIP_TEST.sha256"
+          cat "$ZIP_TEST.sha256" >> "$GITHUB_STEP_SUMMARY"
           echo "ZIP_TEST=$ZIP_TEST"   >> $GITHUB_ENV
           echo "ASB_VER=$ASB_VER"   >> $GITHUB_ENV
           echo "Created: $ZIP_TEST ($(du -sh $ZIP_TEST | cut -f1))"
