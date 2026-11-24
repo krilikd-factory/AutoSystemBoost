@@ -3700,6 +3700,7 @@
   "soter_row_service": "Ծառայություն",
   "soter_run": "Վերանորոգել SOTER-ը",
   "soter_running": "Վերանորոգում…",
+  "soter_prepare_aftersale": "Վերանորոգումից առաջ բացեք AfterSale-ը *#899#-ով, դիտեք Key Status → SOTER key և դուրս եկեք։ Գործարկեք վերանորոգումն ու կրկին ստուգեք։ Որոշ սարքերում այս հերթականությունը կարևոր է, PASS-ը երաշխավորված չէ։",
   "soter_summary": "Վերաստեղծում է SOTER բանալիները։ Root-ը և bootloader-ը չեն թաքցվում։",
   "soter_svc_running": "աշխատում է",
   "soter_svc_stopped": "կանգնեցված է",

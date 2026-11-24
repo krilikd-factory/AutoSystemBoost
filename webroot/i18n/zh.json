@@ -3700,6 +3700,7 @@
   "soter_row_service": "服务",
   "soter_run": "修复 SOTER",
   "soter_running": "正在修复…",
+  "soter_prepare_aftersale": "修复前，通过 *#899# 打开 AfterSale，进入 Key Status → SOTER key 后退出。执行修复，然后再次检查。部分设备可能需要此顺序，不能保证显示 PASS。",
   "soter_summary": "重建 SOTER 密钥，不隐藏 Root 或引导加载程序状态。",
   "soter_svc_running": "运行中",
   "soter_svc_stopped": "已停止",

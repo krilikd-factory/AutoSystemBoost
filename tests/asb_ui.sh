@@ -12339,7 +12339,7 @@ fbm = dict(re.findall(r"\n    ([a-z_]+): '([^']*)'", b[b.index('const fb = {'):b
 assert set(fbm) == {'done','done_no_service','service_down','clear_failed','not_installed','busy','lock_error','unknown'}
 for k, v in fbm.items(): assert en['soter_res_' + k] == v, k
 keys = sorted(k for k in en if k.startswith('soter_'))
-assert len(keys) == 50, len(keys)
+assert len(keys) == 51, len(keys)
 assert {'soter_boot_recent_manual','soter_boot_auto_off'} <= set(keys)
 assert 'soter_confirm' not in en
 for p in sorted((root / 'webroot/i18n').glob('*.json')):

@@ -6742,6 +6742,12 @@ html .cfg-row[class*="cat-"] .cfg-sel-pop.cfg-sel-pop button.active { color:var(
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row:empty { display:none !important; }
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row .cfg-status,
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row .cfg-smart-owner { font-size:10px; white-space:normal; }
+/* Keep the checking badge and SMART on the same baseline as the live value. */
+html .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row.cfg-status-row { flex-wrap:nowrap; min-width:0; }
+html .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row > .cfg-status { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+html .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row > .cfg-smart-owner { flex-shrink:0; white-space:nowrap; }
+.dsp-console .dsp-console-panel .cfg-name, .dsp-console .dsp-console-panel .cfg-name-text { hyphens:none; }
+
 .asb-console-chip { display:inline-flex; align-items:center; min-height:22px; padding:2px 9px; border-radius:11px;
   border:1px solid var(--border); color:var(--text-tertiary); background:color-mix(in srgb,var(--surface) 70%,transparent);
   font:700 10.5px/1.2 var(--sans); letter-spacing:.02em; font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -12650,6 +12656,7 @@ function cfgRenderSoterFixCard(list) {
   const chip = bfxEl('span', 'bfx-chip is-off', T('junk_scan', 'Scanning…')); chip.id = 'soterChip'; titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
   card.appendChild(bfxEl('div', 'bfx-desc', T('soter_summary', 'Rebuilds SOTER keys. Root and bootloader state stay visible.')));
+  card.appendChild(bfxEl('div', 'bfx-note', T('soter_prepare_aftersale', 'Before repair: open AfterSale using *#899#, visit Key Status → SOTER key, then exit AfterSale. Run the repair here, then reopen AfterSale to check the result. This sequence may be required on some devices; PASS is not guaranteed.')));
   const rows = bfxEl('div', 'junk-cats soter-primary-rows'); rows.id = 'soterRows'; card.appendChild(rows);
   /* Last repair and this-boot diagnostics are useful evidence, but do not need to dominate
    * the initial card. Server/service/physical-key warning remain visible at all times. */

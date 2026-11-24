@@ -3700,6 +3700,7 @@
   "soter_row_service": "Servizio",
   "soter_run": "Ripara SOTER",
   "soter_running": "Riparazione…",
+  "soter_prepare_aftersale": "Prima della riparazione apri AfterSale con *#899#, visita Key Status → SOTER key ed esci. Avvia la riparazione e verifica di nuovo. Alcuni dispositivi richiedono questa sequenza; PASS non è garantito.",
   "soter_summary": "Ricrea le chiavi SOTER. Root e bootloader restano visibili.",
   "soter_svc_running": "in esecuzione",
   "soter_svc_stopped": "fermato",

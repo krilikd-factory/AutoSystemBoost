@@ -3700,6 +3700,7 @@
   "soter_row_service": "Hizmet",
   "soter_run": "SOTER’i onar",
   "soter_running": "Onarılıyor…",
+  "soter_prepare_aftersale": "Onarımdan önce *#899# ile AfterSale açın, Key Status → SOTER key bölümüne girip çıkın. Onarımı çalıştırın ve tekrar kontrol edin. Bazı cihazlar bu sırayı gerektirir; PASS garanti değildir.",
   "soter_summary": "SOTER anahtarlarını yeniden oluşturur. Root ve bootloader görünür kalır.",
   "soter_svc_running": "çalışıyor",
   "soter_svc_stopped": "durduruldu",

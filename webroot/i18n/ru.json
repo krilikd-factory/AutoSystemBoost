@@ -3700,6 +3700,7 @@
   "soter_row_service": "Служба",
   "soter_run": "Отремонтировать SOTER",
   "soter_running": "Ремонт…",
+  "soter_prepare_aftersale": "Перед ремонтом откройте AfterSale через *#899#, зайдите в Key Status → SOTER key и выйдите из AfterSale. Затем нажмите «Ремонт SOTER» здесь и снова проверьте ключ в AfterSale. На некоторых устройствах важна эта последовательность; PASS не гарантирован.",
   "soter_summary": "Пересоздаёт ключи SOTER. Root и загрузчик не скрываются.",
   "soter_svc_running": "работает",
   "soter_svc_stopped": "остановлена",

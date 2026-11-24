@@ -3700,6 +3700,7 @@
   "soter_row_service": "الخدمة",
   "soter_run": "إصلاح SOTER",
   "soter_running": "جارٍ الإصلاح…",
+  "soter_prepare_aftersale": "قبل الإصلاح، افتح AfterSale عبر ‎*#899#‎ وانتقل إلى Key Status → SOTER key ثم اخرج. شغّل الإصلاح هنا وأعد الفحص في AfterSale. قد يلزم هذا التسلسل لبعض الأجهزة ولا يُضمن PASS.",
   "soter_summary": "يعيد بناء مفاتيح SOTER. تبقى حالة Root ومحمل الإقلاع ظاهرة.",
   "soter_svc_running": "تعمل",
   "soter_svc_stopped": "متوقفة",

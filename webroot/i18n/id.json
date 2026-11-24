@@ -3700,6 +3700,7 @@
   "soter_row_service": "Layanan",
   "soter_run": "Perbaiki SOTER",
   "soter_running": "Memperbaiki…",
+  "soter_prepare_aftersale": "Sebelum perbaikan, buka AfterSale dengan *#899#, periksa Key Status → SOTER key, lalu keluar. Jalankan perbaikan dan periksa lagi. Beberapa perangkat memerlukan urutan ini; PASS tidak dijamin.",
   "soter_summary": "Membangun ulang kunci SOTER. Root dan bootloader tetap terlihat.",
   "soter_svc_running": "berjalan",
   "soter_svc_stopped": "berhenti",
