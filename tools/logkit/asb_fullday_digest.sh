@@ -1330,7 +1330,7 @@ if [ -f "$_RPT" ]; then
   if [ -n "$_gl" ]; then
     _gf="$(printf '%s\n' "$_gl" | sed -n 's/.* integrates to x\([0-9.][0-9.]*\) of .*/\1/p')"
     _gw="$(printf '%s\n' "$_gl" | sed -n 's/.* (\([0-9][0-9]*\) windows).*/\1/p')"
-    _gm="$(printf '%s\n' "$_gl" | sed -n 's/.*multiply screen-on mA by about \([0-9.][0-9.]*\).*/\1/p')"
+    _gm="$(printf '%s\n' "$_gl" | sed -n -e 's/.*inverse ratio \([0-9.][0-9.]*\).*/\1/p' -e 's/.*multiply screen-on mA by about \([0-9.][0-9.]*\).*/\1/p')"
     [ -n "$_gf" ] && printf 'gauge\tfactor=%s\twindows=%s\tmult=%s\n' "$_gf" "${_gw:-0}" "${_gm:-0}"
   fi
   # Speaker playback cost, from the phase table (the one whose header carries pct/h -

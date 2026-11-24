@@ -3299,7 +3299,7 @@ case "${_csx:--1}" in
   ''|-1|*[!0-9]*) NOTE "battery current gauge: scale not measured yet (needs 5% of screen-on discharge)" ;;
   *) NOTE "battery current gauge: current_now integrates to x$((_csx / 100)).$(printf '%02d' $((_csx % 100))) of the SOC-derived drain (${_csn:-0} window(s), screen-on)"
      if [ "$_csx" -lt 80 ] || [ "$_csx" -gt 125 ]; then
-       NOTE "-> a gauge property, not a load: every mA figure and mA threshold on this phone is off by that factor"
+       NOTE "-> discrepancy needs validation: sampling, gauge scale, capacity and SOC rounding can affect this ratio"
      fi ;;
 esac
 NOTE "cool_gaming = $(cfg cool_gaming)  ·  suppress_gaming_on_battery = $(cfg bat_suppress_gaming)"
