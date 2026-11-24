@@ -3383,6 +3383,26 @@ asb_reset_learning_on_upgrade_to_v56
 asb_capture_oem_toggles
 asb_preserve_user_config
 
+# Exact wakeup rules live outside governor.conf. Prefer the active module, including
+# intentionally empty files; use the persistent snapshot only if that module is gone.
+asb_preserve_wakeup_rules() {
+  _wb_old="$NVBASE/modules/$MODID/config"
+  _wb_dest="$MODPATH/config"
+  if [ -f "$_wb_old/wakeup_blocklist.conf" ] || [ -f "$_wb_old/wakeup_blocklist_sleep.conf" ]; then
+    for _wb_file in wakeup_blocklist.conf wakeup_blocklist_sleep.conf; do
+      if [ -f "$_wb_old/$_wb_file" ]; then
+        cp -f "$_wb_old/$_wb_file" "$_wb_dest/$_wb_file" || return 1
+      else
+        : > "$_wb_dest/$_wb_file" || return 1
+      fi
+    done
+  elif [ -f /data/adb/asb/wakeup_blocklist.snapshot ]; then
+    sed -n 's/^A|//p' /data/adb/asb/wakeup_blocklist.snapshot > "$_wb_dest/wakeup_blocklist.conf" || return 1
+    sed -n 's/^S|//p' /data/adb/asb/wakeup_blocklist.snapshot > "$_wb_dest/wakeup_blocklist_sleep.conf" || return 1
+  fi
+}
+asb_preserve_wakeup_rules || abort 'Cannot preserve wakeup rules; installation stopped.'
+
 if [ -n "${ASB_GOV_ABI:-}" ]; then
   ui_print " "
   ui_print "  🧠  ${ASB_SEC_GOVERNOR:-GOVERNOR}"

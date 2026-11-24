@@ -6532,7 +6532,7 @@ run() {
     MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/node" \
     ASB_WAKEUP_POLICY="$T/mod/config/wakeup_blocklist.conf" \
     ASB_WAKEUP_SLEEP_POLICY="$T/mod/config/wakeup_blocklist_sleep.conf" \
-    ASB_WAKEUP_MODE_STATE="$T/mode_state" \
+    ASB_WAKEUP_MODE_STATE="$T/mode_state" ASB_WAKEUP_SNAPSHOT="$T/snapshot" \
     ASB_WAKEUP_EVENTS_NODE="$T/events" bash "$W" "$@"
 }
 out="$(run apply)"
@@ -6554,6 +6554,8 @@ out="$(run set NETLINK wlan_wow_wl NETLINK)"
 [ "$out" = 'wakeup_blocker|applied|2|unknown' ] || fail "bounded policy update failed: $out"
 printf 'NETLINK\nwlan_wow_wl\n' > "$T/expected"
 cmp -s "$T/mod/config/wakeup_blocklist.conf" "$T/expected" || fail 'policy update was not saved and deduplicated'
+printf 'A|NETLINK\nA|wlan_wow_wl\n' > "$T/expected_snapshot"
+cmp -s "$T/snapshot" "$T/expected_snapshot" || fail 'saved policy snapshot is incomplete'
 out="$(run status)"
 printf '%s\n' "$out" | grep 'node=writable|policy=ready|' >/dev/null && printf '%s\n' "$out" | grep 'saved_count=2|' >/dev/null && printf '%s\n' "$out" | grep 'current_count=2|' >/dev/null || fail "status lacks saved/live counts: $out"
 [ "$(printf '%s\n' "$out" | grep -c '^wakeup_rule|saved|')" -eq 2 ] || fail 'saved policy readback missing'
@@ -13222,6 +13224,31 @@ done
 grep -q 'printf .%s\\n. "${1:-}" | awk -v c=' "$SRC" && f '_wl_svc_state still pipes the dump through printf'
 [ "$fail" = 0 ] && echo 'PASS large dump argv: 300 KB package/batterystats dumps survive mksh (no printf argv), core framework components refuse disable'
 exit "$fail"
+)
+
+t_wakeup_update_migration() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+NVBASE="$T/adb"; MODID=AutoSystemBoost; MODPATH="$NVBASE/modules_update/$MODID"
+mkdir -p "$NVBASE/modules/$MODID/config" "$MODPATH/config" "$T/state"
+sed -n '/^asb_preserve_wakeup_rules() {/,/^}/p' "$ROOT/common/install.sh" | sed "s|/data/adb/asb|$T/state|g" > "$T/fn.sh"
+. "$T/fn.sh"
+printf 'legacy_rule\n' > "$NVBASE/modules/$MODID/config/wakeup_blocklist.conf"
+printf 'sleep_rule\n' > "$NVBASE/modules/$MODID/config/wakeup_blocklist_sleep.conf"
+printf 'A|stale\n' > "$T/state/wakeup_blocklist.snapshot"
+asb_preserve_wakeup_rules
+cmp "$NVBASE/modules/$MODID/config/wakeup_blocklist.conf" "$MODPATH/config/wakeup_blocklist.conf"
+cmp "$NVBASE/modules/$MODID/config/wakeup_blocklist_sleep.conf" "$MODPATH/config/wakeup_blocklist_sleep.conf"
+: > "$NVBASE/modules/$MODID/config/wakeup_blocklist.conf"
+asb_preserve_wakeup_rules
+[ ! -s "$MODPATH/config/wakeup_blocklist.conf" ] || { echo 'empty policy resurrected' >&2; exit 1; }
+rm -rf "$NVBASE/modules/$MODID"
+printf 'A|backup_rule\nS|backup_sleep\n' > "$T/state/wakeup_blocklist.snapshot"
+asb_preserve_wakeup_rules
+[ "$(cat "$MODPATH/config/wakeup_blocklist.conf")" = backup_rule ]
+[ "$(cat "$MODPATH/config/wakeup_blocklist_sleep.conf")" = backup_sleep ]
+echo 'PASS wakeup policy migration: active, empty and snapshot recovery'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -6,6 +6,7 @@ ASB_WB_MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 ASB_WB_NODE="${ASB_WAKEUP_BLOCKLIST_NODE:-/sys/kernel/asb_wakeup/blocklist}"
 ASB_WB_POLICY="${ASB_WAKEUP_POLICY:-$ASB_WB_MODDIR/config/wakeup_blocklist.conf}"
 ASB_WB_SLEEP_POLICY="${ASB_WAKEUP_SLEEP_POLICY:-$ASB_WB_MODDIR/config/wakeup_blocklist_sleep.conf}"
+ASB_WB_SNAPSHOT="${ASB_WAKEUP_SNAPSHOT:-/data/adb/asb/wakeup_blocklist.snapshot}"
 ASB_WB_EVENTS="${ASB_WAKEUP_EVENTS_NODE:-/sys/kernel/asb_wakeup/blocked_events}"
 ASB_WB_ABI="${ASB_WAKEUP_ABI_NODE:-/sys/kernel/asb_wakeup/abi_version}"
 ASB_WB_STATS="${ASB_WAKEUP_STATS_NODE:-/sys/kernel/asb_wakeup/rule_stats}"
@@ -161,6 +162,17 @@ asb_wb_set_locked() {
   mv -f "$_wb_always_new" "$ASB_WB_POLICY" && mv -f "$_wb_sleep_new" "$ASB_WB_SLEEP_POLICY" || {
     rm -f "$_wb_always_new" "$_wb_sleep_new"; printf 'wakeup_blocker|policy_error||\n'; return 1;
   }
+  # Keep both lists together outside the module directory, including an empty list.
+  # A complete snapshot is replaced atomically, so an interrupted save cannot mix versions.
+  _wb_snap_dir="${ASB_WB_SNAPSHOT%/*}"
+  [ "$_wb_snap_dir" != "$ASB_WB_SNAPSHOT" ] || _wb_snap_dir='.'
+  _wb_snap_new="${ASB_WB_SNAPSHOT}.new.$$"
+  if ! mkdir -p "$_wb_snap_dir" || ! (umask 077; {
+    sed 's/^/A|/' "$ASB_WB_POLICY" && sed 's/^/S|/' "$ASB_WB_SLEEP_POLICY"
+  } > "$_wb_snap_new") || ! mv -f "$_wb_snap_new" "$ASB_WB_SNAPSHOT"; then
+    rm -f "$_wb_snap_new"
+    printf 'wakeup_blocker|policy_error||\n'; return 1
+  fi
   rm -f "$ASB_WB_MODE_STATE" 2>/dev/null || true
   asb_wb_apply auto
 }

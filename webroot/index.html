@@ -3094,7 +3094,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent);
 }
 .cfg-icon .tech-icon { width: 22px; height: 22px; }
-.cfg-status-row { display:flex; flex-direction:row; flex-wrap:nowrap; align-items:center; gap:6px; max-width:100%; }
+.cfg-status-row { display:flex; flex-direction:row; flex-wrap:nowrap; align-items:center; gap:6px; min-width:0; max-width:100%; }
 .cfg-status-row .cfg-status, .cfg-status-row .cfg-smart-owner { flex:0 1 auto; white-space:nowrap; }
 .cfg-main {
   flex: 1 1 auto;
@@ -3249,7 +3249,9 @@ html[data-asb-theme="light"] .cfg-smart-owner {
 }
 /* The leading caret: a small disclosure triangle before the name, pointing right while the
  * description is closed and down while it is open. */
-.cfg-caret.cfg-caret-lead { display:inline; margin:0; padding:0; padding-inline-end:3px; font-size:9px; line-height:1; vertical-align:1px;
+.cfg-name-with-caret { display:flex; align-items:baseline; gap:3px; min-width:0; }
+.cfg-name-text { min-width:0; overflow-wrap:break-word; }
+.cfg-caret.cfg-caret-lead { display:inline-block; flex:0 0 auto; margin:0; padding:0; font-size:9px; line-height:1;
   opacity:.45; transform:none; transition:opacity .2s ease; }
 .cfg-caret.cfg-caret-lead::before { content:'\25B8'; }
 .cfg-row.desc-open .cfg-caret.cfg-caret-lead { transform:none; opacity:.7; }
@@ -15464,15 +15466,15 @@ function cfgRenderRow(list, it, showCat) {
     const main = document.createElement('div');
     main.className = 'cfg-main';
     const nm = document.createElement('div');
-    nm.className = 'cfg-name';
-    /* The disclosure caret leads the name: always on the first line, at the same spot in
-     * every row. Trailing the text it fell onto a line of its own under some names. */
-    nm.textContent = Tcfg(it.key, "name", it.name);
+    nm.className = 'cfg-name cfg-name-with-caret';
     const caret = document.createElement('span');
     caret.className = 'cfg-caret cfg-caret-lead';
     caret.setAttribute('aria-hidden', 'true');
-    caret.textContent = '\u00A0';
-    if (nm.insertBefore) nm.insertBefore(caret, nm.firstChild || null); else nm.appendChild(caret);
+    const nameText = document.createElement('span');
+    nameText.className = 'cfg-name-text';
+    nameText.textContent = Tcfg(it.key, "name", it.name);
+    nm.appendChild(caret);
+    nm.appendChild(nameText);
     main.appendChild(nm);
     const st = cfgStatus(it, cur);
     const badge = document.createElement('div');
