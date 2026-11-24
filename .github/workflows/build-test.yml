@@ -855,7 +855,14 @@ jobs:
           chat = os.environ["TG_PRIVATE_CHAT"]
           if not token or not chat.isdecimal() or int(chat) <= 0:
               sys.exit("Missing bot token or invalid private chat ID")
-          text = post.caption("test", os.environ["ASB_VER"], os.environ["RUN_URL"])
+          text = ("🛸 <b>AutoSystemBoost " + os.environ["ASB_VER"] + "</b>\n"
+              "Личная тестовая сборка\n\n"
+              "✅ Надёжнее возвращает настройки Stock и сохраняет не восстановленные значения.\n"
+              "✅ Учитывает ограничения GPU и достоверность температурных данных.\n"
+              "✅ Улучшены проверки cgroup, Bluetooth и идентификации сборки в логах.\n"
+              "✅ Уточнена диагностика расхождения тока и заряда батареи.\n\n"
+              "🧪 Проверь поведение на устройстве и пришли asbdiag и полный лог при проблемах.\n"
+              "🔗 <a href=\"" + os.environ["RUN_URL"] + "\">Сборка на GitHub</a>")
           result = subprocess.run(["curl", "--silent", "--show-error",
               "--form-string", "chat_id=" + chat, "--form-string", "parse_mode=HTML",
               "--form-string", "caption=" + text, "-F", "document=@" + os.environ["ZIP_TEST"],
