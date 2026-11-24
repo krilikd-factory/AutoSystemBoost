@@ -11518,7 +11518,7 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 grep -Fq "['nightcharge', 'sh ' + shQuote(MD + '/runtime/asb_night_charge.sh') + ' status']" "$H" || fail 'batched status read missing'
-grep -Fq 'nm.textContent = Tcfg(it.key, "name", it.name);' "$H" || fail 'card value insertion no longer uses textContent'
+grep -Fq 'nameText.textContent = Tcfg(it.key, "name", it.name);' "$H" || fail 'card value insertion no longer uses textContent'
 grep -Fq "{ key:'night_charge_start', type:'time', def:'22:00', stock:'22:00'" "$H" || fail 'start time control missing'
 grep -Fq "{ key:'night_charge_end', type:'time', def:'06:00', stock:'06:00'" "$H" || fail 'end time control missing'
 grep -Fq "time.type = 'time'; time.className = 'cfg-time';" "$H" || fail 'native time input contract missing'
