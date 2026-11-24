@@ -3393,7 +3393,7 @@ asb_preserve_wakeup_rules() {
       if [ -f "$_wb_old/$_wb_file" ]; then
         cp -f "$_wb_old/$_wb_file" "$_wb_dest/$_wb_file" || return 1
       else
-        : > "$_wb_dest/$_wb_file" || return 1
+        printf %s "" > "$_wb_dest/$_wb_file" || return 1
       fi
     done
   elif [ -f /data/adb/asb/wakeup_blocklist.snapshot ]; then
