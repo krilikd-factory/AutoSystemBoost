@@ -49,10 +49,22 @@ body:
       description: What you did, what you expected and what you saw instead. Steps to reproduce help most.
     validations:
       required: true
+  - type: input
+    id: affected_build
+    attributes:
+      label: First affected build
+      description: Source SHA or GitHub Actions run from the diagnostic header, if available.
+  - type: input
+    id: fixed_build
+    attributes:
+      label: Fix commit or pull request
+  - type: input
+    id: device_verified
+    attributes:
+      label: Build verified on the device
+      description: Include the tested build, model, firmware and observed result.
   - type: textarea
     id: diag
     attributes:
-      label: Diagnostic report
-      description: Attach the file from `su -c asbdiag` or WebUI → Reports. Drag the file here.
-    validations:
-      required: true
+      label: Diagnostic summary
+      description: Share anonymized findings here. Keep raw archives in the project's private intake.

@@ -6702,6 +6702,28 @@ need "$UNINSTALL" '*/haptics_baseline.conf) _restore_ns=system'
 echo 'PASS reversible settings baseline contract (7 audited keys and haptics namespace)'
 )
 
+t_profile_capture_serialization() (
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
+export ASB_PROFILE_BASELINE="$work/ledger"
+printf '77\n' > "$work/node"
+{
+  printf '%s\n' '#include <stdio.h>' '#include <fcntl.h>' '#include <unistd.h>' '#include <string.h>'
+  sed -n '/^#include <sys\/file.h>/,/^\/\* Absolute floor/{ /^\/\* Absolute floor/!p; }' "$ROOT/src/asb_writer.h"
+  echo 'int main(int argc, char **argv) { if (argc != 2) return 2; writer_profile_baseline_record_path(argv[1]); return 0; }'
+} > "$work/writer.c"
+cc -DASB_PROFILE_BASELINE_PATH=\""$ASB_PROFILE_BASELINE"\" "$work/writer.c" -o "$work/writer"
+exec 8>>"$ASB_PROFILE_BASELINE.lock"; flock -x 8
+"$work/writer" "$work/node" 8>&- & native=$!
+sh -c '. "$1"; asb_profile_baseline_capture_path "$2"' sh "$ROOT/runtime/asb_baseline.sh" "$work/node" 8>&- & shell=$!
+flock -u 8; wait "$native"; wait "$shell"
+[ "$(cat "$ASB_PROFILE_BASELINE")" = "path|$work/node|77" ]
+printf '11\n' > "$work/node"
+. "$ROOT/runtime/asb_baseline.sh"
+asb_profile_baseline_restore
+[ "$(cat "$work/node")" = 77 ]
+)
 t_stock_switch_fast_runtime() (
 # Runtime (fix177): choosing Stock returns at once; the settings part of the profile ledger is
 # put back by a background pass that a newer profile stops between keys.
