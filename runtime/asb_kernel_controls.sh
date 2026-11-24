@@ -240,7 +240,6 @@ asb_kc_hrtimer_covered() {
 
 asb_kc_capture() {
   _akc_key="$1" _akc_node="$2" _akc_prev="$3"
-  # An untagged capture from this boot may already contain an ASB value.
   if [ -f "$_akc_prev" ] && ! asb_kc_kid_stored "$_akc_prev" >/dev/null; then
     _mtime="$(stat -c %Y "$_akc_prev")" && _uptime="$(cut -d. -f1 /proc/uptime)" || return 1
     [ "$_mtime" -lt "$(($(date +%s) - _uptime))" ] || return 1

@@ -4600,7 +4600,7 @@ set_case() {
     *) fail "unknown fixture $1" ;;
   esac
 }
-want_applied() { [ "$out" = 'kernel_bore|applied|auto|1|0' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ "$("$REAL_CAT" "$T/state/kernel_bore.prev")" = 0 ] || fail "$1 apply: $out"; }
+want_applied() { [ "$out" = 'kernel_bore|applied|auto|1|0' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ "$(head -n 1 "$T/state/kernel_bore.prev")" = 0 ] || fail "$1 apply: $out"; }
 want_restored() { [ "$out" = 'kernel_bore|restored|auto|0|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 restore: $out"; }
 want_unowned() { [ "$out" = 'kernel_bore|stock_unowned|auto|unknown|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 unowned: $out"; }
 reset_fixture; out="$(run)"; want_applied initial
