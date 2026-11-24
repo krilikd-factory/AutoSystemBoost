@@ -1114,6 +1114,26 @@ bundle_share() {
   return 0
 }
 
+# A root-side provider read does not prove that a third-party app received a
+# usable URI grant. Open the topic and let its document picker open the saved
+# archive in the receiving app's own identity, including Telegram forks.
+bundle_open() {
+  _bp="$1"
+  [ -n "$_bp" ] && [ -s "$_bp" ] || { echo 'error=no_archive'; return 3; }
+  _bc="$(readlink -f "$_bp" 2>/dev/null)"; [ -n "$_bc" ] || _bc="$_bp"
+  case "$_bc" in /sdcard/*) _bc="/storage/emulated/0/${_bc#/sdcard/}" ;; /storage/self/primary/*) _bc="/storage/emulated/0/${_bc#/storage/self/primary/}" ;; /data/media/0/*) _bc="/storage/emulated/0/${_bc#/data/media/0/}" ;; esac
+  bundle_media_own "$_bc"
+  content call --uri content://media/external/file --method scan_file --arg "$_bc" >/dev/null 2>&1 || true
+  if bundle_am -a android.intent.action.VIEW -d 'tg://resolve?domain=AutoSystemBoost&post=3&thread=3'; then
+    echo 'opened=telegram'
+  elif bundle_am -a android.intent.action.VIEW -d 'https://t.me/AutoSystemBoost/3'; then
+    echo 'opened=browser'
+  else
+    echo 'opened=none'
+  fi
+  echo 'attachment=manual'
+}
+
 bundle_id_new() {
   _bir="$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -dc '0-9a-f')"
   [ -n "$_bir" ] || _bir="$(printf '%08x' "$(( $$ * 2654435761 % 4294967296 ))")"
@@ -1241,5 +1261,6 @@ case "${1:-status}" in
   bundle-check) bundle_check ;;
   bundle) bundle_logs ;;
   bundle-share) bundle_share "${2:-}" ;;
+  bundle-open) bundle_open "${2:-}" ;;
   *) echo 'error=bad_action'; exit 64 ;;
 esac

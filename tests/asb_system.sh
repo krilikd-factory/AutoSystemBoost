@@ -10991,6 +10991,11 @@ exit 0
 STUB
   chmod 755 "$T/bin/content" "$T/bin/am" "$T/bin/sleep"
   share() { STUB_LOG="$T/stub.log" STUB_DIR="$T" STUB_SOURCE="$p" PATH="$T/bin:$PATH" run bundle-share "$@"; }
+  # The normal UI opens Bugs and leaves attachment to the receiving app's picker.
+  STUB_LOG="$T/stub.log" STUB_DIR="$T" STUB_SOURCE="$p" PATH="$T/bin:$PATH" run bundle-open "$p" > "$T/manual.out"
+  grep -qx 'opened=telegram' "$T/manual.out" && grep -qx 'attachment=manual' "$T/manual.out" || fail 'manual handoff did not open Bugs'
+  ! grep -q 'SEND' "$T/stub.log" || fail 'manual handoff attempted an unverified URI grant'
+  rm -f "$T/stub.log"
   out="$(share "$p")"
   printf '%s\n' "$out" | grep -qx 'opened=share' || fail "the share sheet was not opened: $out"
   grep -q 'method scan_file' "$T/stub.log" || fail 'the archive was not indexed for the file picker'

@@ -133,8 +133,11 @@ _sf_release() {
   return 0
 }
 _active() {
-  _peak_write "$MAX.0" && touch "$HEARTBEAT" 2>/dev/null || true
+  # Ask SurfaceFlinger for the discovered maximum first. Waiting for a Settings
+  # round trip before that request can leave an intermediate mode visible on touch.
+  # The panel/ROM still decides the actual transition and may refuse the mode.
   [ "$PEAK_FORCE" = 1 ] && _sf_force
+  _peak_write "$MAX.0" && touch "$HEARTBEAT" 2>/dev/null || true
   return 0
 }
 _idle_rate() {

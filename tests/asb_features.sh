@@ -3239,6 +3239,10 @@ run() {   # $1 dump file, rest = shell
 [ "$(run "$T/d15k.txt" _sf_mode)" = "5 165" ] || f "1.5K: wrong mode $(run "$T/d15k.txt" _sf_mode)"
 [ "$(run "$T/dfhd.txt" _sf_mode)" = "11 165" ] || f "FHD: the mode would switch the resolution: $(run "$T/dfhd.txt" _sf_mode)"
 : > "$T/svc.log"
+# The force-mode request must precede a potentially slow Settings write on touch.
+run "$T/d15k.txt" '_sf_force() { echo sf >> "$SVC_LOG"; }; _peak_write() { echo settings >> "$SVC_LOG"; }; PEAK_FORCE=1; MAX=165; HEARTBEAT="$STATE_DIR/hb"; _active' >/dev/null
+printf 'sf\nsettings\n' > "$T/order"; cmp -s "$T/svc.log" "$T/order" || f "touch did not request the maximum first"
+: > "$T/svc.log"
 run "$T/d15k.txt" 'PEAK_FORCE=1; _sf_force; echo "rc=$? on=$SFON"' > "$T/o.txt"
 grep -qx 'rc=0 on=1' "$T/o.txt" || f "force did not report success: $(cat "$T/o.txt")"
 grep -qx 'call SurfaceFlinger 1035 i32 5' "$T/svc.log" || f "wrong SurfaceFlinger call: $(cat "$T/svc.log")"
