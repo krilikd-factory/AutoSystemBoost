@@ -3808,7 +3808,7 @@ grep -q '^lk_cluster_roles() {' "$C" || fail "jank trace still guesses main/prim
 grep -q 'wn += within(topj, "most janky frames")' "$C" || fail "no table for the app with the most janky frames"
 grep -q 'the little cluster (%s) runs no UI' "$C" || fail "report does not name the clusters on a 4-cluster part"
 grep -q '_tier="little"; \[ "$_npol" -eq 2 \] && _tier="main"' "$D" || fail "asbdiag calls the six main cores little"
-grep -q 'no ASB entry and no runtime bind queued - it is read before /vendor/etc' "$D" || fail "asbdiag does not explain a stock /odm effects config"
+grep -q 'no ASB entry and no runtime bind queued - check the active SKU' "$D" || fail "asbdiag does not explain a stock /odm effects config"
 for t in test_cluster_roles_runtime.sh test_odm_bind_reinstall_runtime.sh; do
   asb_has_test "$t" || fail "$t missing"
 done
