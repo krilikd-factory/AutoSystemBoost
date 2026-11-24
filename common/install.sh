@@ -1798,14 +1798,17 @@ asb_register_dsp_effect() {
   if grep -qE 'asb_loudness|asbdsp' "$1" 2>/dev/null; then
     _clean_ae="${1}.asbclean"
     awk '
-      /<library[^>]*name="asbdsp"/            { next }
-      /<effect[^>]*name="asb_loudness"/       { next }
-      /<apply[^>]*effect="asb_loudness"/      { next }
-      { print }
+      {
+        gsub(/<library[^>]*name="asbdsp"[^>]*\/>/, "")
+        gsub(/<effect[^>]*name="asb_loudness"[^>]*\/>/, "")
+        gsub(/<apply[^>]*effect="asb_loudness"[^>]*\/>/, "")
+        print
+      }
     ' "$1" > "$_clean_ae" 2>/dev/null || { rm -f "$_clean_ae" 2>/dev/null; }
     if [ -s "$_clean_ae" ]; then
       # Drop a <stream type="..."> block that our removal left with no <apply> inside.
       awk '
+        /<stream[[:space:]]+type=/ && /<\/stream>/ { print; next }
         /<stream[[:space:]]+type=/ { buf = $0; hold = 1; has = 0; next }
         hold && /<\/stream>/ {
           if (has) { print buf; print body; print }

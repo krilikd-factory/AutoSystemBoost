@@ -1687,6 +1687,11 @@ DSP_XML
 sh -c '. "$1"; asb_register_dsp_effect "$2" blocked' sh "$T/register.sh" "$T/effects.xml" || f "blocked cleanup failed"
 grep -q 'asbdsp\|asb_loudness' "$T/effects.xml" && f "blocked config retains ASB registration"
 grep -q 'vendor_effect' "$T/effects.xml" || f "blocked cleanup removed unrelated effects"
+printf '%s\n' '<root><libraries><library name="vendor"/><library name="asbdsp" path="libasbdsp.so"/></libraries><effects><effect name="vendor_effect"/><effect name="asb_loudness" library="asbdsp"/></effects></root>' > "$T/inline.xml"
+sh -c '. "$1"; asb_register_dsp_effect "$2" blocked' sh "$T/register.sh" "$T/inline.xml" || f "inline cleanup failed"
+grep -q 'asbdsp\|asb_loudness' "$T/inline.xml" && f "inline blocked config retains ASB registration"
+grep -q '<root><libraries><library name="vendor"/></libraries><effects><effect name="vendor_effect"/></effects></root>' "$T/inline.xml" || f "inline cleanup damaged other elements"
+
 grep -q 'asb_register_dsp_effect "$_ec" "$_dsp_registration_mode"' "$I" || f "fuse mode not passed to registration"
 
 # --- runtime ---------------------------------------------------------------------------
