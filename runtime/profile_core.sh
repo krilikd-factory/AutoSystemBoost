@@ -232,6 +232,7 @@ asb_profile_group_write() {
   if ! live="$(cat "$node" 2>/dev/null)"; then live=unknown; outcome=unavailable; fi
   if [ "$outcome" = applied ] && ! asb_profile_value_equal "$node" "$want" "$live"; then outcome=rejected; fi
   [ "$outcome" != applied ] || _group_ok=$((_group_ok + 1))
+  _group_want="$want"; _group_live="$live"
   reason="$(printf '%s' "$node" | tr '/' '.')"
   command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note "$_group_resource" profile "$reason" "$want" "$live" "$outcome"
   return 0
@@ -247,14 +248,14 @@ asb_profile_group_finish() {
   else
     command -v asb_arbiter_release >/dev/null 2>&1 && asb_arbiter_release "$_group_resource" profile
   fi
-  command -v asb_arbiter_log_event >/dev/null 2>&1 && asb_arbiter_log_event write "$_group_resource" profile 30 profile_apply "$_group_seen" "$_group_ok" "$result"
+  command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note "$_group_resource" profile profile_apply "${_group_want:--}" "${_group_live:--}" "$result"
   return 0
 }
 
 asb_apply_cpuset() {
   asb_feature_enabled CPU || return 0
   local _root _grp _cam_guard
-  local _group_resource=cpuset_fg _group_seen=0 _group_ok=0
+  local _group_resource=cpuset_fg _group_seen=0 _group_ok=0 _group_want= _group_live=
   _cam_guard=0
   [ -f /dev/.asb/camera_guard ] && _cam_guard=1
   for _root in /dev/cpuset /sys/fs/cgroup; do
@@ -280,7 +281,7 @@ asb_apply_cpuset() {
 asb_apply_uclamp() {
   asb_feature_enabled CPU || return 0
   local _root _tier _min _max _cam_guard
-  local _group_resource=uclamp_max _group_seen=0 _group_ok=0
+  local _group_resource=uclamp_max _group_seen=0 _group_ok=0 _group_want= _group_live=
   _cam_guard=0
   [ -f /dev/.asb/camera_guard ] && _cam_guard=1
 

@@ -4467,7 +4467,7 @@ else
 fi
 NOTE "phantom_procs = $(cfg phantom_procs)  ·  live: $(settings get global settings_enable_monitor_phantom_procs 2>/dev/null)"
 if [ -r /proc/sys/kernel/sched_schedstats ]; then
-  NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: $(cat /proc/sys/kernel/sched_schedstats 2>/dev/null)  ·  saved baseline: $(cat /data/adb/asb/kernel_sched_stats.prev 2>/dev/null || echo none)"
+  NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: $(cat /proc/sys/kernel/sched_schedstats 2>/dev/null)  ·  saved baseline: $(head -n 1 /data/adb/asb/kernel_sched_stats.prev 2>/dev/null || echo none)"
 else
   NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: not exposed"
 fi

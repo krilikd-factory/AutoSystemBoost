@@ -40,8 +40,9 @@ _alive() {
   [ -s "$PIDF" ] || return 1
   _p=""; _q=""
   _r=""
-  IFS='|' read -r _p _q _r < "$PIDF" 2>/dev/null || return 1
+  IFS='|' read -r _p _q _r _born < "$PIDF" 2>/dev/null || return 1
   case "$_p" in ''|*[!0-9]*) return 1 ;; esac
+  [ -z "$_born" ] || [ "$(_starttime "$_p")" = "$_born" ] || return 1
   [ -r "/proc/$_p/cmdline" ] || return 1
   tr '\0' ' ' < "/proc/$_p/cmdline" 2>/dev/null | grep -qE 'asb_btcodec|asb\.BtCodec' || return 1
   return 0
@@ -100,7 +101,7 @@ case "${1:-status}" in
       CLASSPATH="$DEX" nohup "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" 9>&- </dev/null >"$OUT" 2>&1 &
     fi
     _np=$!
-    printf '%s|%s|%s\n' "$_np" "$_w" "$_wr" > "$PIDF"
+    printf '%s|%s|%s|%s\n' "$_np" "$_w" "$_wr" "$(_starttime "$_np")" > "$PIDF.tmp" && mv -f "$PIDF.tmp" "$PIDF" || exit 1
     _log "watch started quality=$_w rate=$_wr pid=$_np"
     echo "result=started"
     echo "quality=$_w"

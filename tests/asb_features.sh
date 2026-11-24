@@ -379,10 +379,12 @@ printf 'radio_policy_enable=1\nnet_wifi_leave=off\n' > "$TMP/mod/config/governor
 run reconcile
 wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'stale watcher PID after OFF'
 wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'stale watcher lock after OFF'
-if kill -0 "$WPID" 2>/dev/null; then
+watcher_executing() {
   # A container init may not immediately reap an exited orphan.
-  [ "$(ps -o stat= -p "$WPID" | cut -c1)" = Z ] || fail 'reconcile OFF did not stop watcher'
-fi
+  local state
+  state="$(ps -o stat= -p "$1" 2>/dev/null)" && [ -n "$state" ] && [ "${state#Z}" = "$state" ]
+}
+watcher_executing "$WPID" && fail 'reconcile OFF did not stop watcher'
 [ "$(grep -cx 'wifi disable' "$TMP/svc.log")" -eq 1 ] || fail 'fallback acted after explicit off'
 unset WPID
 
@@ -411,7 +413,7 @@ wait_for_absent "$TMP/state/wifi_fallback.action" || fail 'OFF did not clear ASB
 wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'watcher PID remained after active-window OFF'
 wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'watcher lock remained after active-window OFF'
 [ "$(grep -cx 'wifi enable' "$TMP/svc.log")" -ge 2 ] || fail 'OFF did not return ASB-owned Wi-Fi'
-kill -0 "$WPID" 2>/dev/null && fail 'watcher survived active-window OFF'
+watcher_executing "$WPID" && fail 'watcher survived active-window OFF'
 unset WPID
 
 # A network that NEVER validated must never be touched: this is the field-reported loop
@@ -432,8 +434,8 @@ run reconcile
 # Same race as above: the OFF signal is delivered, the watcher exits on its next pass.
 # Checking the PID the instant reconcile returns failed about one run in three under load.
 wait_for_absent "$TMP/state/wifi_fallback.pid" || true
-_wv=0; while kill -0 "$WPID" 2>/dev/null && [ "$_wv" -lt 50 ]; do sleep 0.1; _wv=$((_wv + 1)); done
-kill -0 "$WPID" 2>/dev/null && fail 'never-validated watcher survived OFF'
+_wv=0; while watcher_executing "$WPID" && [ "$_wv" -lt 50 ]; do sleep 0.1; _wv=$((_wv + 1)); done
+watcher_executing "$WPID" && fail 'never-validated watcher survived OFF'
 unset WPID
 
 # Model an Android shell that execs the script directly: no literal `sh` argument precedes
