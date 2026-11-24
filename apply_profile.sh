@@ -251,6 +251,8 @@ run_stock_finish() {
   fi
   if [ "$_sf_rc" = 2 ]; then
     asb_log "stock settings restore superseded by a newer profile - ledger kept"
+  elif [ "$_sf_rc" != 0 ]; then
+    asb_log "stock settings restore partial epoch=$WORKER_EPOCH; retained pending records"
   else
     asb_log "stock settings restore done epoch=$WORKER_EPOCH"
   fi

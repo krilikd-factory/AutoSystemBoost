@@ -13,79 +13,93 @@ ASB_BASELINE="${ASB_BASELINE:-/data/adb/asb/baseline.txt}"
 # writes to their exact pre-profile values during an immediate Stock transition.
 ASB_PROFILE_BASELINE="${ASB_PROFILE_BASELINE:-/data/adb/asb/profile_runtime_baseline.v1}"
 
-asb_profile_baseline_record() {
-  _pb_type="$1" _pb_key="$2" _pb_value="$3"
-  [ -n "$_pb_type" ] && [ -n "$_pb_key" ] || return 1
-  # Use the configured snapshot directory. Production keeps /data/adb/asb, while host
-  # contracts inject a temporary path and must not need permission to create /data.
-  mkdir -p "$(dirname "$ASB_PROFILE_BASELINE")" 2>/dev/null || return 1
-  [ -f "$ASB_PROFILE_BASELINE" ] || true > "$ASB_PROFILE_BASELINE" 2>/dev/null || return 1
-  grep -Fq "$_pb_type|$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0
-  # Trim the trailing newline rather than rewriting every one.
-  #
-  # Same defect as the native recorder: a sysfs value arrives as "1200000\n" and was
-  # stored as "1200000_", which restores as a string no numeric node accepts. Only an
-  # embedded pipe still needs substituting, because it would break the record format.
-  _pb_clean="$(printf '%s' "$_pb_value" | tr -d '\n\r' | tr '|' '_')"
-  printf '%s|%s|%s\n' "$_pb_type" "$_pb_key" "$_pb_clean" >> "$ASB_PROFILE_BASELINE" 2>/dev/null
-}
+# All writers and the Stock pass lock a stable sibling inode. The ledger itself
+# may be replaced by rename while held. Kernel file locks disappear on exit.
+asb_pb_locked() (
+  mkdir -p "${ASB_PROFILE_BASELINE%/*}" || exit 1
+  exec 9>>"$ASB_PROFILE_BASELINE.lock" || exit 1
+  flock -x 9 || exit 1
+  "$@"
+)
 
-asb_profile_baseline_capture_path() {
-  _pb_path="$1"
-  [ -r "$_pb_path" ] || return 0
-  asb_profile_baseline_record path "$_pb_path" "$(cat "$_pb_path" 2>/dev/null | tr -d '\r\n')"
-}
-
-asb_profile_baseline_capture_setting() {
-  _pb_ns="$1" _pb_key="$2"
-  command -v settings >/dev/null 2>&1 || return 0
-  grep -Fq "setting|$_pb_ns:$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0
-  _pb_val="$(settings get "$_pb_ns" "$_pb_key" 2>/dev/null)"
-  [ "$_pb_val" = "null" ] && _pb_val=""
-  asb_profile_baseline_record setting "$_pb_ns:$_pb_key" "$_pb_val"
-}
-
-# $1 = all (default) | path | setting.
-#
-# Split for the Stock switch (fix177). A sysfs path is a write that takes microseconds; every
-# setting is a `settings` process start (the Java framework client, 0.5-1 s each on the
-# phone). The WebUI waited for the whole ledger - the owner saw "Stock selected - restoring
-# ROM baseline..." for about 30 s with the screen frozen and two profile cards half lit. The
-# direct switch now restores the paths (CPU, GPU, VM) at once and hands the settings to a
-# background pass.
-#
-# ASB_PB_GUARD, when set, names a function asked before each record: a non-zero answer stops
-# the pass and KEEPS the ledger, so a newer profile that starts writing does not have its
-# values overwritten by a stale restore, and the original values stay recorded for the next
-# Stock. The ledger is removed only once the settings part has completed.
-asb_profile_baseline_restore() {
-  _pb_only="${1:-all}"
-  [ -f "$ASB_PROFILE_BASELINE" ] || return 0
-  while IFS='|' read -r _pb_type _pb_key _pb_value; do
-    [ "$_pb_only" = all ] || [ "$_pb_only" = "$_pb_type" ] || continue
-    if [ -n "${ASB_PB_GUARD:-}" ] && ! "$ASB_PB_GUARD"; then return 2; fi
-    case "$_pb_type" in
-      path)
-        # Older profiles captured the vendor thermal governor's live limit.
-        [ "$_pb_key" != /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] || continue
-        [ -w "$_pb_key" ] && printf '%s\n' "$_pb_value" > "$_pb_key" 2>/dev/null || true
-        ;;
-      setting)
-        _pb_ns="${_pb_key%%:*}"; _pb_name="${_pb_key#*:}"
-        [ -n "$_pb_ns" ] && [ -n "$_pb_name" ] || continue
-        if [ -z "$_pb_value" ]; then settings delete "$_pb_ns" "$_pb_name" >/dev/null 2>&1 </dev/null || true
-        else settings put "$_pb_ns" "$_pb_name" "$_pb_value" >/dev/null 2>&1 </dev/null || true
-        fi
-        ;;
+asb_pb_setting_read() {
+  # Keep Android's literal null distinct from transport failure. The public
+  # settings wrapper normalizes both to empty for historical display callers.
+  if command -v _asb_set_clean >/dev/null 2>&1; then
+    _pb_reply="$(command settings get "$1" "$2" 2>/dev/null)" &&
+      [ -n "$_pb_reply" ] && _asb_set_clean "$_pb_reply" >/dev/null &&
+      { _asb_set_bare "$_pb_reply"; return; }
+    _pb_reply="$(content query --uri "content://settings/$1" --where "name='$2'" 2>/dev/null)" || return 1
+    case "$_pb_reply" in
+      'No result found.'|'No result found') printf null ;;
+      'Row: 0 value='*) printf '%s' "${_pb_reply#Row: 0 value=}" ;;
+      *) return 1 ;;
     esac
-  done < "$ASB_PROFILE_BASELINE"
-  [ "$_pb_only" = path ] && return 0
-  rm -f "$ASB_PROFILE_BASELINE" 2>/dev/null || true
+  else
+    settings get "$1" "$2"
+  fi
 }
-# How many settings the background pass still has to put back (the WebUI shows it).
+
+asb_pb_capture() {
+  local kind="$1" key="$2" value
+  if [ -e "$ASB_PROFILE_BASELINE" ]; then
+    [ -r "$ASB_PROFILE_BASELINE" ] || return 1
+    awk -F'|' -v t="$kind" -v k="$key" '$1==t && $2==k { found=1 } END {exit !found}' "$ASB_PROFILE_BASELINE" && return 0
+  fi
+  case "$kind" in
+    path) value="$(cat "$key")" || return 1 ;;
+    setting) value="$(asb_pb_setting_read "${key%%:*}" "${key#*:}")" || return 1 ;;
+  esac
+  [ -n "$value" ] || return 1
+  case "$value" in *'|'*|*'
+'*) return 1 ;; esac
+  [ "$kind:$value" != setting:null ] || value=''
+  printf '%s|%s|%s\n' "$kind" "$key" "$value" >> "$ASB_PROFILE_BASELINE"
+}
+
+asb_profile_baseline_capture_path() { asb_pb_locked asb_pb_capture path "$1"; }
+asb_profile_baseline_capture_setting() { asb_pb_locked asb_pb_capture setting "$1:$2"; }
+
+asb_pb_restore_one() {
+  local key="$2" value="$3" actual
+  case "$1" in
+    path)
+      [ "$key" != /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] || return 0
+      [ -e "$key" ] && [ -w "$key" ] && printf '%s\n' "$value" > "$key" || return 1
+      actual="$(cat "$key")" || return 1 ;;
+    setting)
+      if [ -n "$value" ]; then settings put "${key%%:*}" "${key#*:}" "$value" || return 1
+      else settings delete "${key%%:*}" "${key#*:}" || return 1; value=null
+      fi
+      actual="$(asb_pb_setting_read "${key%%:*}" "${key#*:}")" || return 1 ;;
+    *) return 1 ;;
+  esac
+  [ "$actual" = "$value" ]
+}
+
+asb_pb_restore_locked() {
+  local only="$1" kind key value rc=0 tmp
+  [ -f "$ASB_PROFILE_BASELINE" ] || return 0
+  tmp="$(mktemp "$ASB_PROFILE_BASELINE.XXXXXX")" || return 1
+  while IFS='|' read -r kind key value; do
+    if [ "$only" = all ] || [ "$only" = "$kind" ]; then
+      if [ -n "${ASB_PB_GUARD:-}" ] && ! "$ASB_PB_GUARD"; then rm -f "$tmp"; return 2; fi
+      if asb_pb_restore_one "$kind" "$key" "$value" </dev/null; then continue; fi
+      rc=1
+    fi
+    printf '%s|%s|%s\n' "$kind" "$key" "$value" >> "$tmp" || { rm -f "$tmp"; return 1; }
+  done < "$ASB_PROFILE_BASELINE"
+  mv -f "$tmp" "$ASB_PROFILE_BASELINE" || return 1
+  [ -s "$ASB_PROFILE_BASELINE" ] || rm -f "$ASB_PROFILE_BASELINE" || return 1
+  return "$rc"
+}
+
+asb_profile_baseline_restore() {
+  asb_pb_locked asb_pb_restore_locked "${1:-all}"
+}
 asb_profile_baseline_pending_settings() {
   [ -f "$ASB_PROFILE_BASELINE" ] || { echo 0; return 0; }
-  grep -c '^setting|' "$ASB_PROFILE_BASELINE" 2>/dev/null || echo 0
+  awk '/^setting[|]/ {n++} END {print n+0}' "$ASB_PROFILE_BASELINE"
 }
 
 asb_baseline_init() {
@@ -110,7 +124,9 @@ asb_settings_put() {
   asb_baseline_init
   # Only profile_core enables this flag around its profile-owned apply transaction. Manual
   # WebUI audio changes intentionally do not enter the Stock runtime baseline.
-  [ "${ASB_PROFILE_BASELINE_CAPTURE:-0}" = "1" ] && asb_profile_baseline_capture_setting "$_ns" "$_key"
+  if [ "${ASB_PROFILE_BASELINE_CAPTURE:-0}" = 1 ]; then
+    asb_profile_baseline_capture_setting "$_ns" "$_key" || return 1
+  fi
   if ! grep -qE "^settings\|${_ns}\|${_key}\|" "$ASB_BASELINE" 2>/dev/null; then
     local _orig
     _orig="$(settings get "$_ns" "$_key" 2>/dev/null)"

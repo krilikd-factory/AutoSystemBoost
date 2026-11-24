@@ -53,8 +53,9 @@ readf() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
 # one pass, so the first pass had to get cheaper on its own.
 writef_retry() {
   local _p="$1" _v="$2" _tries="${3:-5}" _delay="${4:-0.12}"
-  command -v asb_profile_baseline_capture_path >/dev/null 2>&1 && \
-    asb_profile_baseline_capture_path "$_p" || true
+  if command -v asb_profile_baseline_capture_path >/dev/null 2>&1; then
+    asb_profile_baseline_capture_path "$_p" || return 1
+  fi
   _i=1
   [ -e "$_p" ] || return 1
   while [ "$_i" -le "$_tries" ]; do
@@ -76,8 +77,9 @@ writef_retry() {
 sysctlw() {
   local k="$1" v="$2" p
   p="/proc/sys/$(echo "$k" | tr . /)"
-  command -v asb_profile_baseline_capture_path >/dev/null 2>&1 && \
-    asb_profile_baseline_capture_path "$p" || true
+  if command -v asb_profile_baseline_capture_path >/dev/null 2>&1; then
+    asb_profile_baseline_capture_path "$p" || return 1
+  fi
   if has sysctl; then sysctl -w "$k=$v" >/dev/null 2>&1 && return 0; fi
   [ -w "$p" ] || return 1
   echo "$v" > "$p" 2>/dev/null

@@ -754,8 +754,16 @@ static long cpu_lowest_opp(int path_idx) {
 /* Native Smart caps do not pass through the shell profile wrapper. Record each writable
  * path once in the same profile-only snapshot used by Stock, before the native writer makes
  * its first change. If the file cannot be created, fail closed: never invent a ROM default. */
+#include <sys/file.h>
+static void writer_baseline_unlock(int *fd) {
+    if (*fd >= 0) close(*fd);
+}
+
 static void writer_profile_baseline_record_path(const char *path) {
     if (!path || !*path) return;
+    int lockfd __attribute__((cleanup(writer_baseline_unlock))) =
+        open("/data/adb/asb/profile_runtime_baseline.v1.lock", O_CREAT | O_WRONLY | O_CLOEXEC, 0600);
+    if (lockfd < 0 || flock(lockfd, LOCK_EX) < 0) return;
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return;
     char value[160] = {0};

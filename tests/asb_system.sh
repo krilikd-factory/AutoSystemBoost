@@ -6711,7 +6711,16 @@ fail() { echo "FAIL stock switch fast: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/mod/runtime"
 cp "$ROOT/runtime/asb_baseline.sh" "$T/mod/runtime/"
-printf '#!/bin/sh\necho "$*" >> "$SLOG"\n' > "$T/bin/settings"; chmod +x "$T/bin/settings"
+cat > "$T/bin/settings" <<'SETTINGS'
+#!/bin/sh
+key="$SLOG.$2.$3"
+case "$1" in
+  get) if [ -f "$key" ]; then cat "$key"; else echo null; fi ;;
+  put) echo "$*" >> "$SLOG"; printf '%s' "$4" > "$key" ;;
+  delete) echo "$*" >> "$SLOG"; rm -f "$key" ;;
+esac
+SETTINGS
+chmod +x "$T/bin/settings"
 echo 1996800 > "$T/cpu_max"; echo 100 > "$T/swappiness"
 mk() {
   printf 'path|%s|3628800\npath|%s|60\nsetting|global:a|1\nsetting|global:b|\nsetting|system:c|x\n' \
@@ -6742,6 +6751,16 @@ grep -q '^setting|global:b|$' "$T/pb" || fail "the ledger lost the original valu
 sh -c ". '$T/run.sh'; asb_profile_baseline_restore setting" || fail "settings pass failed"
 [ "$(tr '\n' ';' < "$T/slog")" = 'put global a 1;delete global b;put system c x;' ] || fail "settings restored: $(cat "$T/slog")"
 [ -f "$T/pb" ] && fail "ledger kept after a complete pass"
+# A missing node must survive a partial restore, and a new process can retry it.
+printf 'path|%s|11\npath|%s|22\n' "$T/cpu_max" "$T/missing" > "$T/pb"
+if sh -c ". '$T/run.sh'; asb_profile_baseline_restore path"; then fail "partial restore reported success"; fi
+[ "$(cat "$T/pb")" = "path|$T/missing|22" ] || fail "wrong retry ledger"
+[ "$(sh -c ". '$T/run.sh'; asb_profile_baseline_pending_settings")" = 0 ] || fail "duplicate zero count"
+: > "$T/missing"
+sh -c ". '$T/run.sh'; asb_profile_baseline_restore path" || fail "retry failed"
+[ "$(cat "$T/missing")" = 22 ] && [ ! -e "$T/pb" ] || fail "retry lost baseline"
+if sh -c ". '$T/run.sh'; settings() { return 1; }; asb_profile_baseline_capture_setting global sample"; then fail "captured failed settings read"; fi
+[ ! -e "$T/pb" ] || fail "failed read created a ledger"
 # The full transaction (boot, worker) is unchanged: everything, in one pass.
 mk
 sh -c ". '$T/run.sh'; asb_profile_baseline_restore" || fail "full pass"
