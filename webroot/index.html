@@ -8860,8 +8860,8 @@ async function asbDebugStopFullDay() {
  * infinite-log folder and report into Download, then opens the group's Bugs topic, where the
  * user attaches the archive. A bot collects archives from Bugs and General for analysis. */
 const ASB_BUGS_URL = 'https://t.me/AutoSystemBoost/3';
-let _asbSendArmed = 0;
-async function asbSendLogs() {
+let _asbSendArmed = 0, _asbSendMode = '';
+async function asbSendLogs(manual) {
   if (_asbDebugActionBusy) return;
   _asbDebugActionBusy = true;
   let waitOpen = false;
@@ -8886,10 +8886,9 @@ async function asbSendLogs() {
       return;
     }
     uiSound('success');
-    /* The archive is indexed for the receiver's own file picker. A provider that root can
-     * read can still be inaccessible to Telegram forks, so open Bugs for manual attachment. */
+    /* Offer the normal attachment path and a manual picker for clients that cannot read its URI. */
     const shortPath = b.path.replace(/^\/(sdcard|storage\/emulated\/0)\//, '');
-    await run('sh ' + MD + '/runtime/asb_debug_support.sh bundle-open ' + JSON.stringify(b.path) + ' 2>/dev/null');
+    await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + (manual ? 'bundle-open ' : 'bundle-share ') + JSON.stringify(b.path) + ' 2>/dev/null');
     if (b.reused === '1') toast(T('dbg_send_reused', 'No new logs since %s - attach it if it was not sent yet').replace('%s', shortPath), 'warn');
     else toast(T('dbg_send_saved', 'Saved %s - attach it in the Bugs topic').replace('%s', shortPath), 'good');
   } catch (e) {
@@ -25786,21 +25785,24 @@ function asbLogMenuPick(action) {
     asbDebugStopFullDay();
     return;
   }
-  if (action === 'send') {
-    const label = document.getElementById('logMenuSendLabel');
-    if (!_asbSendArmed || Date.now() - _asbSendArmed >= 4000) {
-      _asbSendArmed = Date.now();
+  if (action === 'send' || action === 'send-manual') {
+    const manual = action === 'send-manual';
+    const label = document.getElementById(manual ? 'logMenuSendManualLabel' : 'logMenuSendLabel');
+    const labelKey = manual ? 'dbg_send_manual' : 'dbg_send_btn';
+    const labelDefault = manual ? 'Attach logs manually' : 'Send logs to Bugs';
+    if (!_asbSendArmed || _asbSendMode !== action || Date.now() - _asbSendArmed >= 4000) {
+      _asbSendArmed = Date.now(); _asbSendMode = action;
       if (label) { label.removeAttribute('data-i18n'); label.textContent = T('dbg_send_confirm', 'Tap again: pack asbdiag and the infinite log, then open Bugs'); }
       if (typeof uiSound === 'function') uiSound('option');
       setTimeout(function () {
-        if (Date.now() - _asbSendArmed >= 4000 && label) label.textContent = T('dbg_send_btn', 'Send logs to Bugs');
+        if (Date.now() - _asbSendArmed >= 4000 && label) label.textContent = T(labelKey, labelDefault);
       }, 4100);
       return;
     }
-    _asbSendArmed = 0;
-    if (label) label.textContent = T('dbg_send_btn', 'Send logs to Bugs');
+    _asbSendArmed = 0; _asbSendMode = '';
+    if (label) label.textContent = T(labelKey, labelDefault);
     asbCloseLogMenu();
-    asbSendLogs();
+    asbSendLogs(manual);
     return;
   }
   asbCloseLogMenu();
@@ -28998,6 +29000,11 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
     <span class="log-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg></span>
     <span class="log-menu-txt"><span class="log-menu-title" id="logMenuSendLabel" data-i18n="dbg_send_btn">Send logs to Bugs</span>
     <span class="log-menu-sub" data-i18n="log_menu_send_sub">Packs asbdiag and the infinite log, opens Telegram</span></span>
+  </button>
+  <button class="log-menu-item" id="logMenuSendManual" role="menuitem" type="button" onclick="asbLogMenuPick('send-manual')">
+    <span class="log-menu-ico" aria-hidden="true">📎</span>
+    <span class="log-menu-txt"><span class="log-menu-title" id="logMenuSendManualLabel" data-i18n="dbg_send_manual">Attach logs manually</span>
+    <span class="log-menu-sub" data-i18n="dbg_send_manual_sub">For clients that cannot open an automatically shared attachment</span></span>
   </button>
 </div>
 <nav class="asb-tabbar" id="asbTabbar" role="tablist" aria-label="Sections">

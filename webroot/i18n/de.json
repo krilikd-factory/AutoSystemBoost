@@ -4376,6 +4376,8 @@
   "console_grp_stock": "Standard",
   "console_sum_changed": "geändert · %n",
   "console_sum_stock": "Standard · %n",
+  "dbg_send_manual": "Logs manuell anhängen",
+  "dbg_send_manual_sub": "Wenn die App den automatisch geteilten Anhang nicht öffnen kann",
   "dbg_send_btn": "Logs an Bugs senden",
   "dbg_send_confirm": "Nochmals tippen: asbdiag und Endlos-Log packen, dann Bugs öffnen",
   "dbg_send_diag_first": "Erstelle zuerst ein frisches asbdiag · bitte warten",

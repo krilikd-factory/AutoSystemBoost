@@ -4376,6 +4376,8 @@
   "console_grp_stock": "сток",
   "console_sum_changed": "изменено · %n",
   "console_sum_stock": "сток · %n",
+  "dbg_send_manual": "Прикрепить логи вручную",
+  "dbg_send_manual_sub": "Если клиент не открывает автоматическое вложение",
   "dbg_send_btn": "Отправить логи в Bugs",
   "dbg_send_confirm": "Нажмите ещё раз: соберу asbdiag и бесконечный лог и открою Bugs",
   "dbg_send_diag_first": "Сначала делаю свежий asbdiag · подождите",

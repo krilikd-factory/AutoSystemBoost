@@ -4376,6 +4376,8 @@
   "console_grp_stock": "d’origine",
   "console_sum_changed": "modifié · %n",
   "console_sum_stock": "d’origine · %n",
+  "dbg_send_manual": "Joindre les journaux manuellement",
+  "dbg_send_manual_sub": "Si le client ne peut pas ouvrir la pièce jointe automatique",
   "dbg_send_btn": "Envoyer les journaux à Bugs",
   "dbg_send_confirm": "Touchez encore : asbdiag et le journal infini sont emballés, puis Bugs s’ouvre",
   "dbg_send_diag_first": "Création d’un asbdiag récent · patientez",

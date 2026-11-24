@@ -4376,6 +4376,8 @@
   "console_grp_stock": "bawaan",
   "console_sum_changed": "diubah · %n",
   "console_sum_stock": "bawaan · %n",
+  "dbg_send_manual": "Lampirkan log secara manual",
+  "dbg_send_manual_sub": "Jika aplikasi tidak dapat membuka lampiran otomatis",
   "dbg_send_btn": "Kirim log ke Bugs",
   "dbg_send_confirm": "Ketuk lagi: kemas asbdiag dan log tanpa batas, lalu buka Bugs",
   "dbg_send_diag_first": "Membuat asbdiag baru dulu · tunggu",

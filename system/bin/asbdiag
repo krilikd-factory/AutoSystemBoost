@@ -2282,7 +2282,11 @@ elif [ "$_dsp_on" = "1" ]; then
   fi
   if [ -z "$_dsp_reg" ]; then
     NOTE "  DSP is enabled but no ASB effect is attached: what you hear is stock audio"
-    NOTE "  installed ABI: $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null) - try dsp_effect_abi=legacy/aidl and reboot, then rerun asbdiag"
+    if [ -f /data/adb/asb/dsp_effects_blocked ]; then
+      NOTE "  installed ABI: $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null) - guard is active; do not retry registration until the restart cause is investigated"
+    else
+      NOTE "  installed ABI: $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null) - compare legacy/aidl compatibility before changing the ABI"
+    fi
     # Which of the three ways it can fail: no config the HAL reads lists the library, the
     # file is not visible / labelled for the HAL, or the HAL tried and refused it (dlopen,
     # symbol, version). A field report on an OnePlus 12 had only "absent" twice and nothing
@@ -2325,8 +2329,14 @@ elif [ "$_dsp_on" = "1" ]; then
       fi
     done
     if [ -f /data/adb/asb/dsp_effects_blocked ]; then
-      NOTE "  effects crash fuse TRIPPED ($(cat /data/adb/asb/dsp_effects_blocked 2>/dev/null)): audioserver kept restarting with the effect registered, so it was removed"
-      NOTE "  to try again: delete /data/adb/asb/dsp_effects_blocked and reinstall"
+      NOTE "  effects safety guard TRIPPED ($(cat /data/adb/asb/dsp_effects_blocked 2>/dev/null)): repeated audio-service PID changes were observed while effects were registered; the cause is not established"
+      NOTE "  DSP remains disabled to protect audio. Preserve this report and investigate before retrying."
+      if [ -s /data/adb/asb/dsp_guard_evidence.txt ]; then
+        NOTE "  saved crash-buffer evidence from the guard (may be incomplete):"
+        head -n 80 /data/adb/asb/dsp_guard_evidence.txt | while IFS= read -r _ev; do P "    $_ev"; done
+      else
+        NOTE "  saved crash-buffer evidence: unavailable (older guard event or no matching crash-buffer lines)"
+      fi
     fi
     grep -s 'action=effects_guard' /data/adb/asb/vendor_mounts.log | tail -n 3 | while IFS= read -r _dl; do P "    $_dl"; done
     for _dlib in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do

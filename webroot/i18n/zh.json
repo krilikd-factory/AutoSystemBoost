@@ -4376,6 +4376,8 @@
   "console_grp_stock": "原厂",
   "console_sum_changed": "已修改 · %n",
   "console_sum_stock": "原厂 · %n",
+  "dbg_send_manual": "手动附加日志",
+  "dbg_send_manual_sub": "如果客户端无法打开自动分享的附件",
   "dbg_send_btn": "发送日志到 Bugs",
   "dbg_send_confirm": "再点一次：打包 asbdiag 和无限日志并打开 Bugs",
   "dbg_send_diag_first": "先生成新的 asbdiag · 请稍候",

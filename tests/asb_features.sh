@@ -1726,6 +1726,7 @@ X
 printf '#!/bin/sh\necho "$@" >> "$UMLOG"\nexit 0\n' > "$T/bin/umount"
 printf '#!/bin/sh\necho "$@" >> "$SPLOG"\n' > "$T/bin/setprop"
 printf '#!/bin/sh\nexit 0\n' > "$T/bin/sleep"
+printf '#!/bin/sh\nprintf "audiohalservice failed loading asbdsp\\nbacktrace fixture\\n"\n' > "$T/bin/logcat"
 chmod +x "$T/bin/"*
 
 run_guard() {   # $1 = CRASHING
@@ -1746,6 +1747,7 @@ grep -q 'result=stable restarts=0' "$T/log" || f "stable verdict not logged"
 
 run_guard 1
 [ -f "$T/state/dsp_effects_blocked" ] || f "crash loop did not trip the fuse"
+grep -q 'audiohalservice failed loading asbdsp' "$T/state/dsp_guard_evidence.txt" || f "bounded crash evidence was not retained"
 grep -q 'audio_effects' "$T/man" && f "effects bind still in the manifest after tripping"
 grep -q '/odm/etc/camera/x.json' "$T/man" || f "tripping removed an unrelated (camera) bind"
 grep -q '/odm/etc/audio_effects.xml' "$T/um" 2>/dev/null || f "effects config not unmounted"

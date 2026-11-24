@@ -4376,6 +4376,8 @@
   "console_grp_stock": "de fábrica",
   "console_sum_changed": "cambiado · %n",
   "console_sum_stock": "de fábrica · %n",
+  "dbg_send_manual": "Adjuntar registros manualmente",
+  "dbg_send_manual_sub": "Si el cliente no abre el archivo compartido automáticamente",
   "dbg_send_btn": "Enviar registros a Bugs",
   "dbg_send_confirm": "Toca de nuevo: empaqueto asbdiag y el registro infinito y abro Bugs",
   "dbg_send_diag_first": "Primero creo un asbdiag nuevo · espera",

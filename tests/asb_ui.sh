@@ -17043,6 +17043,29 @@ P
   echo 'PASS webui picker/dock/infirmary: app picker, single dock, deferred Infirmary loads, LDAC card'
 )
 
+t_debug_share_choice_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+node - "$ROOT/webroot/index.html" <<'JS'
+const fs = require('fs'), source = fs.readFileSync(process.argv[2], 'utf8');
+const start = source.indexOf('function asbLogMenuPick(action) {');
+const end = source.indexOf('/* Any tap outside closes it', start);
+if (start < 0 || end < 0) throw Error('menu function missing');
+let _asbLogStopping = false, _asbLogRunning = false, _asbSendArmed = 0, _asbSendMode = '';
+const sent = [];
+const document = {getElementById: () => ({removeAttribute() {}, textContent:''})};
+const T = (key, fallback) => fallback, uiSound = () => {}, setTimeout = () => {};
+const asbCloseLogMenu = () => {}, asbSendLogs = manual => sent.push(manual);
+eval(source.slice(start, end));
+asbLogMenuPick('send'); asbLogMenuPick('send');
+asbLogMenuPick('send-manual'); asbLogMenuPick('send-manual');
+if (String(sent) !== 'false,true') throw Error('wrong share mode: ' + sent);
+asbLogMenuPick('send'); asbLogMenuPick('send-manual');
+if (sent.length !== 2) throw Error('changing modes bypassed confirmation');
+console.log('PASS direct and manual log sharing choices');
+JS
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

@@ -202,6 +202,19 @@ do_effects_guard() {
     _log "action=effects_guard result=stable restarts=$_deaths"
     return 0
   fi
+  # Preserve bounded crash-buffer evidence before undo/restart; PID changes alone
+  # do not establish that the DSP caused them. Do not clear or weaken the guard.
+  _evidence="${ASB_ODM_STATE:-/data/adb/asb}/dsp_guard_evidence.txt"
+  rm -f "$_evidence" 2>/dev/null || true
+  if command -v logcat >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
+    _evtmp="$_evidence.tmp.$$"
+    (umask 077; timeout 8 logcat -b crash -d -t 300 -v threadtime 2>/dev/null | awk '
+      BEGIN { IGNORECASE=1; left=0; n=0 }
+      { line=tolower($0); if (line ~ /audioserver|android.hardware.audio|audiohalservice|asbdsp/) left=5;
+        if (left > 0 && n < 80) { print substr($0,1,240); n++; left-- } }
+    ' > "$_evtmp")
+    if [ -s "$_evtmp" ]; then mv -f "$_evtmp" "$_evidence" 2>/dev/null || rm -f "$_evtmp"; else rm -f "$_evtmp"; fi
+  fi
   _keep="$MAN.keep.$$"; true > "$_keep"
   while IFS='|' read -r _t _p; do
     case "$_t" in

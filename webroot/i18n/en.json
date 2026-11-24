@@ -4269,6 +4269,8 @@
   "console_grp_stock": "stock",
   "console_sum_changed": "changed · %n",
   "console_sum_stock": "stock · %n",
+  "dbg_send_manual": "Attach logs manually",
+  "dbg_send_manual_sub": "For clients that cannot open an automatically shared attachment",
   "dbg_send_btn": "Send logs to Bugs",
   "dbg_send_confirm": "Tap again: pack asbdiag and the infinite log, then open Bugs",
   "dbg_send_diag_first": "Making a fresh asbdiag first · please wait",

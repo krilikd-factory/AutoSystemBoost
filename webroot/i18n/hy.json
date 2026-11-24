@@ -4376,6 +4376,8 @@
   "console_grp_stock": "գործարանային",
   "console_sum_changed": "փոխված · %n",
   "console_sum_stock": "գործարանային · %n",
+  "dbg_send_manual": "Կցել լոգերը ձեռքով",
+  "dbg_send_manual_sub": "Եթե հավելվածը չի բացում ավտոմատ կցված ֆայլը",
   "dbg_send_btn": "Ուղարկել լոգերը Bugs",
   "dbg_send_confirm": "Սեղմեք կրկին՝ կփաթեթավորեմ asbdiag-ը և անվերջ լոգը ու կբացեմ Bugs",
   "dbg_send_diag_first": "Նախ ստեղծում եմ թարմ asbdiag · սպասեք",

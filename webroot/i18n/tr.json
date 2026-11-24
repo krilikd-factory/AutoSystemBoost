@@ -4376,6 +4376,8 @@
   "console_grp_stock": "varsayılan",
   "console_sum_changed": "değişti · %n",
   "console_sum_stock": "varsayılan · %n",
+  "dbg_send_manual": "Günlükleri elle ekle",
+  "dbg_send_manual_sub": "İstemci otomatik paylaşılan eki açamıyorsa",
   "dbg_send_btn": "Logları Bugs’a gönder",
   "dbg_send_confirm": "Tekrar dokunun: asbdiag ve sonsuz log paketlenir, Bugs açılır",
   "dbg_send_diag_first": "Önce yeni bir asbdiag hazırlanıyor · bekleyin",

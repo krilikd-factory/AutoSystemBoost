@@ -4376,6 +4376,8 @@
   "console_grp_stock": "di serie",
   "console_sum_changed": "modificato · %n",
   "console_sum_stock": "di serie · %n",
+  "dbg_send_manual": "Allega i log manualmente",
+  "dbg_send_manual_sub": "Se il client non apre l’allegato condiviso automaticamente",
   "dbg_send_btn": "Invia i log a Bugs",
   "dbg_send_confirm": "Tocca di nuovo: impacchetto asbdiag e il log infinito e apro Bugs",
   "dbg_send_diag_first": "Prima creo un asbdiag aggiornato · attendi",
