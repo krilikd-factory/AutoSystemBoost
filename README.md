@@ -270,7 +270,7 @@ On demand, you can record an extended session and inspect smoothness, drain, nig
 2. **Hypotheses** — possible explanations that still need confirmation.
 3. **Recommendations** — next steps, not guaranteed fixes.
 
-ASB does not blame an app because of one coincidence or promise a battery-saving percentage without comparable field measurements. Detailed collection is user-triggered; there is no permanent extended-capture process running in the background.
+ASB does not blame an app because of one coincidence or promise a battery-saving percentage without comparable field measurements. Detailed collection is user-triggered; there is no permanent extended-capture process running in the background. For controlled on-device measurements, see the [profile trial protocol](docs/field_baseline/profile-trials.md).
 
 ## 🛡 Safety and privacy
 
