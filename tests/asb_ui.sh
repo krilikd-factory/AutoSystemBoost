@@ -17066,6 +17066,29 @@ console.log('PASS direct and manual log sharing choices');
 JS
 )
 
+t_webui_profile_header_selected_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+node - "$ROOT/webroot/index.html" <<'JS'
+const fs = require('fs'), src = fs.readFileSync(process.argv[2], 'utf8');
+const ids = ['curProfile','liveCurProfile','cfgCurProfile','rpCurProfile','devCurProfile','zyCurProfile'];
+const buttons = ids.map(() => ({textContent:'—', disabled:true, setAttribute(){}, classList:{contains(){return false},remove(){},add(){}}}));
+const document = {getElementById: id => buttons[ids.indexOf(id)], querySelectorAll: q => q === '.profile-evidence-link' ? buttons : []};
+const T = (k, fallback) => fallback, asbHomeValueResolve = () => {};
+const start=src.indexOf('let _selectedProfile = '), end=src.indexOf('let switching = false;',start);
+if(start<0||end<0) throw Error('profile UI missing');
+eval(src.slice(start,end) + `
+  for (const value of ['smart','battery','stock']) {
+    ui(value);
+    if (!buttons.every(b => b.textContent.toLowerCase() === value)) throw Error('header mismatch for '+value);
+  }
+`);
+const pollStart=src.indexOf('const _profRaw ='), pollEnd=src.indexOf('/* LIGHT_IDLE',pollStart);
+if(pollStart<0||pollEnd<0||src.slice(pollStart,pollEnd).includes('liveCurProfile.textContent')) throw Error('telemetry can overwrite selected header');
+console.log('PASS profile headers use selected mode immediately');
+JS
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

@@ -7104,7 +7104,7 @@ html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + 
     <div class="status-row">
       <div class="dot"></div>
       <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
-      <button class="status-val profile-evidence-link" id="liveCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="false">balanced</button>
+      <button class="status-val profile-evidence-link" id="liveCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="true" disabled>—</button>
         <!-- Same pair as the main island, inside the pill so it shares its row instead of
              wrapping to a second one. -->
         <div class="island-actions">
@@ -7312,7 +7312,7 @@ html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + 
     <div class="status-row has-back">
       <div class="dot"></div>
       <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
-      <button class="status-val profile-evidence-link" id="cfgCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="false">balanced</button>
+      <button class="status-val profile-evidence-link" id="cfgCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="true" disabled>—</button>
         <!-- Same pair as the main island, inside the pill so it shares its row instead of
              wrapping to a second one. -->
         <div class="island-actions">
@@ -7444,7 +7444,7 @@ html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + 
     <div class="status-row has-back">
       <div class="dot"></div>
       <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
-      <button class="status-val profile-evidence-link" id="rpCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="false">balanced</button>
+      <button class="status-val profile-evidence-link" id="rpCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="true" disabled>—</button>
         <div class="island-actions">
           <button class="island-btn" type="button" onclick="asbToggleLogMenu(event)"
                   aria-haspopup="menu" aria-expanded="false" aria-label="Logs">
@@ -7525,7 +7525,7 @@ html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + 
       <div class="status-row has-back">
         <div class="dot"></div>
         <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
-        <button class="status-val profile-evidence-link" id="devCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="false">balanced</button>
+        <button class="status-val profile-evidence-link" id="devCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="true" disabled>—</button>
         <div class="island-actions">
           <button class="island-btn" id="devLogsBtn" type="button" onclick="asbToggleLogMenu(event)" aria-haspopup="menu" aria-expanded="false" aria-label="Logs">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
@@ -7586,7 +7586,7 @@ html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + 
       <div class="status-row has-back">
         <div class="dot"></div>
         <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
-        <button class="status-val profile-evidence-link" id="zyCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="false">balanced</button>
+        <button class="status-val profile-evidence-link" id="zyCurProfile" type="button" onclick="profileDetailsOpen(_selectedProfile)" aria-haspopup="dialog" aria-disabled="true" disabled>—</button>
         <div class="island-actions">
           <button class="island-btn" id="zyLogsBtn" type="button"
                   onclick="asbToggleLogMenu(event)" aria-haspopup="menu"
@@ -9030,6 +9030,7 @@ function ui(p) {
   current.setAttribute('aria-disabled', canInspect ? 'false' : 'true');
   current.title = canInspect ? T('pd_open', 'Open actual changes for the active profile') : '';
   document.querySelectorAll('.profile-evidence-link').forEach(function (btn) {
+    btn.textContent = current.textContent;
     btn.disabled = !canInspect;
     btn.setAttribute('aria-disabled', canInspect ? 'false' : 'true');
     btn.title = current.title;
@@ -27751,21 +27752,8 @@ async function pollLive(visible, prefetch) {
     if (mainSocBadge && liveSocBadge) liveSocBadge.textContent = mainSocBadge.textContent;
     const mainVerBadge = _el('verBadge'); const liveVerBadge = _el('liveVerBadge');
     if (mainVerBadge && liveVerBadge) liveVerBadge.textContent = mainVerBadge.textContent;
-    const liveCurProfile = _el('liveCurProfile');
-    if (liveCurProfile) {
-      // Smart is not a set of rails of its own - it picks one of the other three and the
-      // governor reports that resolved one. Showing it alone made the Live page say
-      // "Balanced" while the user had chosen Smart and the main page agreed with them.
-      // Reported exactly that way, and it reads like a bug even though both numbers are
-      // correct: they answer different questions.
-      //
-      // "Smart -> Balanced" answers both: what you selected, and what it decided.
-      const _chosen = (_mainProf && _mainProf.textContent || '').trim().toLowerCase();
-      liveCurProfile.textContent =
-        (_chosen === 'smart' && profile && profile !== 'smart' && profile !== '—')
-          ? ('smart \u2192 ' + profile)
-          : profile;
-    }
+    // The header shows the selected profile, not the governor's resolved rails.
+    // ui() updates every header synchronously; a delayed telemetry sample must not overwrite it.
 
     /* LIGHT_IDLE with the screen on is not a contradiction, but it reads like one.
      *
