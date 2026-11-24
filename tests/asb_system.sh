@@ -3541,7 +3541,7 @@ grep -q 'bash tools/asb_source_regression.sh' "$ROOT/.github/workflows/host-regr
 grep -q 'export ASB_DSP_REFERENCE_OPTIONAL=1' "$ROOT/tools/asb_source_regression.sh" || fail "source-only entry point does not set its explicit mode"
 grep -q 'MODE=SOURCE_ONLY' "$ROOT/tools/asb_full_regression.sh" || fail "runner does not announce source-only mode"
 grep -q 'MODE=RELEASE_STRICT' "$ROOT/tools/asb_full_regression.sh" || fail "runner does not announce strict mode"
-grep -q 'if \[ "\$_pb_missing" = 1 \]; then' "$ROOT/.github/workflows/build-test.yml" || fail "test workflow skips DSP staging even when every reference binary exists"
+grep -Fq 'if [ "$_pb_missing" = 1 ] && [ "${{ inputs.strict_reference }}" != true ]; then' "$ROOT/.github/workflows/host-regression.yml" || fail "strict DSP reference gate missing"
 grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/.github/workflows/build-release.yml" && fail "release build must never skip the DSP reference"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix133 contract"
@@ -10346,7 +10346,7 @@ new_fixture
 rm -rf "$T/block/mmcblk0"
 printf 'io_scheduler=kyber\n' > "$T/conf"
 run_io apply >/dev/null || fail 'kernel-id fixture apply'
-printf 'different|kernel\n' > "$T/state/sda.prev.kid"
+sed -i '2c different|kernel' "$T/state/sda.prev"
 printf 'io_scheduler=stock\n' > "$T/conf"
 out="$(run_io restore)"
 printf '%s\n' "$out" | grep -Fq 'io_scheduler|stock_unowned|' || fail "stale kernel baseline claimed restore: $out"
@@ -10571,8 +10571,8 @@ if PATH="$T/bin:$PATH" run_io smart 2 1 > "$T/out" 2>&1; then fail 'second-queue
 grep -Fq 'io_scheduler|write_failed|' "$T/out" || fail "second-queue failure verdict: $(cat "$T/out")"
 [ "$(active "$T/block/sda/queue/scheduler")" = mq-deadline ] || fail 'first queue retained a partial Smart apply'
 [ ! -e "$T/state/smart.plan" ] || fail 'failed partial apply saved a Smart plan'
-[ "$(cat "$T/state/sda.prev")" = mq-deadline ] || fail 'rollback damaged the persistent sda Stock baseline'
-[ "$(cat "$T/state/mmcblk0.prev")" = mq-deadline ] || fail 'rollback damaged the persistent mmc Stock baseline'
+[ "$(head -n 1 "$T/state/sda.prev")" = mq-deadline ] || fail 'rollback damaged the persistent sda Stock baseline'
+[ "$(head -n 1 "$T/state/mmcblk0.prev")" = mq-deadline ] || fail 'rollback damaged the persistent mmc Stock baseline'
 echo 'PASS I/O scheduler multidevice buildfix16: per-queue partial exposure, mixed live state, minimal none/ADIOS kernels, exact per-device Stock and second-write transactional rollback with preserved baselines'
 )
 

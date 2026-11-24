@@ -51,8 +51,33 @@ readf() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
 #
 # The dead-node memory below still helps, but only for repeated calls: a boot makes exactly
 # one pass, so the first pass had to get cheaper on its own.
+asb_profile_value_equal() {
+  [ "$2" = "$3" ] && return 0
+  case "$1" in
+    */*uclamp.min|*/*uclamp.max)
+      awk -v a="$2" -v b="$3" 'BEGIN { n="^[0-9]+([.][0-9]+)?$"; exit !(a~n && b~n && a+0==b+0) }' ;;
+    */cpus|*/cpuset.cpus)
+      awk -v a="$2" -v b="$3" '
+        function expand(s, set,   fields,range,i,j,n,count) {
+          count=split(s,fields,",")
+          for(i=1;i<=count;i++) {
+            if(fields[i] !~ /^[0-9]+(-[0-9]+)?$/) return 0
+            n=split(fields[i],range,"-"); if(n==1) range[2]=range[1]
+            if(range[1]+0>range[2]+0 || range[2]+0>8191) return 0
+            for(j=range[1]+0;j<=range[2]+0;j++) set[j]=1
+          }
+          return count>0
+        }
+        BEGIN {
+          if(!expand(a,x) || !expand(b,y)) exit 1
+          for(i in x) if(!(i in y)) exit 1
+          for(i in y) if(!(i in x)) exit 1
+        }' ;;
+    *) return 1 ;;
+  esac
+}
 writef_retry() {
-  local _p="$1" _v="$2" _tries="${3:-5}" _delay="${4:-0.12}"
+  local _actual _i _p="$1" _v="$2" _tries="${3:-5}" _delay="${4:-0.12}"
   if command -v asb_profile_baseline_capture_path >/dev/null 2>&1; then
     asb_profile_baseline_capture_path "$_p" || return 1
   fi
@@ -60,9 +85,9 @@ writef_retry() {
   [ -e "$_p" ] || return 1
   while [ "$_i" -le "$_tries" ]; do
     [ -w "$_p" ] || return 1
-    echo "$_v" > "$_p" 2>/dev/null || true
-    [ ! -r "$_p" ] && return 0
-    [ "$(cat "$_p" 2>/dev/null)" = "$_v" ] && return 0
+    if echo "$_v" > "$_p" 2>/dev/null; then
+      _actual="$(cat "$_p" 2>/dev/null)" && asb_profile_value_equal "$_p" "$_v" "$_actual" && return 0
+    fi
     sleep "$_delay"
     _i=$((_i+1))
   done
@@ -196,9 +221,40 @@ asb_pick_gpu_pct() {
   [ -n "$_pick" ] && echo "$_pick"
 }
 
+# The arbiter lease covers a whole resource. Claim it only if every exposed
+# node accepted its value. Keep the actual readback for each attempted write.
+asb_profile_group_write() {
+  local node="$1" want="$2" live outcome reason
+  [ -e "$node" ] || return 0
+  _group_seen=$((_group_seen + 1))
+  outcome=rejected
+  if writef_retry "$node" "$want" 2 0.06; then outcome=applied; fi
+  if ! live="$(cat "$node" 2>/dev/null)"; then live=unknown; outcome=unavailable; fi
+  if [ "$outcome" = applied ] && ! asb_profile_value_equal "$node" "$want" "$live"; then outcome=rejected; fi
+  [ "$outcome" != applied ] || _group_ok=$((_group_ok + 1))
+  reason="$(printf '%s' "$node" | tr '/' '.')"
+  command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note "$_group_resource" profile "$reason" "$want" "$live" "$outcome"
+  return 0
+}
+asb_profile_group_finish() {
+  local result
+  if [ "$_group_seen" -eq 0 ]; then result=unavailable
+  elif [ "$_group_ok" -eq "$_group_seen" ]; then result=applied
+  elif [ "$_group_ok" -eq 0 ]; then result=rejected
+  else result=partial; fi
+  if [ "$result" = applied ]; then
+    command -v asb_arbiter_claim >/dev/null 2>&1 && asb_arbiter_claim "$_group_resource" profile 30 120 profile_apply
+  else
+    command -v asb_arbiter_release >/dev/null 2>&1 && asb_arbiter_release "$_group_resource" profile
+  fi
+  command -v asb_arbiter_log_event >/dev/null 2>&1 && asb_arbiter_log_event write "$_group_resource" profile 30 profile_apply "$_group_seen" "$_group_ok" "$result"
+  return 0
+}
+
 asb_apply_cpuset() {
   asb_feature_enabled CPU || return 0
   local _root _grp _cam_guard
+  local _group_resource=cpuset_fg _group_seen=0 _group_ok=0
   _cam_guard=0
   [ -f /dev/.asb/camera_guard ] && _cam_guard=1
   for _root in /dev/cpuset /sys/fs/cgroup; do
@@ -214,17 +270,17 @@ asb_apply_cpuset() {
     [ "$_cam_guard" = "1" ] && continue
     command -v asb_arbiter_can_write >/dev/null 2>&1 && ! asb_arbiter_can_write cpuset_fg profile && continue
     for _grp in foreground top-app; do
-      [ -e "$_root/$_grp/cpus" ] && writef_retry "$_root/$_grp/cpus" "$FG_CPUS" 2 0.06 || true
-      [ -e "$_root/$_grp/cpuset.cpus" ] && writef_retry "$_root/$_grp/cpuset.cpus" "$FG_CPUS" 2 0.06 || true
+      asb_profile_group_write "$_root/$_grp/cpus" "$FG_CPUS"
+      asb_profile_group_write "$_root/$_grp/cpuset.cpus" "$FG_CPUS"
     done
-    command -v asb_arbiter_claim >/dev/null 2>&1 && asb_arbiter_claim cpuset_fg profile 30 120 profile_apply || true
-    command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note cpuset_fg profile profile_apply "$FG_CPUS" "$FG_CPUS" applied || true
   done
+  [ "$_cam_guard" = 1 ] || asb_profile_group_finish
 }
 
 asb_apply_uclamp() {
   asb_feature_enabled CPU || return 0
   local _root _tier _min _max _cam_guard
+  local _group_resource=uclamp_max _group_seen=0 _group_ok=0
   _cam_guard=0
   [ -f /dev/.asb/camera_guard ] && _cam_guard=1
 
@@ -336,15 +392,14 @@ asb_apply_uclamp() {
         *) [ "$_max" -lt 1 ] 2>/dev/null && _max="" ;;
       esac
       if [ -n "$_max" ] && [ "$_cam_guard" != "1" ] && { ! command -v asb_arbiter_can_write >/dev/null 2>&1 || asb_arbiter_can_write uclamp_max profile; }; then
-        [ -e "$_root/$_tier/cpu.uclamp.max" ] && writef_retry "$_root/$_tier/cpu.uclamp.max" "$_max" 2 0.06 || true
-        [ -e "$_root/$_tier/uclamp.max" ] && writef_retry "$_root/$_tier/uclamp.max" "$_max" 2 0.06 || true
-        command -v asb_arbiter_claim >/dev/null 2>&1 && asb_arbiter_claim uclamp_max profile 30 120 profile_apply || true
-        command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note uclamp_max profile profile_apply "$_max" "$_max" applied || true
+        asb_profile_group_write "$_root/$_tier/cpu.uclamp.max" "$_max"
+        asb_profile_group_write "$_root/$_tier/uclamp.max" "$_max"
       fi
     done
     [ -e "$_root/top-app/cpu.uclamp.latency_sensitive" ] && writef_retry "$_root/top-app/cpu.uclamp.latency_sensitive" "$LATENCY_SENSITIVE" 2 0.06 || true
     [ -e "$_root/top-app/uclamp.latency_sensitive" ] && writef_retry "$_root/top-app/uclamp.latency_sensitive" "$LATENCY_SENSITIVE" 2 0.06 || true
   done
+  [ "$_cam_guard" = 1 ] || asb_profile_group_finish
 }
 
 asb_apply_walt() {

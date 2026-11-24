@@ -73,30 +73,41 @@ _ios_devices() {
   done
 }
 _ios_kid() { printf '%s|%s\n' "$(uname -r 2>/dev/null)" "$(uname -v 2>/dev/null)"; }
-_ios_kid_ok() { [ ! -f "$1.kid" ] || [ "$(cat "$1.kid" 2>/dev/null)" = "$(_ios_kid)" ]; }
-_ios_kid_write() {
-  _iosk_tmp="$1.kid.tmp.$$"
-  (umask 077; _ios_kid > "$_iosk_tmp" 2>/dev/null) && mv -f "$_iosk_tmp" "$1.kid" 2>/dev/null
+_ios_kid_stored() {
+  local id
+  id="$(sed -n '2p' "$1")" || return 1
+  if [ -n "$id" ]; then printf '%s\n' "$id"
+  elif [ -s "$1.kid" ]; then cat "$1.kid"
+  else return 1; fi
 }
+_ios_kid_ok() {
+  local saved
+  saved="$(_ios_kid_stored "$1")" && [ "$saved" = "$(_ios_kid)" ]
+}
+
 _ios_prev() { printf '%s/%s.prev\n' "$STATE" "$1"; }
 _ios_capture() {
   _iosc_dev="$1"; _iosc_node="$(_ios_node "$_iosc_dev")" || return 1
   _iosc_prev="$(_ios_prev "$_iosc_dev")"
+  # An untagged capture from this boot may already contain an ASB value.
+  if [ -f "$_iosc_prev" ] && ! _ios_kid_stored "$_iosc_prev" >/dev/null; then
+    _mtime="$(stat -c %Y "$_iosc_prev")" && _uptime="$(cut -d. -f1 /proc/uptime)" || return 1
+    [ "$_mtime" -lt "$(($(date +%s) - _uptime))" ] || return 1
+  fi
   if [ -f "$_iosc_prev" ] && ! _ios_kid_ok "$_iosc_prev"; then
     rm -f "$_iosc_prev" "$_iosc_prev.kid" 2>/dev/null || return 1
   fi
   if [ -f "$_iosc_prev" ]; then
-    _ios_name_ok "$(cat "$_iosc_prev" 2>/dev/null)" || return 1
-    [ -f "$_iosc_prev.kid" ] || _ios_kid_write "$_iosc_prev"
+    _ios_name_ok "$(head -n 1 "$_iosc_prev" 2>/dev/null)" || return 1
     return 0
   fi
   _iosc_orig="$(_ios_active "$_iosc_node")" || return 1
   _ios_name_ok "$_iosc_orig" || return 1
   mkdir -p "$STATE" 2>/dev/null || return 1
   _iosc_tmp="$_iosc_prev.tmp.$$"
-  (umask 077; printf '%s\n' "$_iosc_orig" > "$_iosc_tmp" 2>/dev/null) || { rm -f "$_iosc_tmp" 2>/dev/null; return 1; }
+  (umask 077; printf '%s\n%s\n' "$_iosc_orig" "$(_ios_kid)" > "$_iosc_tmp" 2>/dev/null) || { rm -f "$_iosc_tmp" 2>/dev/null; return 1; }
   mv -f "$_iosc_tmp" "$_iosc_prev" 2>/dev/null || { rm -f "$_iosc_tmp" 2>/dev/null; return 1; }
-  _ios_kid_write "$_iosc_prev"
+  return 0
 }
 _ios_live() {
   _iosl_seen=""; _iosl_mixed=0
@@ -116,7 +127,7 @@ _ios_baseline() {
     [ -f "$_iosb_file" ] || continue
     _ios_kid_ok "$_iosb_file" || continue
     _iosb_any=1
-    _iosb_val="$(cat "$_iosb_file" 2>/dev/null)"
+    _iosb_val="$(head -n 1 "$_iosb_file" 2>/dev/null)"
     _ios_name_ok "$_iosb_val" || continue
     if [ -z "$_iosb_seen" ]; then _iosb_seen="$_iosb_val"
     elif [ "$_iosb_seen" != "$_iosb_val" ]; then _iosb_mixed=1; fi
@@ -281,7 +292,7 @@ _ios_restore() {
       rm -f "$_iosr_prev" "$_iosr_prev.kid" 2>/dev/null || { _ios_emit state_cleanup_failed; return 1; }
       continue
     fi
-    _iosr_orig="$(cat "$_iosr_prev" 2>/dev/null)"
+    _iosr_orig="$(head -n 1 "$_iosr_prev" 2>/dev/null)"
     _ios_name_ok "$_iosr_orig" || { _ios_emit baseline_invalid; return 1; }
     [ -e "$_iosr_node" ] || { _ios_emit not_exposed; return 1; }
     [ -w "$_iosr_node" ] || { _ios_emit not_writable; return 1; }
