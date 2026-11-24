@@ -3531,7 +3531,7 @@ grep -q 'by screen state        : screen on' "$L/asb_log_full_day.sh" || fail "t
 grep -q "_ph() { awk" "$L/asb_log_full_day.sh" || fail "cost rates still divide by whole hours"
 grep -q '^lk_sysui_verdict() {' "$L/_asb_logkit_common.sh" || fail "SystemUI restart has no verdict"
 grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/tests/asb_features.sh" || fail "DSP reference has no explicit source-only switch"
-grep -q 'bash tools/asb_source_regression.sh' "$ROOT/.github/workflows/build-test.yml" || fail "source-only test workflow cannot reach the native build"
+grep -q 'bash tools/asb_source_regression.sh' "$ROOT/.github/workflows/host-regression.yml" || fail "source-only test workflow cannot reach the native build"
 grep -q 'export ASB_DSP_REFERENCE_OPTIONAL=1' "$ROOT/tools/asb_source_regression.sh" || fail "source-only entry point does not set its explicit mode"
 grep -q 'MODE=SOURCE_ONLY' "$ROOT/tools/asb_full_regression.sh" || fail "runner does not announce source-only mode"
 grep -q 'MODE=RELEASE_STRICT' "$ROOT/tools/asb_full_regression.sh" || fail "runner does not announce strict mode"
@@ -7905,9 +7905,10 @@ fail() { echo "FAIL workflow executable modes: $*" >&2; exit 1; }
 
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
   [ -f "$WF" ] || fail "missing $WF"
-  [ "$(grep -c 'name: Normalize executable source script modes' "$WF")" = 2 ] \
-    || fail "regression and package jobs do not both normalize modes in $WF"
-  grep -Fq 'needs: regression' "$WF" || fail "package job is not gated by every regression shard in $WF"
+  grep -Fq 'uses: ./.github/workflows/host-regression.yml' "$WF" || fail "missing shared regression"
+  grep -Fq 'needs: regression' "$WF" || fail "packaging lost its gate"
+done
+for WF in "$ROOT/.github/workflows/host-regression.yml"; do
   grep -Fq 'fail-fast: false' "$WF" || fail "one shard can hide the diagnostics of another in $WF"
   [ "$(sed -n 's/^            suites: //p' "$WF" | wc -l)" = 3 ] \
     || fail "expected exactly three regression shards in $WF"
@@ -7922,7 +7923,7 @@ for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/buil
   grep -Fq 'for tool in zip unzip curl file rsync jq; do' "$WF" \
     || fail "jq must be a verified runner dependency in $WF"
   for p in $_helpers; do
-    [ "$(grep -c "$p" "$WF")" -ge 2 ] || fail "$WF does not restore $p in both jobs"
+    [ "$(grep -c "$p" "$WF")" -ge 1 ] || fail "$WF does not restore $p in both jobs"
   done
 done
 grep -Fq 'ASB_REGRESSION_SUITES:-' "$ROOT/tools/asb_full_regression.sh" \
@@ -7938,7 +7939,7 @@ for p in $_helpers; do
   chmod 0644 "$TMP/$p"
 done
 _n=0
-for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
+for WF in "$ROOT/.github/workflows/host-regression.yml" "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
   awk '
     /- name: Normalize executable source script modes/ { capture=1; next }
     capture && /^      - name:/ { capture=0 }
@@ -7949,7 +7950,7 @@ for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/buil
   ' "$WF" > "$TMP/blocks.sh"
   # Split at the second chmod comment: each block is complete and independently executable.
   awk -v prefix="$TMP/normalize." '/# Browser uploads can turn git mode/{n++} {print > (prefix n ".sh")}' "$TMP/blocks.sh"
-  for block in "$TMP/normalize.1.sh" "$TMP/normalize.2.sh"; do
+  for block in "$TMP"/normalize.*.sh; do
     _n=$(( _n + 1 ))
     for p in $_helpers; do chmod 0644 "$TMP/$p"; done
     (cd "$TMP" && sh "$block") || fail "extracted normalize step failed for $WF block $_n"

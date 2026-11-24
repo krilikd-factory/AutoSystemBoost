@@ -33,9 +33,11 @@ _probe() {
   _cg_v1=0; [ -d /dev/cpuctl ] || [ -d /dev/cpuset ] && _cg_v1=1
   _cg_v2=0; [ -r /sys/fs/cgroup/cgroup.controllers ] && _cg_v2=1
   _uclamp=0; [ -e /dev/cpuctl/top-app/cpu.uclamp.max ] || [ -e /sys/fs/cgroup/top-app/cpu.uclamp.max ] && _uclamp=1
-  _thermal=0; [ -d /sys/class/thermal ] && _thermal=1
-  _thermal_headroom=0
-  for _h in /sys/class/thermal/thermal_zone*/temp /sys/devices/virtual/thermal/thermal_zone*/temp; do [ -r "$_h" ] && { _thermal_headroom=1; break; }; done
+  _thermal=0; _thermal_headroom=0
+  for _h in /sys/class/thermal/thermal_zone*/temp; do
+    [ -r "$_h" ] && { _thermal=1; break; }
+  done
+  grep -Eq '"headroom_valid"[[:space:]]*:[[:space:]]*1[[:space:]]*[,}]' /dev/.asb/status 2>/dev/null && _thermal_headroom=1
   _battery_current=0
   for _b in /sys/class/power_supply/battery/current_now /sys/class/power_supply/battery/current_avg /sys/class/power_supply/battery/constant_charge_current; do [ -r "$_b" ] && { _battery_current=1; break; }; done
   _gpu=0
