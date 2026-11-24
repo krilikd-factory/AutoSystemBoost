@@ -173,17 +173,18 @@ asb_kc_kid() {
   printf '%s\n' "$_akk_id"
 }
 
+asb_kc_kid_stored() {
+  local id
+  id="$(sed -n '2p' "$1")" || return 1
+  if [ -n "$id" ]; then printf '%s\n' "$id"
+  elif [ -s "$1.kid" ]; then cat "$1.kid"
+  else return 1; fi
+}
 asb_kc_kid_ok() {
-  [ -f "$1.kid" ] || return 0
-  [ "$(cat "$1.kid" 2>/dev/null)" = "$(asb_kc_kid)" ]
+  local saved
+  saved="$(asb_kc_kid_stored "$1")" && [ "$saved" = "$(asb_kc_kid)" ]
 }
 
-asb_kc_kid_write() {
-  _akw_tmp="$1.kid.tmp.$$"
-  (umask 077; asb_kc_kid > "$_akw_tmp" 2>/dev/null) && mv -f "$_akw_tmp" "$1.kid" 2>/dev/null && return 0
-  rm -f "$_akw_tmp" 2>/dev/null
-  return 0
-}
 
 asb_kc_lpm_inverted() {
   case "$(asb_kc_node kernel_lpm_prediction)" in
@@ -239,22 +240,25 @@ asb_kc_hrtimer_covered() {
 
 asb_kc_capture() {
   _akc_key="$1" _akc_node="$2" _akc_prev="$3"
+  if [ -f "$_akc_prev" ] && ! asb_kc_kid_stored "$_akc_prev" >/dev/null; then
+    _mtime="$(stat -c %Y "$_akc_prev")" && _uptime="$(cut -d. -f1 /proc/uptime)" || return 1
+    [ "$_mtime" -lt "$(($(date +%s) - _uptime))" ] || return 1
+  fi
   if [ -f "$_akc_prev" ] && ! asb_kc_kid_ok "$_akc_prev"; then
     rm -f "$_akc_prev" "$_akc_prev.kid" 2>/dev/null || return 1
   fi
   if [ -f "$_akc_prev" ]; then
-    _akc_saved="$(asb_kc_clean "$(cat "$_akc_prev" 2>/dev/null)")"
+    _akc_saved="$(asb_kc_clean "$(head -n 1 "$_akc_prev" 2>/dev/null)")"
     asb_kc_valid_value "$_akc_key" "$_akc_saved" || return 1
-    [ -f "$_akc_prev.kid" ] || asb_kc_kid_write "$_akc_prev"
     return 0
   fi
   _akc_orig="$(asb_kc_clean "$(cat "$_akc_node" 2>/dev/null)")"
   asb_kc_valid_value "$_akc_key" "$_akc_orig" || return 1
   mkdir -p "${_akc_prev%/*}" 2>/dev/null || return 1
   _akc_tmp="$_akc_prev.tmp.$$"
-  (umask 077; printf '%s\n' "$_akc_orig" > "$_akc_tmp" 2>/dev/null) || { rm -f "$_akc_tmp" 2>/dev/null; return 1; }
+  (umask 077; printf '%s\n%s\n' "$_akc_orig" "$(asb_kc_kid)" > "$_akc_tmp" 2>/dev/null) || { rm -f "$_akc_tmp" 2>/dev/null; return 1; }
   mv -f "$_akc_tmp" "$_akc_prev" 2>/dev/null || { rm -f "$_akc_tmp" 2>/dev/null; return 1; }
-  asb_kc_kid_write "$_akc_prev"
+  return 0
 }
 
 asb_kc_restore() {
@@ -271,7 +275,7 @@ asb_kc_restore() {
     asb_kc_emit "$_akr_key" stock_unowned "$_akr_mode" "" none
     return 0
   fi
-  _akr_orig="$(asb_kc_clean "$(cat "$_akr_prev" 2>/dev/null)")"
+  _akr_orig="$(asb_kc_clean "$(head -n 1 "$_akr_prev" 2>/dev/null)")"
   asb_kc_valid_value "$_akr_key" "$_akr_orig" || { asb_kc_emit "$_akr_key" baseline_invalid "$_akr_mode" "" invalid; return 1; }
   [ -e "$_akr_node" ] || { asb_kc_emit "$_akr_key" not_exposed "$_akr_mode" "" "$_akr_orig"; return 1; }
   [ -w "$_akr_node" ] || { asb_kc_emit "$_akr_key" not_writable "$_akr_mode" "" "$_akr_orig"; return 1; }
@@ -320,6 +324,11 @@ asb_kc_bore_auto_hold() {
   case "$_akb_now" in ''|*[!0-9]*) return 0 ;; esac
   _akb_epoch_age=$((_akb_now - _akb_epoch))
   [ "$_akb_epoch_age" -ge 0 ] && [ "$_akb_epoch_age" -le "${ASB_KC_BORE_STATUS_MAX_AGE_S:-120}" ] || return 0
+  _akb_secondary="$(asb_kc_json_num "$_akb_status" secondary_read_epoch)"
+  case "$_akb_secondary" in ''|*[!0-9]*) return 0 ;; esac
+  _akb_age=$((_akb_now - _akb_secondary))
+  [ "$_akb_age" -ge 0 ] && [ "$_akb_age" -le "${ASB_KC_BORE_STATUS_MAX_AGE_S:-120}" ] || return 0
+  [ "$(asb_kc_json_num "$_akb_status" surface_independent)" = 1 ] || return 0
   _akb_state="$(asb_kc_json_text "$_akb_status" state | tr 'a-z' 'A-Z')"
   case "$_akb_state" in MODERATE|HEAVY) ;; *) return 0 ;; esac
   [ "$(asb_kc_json_num "$_akb_status" thermal)" = 0 ] || return 0
@@ -333,6 +342,7 @@ asb_kc_bore_auto_hold() {
   [ "$_akb_cpu" -lt "$_akb_enter" ] || return 0
   for _akb_value in "$_akb_skin" "$_akb_surface" "$_akb_board"; do
     case "$_akb_value" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$_akb_value" -gt 0 ] || return 0
   done
   [ "$_akb_skin" -lt "$_akb_limit" ] || return 0
   _akb_hot=$((_akb_limit + 3))
@@ -438,7 +448,7 @@ asb_kc_apply() {
   fi
   _aka_prev="$(asb_kc_prev "$_aka_key")"
   _aka_saved=none
-  [ -f "$_aka_prev" ] && asb_kc_kid_ok "$_aka_prev" && _aka_saved="$(asb_kc_clean "$(cat "$_aka_prev" 2>/dev/null)")"
+  [ -f "$_aka_prev" ] && asb_kc_kid_ok "$_aka_prev" && _aka_saved="$(asb_kc_clean "$(head -n 1 "$_aka_prev" 2>/dev/null)")"
   [ -e "$_aka_node" ] || { asb_kc_emit "$_aka_key" not_exposed "$_aka_mode" "" "$_aka_saved"; return 1; }
   [ -r "$_aka_node" ] || { asb_kc_emit "$_aka_key" not_readable "$_aka_mode" "" "$_aka_saved"; return 1; }
   [ -w "$_aka_node" ] || { asb_kc_emit "$_aka_key" not_writable "$_aka_mode" "" "$_aka_saved"; return 1; }
@@ -481,7 +491,7 @@ asb_kc_apply() {
     return 0
   fi
   asb_kc_capture "$_aka_key" "$_aka_node" "$_aka_prev" || { asb_kc_emit "$_aka_key" baseline_failed "$_aka_mode" "" "$_aka_saved"; return 1; }
-  _aka_saved="$(asb_kc_clean "$(cat "$_aka_prev" 2>/dev/null)")"
+  _aka_saved="$(asb_kc_clean "$(head -n 1 "$_aka_prev" 2>/dev/null)")"
   _aka_before="$(asb_kc_clean "$(cat "$_aka_node" 2>/dev/null)")"
   if ! asb_kc_same "$_aka_want" "$_aka_before"; then
     printf '%s\n' "$_aka_want" > "$_aka_node" 2>/dev/null || { asb_kc_emit "$_aka_key" write_failed "$_aka_mode" "$_aka_before" "$_aka_saved"; return 1; }
@@ -507,7 +517,7 @@ asb_kc_status() {
   fi
   _akst_prev="$(asb_kc_prev "$_akst_key")"
   _akst_base=none
-  [ -f "$_akst_prev" ] && asb_kc_kid_ok "$_akst_prev" && _akst_base="$(asb_kc_clean "$(cat "$_akst_prev" 2>/dev/null)")"
+  [ -f "$_akst_prev" ] && asb_kc_kid_ok "$_akst_prev" && _akst_base="$(asb_kc_clean "$(head -n 1 "$_akst_prev" 2>/dev/null)")"
   if [ ! -e "$_akst_node" ]; then
     if [ "$_akst_key" = kernel_hrtimer_migration ]; then
       asb_kc_hrtimer_covered "$_akst_mode" "$_akst_base"

@@ -37,11 +37,13 @@ asb_stock_restore_profile_runtime() {
   # This is deliberately separate from asb_baseline_replay: the global baseline contains
   # independent user-selected controls (including manual audio), while Stock must restore
   # only values that a power profile itself changed.
+  local _restore_rc=0
   command -v asb_profile_baseline_restore >/dev/null 2>&1 && \
-    asb_profile_baseline_restore || true
+    { asb_profile_baseline_restore || _restore_rc=$?; }
   _asp_moddir="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
   [ -f "$_asp_moddir/runtime/asb_kernel_controls.sh" ] && \
     MODDIR="$_asp_moddir" sh "$_asp_moddir/runtime/asb_kernel_controls.sh" restore >/dev/null 2>&1 || true
+  return "$_restore_rc"
 }
 
 asb_stock_enter() {
@@ -49,10 +51,15 @@ asb_stock_enter() {
   true > /data/adb/asb/stock_profile_active 2>/dev/null || true
   asb_stock_stop_governor
   asb_stock_release_profile_leases
-  asb_stock_restore_profile_runtime
+  local _restore_rc=0
+  asb_stock_restore_profile_runtime || _restore_rc=$?
   _asp_moddir="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
   [ -f "$_asp_moddir/runtime/asb_net_apply.sh" ] && \
     ( MODDIR="$_asp_moddir" sh "$_asp_moddir/runtime/asb_net_apply.sh" >/dev/null 2>&1 & )
+  if [ "$_restore_rc" != 0 ]; then
+    command -v asb_log >/dev/null 2>&1 && asb_log 'stock profile: partial restore; baseline kept for retry'
+    return "$_restore_rc"
+  fi
   command -v asb_log >/dev/null 2>&1 && \
     asb_log 'stock profile: native governor stopped; profile-owned baseline restored; no ASB power policy remains active'
 }
@@ -68,12 +75,12 @@ asb_stock_enter_fast() {
   asb_stock_stop_governor
   asb_stock_release_profile_leases
   command -v asb_profile_baseline_restore >/dev/null 2>&1 && \
-    asb_profile_baseline_restore path || true
+    { asb_profile_baseline_restore path || { command -v asb_log >/dev/null 2>&1 && asb_log "stock profile: path restore partial; baseline kept"; }; }
   _asp_moddir="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
   [ -f "$_asp_moddir/runtime/asb_kernel_controls.sh" ] && \
     MODDIR="$_asp_moddir" sh "$_asp_moddir/runtime/asb_kernel_controls.sh" restore >/dev/null 2>&1 || true
   command -v asb_log >/dev/null 2>&1 && \
-    asb_log 'stock profile: native governor stopped, profile sysfs values restored; settings follow in the background'
+    asb_log 'stock profile: native governor stopped, profile sysfs pass finished; settings follow in the background'
 }
 
 # The background half. Returns 2 when a newer profile superseded it (ledger kept).

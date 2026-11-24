@@ -50,6 +50,18 @@ _asb_set_bare() {
   esac
 }
 
+asb_setting_read_baseline() {
+    _pb_reply="$(command settings get "$1" "$2" 2>/dev/null)" &&
+      [ -n "$_pb_reply" ] && _asb_set_clean "$_pb_reply" >/dev/null &&
+      { _asb_set_bare "$_pb_reply"; return; }
+    _pb_reply="$(content query --uri "content://settings/$1" --where "name='$2'" 2>/dev/null)" || return 1
+    case "$_pb_reply" in
+      'No result found.'|'No result found') printf null ;;
+      'Row: 0 value='*) printf '%s' "${_pb_reply#Row: 0 value=}" ;;
+      *) return 1 ;;
+    esac
+}
+
 asb_set_get() {   # $1=namespace $2=key
   _r="$(command settings get "$1" "$2" 2>/dev/null)"
   if _asb_set_clean "$_r" >/dev/null 2>&1; then

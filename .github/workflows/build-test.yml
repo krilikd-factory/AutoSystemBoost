@@ -30,87 +30,7 @@ permissions:
 
 jobs:
   regression:
-    name: Host regression / ${{ matrix.name }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: features
-            suites: features
-          - name: system-smart
-            suites: system smart
-          - name: ui-zygisk-package
-            suites: ui zygisk package_tweaks
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Normalize executable source script modes
-        run: |
-          # Browser uploads can turn git mode 100755 into 100644. Restore every helper whose
-          # executable mode is a tested contract before regression or packaging starts.
-          chmod 0755 \
-            runtime/asb_active_efficiency_envelope.sh \
-            runtime/asb_boot_timeline.sh \
-            runtime/asb_debug_support.sh \
-            runtime/asb_page_export.sh \
-            runtime/asb_io_scheduler.sh \
-            runtime/asb_kernel_controls.sh \
-            runtime/asb_wakeup_blocker.sh \
-            runtime/asb_stock_policy.sh \
-            runtime/asb_overlay_guard.sh \
-            runtime/asb_wifi_fallback.sh \
-            runtime/asb_package_state.sh \
-            runtime/asb_heytap_mcs.sh \
-            runtime/asb_art_compile.sh \
-            runtime/asb_documentsui_fix.sh \
-            runtime/asb_junk_cleanup.sh \
-            runtime/asb_pressure_snapshot.sh \
-            runtime/asb_soter_fix.sh \
-            runtime/asb_camera_tools.sh \
-            runtime/asb_module_desc.sh \
-            tools/asb_kernel_uv_coexist.sh \
-            tools/asb_device_info.sh
-
-      - name: Verify runner tools
-        shell: bash
-        run: |
-          missing=()
-          for tool in zip unzip curl file rsync jq; do
-            command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
-          done
-          if [ "${#missing[@]}" -eq 0 ]; then
-            printf 'Runner tools already available: %s\n' 'zip unzip curl file rsync jq'
-            exit 0
-          fi
-          echo "::warning::Installing missing runner tools: ${missing[*]}"
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends "${missing[@]}"
-
-      - name: Run canonical host regression shard
-        shell: bash
-        run: |
-          # A source-only checkout deliberately has no AIDL reference binaries. Skip only
-          # their byte-for-byte staging check; every other gate remains mandatory.
-          _pb_missing=0
-          for _pb in \
-            arm64-v8a/libasbdsp_v3.so \
-            armeabi-v7a/libasbdsp_v3.so \
-            arm64-v8a/asb_dsp_attach \
-            arm64-v8a/libasbdsp_v2.so \
-            armeabi-v7a/libasbdsp_v2.so; do
-            [ -s "src/DSP_AIDL/prebuilt/$_pb" ] || _pb_missing=1
-          done
-          if [ "$_pb_missing" = 1 ]; then
-            echo "Source-only DSP checkout: reference staging optional; static DSP gates remain mandatory."
-            ASB_REGRESSION_JOBS=8 ASB_REGRESSION_SUITES="${{ matrix.suites }}" \
-              bash tools/asb_source_regression.sh
-          else
-            ASB_REGRESSION_JOBS=8 ASB_REGRESSION_SUITES="${{ matrix.suites }}" \
-              bash tools/asb_full_regression.sh
-          fi
+    uses: ./.github/workflows/host-regression.yml
 
   build-test:
     needs: regression
@@ -650,11 +570,14 @@ jobs:
           sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_TEST/module.prop"
           grep -qx "version=${ASB_VER}" "$PKG_TEST/module.prop"
           grep -qx "versionCode=${BASE_CODE}" "$PKG_TEST/module.prop"
-          ASB_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+          ASB_COMMIT=$(git rev-parse HEAD)
           ASB_BIN_SHA=$(sha256sum "$PKG_TEST/bin/asb" | awk '{print $1}')
           cat > "$PKG_TEST/release-manifest.json" <<EOF
           {
-            "schema": 1,
+            "schema": 2,
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "channel": "test",
             "distribution": "flashable-module",
             "version": "${ASB_VER}",
             "versionCode": ${ASB_CODE},
@@ -679,7 +602,14 @@ jobs:
           # the same objects, rules and code (tools/asb_slim_package.py checks it and restores the
           # originals on any difference).
           python3 tools/asb_slim_package.py "$PKG_TEST" || { echo "::error::package slimming check failed"; exit 1; }
+          # Hash the final staged payload. Exclude its manifest to avoid a self-reference.
+          content_sha=$(cd "$PKG_TEST" && tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --exclude=./release-manifest.json --exclude='*.DS_Store' -cf - . | sha256sum | cut -d' ' -f1)
+          config_sha=$(sha256sum "$PKG_TEST/config/governor.conf" | cut -d' ' -f1)
+          jq --arg payload "$content_sha" --arg config "$config_sha" '. + {payload_sha256:$payload, shipped_config_sha256:$config}' "$PKG_TEST/release-manifest.json" > "$RUNNER_TEMP/asb-manifest.json"
+          cp "$RUNNER_TEMP/asb-manifest.json" "$PKG_TEST/release-manifest.json"
           ( cd "$PKG_TEST" && zip -rq "../$ZIP_TEST" . -x "*.DS_Store" )
+          sha256sum "$ZIP_TEST" > "$ZIP_TEST.sha256"
+          cat "$ZIP_TEST.sha256" >> "$GITHUB_STEP_SUMMARY"
           echo "ZIP_TEST=$ZIP_TEST"   >> $GITHUB_ENV
           echo "ASB_VER=$ASB_VER"   >> $GITHUB_ENV
           echo "Created: $ZIP_TEST ($(du -sh $ZIP_TEST | cut -f1))"

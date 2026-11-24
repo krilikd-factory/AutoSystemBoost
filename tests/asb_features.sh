@@ -379,7 +379,12 @@ printf 'radio_policy_enable=1\nnet_wifi_leave=off\n' > "$TMP/mod/config/governor
 run reconcile
 wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'stale watcher PID after OFF'
 wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'stale watcher lock after OFF'
-kill -0 "$WPID" 2>/dev/null && fail 'reconcile OFF did not stop watcher'
+watcher_executing() {
+  # A container init may not immediately reap an exited orphan.
+  local state
+  state="$(ps -o stat= -p "$1" 2>/dev/null)" && [ -n "$state" ] && [ "${state#Z}" = "$state" ]
+}
+watcher_executing "$WPID" && fail 'reconcile OFF did not stop watcher'
 [ "$(grep -cx 'wifi disable' "$TMP/svc.log")" -eq 1 ] || fail 'fallback acted after explicit off'
 unset WPID
 
@@ -408,7 +413,7 @@ wait_for_absent "$TMP/state/wifi_fallback.action" || fail 'OFF did not clear ASB
 wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'watcher PID remained after active-window OFF'
 wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'watcher lock remained after active-window OFF'
 [ "$(grep -cx 'wifi enable' "$TMP/svc.log")" -ge 2 ] || fail 'OFF did not return ASB-owned Wi-Fi'
-kill -0 "$WPID" 2>/dev/null && fail 'watcher survived active-window OFF'
+watcher_executing "$WPID" && fail 'watcher survived active-window OFF'
 unset WPID
 
 # A network that NEVER validated must never be touched: this is the field-reported loop
@@ -429,8 +434,8 @@ run reconcile
 # Same race as above: the OFF signal is delivered, the watcher exits on its next pass.
 # Checking the PID the instant reconcile returns failed about one run in three under load.
 wait_for_absent "$TMP/state/wifi_fallback.pid" || true
-_wv=0; while kill -0 "$WPID" 2>/dev/null && [ "$_wv" -lt 50 ]; do sleep 0.1; _wv=$((_wv + 1)); done
-kill -0 "$WPID" 2>/dev/null && fail 'never-validated watcher survived OFF'
+_wv=0; while watcher_executing "$WPID" && [ "$_wv" -lt 50 ]; do sleep 0.1; _wv=$((_wv + 1)); done
+watcher_executing "$WPID" && fail 'never-validated watcher survived OFF'
 unset WPID
 
 # Model an Android shell that execs the script directly: no literal `sh` argument precedes
@@ -4542,13 +4547,13 @@ SH
 chmod 0755 "$T/bin/settings" "$T/bin/cat"
 write_status() {
   _now="$(date +%s)"; _epoch=$((_now - EPOCH_OFFSET))
-  printf '{"state":"%s","thermal":%s,"temp":%s,"temp_valid":%s,"temp_age_s":%s,"temp_read_epoch":%s,"skin_temp":%s,"surface_hotspot":%s,"board_temp":%s}\n' \
-    "$STATE" "$THERMAL" "$TEMP" "$TEMP_VALID" "$AGE" "$_epoch" "$SKIN" "$SURFACE" "$BOARD" > "$STATUS"
+  printf '{"state":"%s","thermal":%s,"temp":%s,"temp_valid":%s,"temp_age_s":%s,"temp_read_epoch":%s,"skin_temp":%s,"surface_hotspot":%s,"board_temp":%s,"secondary_read_epoch":%s,"surface_independent":%s}\n' \
+    "$STATE" "$THERMAL" "$TEMP" "$TEMP_VALID" "$AGE" "$_epoch" "$SKIN" "$SURFACE" "$BOARD" "$((_epoch - SECONDARY_OFFSET))" "$INDEPENDENT" > "$STATUS"
 }
 reset_fixture() {
   rm -f "$SAFE" "$RECOVERY" "$T/clamp" "$T/state/kernel_bore.prev" "$T/state/kernel_bore.prev.kid"
   PROFILE=performance; LOW_POWER=0; STATE=MODERATE; THERMAL=0; TEMP=40; TEMP_VALID=1
-  AGE=0; EPOCH_OFFSET=0; SKIN=35; SURFACE=36; BOARD=37; TEST_PATH="$T/bin:/usr/bin:/bin"
+  AGE=0; EPOCH_OFFSET=0; SECONDARY_OFFSET=0; INDEPENDENT=1; SKIN=35; SURFACE=36; BOARD=37; TEST_PATH="$T/bin:/usr/bin:/bin"
   printf '90\n' > "$CAP"; chmod 0644 "$NODE" 2>/dev/null || :; printf '0\n' > "$NODE"; write_status
 }
 run() {
@@ -4579,6 +4584,11 @@ set_case() {
     hot_cpu) TEMP=55; write_status ;;
     hot_skin) SKIN=47; write_status ;;
     hot_surface) SURFACE=50; write_status ;;
+    stale_skin) SECONDARY_OFFSET=180; write_status ;;
+    derived_surface) INDEPENDENT=0; write_status ;;
+    missing_board) BOARD=0; write_status ;;
+    missing_skin) SKIN=0; write_status ;;
+    missing_surface) SURFACE=0; write_status ;;
     hot_board) BOARD=50; write_status ;;
     thermal_cap) THERMAL=1; write_status ;;
     idle) STATE=DEEP_IDLE; write_status ;;
@@ -4590,14 +4600,14 @@ set_case() {
     *) fail "unknown fixture $1" ;;
   esac
 }
-want_applied() { [ "$out" = 'kernel_bore|applied|auto|1|0' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ "$("$REAL_CAT" "$T/state/kernel_bore.prev")" = 0 ] || fail "$1 apply: $out"; }
+want_applied() { [ "$out" = 'kernel_bore|applied|auto|1|0' ] && [ "$("$REAL_CAT" "$NODE")" = 1 ] && [ "$(head -n 1 "$T/state/kernel_bore.prev")" = 0 ] || fail "$1 apply: $out"; }
 want_restored() { [ "$out" = 'kernel_bore|restored|auto|0|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 restore: $out"; }
 want_unowned() { [ "$out" = 'kernel_bore|stock_unowned|auto|unknown|none' ] && [ "$("$REAL_CAT" "$NODE")" = 0 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "$1 unowned: $out"; }
 reset_fixture; out="$(run)"; want_applied initial
 PROFILE=performance; STATE=HEAVY; write_status; out="$(run)"; want_applied heavy
 for c in battery balanced smart battery_saver low_power_unknown settings_missing low_charge missing_capacity invalid_capacity \
          safe_mode watchdog missing_status stale_age stale_epoch future_epoch malformed_status invalid_temp_valid \
-         hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
+         stale_skin derived_surface missing_board missing_skin missing_surface hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
   reset_fixture; out="$(run)"; want_applied "$c setup"
   set_case "$c"; out="$(run)"; want_restored "$c"
   reset_fixture; set_case "$c"; out="$(run)"; want_unowned "$c"
@@ -5803,9 +5813,9 @@ out="$(run apply kernel_sched_nr_migrate; run apply kernel_sched_stats)"
 printf '%s\n' "$out" | grep '^kernel_sched_nr_migrate|applied|4|4|32$' >/dev/null || fail "upgrade request did not apply: $out"
 printf '%s\n' "$out" | grep '^kernel_sched_stats|stock_unowned|stock|unknown|none$' >/dev/null || fail "Stock stats was not inert: $out"
 [ "$(cat "$T/nr")" = 4 ] && [ "$(cat "$T/stats")" = 1 ] || fail 'fixed-node apply wrote the wrong value'
-[ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] && [ ! -e "$T/state/kernel_sched_stats.prev" ] || fail 'upgrade baseline/stock ownership is wrong'
+[ "$(head -n 1 "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] && [ ! -e "$T/state/kernel_sched_stats.prev" ] || fail 'upgrade baseline/stock ownership is wrong'
 run apply kernel_sched_nr_migrate >/dev/null
-[ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'repeat apply replaced the original migration baseline'
+[ "$(head -n 1 "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'repeat apply replaced the original migration baseline'
 # A successful write with a different live value remains a failure and keeps restore evidence.
 mkdir -p "$T/bin"; REAL_CAT="$(command -v cat)"
 cat > "$T/bin/cat" <<'S'
@@ -5853,9 +5863,9 @@ run() {
 printf '1\n' > "$T/sched_stats"
 run off
 [ "$(cat "$T/sched_stats")" = 0 ] || fail 'off did not write zero'
-[ "$(cat "$T/state/sched.prev")" = 1 ] || fail 'original one was not captured'
+[ "$(head -n 1 "$T/state/sched.prev")" = 1 ] || fail 'original one was not captured'
 run off
-[ "$(cat "$T/state/sched.prev")" = 1 ] || fail 'repeat apply replaced the original baseline'
+[ "$(head -n 1 "$T/state/sched.prev")" = 1 ] || fail 'repeat apply replaced the original baseline'
 run stock
 [ "$(cat "$T/sched_stats")" = 1 ] || fail 'stock did not restore original one'
 [ ! -e "$T/state/sched.prev" ] || fail 'consumed baseline was not removed'
@@ -5868,7 +5878,7 @@ run stock
 [ "$(cat "$T/sched_stats")" = 0 ] || fail 'stock did not restore the captured pre-ASB value after an external change'
 rm -f "$T/sched_stats"; printf '1\n' > "$T/state/sched.prev"
 run off
-[ "$(cat "$T/state/sched.prev")" = 1 ] || fail 'missing node destroyed evidence instead of leaving it for restore'
+[ "$(head -n 1 "$T/state/sched.prev")" = 1 ] || fail 'missing node destroyed evidence instead of leaving it for restore'
 grep -Fq 'asb_kernel_controls.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall restore owner missing'
 ! grep -q '/proc/sys/kernel/sched_stats' "$ROOT/uninstall.sh" || fail 'legacy uninstall writer remains'
 grep -Fq 'kernel_sched_stats = $(cfg kernel_sched_stats)' "$ROOT/tools/asb_diag.sh" || fail 'diagnostic live state missing'
@@ -5898,11 +5908,11 @@ printf '%s\n' "$out" | grep '^kernel_timer_migration|applied|off|0|1$' >/dev/nul
 printf '%s\n' "$out" | grep '^kernel_sched_nr_migrate|applied|8|8|32$' >/dev/null || fail "migration apply verdict: $out"
 [ "$(cat "$T/mglru")" = 7 ] && [ "$(cat "$T/timer")" = 0 ] && [ "$(cat "$T/nr")" = 8 ] || fail 'allowlisted values were not written'
 run apply >/dev/null
-[ "$(cat "$T/state/mglru_mode.prev")" = 0x0001 ] || fail 'repeat apply replaced MGLRU baseline'
+[ "$(head -n 1 "$T/state/mglru_mode.prev")" = 0x0001 ] || fail 'repeat apply replaced MGLRU baseline'
 # The baseline filename is the full key, not a shortened display label.
 [ -f "$T/state/kernel_timer_migration.prev" ] || fail 'timer baseline key path missing'
-[ "$(cat "$T/state/kernel_timer_migration.prev")" = 1 ] || fail 'timer baseline changed'
-[ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'migration baseline changed'
+[ "$(head -n 1 "$T/state/kernel_timer_migration.prev")" = 1 ] || fail 'timer baseline changed'
+[ "$(head -n 1 "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'migration baseline changed'
 # Explicit Smart values are accepted only in Smart mode; a caller cannot turn manual off into 7.
 printf 'mglru_mode=off\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
 run apply mglru_mode 7 >/dev/null
@@ -6019,11 +6029,11 @@ out="$(run apply)"
 printf '%s\n' "$out" | grep '^kernel_sched_autogroup|applied|off|0|1$' >/dev/null || fail "autogroup off: $out"
 printf '%s\n' "$out" | grep '^kernel_sched_child_runs_first|applied|on|1|0$' >/dev/null || fail "child-first on: $out"
 [ "$(cat "$T/autogroup")" = 0 ] && [ "$(cat "$T/child")" = 1 ] || fail 'requested scheduler values not written'
-[ "$(cat "$T/state/kernel_sched_autogroup.prev")" = 1 ] || fail 'autogroup baseline not captured'
-[ "$(cat "$T/state/kernel_sched_child_runs_first.prev")" = 0 ] || fail 'child-first baseline not captured'
+[ "$(head -n 1 "$T/state/kernel_sched_autogroup.prev")" = 1 ] || fail 'autogroup baseline not captured'
+[ "$(head -n 1 "$T/state/kernel_sched_child_runs_first.prev")" = 0 ] || fail 'child-first baseline not captured'
 mode on off
 run apply >/dev/null
-[ "$(cat "$T/state/kernel_sched_autogroup.prev")" = 1 ] && [ "$(cat "$T/state/kernel_sched_child_runs_first.prev")" = 0 ] || fail 'repeat apply replaced original baseline'
+[ "$(head -n 1 "$T/state/kernel_sched_autogroup.prev")" = 1 ] && [ "$(head -n 1 "$T/state/kernel_sched_child_runs_first.prev")" = 0 ] || fail 'repeat apply replaced original baseline'
 out="$(run status)"
 printf '%s\n' "$out" | grep '^kernel_sched_autogroup|writable|on|1|1$' >/dev/null || fail "autogroup status: $out"
 printf '%s\n' "$out" | grep '^kernel_sched_child_runs_first|writable|off|0|0$' >/dev/null || fail "child-first status: $out"
@@ -6120,7 +6130,7 @@ printf '%s\n' "$out" | grep '^kernel_hrtimer_migration|applied|auto|0|1$' >/dev/
 printf '%s\n' "$out" | grep '^kernel_lpm_prediction|applied|auto|1|0$' >/dev/null || fail "Battery LPM Auto: $out"
 [ "$(cat "$T/hrtimer")" = 0 ] && [ "$(cat "$T/lpm")" = 1 ] && [ "$(cat "$T/usb")" = -1 ] || fail 'Auto wrote an unintended value'
 run apply kernel_hrtimer_migration '' performance >/dev/null; run apply kernel_lpm_prediction '' battery >/dev/null
-[ "$(cat "$T/state/kernel_hrtimer_migration.prev")" = 1 ] && [ "$(cat "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'repeat Auto apply replaced a baseline'
+[ "$(head -n 1 "$T/state/kernel_hrtimer_migration.prev")" = 1 ] && [ "$(head -n 1 "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'repeat Auto apply replaced a baseline'
 out="$(run apply kernel_hrtimer_migration '' battery; run apply kernel_lpm_prediction '' balanced)"
 printf '%s\n' "$out" | grep '^kernel_hrtimer_migration|restored|auto|1|none$' >/dev/null || fail "non-Performance hrtimer release: $out"
 printf '%s\n' "$out" | grep '^kernel_lpm_prediction|restored|auto|0|none$' >/dev/null || fail "non-Battery LPM release: $out"
@@ -6157,11 +6167,11 @@ mv "$T/hrtimer.vendor" "$T/hrtimer"; mode stock stock stock
 mode auto auto on
 out="$(run apply kernel_usb_autosuspend)"
 printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|applied|on|2|-1$' >/dev/null || fail "USB on: $out"
-[ "$(cat "$T/state/kernel_usb_autosuspend.prev")" = -1 ] || fail 'USB baseline lost its sign'
+[ "$(head -n 1 "$T/state/kernel_usb_autosuspend.prev")" = -1 ] || fail 'USB baseline lost its sign'
 mode auto auto off
 out="$(run apply kernel_usb_autosuspend; run apply kernel_usb_autosuspend)"
 printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|applied|off|-1|-1$' >/dev/null || fail "USB off/readback: $out"
-[ "$(cat "$T/state/kernel_usb_autosuspend.prev")" = -1 ] || fail 'USB repeat apply replaced baseline'
+[ "$(head -n 1 "$T/state/kernel_usb_autosuspend.prev")" = -1 ] || fail 'USB repeat apply replaced baseline'
 out="$(run status kernel_usb_autosuspend)"
 printf '%s\n' "$out" | grep '^kernel_usb_autosuspend|writable|off|-1|-1$' >/dev/null || fail "signed USB status: $out"
 mode auto auto stock
@@ -6239,7 +6249,7 @@ out="$(run status kernel_lpm_prediction)"
 cfg off
 out="$(run apply kernel_lpm_prediction '' balanced)"
 [ "$out" = 'kernel_lpm_prediction|applied|off|0|1' ] || fail "Off: $out"
-[ "$(cat "$N")" = 1 ] && [ "$(cat "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'Off must write prediction_disabled=1 and keep the raw baseline'
+[ "$(cat "$N")" = 1 ] && [ "$(head -n 1 "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'Off must write prediction_disabled=1 and keep the raw baseline'
 cfg on
 out="$(run apply kernel_lpm_prediction '' balanced)"
 [ "$out" = 'kernel_lpm_prediction|applied|on|1|1' ] && [ "$(cat "$N")" = 0 ] || fail "On: $out / $(cat "$N")"
@@ -6308,7 +6318,7 @@ out="$(run status kernel_sched_nr_migrate)"
 [ ! -e "$T/mp" ] || fail 'status left the private debugfs mount point'
 out="$(run apply kernel_sched_nr_migrate)"
 [ "$out" = 'kernel_sched_nr_migrate|applied|8|8|32' ] || fail "apply through the private mount: $out"
-[ "$(cat "$T/kernel/nr")" = 8 ] && [ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'value or baseline wrong'
+[ "$(cat "$T/kernel/nr")" = 8 ] && [ "$(head -n 1 "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'value or baseline wrong'
 [ ! -e "$T/mp" ] || fail 'apply left debugfs mounted'
 [ "$(grep -c '^mount -t debugfs debugfs ' "$T/log")" = "$(grep -c '^umount ' "$T/log")" ] || fail "mounts and unmounts do not pair: $(cat "$T/log")"
 out="$(run apply || true)"
@@ -12232,11 +12242,11 @@ run() {
 printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
 printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|2000' >/dev/null || fail "bounded apply/readback: $out"
-[ "$(cat "$T/ttl")" = 1000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'value or original baseline is wrong'
+[ "$(cat "$T/ttl")" = 1000 ] && [ "$(head -n 1 "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'value or original baseline is wrong'
 printf 'kernel_mglru_min_ttl=5000\n' > "$T/mod/config/governor.conf"
 set +e; out="$(run apply kernel_mglru_min_ttl)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|invalid_value|5000|unknown|none' >/dev/null || fail "legacy 5000 was not rejected explicitly: $out"
-[ "$(cat "$T/ttl")" = 1000 ] && [ "$(cat "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'rejected TTL changed the live value or original baseline'
+[ "$(cat "$T/ttl")" = 1000 ] && [ "$(head -n 1 "$T/state/kernel_mglru_min_ttl.prev")" = 2000 ] || fail 'rejected TTL changed the live value or original baseline'
 set +e; out="$(run status kernel_mglru_min_ttl)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|invalid_value|5000|unknown|none' >/dev/null || fail "invalid TTL status was hidden: $out"
 printf '9\n' > "$T/ttl"
@@ -12305,14 +12315,14 @@ KID='6.12.23-a|#1 SMP PREEMPT Mon Nov 10'
 printf '2000\n' > "$T/ttl"; printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
 printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|2000' >/dev/null || fail "first capture: $out"
-[ "$(cat "$P")" = 2000 ] && [ "$(cat "$P.kid")" = "$KID" ] || fail 'baseline or kernel id not recorded'
+[ "$(head -n 1 "$P")" = 2000 ] && [ "$(sed -n '2p' "$P")" = "$KID" ] || fail 'baseline or kernel id not recorded'
 KID='6.12.23-b|#1 SMP PREEMPT Fri Nov 14'
 printf '0\n' > "$T/ttl"
 out="$(run status kernel_mglru_min_ttl)"
 printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|writable|1000|0|none' >/dev/null || fail "status shows a foreign baseline: $out"
 out="$(run apply kernel_mglru_min_ttl)"
 printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|0' >/dev/null || fail "new kernel not re-captured: $out"
-[ "$(cat "$P")" = 0 ] && [ "$(cat "$P.kid")" = "$KID" ] || fail 'baseline not bound to the new kernel'
+[ "$(head -n 1 "$P")" = 0 ] && [ "$(sed -n '2p' "$P")" = "$KID" ] || fail 'baseline not bound to the new kernel'
 printf 'kernel_mglru_min_ttl=stock\n' > "$T/mod/config/governor.conf"
 out="$(run apply kernel_mglru_min_ttl)"
 printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|restored|stock|0|none' >/dev/null || fail "same-kernel restore: $out"
@@ -12329,11 +12339,10 @@ printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|stock_unowned|stock|unknown
 printf '2000\n' > "$P"
 KID='6.12.23-d|#1'
 printf 'kernel_mglru_min_ttl=1000\n' > "$T/mod/config/governor.conf"
-out="$(run apply kernel_mglru_min_ttl)"
-printf '%s\n' "$out" | grep -x 'kernel_mglru_min_ttl|applied|1000|1000|2000' >/dev/null || fail "legacy baseline not adopted: $out"
-[ "$(cat "$P.kid")" = "$KID" ] || fail 'legacy baseline not bound'
+if run apply kernel_mglru_min_ttl > "$T/unbound"; then fail 'untagged baseline accepted'; fi
+[ "$(cat "$T/ttl")" = 7 ] || fail 'untagged baseline changed live state'
 printf '2000\n' > "$T/ttl"; rm -f "$P" "$P.kid"; out="$(MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_MGLRU_MIN_TTL_NODE="$T/ttl" sh "$K" apply kernel_mglru_min_ttl)"
-[ -s "$P.kid" ] && grep -Fq "$(uname -r)" "$P.kid" || fail "default kernel id is not uname-based: $(cat "$P.kid" 2>/dev/null)"
+[ -s "$P" ] && grep -Fq "$(uname -r)" "$P" || fail "default kernel id is not uname-based: $(sed -n '2p' "$P" 2>/dev/null)"
 echo 'PASS kernel-bound baseline: kernel id sidecar, re-capture after a kernel change, no foreign restore, legacy baseline adopted, status hides a foreign value'
 )
 
@@ -12944,7 +12953,7 @@ done
 out="$(run smart 4 0 1)"
 printf '%s\n' "$out" | grep -qx 'smart_kernel|scenario=heavy|state=applied' || fail "heavy: $out"
 want '0 8 0 0 0 256' heavy
-[ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] && [ "$(cat "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'scenario transition replaced a baseline'
+[ "$(head -n 1 "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] && [ "$(head -n 1 "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'scenario transition replaced a baseline'
 run smart 4 1 1 >/dev/null; want '1 4 0 1 1 128' warm-heavy
 run smart 4 2 1 >/dev/null; want '1 2 0 1 1 0' hot
 run smart 4 0 0 >/dev/null; want '1 2 0 1 1 0' screen-off
@@ -13042,7 +13051,7 @@ run() {
 }
 want() {
   [ "$(cat "$T/bore")" = "$1" ] || fail "$2: node=$(cat "$T/bore")"
-  [ "$(cat "$T/state/kernel_bore.prev")" = 0 ] || fail "$2: original baseline changed"
+  [ "$(head -n 1 "$T/state/kernel_bore.prev")" = 0 ] || fail "$2: original baseline changed"
 }
 out="$(run smart 0 0 1)"; printf '%s\n' "$out" | grep -qx 'smart_kernel|scenario=idle|state=applied' || fail "idle: $out"; want 0 idle
 out="$(run smart 2 0 1)"; printf '%s\n' "$out" | grep -qx 'smart_kernel|scenario=light|state=applied' || fail "light: $out"; want 1 light
@@ -13077,9 +13086,9 @@ out="$(run status kernel_bore)"
 [ "$out" = 'kernel_bore|writable|off|1|none' ] || fail "initial status: $out"
 out="$(run apply kernel_bore)"
 [ "$out" = 'kernel_bore|applied|off|0|1' ] && [ "$(cat "$T/proc/sys/kernel/sched_bore")" = 0 ] || fail "off/readback: $out"
-[ "$(cat "$T/state/kernel_bore.prev")" = 1 ] || fail 'initial baseline was not captured'
+[ "$(head -n 1 "$T/state/kernel_bore.prev")" = 1 ] || fail 'initial baseline was not captured'
 mode on; out="$(run apply kernel_bore)"
-[ "$out" = 'kernel_bore|applied|on|1|1' ] && [ "$(cat "$T/state/kernel_bore.prev")" = 1 ] || fail "repeat apply replaced baseline: $out"
+[ "$out" = 'kernel_bore|applied|on|1|1' ] && [ "$(head -n 1 "$T/state/kernel_bore.prev")" = 1 ] || fail "repeat apply replaced baseline: $out"
 mode stock; out="$(run apply kernel_bore)"
 [ "$out" = 'kernel_bore|restored|stock|1|none' ] && [ "$(cat "$T/proc/sys/kernel/sched_bore")" = 1 ] && [ ! -e "$T/state/kernel_bore.prev" ] || fail "exact Stock restore: $out"
 # A baseline belongs to one kernel identity. A new kernel must not receive the old one's value.

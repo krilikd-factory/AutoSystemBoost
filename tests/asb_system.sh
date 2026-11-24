@@ -3483,7 +3483,13 @@ grep -q 'thermal_conf_promotions=%lu' "$ROOT/src/asb_governor.c" || fail "promot
 grep -q 'rejected before on this ROM build - not retried' "$L" || fail "refused settings retried every pass"
 grep -q '_lg_cr="$(printf' "$L" || fail "ledger note still forks per field"
 grep -q "printf '%s|%.120s|%.120s" "$L" || fail "ledger field cap lost"
-grep -q 'grep -Fq "setting|$_pb_ns:$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0' "$ROOT/runtime/asb_baseline.sh" || fail "baseline capture reads Android for recorded keys"
+# An already-recorded setting must be usable while the provider is unavailable.
+( . "$ROOT/runtime/asb_baseline.sh"
+  d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
+  ASB_PROFILE_BASELINE="$d/ledger"; printf 'setting|global:example|original\n' > "$ASB_PROFILE_BASELINE"
+  settings() { echo touched > "$d/read"; return 1; }
+  asb_profile_baseline_capture_setting global example && [ ! -e "$d/read" ]
+) || fail "baseline capture reads Android for recorded keys"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix129 contract"
 ) || exit 1
@@ -3531,11 +3537,11 @@ grep -q 'by screen state        : screen on' "$L/asb_log_full_day.sh" || fail "t
 grep -q "_ph() { awk" "$L/asb_log_full_day.sh" || fail "cost rates still divide by whole hours"
 grep -q '^lk_sysui_verdict() {' "$L/_asb_logkit_common.sh" || fail "SystemUI restart has no verdict"
 grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/tests/asb_features.sh" || fail "DSP reference has no explicit source-only switch"
-grep -q 'bash tools/asb_source_regression.sh' "$ROOT/.github/workflows/build-test.yml" || fail "source-only test workflow cannot reach the native build"
+grep -q 'bash tools/asb_source_regression.sh' "$ROOT/.github/workflows/host-regression.yml" || fail "source-only test workflow cannot reach the native build"
 grep -q 'export ASB_DSP_REFERENCE_OPTIONAL=1' "$ROOT/tools/asb_source_regression.sh" || fail "source-only entry point does not set its explicit mode"
 grep -q 'MODE=SOURCE_ONLY' "$ROOT/tools/asb_full_regression.sh" || fail "runner does not announce source-only mode"
 grep -q 'MODE=RELEASE_STRICT' "$ROOT/tools/asb_full_regression.sh" || fail "runner does not announce strict mode"
-grep -q 'if \[ "\$_pb_missing" = 1 \]; then' "$ROOT/.github/workflows/build-test.yml" || fail "test workflow skips DSP staging even when every reference binary exists"
+grep -Fq 'if [ "$_pb_missing" = 1 ] && [ "${{ inputs.strict_reference }}" != true ]; then' "$ROOT/.github/workflows/host-regression.yml" || fail "strict DSP reference gate missing"
 grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/.github/workflows/build-release.yml" && fail "release build must never skip the DSP reference"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix133 contract"
@@ -4655,15 +4661,13 @@ rm -rf "$_OT"
 # Audit K3: a profile's GPU intent is GPU_MAX_PCT alone. thermal_pwrlevel belongs to the
 # vendor thermal engine - the governor reads it back as a vendor cap, so the profile's
 # static level (battery 7, balanced/performance 2) looked like one and double-capped the
-# GPU. Profiles carry the key no more; the shell releases a stale static level once per
-# boot (the engine re-asserts it when it actually needs to cool the GPU).
+# GPU. Profile changes and boot must preserve the live vendor cap.
 for _p in "$ROOT"/profiles/*.sh; do
   grep -q 'GPU_THERMAL_PWRLEVEL' "$_p" && fail "profile still pins thermal_pwrlevel: $_p"
 done
-grep -c 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" | grep '^[0-9]' >/dev/null || fail "profile_core lost the stale-level release"
-grep -qF 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" || fail "profile_core does not release a stale thermal_pwrlevel"
-grep -qF 'gpu_tpl_released' "$ROOT/service.sh" || fail "service.sh does not release a stale thermal_pwrlevel"
-grep -qF 'writef_retry "$_tpl" 0 2 0.06' "$ROOT/runtime/profile_core.sh" || fail "the release must write 0 (no cap), not another level"
+if grep -E 'gpu_tpl_released|writef_retry .*thermal_pwrlevel' "$ROOT/runtime/profile_core.sh" "$ROOT/service.sh"; then
+  fail "ASB must leave the vendor GPU thermal cap untouched"
+fi
 grep -qF 'vendor thermal cap, read-only for us' "$ROOT/src/asb_writer.h" || fail "the writer lost the vendor-cap reading of the node"
 # Audit K4: asbdiag probes the meter itself, not only the recorder's summary - a phone
 # without a usable charge_counter used to stay silently blind (Smart V5 learns nothing).
@@ -6698,6 +6702,28 @@ need "$UNINSTALL" '*/haptics_baseline.conf) _restore_ns=system'
 echo 'PASS reversible settings baseline contract (7 audited keys and haptics namespace)'
 )
 
+t_profile_capture_serialization() (
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
+export ASB_PROFILE_BASELINE="$work/ledger"
+printf '77\n' > "$work/node"
+{
+  printf '%s\n' '#include <stdio.h>' '#include <fcntl.h>' '#include <unistd.h>' '#include <string.h>'
+  sed -n '/^#include <sys\/file.h>/,/^\/\* Absolute floor/{ /^\/\* Absolute floor/!p; }' "$ROOT/src/asb_writer.h"
+  echo 'int main(int argc, char **argv) { if (argc != 2) return 2; writer_profile_baseline_record_path(argv[1]); return 0; }'
+} > "$work/writer.c"
+cc -DASB_PROFILE_BASELINE_PATH=\""$ASB_PROFILE_BASELINE"\" "$work/writer.c" -o "$work/writer"
+exec 8>>"$ASB_PROFILE_BASELINE.lock"; flock -x 8
+"$work/writer" "$work/node" 8>&- & native=$!
+sh -c '. "$1"; asb_profile_baseline_capture_path "$2"' sh "$ROOT/runtime/asb_baseline.sh" "$work/node" 8>&- & shell=$!
+flock -u 8; wait "$native"; wait "$shell"
+[ "$(cat "$ASB_PROFILE_BASELINE")" = "path|$work/node|77" ]
+printf '11\n' > "$work/node"
+. "$ROOT/runtime/asb_baseline.sh"
+asb_profile_baseline_restore
+[ "$(cat "$work/node")" = 77 ]
+)
 t_stock_switch_fast_runtime() (
 # Runtime (fix177): choosing Stock returns at once; the settings part of the profile ledger is
 # put back by a background pass that a newer profile stops between keys.
@@ -6713,7 +6739,16 @@ fail() { echo "FAIL stock switch fast: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/mod/runtime"
 cp "$ROOT/runtime/asb_baseline.sh" "$T/mod/runtime/"
-printf '#!/bin/sh\necho "$*" >> "$SLOG"\n' > "$T/bin/settings"; chmod +x "$T/bin/settings"
+cat > "$T/bin/settings" <<'SETTINGS'
+#!/bin/sh
+key="$SLOG.$2.$3"
+case "$1" in
+  get) if [ -f "$key" ]; then cat "$key"; else echo null; fi ;;
+  put) echo "$*" >> "$SLOG"; printf '%s' "$4" > "$key" ;;
+  delete) echo "$*" >> "$SLOG"; rm -f "$key" ;;
+esac
+SETTINGS
+chmod +x "$T/bin/settings"
 echo 1996800 > "$T/cpu_max"; echo 100 > "$T/swappiness"
 mk() {
   printf 'path|%s|3628800\npath|%s|60\nsetting|global:a|1\nsetting|global:b|\nsetting|system:c|x\n' \
@@ -6744,6 +6779,16 @@ grep -q '^setting|global:b|$' "$T/pb" || fail "the ledger lost the original valu
 sh -c ". '$T/run.sh'; asb_profile_baseline_restore setting" || fail "settings pass failed"
 [ "$(tr '\n' ';' < "$T/slog")" = 'put global a 1;delete global b;put system c x;' ] || fail "settings restored: $(cat "$T/slog")"
 [ -f "$T/pb" ] && fail "ledger kept after a complete pass"
+# A missing node must survive a partial restore, and a new process can retry it.
+printf 'path|%s|11\npath|%s|22\n' "$T/cpu_max" "$T/missing" > "$T/pb"
+if sh -c ". '$T/run.sh'; asb_profile_baseline_restore path"; then fail "partial restore reported success"; fi
+[ "$(cat "$T/pb")" = "path|$T/missing|22" ] || fail "wrong retry ledger"
+[ "$(sh -c ". '$T/run.sh'; asb_profile_baseline_pending_settings")" = 0 ] || fail "duplicate zero count"
+: > "$T/missing"
+sh -c ". '$T/run.sh'; asb_profile_baseline_restore path" || fail "retry failed"
+[ "$(cat "$T/missing")" = 22 ] && [ ! -e "$T/pb" ] || fail "retry lost baseline"
+if sh -c ". '$T/run.sh'; settings() { return 1; }; asb_profile_baseline_capture_setting global sample"; then fail "captured failed settings read"; fi
+[ ! -e "$T/pb" ] || fail "failed read created a ledger"
 # The full transaction (boot, worker) is unchanged: everything, in one pass.
 mk
 sh -c ". '$T/run.sh'; asb_profile_baseline_restore" || fail "full pass"
@@ -7888,9 +7933,10 @@ fail() { echo "FAIL workflow executable modes: $*" >&2; exit 1; }
 
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
   [ -f "$WF" ] || fail "missing $WF"
-  [ "$(grep -c 'name: Normalize executable source script modes' "$WF")" = 2 ] \
-    || fail "regression and package jobs do not both normalize modes in $WF"
-  grep -Fq 'needs: regression' "$WF" || fail "package job is not gated by every regression shard in $WF"
+  grep -Fq 'uses: ./.github/workflows/host-regression.yml' "$WF" || fail "missing shared regression"
+  grep -Fq 'needs: regression' "$WF" || fail "packaging lost its gate"
+done
+for WF in "$ROOT/.github/workflows/host-regression.yml"; do
   grep -Fq 'fail-fast: false' "$WF" || fail "one shard can hide the diagnostics of another in $WF"
   [ "$(sed -n 's/^            suites: //p' "$WF" | wc -l)" = 3 ] \
     || fail "expected exactly three regression shards in $WF"
@@ -7905,7 +7951,7 @@ for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/buil
   grep -Fq 'for tool in zip unzip curl file rsync jq; do' "$WF" \
     || fail "jq must be a verified runner dependency in $WF"
   for p in $_helpers; do
-    [ "$(grep -c "$p" "$WF")" -ge 2 ] || fail "$WF does not restore $p in both jobs"
+    [ "$(grep -c "$p" "$WF")" -ge 1 ] || fail "$WF does not restore $p in both jobs"
   done
 done
 grep -Fq 'ASB_REGRESSION_SUITES:-' "$ROOT/tools/asb_full_regression.sh" \
@@ -7921,7 +7967,7 @@ for p in $_helpers; do
   chmod 0644 "$TMP/$p"
 done
 _n=0
-for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
+for WF in "$ROOT/.github/workflows/host-regression.yml" "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
   awk '
     /- name: Normalize executable source script modes/ { capture=1; next }
     capture && /^      - name:/ { capture=0 }
@@ -7932,7 +7978,7 @@ for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/buil
   ' "$WF" > "$TMP/blocks.sh"
   # Split at the second chmod comment: each block is complete and independently executable.
   awk -v prefix="$TMP/normalize." '/# Browser uploads can turn git mode/{n++} {print > (prefix n ".sh")}' "$TMP/blocks.sh"
-  for block in "$TMP/normalize.1.sh" "$TMP/normalize.2.sh"; do
+  for block in "$TMP"/normalize.*.sh; do
     _n=$(( _n + 1 ))
     for p in $_helpers; do chmod 0644 "$TMP/$p"; done
     (cd "$TMP" && sh "$block") || fail "extracted normalize step failed for $WF block $_n"
@@ -10322,7 +10368,7 @@ new_fixture
 rm -rf "$T/block/mmcblk0"
 printf 'io_scheduler=kyber\n' > "$T/conf"
 run_io apply >/dev/null || fail 'kernel-id fixture apply'
-printf 'different|kernel\n' > "$T/state/sda.prev.kid"
+sed -i '2c different|kernel' "$T/state/sda.prev"
 printf 'io_scheduler=stock\n' > "$T/conf"
 out="$(run_io restore)"
 printf '%s\n' "$out" | grep -Fq 'io_scheduler|stock_unowned|' || fail "stale kernel baseline claimed restore: $out"
@@ -10547,8 +10593,8 @@ if PATH="$T/bin:$PATH" run_io smart 2 1 > "$T/out" 2>&1; then fail 'second-queue
 grep -Fq 'io_scheduler|write_failed|' "$T/out" || fail "second-queue failure verdict: $(cat "$T/out")"
 [ "$(active "$T/block/sda/queue/scheduler")" = mq-deadline ] || fail 'first queue retained a partial Smart apply'
 [ ! -e "$T/state/smart.plan" ] || fail 'failed partial apply saved a Smart plan'
-[ "$(cat "$T/state/sda.prev")" = mq-deadline ] || fail 'rollback damaged the persistent sda Stock baseline'
-[ "$(cat "$T/state/mmcblk0.prev")" = mq-deadline ] || fail 'rollback damaged the persistent mmc Stock baseline'
+[ "$(head -n 1 "$T/state/sda.prev")" = mq-deadline ] || fail 'rollback damaged the persistent sda Stock baseline'
+[ "$(head -n 1 "$T/state/mmcblk0.prev")" = mq-deadline ] || fail 'rollback damaged the persistent mmc Stock baseline'
 echo 'PASS I/O scheduler multidevice buildfix16: per-queue partial exposure, mixed live state, minimal none/ADIOS kernels, exact per-device Stock and second-write transactional rollback with preserved baselines'
 )
 

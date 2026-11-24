@@ -40,14 +40,26 @@ _alive() {
   [ -s "$PIDF" ] || return 1
   _p=""; _q=""
   _r=""
-  IFS='|' read -r _p _q _r < "$PIDF" 2>/dev/null || return 1
+  IFS='|' read -r _p _q _r _born < "$PIDF" 2>/dev/null || return 1
   case "$_p" in ''|*[!0-9]*) return 1 ;; esac
+  [ -z "$_born" ] || [ "$(_starttime "$_p")" = "$_born" ] || return 1
   [ -r "/proc/$_p/cmdline" ] || return 1
   tr '\0' ' ' < "/proc/$_p/cmdline" 2>/dev/null | grep -qE 'asb_btcodec|asb\.BtCodec' || return 1
   return 0
 }
+_starttime() {
+  sed 's/^.*) //' "/proc/$1/stat" 2>/dev/null | awk '{print $20}'
+}
 _stop() {
-  if _alive; then kill "$_p" 2>/dev/null; sleep 1; kill -9 "$_p" 2>/dev/null; fi
+  if _alive; then
+    _target="$_p"; _start="$(_starttime "$_target")"
+    if [ -n "$_start" ] && _alive && [ "$_p" = "$_target" ] && kill "$_target" 2>/dev/null; then
+      sleep 1
+      if _alive && [ "$_p" = "$_target" ] && [ "$(_starttime "$_target")" = "$_start" ]; then
+        kill -9 "$_target" 2>/dev/null
+      fi
+    fi
+  fi
   rm -f "$PIDF" 2>/dev/null
 }
 _ready() {
@@ -59,6 +71,13 @@ _ready() {
 _run() {
   CLASSPATH="$DEX" "$(_ap)" /system/bin asb.BtCodec "$@"
 }
+
+case "${1:-status}" in
+  apply|stop)
+    mkdir -p "$STATE_DIR" || exit 1
+    exec 9>>"$STATE_DIR/bt_ldac.lock" || exit 1
+    flock -x 9 || exit 1 ;;
+esac
 
 case "${1:-status}" in
   apply)
@@ -77,12 +96,12 @@ case "${1:-status}" in
     rm -f "$STF" 2>/dev/null
     _ap_bin="$(_ap)"
     if _has setsid; then
-      CLASSPATH="$DEX" setsid "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" </dev/null >"$OUT" 2>&1 &
+      CLASSPATH="$DEX" setsid "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" 9>&- </dev/null >"$OUT" 2>&1 &
     else
-      CLASSPATH="$DEX" nohup "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" </dev/null >"$OUT" 2>&1 &
+      CLASSPATH="$DEX" nohup "$_ap_bin" /system/bin --nice-name=asb_btcodec asb.BtCodec watch "$_w" "$STF" "$_wr" 9>&- </dev/null >"$OUT" 2>&1 &
     fi
     _np=$!
-    printf '%s|%s|%s\n' "$_np" "$_w" "$_wr" > "$PIDF"
+    printf '%s|%s|%s|%s\n' "$_np" "$_w" "$_wr" "$(_starttime "$_np")" > "$PIDF.tmp" && mv -f "$PIDF.tmp" "$PIDF" || exit 1
     _log "watch started quality=$_w rate=$_wr pid=$_np"
     echo "result=started"
     echo "quality=$_w"

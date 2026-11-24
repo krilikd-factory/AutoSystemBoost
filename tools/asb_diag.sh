@@ -159,6 +159,13 @@ _root_mgr="unknown"
 P " root    : $_root_mgr"
 P " module  : ${MODDIR:-NOT FOUND}"
 [ -n "$MODDIR" ] && P " version : $(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | cut -d= -f2)  ($(grep '^versionCode=' "$MODDIR/module.prop" 2>/dev/null | cut -d= -f2))"
+if [ -r "$MODDIR/release-manifest.json" ]; then
+  for _field in source_commit payload_sha256 run_id run_attempt channel shipped_config_sha256; do
+    _value="$(sed -n 's/.*"'"$_field"'"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_-]*\)".*/\1/p' "$MODDIR/release-manifest.json" | head -1)"
+    [ -z "$_value" ] || P " $_field : $_value"
+  done
+  P " live_config_sha256 : $(sha256sum "$MODDIR/config/governor.conf" 2>/dev/null | cut -d' ' -f1)"
+fi
 
 if [ -z "$MODDIR" ]; then
   P ""; P "  !! AutoSystemBoost module not found — is it installed & enabled?"
@@ -4460,7 +4467,7 @@ else
 fi
 NOTE "phantom_procs = $(cfg phantom_procs)  ·  live: $(settings get global settings_enable_monitor_phantom_procs 2>/dev/null)"
 if [ -r /proc/sys/kernel/sched_schedstats ]; then
-  NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: $(cat /proc/sys/kernel/sched_schedstats 2>/dev/null)  ·  saved baseline: $(cat /data/adb/asb/kernel_sched_stats.prev 2>/dev/null || echo none)"
+  NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: $(cat /proc/sys/kernel/sched_schedstats 2>/dev/null)  ·  saved baseline: $(head -n 1 /data/adb/asb/kernel_sched_stats.prev 2>/dev/null || echo none)"
 else
   NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: not exposed"
 fi

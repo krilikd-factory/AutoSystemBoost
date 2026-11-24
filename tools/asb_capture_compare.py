@@ -168,8 +168,10 @@ def parse_capture(d):
     rep = _read(os.path.join(d, "_full_day_report.txt"))
     env = _read(os.path.join(d, "env.txt"))
     m = {"kind": "capture", "path": d}
-    for key, pat in (("model", r"^model:\s+(\S+)"), ("version", r"^module_version:\s+(\S+)"),
-                     ("oem_build", r"^oem_build:\s+(.+)$")):
+    for key, pat in (("model", r"^model:[ \t]*([^\n]+)"), ("version", r"^module_version:\s+(\S+)"),
+                     ("fingerprint", r"^fingerprint:[ \t]*([^\n]+)"),
+                     ("kernel_release", r"^kernel_release:[ \t]*([^\n]+)"),
+                     ("oem_build", r"^oem_build:[ \t]*([^\n]+)")):
         mm = re.search(pat, env, re.M)
         m[key] = mm.group(1).strip() if mm else "?"
     try:
@@ -280,10 +282,14 @@ def parse_diag(path):
     return m
 
 
+def cohort(capture):
+    return tuple(capture.get(key) or "?" for key in ("model", "fingerprint", "kernel_release"))
+
+
 def dedupe(caps):
     best = {}
     for c in caps:
-        key = (c["model"], c["start_epoch"]) if c["start_epoch"] else (c["model"], c["path"])
+        key = (*cohort(c), c["version"], c["start_epoch"] or c["path"])
         if key not in best or c["elapsed_min"] > best[key]["elapsed_min"]:
             best[key] = c
     return list(best.values())
@@ -340,28 +346,28 @@ def diag_rows(diags):
 
 DHEAD = ["model", "version", "date", "safe media", "bypass", "txqueue", "ASB CPU", "doze trim/kept/granted"]
 
-def _solid(ph, key):
-    if not ph or ph.get("rough") or (ph.get("min") or 0) < 30:
+def _solid(ph, key, minimum_minutes=30):
+    if not ph or ph.get("rough") or (ph.get("min") or 0) < minimum_minutes:
         return None
     return ph.get(key)
 
 
 METRICS = [
-    ("night %/h", lambda c: None if not c.get("night") or c["night"].get("rough") else c["night"].get("pct_h"), True),
-    ("night awake %", lambda c: _solid(c.get("night"), "awake"), True),
-    ("idle %/h", lambda c: _solid(c.get("idle"), "pct_h"), True),
-    ("idle awake %", lambda c: _solid(c.get("idle"), "awake"), True),
-    ("screen-on %/h", lambda c: c.get("screen_on_pct_h"), True),
-    ("janky frames/s", lambda c: c.get("ui_janky_s"), True),
-    ("janky floor/s", lambda c: c.get("ui_floor_s"), True),
-    ("LIGHT_IDLE janky/s", lambda c: (c.get("ui_states") or {}).get("LIGHT_IDLE", {}).get("janky_s"), True),
-    ("MODERATE janky/s", lambda c: (c.get("ui_states") or {}).get("MODERATE", {}).get("janky_s"), True),
-    ("prime working %", lambda c: c.get("prime_work_pct"), True),
-    ("warm: main under prime %", lambda c: c.get("warm_below_pct"), True),
-    ("warm: prime working %", lambda c: c.get("warm_prime_pct"), True),
-    ("warm screen-on mA", lambda c: c.get("warm_on_ma"), True),
-    ("ASB CPU s/h", lambda c: c.get("asb_cpu_s_h"), True),
-    ("Wi-Fi leave median s", lambda c: c.get("wifi_leave_median_s"), True),
+    ("night %/h", lambda c: _solid(c.get("night"), "pct_h", 360)),
+    ("night awake %", lambda c: _solid(c.get("night"), "awake", 360)),
+    ("idle %/h", lambda c: _solid(c.get("idle"), "pct_h")),
+    ("idle awake %", lambda c: _solid(c.get("idle"), "awake")),
+    ("screen-on %/h", lambda c: c.get("screen_on_pct_h")),
+    ("janky frames/s", lambda c: c.get("ui_janky_s")),
+    ("janky floor/s", lambda c: c.get("ui_floor_s")),
+    ("LIGHT_IDLE janky/s", lambda c: (c.get("ui_states") or {}).get("LIGHT_IDLE", {}).get("janky_s")),
+    ("MODERATE janky/s", lambda c: (c.get("ui_states") or {}).get("MODERATE", {}).get("janky_s")),
+    ("prime working %", lambda c: c.get("prime_work_pct")),
+    ("warm: main under prime %", lambda c: c.get("warm_below_pct")),
+    ("warm: prime working %", lambda c: c.get("warm_prime_pct")),
+    ("warm screen-on mA", lambda c: c.get("warm_on_ma")),
+    ("ASB CPU s/h", lambda c: c.get("asb_cpu_s_h")),
+    ("Wi-Fi leave median s", lambda c: c.get("wifi_leave_median_s")),
 ]
 
 
@@ -395,18 +401,22 @@ def compare_diags(base, new):
 
 def compare(base, new):
     bcap = [c for c in base.get("captures", [])]
-    models = sorted({c["model"] for c in new} | {c["model"] for c in bcap})
+    groups = sorted({cohort(c) for c in new + bcap})
     out = []
-    for mdl in models:
-        b = [c for c in bcap if c["model"] == mdl]
-        n = [c for c in new if c["model"] == mdl]
+    for group in groups:
+        mdl = " / ".join(group)
+        if any(value.strip().lower() in {"?", "-", "unknown", "n/a", "unavailable"} for value in group):
+            out.append(f"{mdl}: incomplete device, ROM or kernel identity; descriptive data only")
+            continue
+        b = [c for c in bcap if cohort(c) == group]
+        n = [c for c in new if cohort(c) == group]
         if not b or not n:
             out.append("%s: %s" % (mdl, "only in the new logs" if n else "only in the baseline"))
             continue
         out.append("%s: baseline %d capture(s) %s, new %d capture(s) %s" % (
             mdl, len(b), sorted({c["version"] for c in b}), len(n), sorted({c["version"] for c in n})))
         rows = []
-        for name, get, lower_better in METRICS:
+        for name, get in METRICS:
             bv, nv = _median([get(c) for c in b]), _median([get(c) for c in n])
             if bv is None and nv is None:
                 continue
@@ -414,11 +424,11 @@ def compare(base, new):
                 rows.append([name, _fmt(bv), _fmt(nv), "-", "not in both"])
                 continue
             delta = nv - bv
-            rel = (delta / bv * 100.0) if bv else 0.0
-            verdict = "same"
-            if abs(rel) >= 10 and abs(delta) > 0.05:
-                verdict = "better" if (delta < 0) == lower_better else "worse"
-            rows.append([name, _fmt(bv), _fmt(nv), "%+.2f (%+.0f%%)" % (delta, rel), verdict])
+            change = "%+.2f" % delta
+            if bv:
+                change += " (%+.0f%%)" % (delta / bv * 100)
+            direction = "lower" if delta < 0 else "higher" if delta > 0 else "equal"
+            rows.append([name, _fmt(bv), _fmt(nv), change, direction])
         ctx = []
         for label, get in (("capture min", lambda c: c.get("elapsed_min")),
                            ("night length min", lambda c: (c.get("night") or {}).get("min")),
@@ -428,7 +438,7 @@ def compare(base, new):
                            ("mobile MiB", lambda c: c.get("mobile_mib"))):
             ctx.append("%s %s -> %s" % (label, _fmt(_median([get(c) for c in b]), "", 0),
                                          _fmt(_median([get(c) for c in n]), "", 0)))
-        out.append(table(rows, ["metric", "baseline", "new", "change", "verdict"]))
+        out.append(table(rows, ["metric", "baseline", "new", "change", "observed"]))
         out.append("  context: " + "; ".join(ctx))
         out.append("")
     return "\n".join(out)
@@ -471,7 +481,7 @@ def main():
     if a.baseline:
         with open(a.baseline, encoding="utf-8") as f:
             base = json.load(f)
-        print("COMPARISON WITH %s (medians per model)" % (base.get("label") or a.baseline))
+        print("COMPARISON WITH %s (medians per model, ROM and kernel)" % (base.get("label") or a.baseline))
         print(compare(base, caps))
         print("ASBDIAG, BASELINE AGAINST NEW")
         print(compare_diags(base, diags))

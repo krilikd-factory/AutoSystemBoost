@@ -373,6 +373,53 @@ grep -q 'cp -f "$MODDIR/config/governor.conf" /dev/.asb_profile_state/governor.b
 exit "$fail"
 )
 
+t_profile_trial_audit() (
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+python3 - "$ROOT/tools" <<'PYTEST'
+import sys
+sys.path.insert(0, sys.argv[1])
+from asb_profile_trial import evaluate, template
+trial = template()
+for field in ("model", "rom_fingerprint", "kernel", "device_alias", "workload", "A", "B"):
+    trial[field] = field
+for rule in trial["metrics"].values():
+    rule["tolerance"] = 0.5
+for i, order in enumerate(("AA", "AB", "BA", "AB")):
+    for j, variant in enumerate(order):
+        trial["runs"].append({"id": f"{i}-{j}", "pair": str(i), "variant": variant,
+                              "duration_s": 30, "conditions": "fixed",
+                              "values": {key: 10 if variant == "A" else 8 for key in trial["metrics"]}})
+assert evaluate(trial)["status"] == "repeatable_gain_in_this_cohort"
+trial["runs"][-1]["values"]["surface_peak_c"] = 11
+assert evaluate(trial)["status"] == "regression"
+trial["runs"][-1]["excluded_reason"] = "charging"
+result = evaluate(trial)
+assert result["status"] == "insufficient_data" and result["excluded_pairs"] == {"3": "charging"}
+PYTEST
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cd "$T"
+mkdir -p sys/devices/system/cpu/cpufreq/policy7 proc/pressure
+echo 3200000 > sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+echo 'some avg10=0.00 total=100' > proc/pressure/memory
+echo 'governor_writes=23' > state
+ASB_TRIAL_SYS="$PWD/sys" ASB_TRIAL_PROC="$PWD/proc" ASB_TRIAL_STATE="$PWD/state" sh "$ROOT/tools/asb_trial_snapshot.sh" > snapshot
+awk '$1=="policy7/scaling_max_freq" && $2==3200000 {cpu=1} $1=="governor_writes" && $2==23 {gov=1} $1=="psi/memory/some" {psi=1} END {exit !(cpu && gov && psi)}' snapshot
+git init -q
+git config user.name Test
+git config user.email fixture@example.invalid
+echo base > base; git add base; git commit -qm base
+base=$(git rev-parse HEAD)
+echo fixed > fix; git add fix; git commit -qm fix
+fix=$(git rev-parse HEAD)
+tool="$ROOT/tools/asb_fix_history.sh"
+[ "$("$tool" "$fix" "$fix")" = fix_in_history ]
+[ "$("$tool" "$fix" "$base")" = patch_not_found ]
+git checkout -q --detach "$base"
+echo other > other; git add other; git commit -qm other
+git cherry-pick "$fix" >/dev/null
+[ "$("$tool" "$fix" "$(git rev-parse HEAD)")" = equivalent_patch_in_history ]
+)
 t_capture_compare_runtime() (
 # Runtime (fix152): the host comparison of field logs, build against build.
 #
@@ -389,7 +436,7 @@ command -v python3 >/dev/null 2>&1 || { echo "SKIP capture compare: no python3";
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cap() {   # dir model start night_pct night_awake idle_pct janky_s li_s cpu_ms wifi_med
   mkdir -p "$1"
-  printf 'model:           %s\nmodule_version:  V65-debug%s\noem_build:       X\n' "$2" "$3" > "$1/env.txt"
+  printf 'model:           %s\nfingerprint: fixture/android/build\nkernel_release: fixture-kernel\nmodule_version:  V65-debug%s\noem_build:       X\n' "$2" "$3" > "$1/env.txt"
   printf '# phase timeline\n%s|2026-10-20 08:00:00|active|capture_start\n' "$3" > "$1/phase_timeline.txt"
   printf 'governor_cpu_ms=%s\ngovernor_uptime_s=36000\n' "$9" > "$1/snapshot_1.txt"
   cat > "$1/_full_day_report.txt" <<R
@@ -446,16 +493,20 @@ python3 "$TOOL" "$T/old" --json "$T/base.json" --label base > "$T/o1" || fail "b
 grep -q '^FULL-DAY CAPTURES (2)$' "$T/o1" || fail "baseline captures: $(head -3 "$T/o1")"
 python3 "$TOOL" "$T/new" "$T/new/outer.zip" --baseline "$T/base.json" > "$T/o2" || fail "compare run failed"
 grep -q '^FULL-DAY CAPTURES (2)$' "$T/o2" || fail "a capture sent twice (a zip inside a zip) counted twice: $(grep -c CPH2745 "$T/o2")"
-grep -q '^night %/h *0.56 *0.44 .*better' "$T/o2" || fail "night not better: $(grep 'night %/h' "$T/o2")"
-grep -q '^LIGHT_IDLE janky/s *3.92 *2.00 .*better' "$T/o2" || fail "LIGHT_IDLE jank: $(grep LIGHT "$T/o2")"
-grep -q '^Wi-Fi leave median s *20 *6 .*better' "$T/o2" || fail "Wi-Fi leave: $(grep 'Wi-Fi leave' "$T/o2")"
-grep -q '^ASB CPU s/h *1.80 *1.44 .*better' "$T/o2" || fail "ASB CPU: $(grep 'ASB CPU s/h' "$T/o2")"
-grep -q '^night %/h *0.90 *0.95 .*same' "$T/o2" || fail "a 5% change called a verdict: $(grep 'night %/h' "$T/o2")"
+grep -q '^night %/h *0.56 *0.44 .*lower' "$T/o2" || fail "night not better: $(grep 'night %/h' "$T/o2")"
+grep -q '^LIGHT_IDLE janky/s *3.92 *2.00 .*lower' "$T/o2" || fail "LIGHT_IDLE jank: $(grep LIGHT "$T/o2")"
+grep -q '^Wi-Fi leave median s *20 *6 .*lower' "$T/o2" || fail "Wi-Fi leave: $(grep 'Wi-Fi leave' "$T/o2")"
+grep -q '^ASB CPU s/h *1.80 *1.44 .*lower' "$T/o2" || fail "ASB CPU: $(grep 'ASB CPU s/h' "$T/o2")"
+grep -q '^night %/h *0.90 *0.95 .*higher' "$T/o2" || fail "a 5% change called a verdict: $(grep 'night %/h' "$T/o2")"
 grep -q '^idle %/h *5.50 *- ' "$T/o2" || fail "a '~' figure was compared: $(grep 'idle %/h' "$T/o2")"
 grep -q 'wlan0=256' "$T/o2" || fail "the Wi-Fi queue from asbdiag is not shown"
 grep -q 'doze trim 7/kept 3/granted 1' "$T/o2" || fail "the doze trim figures from asbdiag are not shown"
 python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['label']=='base' and len(d['captures'])==2" "$T/base.json" || fail "saved figures unreadable"
 python3 "$TOOL" "$ROOT/docs/field_baseline" --baseline "$ROOT/docs/field_baseline/fix150.json" >/dev/null || fail "the stored fix150 baseline does not load"
+sed -i 's/fixture-kernel/other-kernel/' "$T/new/a/env.txt"
+python3 "$TOOL" "$T/new/a" --baseline "$T/base.json" > "$T/other"
+grep -q 'only in the new logs' "$T/other" || fail "kernel cohorts mixed"
+if grep -q '^night %/h ' "$T/other"; then fail "cross-kernel battery delta"; fi
 echo "PASS capture compare: field logs read from folders and nested zips, one capture once, build against build per model"
 )
 
@@ -476,7 +527,7 @@ command -v python3 >/dev/null 2>&1 || { echo "SKIP capture compare warm: no pyth
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cap() {
   d="$T/$1"; mkdir -p "$d"
-  printf 'model:           CPH2745\nmodule_version:  V65-debug%s\n' "$2" > "$d/env.txt"
+  printf 'model:           CPH2745\nfingerprint: fixture/android/build\nkernel_release: fixture-kernel\nmodule_version:  V65-debug%s\n' "$2" > "$d/env.txt"
   printf '%s|2026-10-20 08:00:00|active|capture_start\n' "$3" > "$d/phase_timeline.txt"
   printf ' capture: 24h target, 600 min elapsed\n' > "$d/_full_day_report.txt"
   printf 'main_parity_capacity="762,1024"\n' > "$d/snapshot_1.txt"
@@ -508,9 +559,9 @@ if bad:
     print(bad); sys.exit(1)
 P
 python3 "$TOOL" "$T/new" --baseline "$T/base.json" > "$T/o2" 2>&1 || { cat "$T/o2" >&2; fail "comparison failed"; }
-grep -qE '^warm: main under prime % +66\.70 +0\.00 +-66\.70 \(-100%\) +better' "$T/o2" || fail "main-under-prime row: $(cat "$T/o2")"
-grep -qE '^warm: prime working % +66\.70 +16\.70 .* better' "$T/o2" || fail "prime row: $(cat "$T/o2")"
-grep -qE '^warm screen-on mA +433 +343 .* better' "$T/o2" || fail "current row: $(cat "$T/o2")"
+grep -qE '^warm: main under prime % +66\.70 +0\.00 +-66\.70 \(-100%\) +lower' "$T/o2" || fail "main-under-prime row: $(cat "$T/o2")"
+grep -qE '^warm: prime working % +66\.70 +16\.70 .* lower' "$T/o2" || fail "prime row: $(cat "$T/o2")"
+grep -qE '^warm screen-on mA +433 +343 .* lower' "$T/o2" || fail "current row: $(cat "$T/o2")"
 cap cool 9 9000
 e=9000
 for i in 1 2 3 4 5 6; do row cool $e 1 1555200 1862400 1862400 480 35; e=$((e + 20)); done
