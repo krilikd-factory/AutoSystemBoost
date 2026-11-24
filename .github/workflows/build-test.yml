@@ -3,6 +3,10 @@ name: ASB · Build Test
 on:
   workflow_dispatch:
     inputs:
+      private_chat:
+        description: 'Private Telegram chat ID'
+        required: true
+        type: string
       test_sequence:
         description: 'Positive test sequence after this public release (1, 2, …, 10, …)'
         required: false
@@ -826,7 +830,7 @@ jobs:
       # Optional: posts the flashable zip to the "Test" topic of the owner's Telegram forum.
       # Releases go to "Last Release" from build-release.yml; each needs its own topic id.
       - name: Post test build to Telegram (Test topic)
-        if: ${{ inputs.telegram }}
+        if: ${{ false }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT: '@AutoSystemBoost'
@@ -834,6 +838,38 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           TG_PIN: ${{ inputs.telegram_pin }}
         run: python3 .github/scripts/telegram_post.py test "$ZIP_TEST" "$ASB_VER"
+
+      - name: Send test build privately
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_PRIVATE_CHAT: ${{ inputs.private_chat }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PYPRIVATE'
+          import json, os, subprocess, sys
+          import importlib.util
+          spec = importlib.util.spec_from_file_location("post", ".github/scripts/telegram_post.py")
+          post = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(post)
+          token = os.environ["TG_TOKEN"]
+          chat = os.environ["TG_PRIVATE_CHAT"]
+          if not token or not chat.isdecimal() or int(chat) <= 0:
+              sys.exit("Missing bot token or invalid private chat ID")
+          text = post.caption("test", os.environ["ASB_VER"], os.environ["RUN_URL"])
+          result = subprocess.run(["curl", "--silent", "--show-error",
+              "--form-string", "chat_id=" + chat, "--form-string", "parse_mode=HTML",
+              "--form-string", "caption=" + text, "-F", "document=@" + os.environ["ZIP_TEST"],
+              "https://api.telegram.org/bot" + token + "/sendDocument"], capture_output=True, text=True)
+          try:
+              response = json.loads(result.stdout)
+          except ValueError:
+              sys.exit("Telegram returned an unreadable response")
+          if result.returncode or not response.get("ok"):
+              sys.exit("Telegram delivery failed: " + str(response.get("description", "request error")))
+          if response.get("result", {}).get("chat", {}).get("type") != "private":
+              sys.exit("Telegram returned an unexpected chat type")
+          print("Private Telegram delivery confirmed")
+          PYPRIVATE
 
       - name: Check the Last Release topic (optional)
         if: ${{ inputs.tg_probe_release }}
