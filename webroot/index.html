@@ -8878,7 +8878,7 @@ async function asbSendLogs() {
     const shortPath = b.path.replace(/^\/(sdcard|storage\/emulated\/0)\//, '');
     const sh = debugActionText(await run('sh ' + MD + '/runtime/asb_debug_support.sh bundle-share ' + JSON.stringify(b.path) + ' 2>/dev/null'));
     if (b.reused === '1') toast(T('dbg_send_reused', 'No new logs since %s - attach it if it was not sent yet').replace('%s', shortPath), 'warn');
-    else if (sh.opened === 'share') toast(T('dbg_send_shared', 'Archive attached: pick Telegram, then AutoSystemBoost and the Bugs topic'), 'good');
+    else if (sh.opened === 'share') toast(T('dbg_send_share_check', 'Choose Telegram and Bugs, then check that the archive is attached'), 'good');
     else toast(T('dbg_send_saved', 'Saved %s - attach it in the Bugs topic').replace('%s', shortPath), 'good');
   } catch (e) {
     toast(T('dbg_send_failed', 'Could not pack the logs'), 'bad');

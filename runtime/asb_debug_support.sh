@@ -1043,6 +1043,21 @@ bundle_media_own() {
   return 0
 }
 
+# Verify the exact URI before handing it to a receiving app. A successful
+# activity launch alone does not mean the provider can open the attachment.
+bundle_uri_readable() {
+  command -v cmp >/dev/null 2>&1 || return 1
+  content read --uri "$1" 2>/dev/null | cmp -s - "$2"
+}
+
+bundle_archive_valid() {
+  case "$1" in
+    *.tar.gz) tar -tzf "$1" >/dev/null 2>&1 ;;
+    *.tar) tar -tf "$1" >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
+
 bundle_share() {
   _bp="$1"
   [ -n "$_bp" ] && [ -s "$_bp" ] || { echo 'error=no_archive'; return 3; }
@@ -1062,22 +1077,31 @@ bundle_share() {
     sleep 1
   done
   [ -n "$_bid" ] && echo "media_id=$_bid"
+  # MediaStore can grant the receiving app a content URI on Android builds
+  # whose DocumentsProvider rejects direct document URIs.
+  if [ -n "$_bid" ]; then
+    _buri="content://media/external/file/$_bid"
+    if bundle_uri_readable "$_buri" "$_bp" &&
+       bundle_am -a android.intent.action.SEND -d "$_buri" -t application/octet-stream \
+         --eu android.intent.extra.STREAM "$_buri" --grant-read-uri-permission -f 0x10000001; then
+      echo 'share_uri=media'
+      echo 'opened=share'
+      return 0
+    fi
+  fi
   case "$_bp" in
     /storage/emulated/0/*)
       _bdoc="$(printf '%s' "primary:${_bp#/storage/emulated/0/}" | sed 's/%/%25/g; s/:/%3A/g; s#/#%2F#g; s/ /%20/g')"
-      if bundle_am -a android.intent.action.SEND -d "content://com.android.externalstorage.documents/document/$_bdoc" -t application/gzip \
-           --eu android.intent.extra.STREAM "content://com.android.externalstorage.documents/document/$_bdoc" --grant-read-uri-permission -f 0x10000001; then
+      _buri="content://com.android.externalstorage.documents/document/$_bdoc"
+      if bundle_uri_readable "$_buri" "$_bp" &&
+         bundle_am -a android.intent.action.SEND -d "$_buri" -t application/octet-stream \
+           --eu android.intent.extra.STREAM "$_buri" --grant-read-uri-permission -f 0x10000001; then
         echo 'share_uri=document'
         echo 'opened=share'
         return 0
       fi
       ;;
   esac
-  if [ -n "$_bid" ] && bundle_am -a android.intent.action.SEND -d "content://media/external/file/$_bid" -t application/gzip \
-       --eu android.intent.extra.STREAM "content://media/external/file/$_bid" --grant-read-uri-permission -f 0x10000001; then
-    echo 'opened=share'
-    return 0
-  fi
   if bundle_am -a android.intent.action.VIEW -d 'tg://resolve?domain=AutoSystemBoost&post=3&thread=3'; then
     echo 'opened=telegram'
     return 0
@@ -1118,7 +1142,7 @@ bundle_logs() {
   if [ -n "$_fp" ] && [ "$_active" = 0 ] && [ -r "$_last" ] && [ "$(sed -n 's/^key=//p' "$_last" | head -n 1)" = "$_key" ]; then
     _id="$(sed -n 's/^id=//p' "$_last" | head -n 1 | tr -dc '0-9a-f_-')"
     _old="$(sed -n 's/^path=//p' "$_last" | head -n 1)"
-    if [ -n "$_id" ] && [ -s "$_old" ]; then
+    if [ -n "$_id" ] && [ -s "$_old" ] && bundle_archive_valid "$_old"; then
       echo "path=$_old"
       echo "id=$_id"
       echo 'reused=1'
@@ -1183,6 +1207,13 @@ bundle_logs() {
     rm -f "$_bf.tmp" 2>/dev/null
     echo 'error=too_big'; echo "bytes=$_bb"; return 7
   fi
+  # tar validates the complete stream, including the gzip checksum. An
+  # interrupted or truncated archive must not be offered as an attachment.
+  case "$_bf" in
+    *.tar.gz) tar -tzf "$_bf.tmp" >/dev/null 2>&1 ;;
+    *.tar) tar -tf "$_bf.tmp" >/dev/null 2>&1 ;;
+    *) false ;;
+  esac || { rm -f "$_bf.tmp" 2>/dev/null; echo 'error=bundle_failed'; return 6; }
   mv -f "$_bf.tmp" "$_bf" 2>/dev/null || { rm -f "$_bf.tmp" 2>/dev/null; echo 'error=bundle_failed'; return 6; }
   mkdir -p "$STATE_DIR" 2>/dev/null
   { echo "key=$_key"; echo "id=$_id"; echo "path=$_bf"; } > "$_last" 2>/dev/null || true

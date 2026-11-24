@@ -10971,7 +10971,11 @@ t_debug_log_bundle_runtime() (
   cat > "$T/bin/content" <<'STUB'
 #!/bin/sh
 echo "content $*" >> "$STUB_LOG"
-case "$*" in *query*) [ -f "$STUB_DIR/indexed" ] && echo "Row: 0 _id=4242" ;; *call*) touch "$STUB_DIR/indexed" ;; esac
+case "$*" in
+  *query*) [ -f "$STUB_DIR/indexed" ] && echo "Row: 0 _id=4242" ;;
+  *call*) touch "$STUB_DIR/indexed" ;;
+  *read*) [ -f "$STUB_DIR/bad_uri" ] && exit 1; cat "$STUB_SOURCE" ;;
+esac
 exit 0
 STUB
   cat > "$T/bin/am" <<'STUB'
@@ -10986,12 +10990,18 @@ STUB
 exit 0
 STUB
   chmod 755 "$T/bin/content" "$T/bin/am" "$T/bin/sleep"
-  share() { STUB_LOG="$T/stub.log" STUB_DIR="$T" PATH="$T/bin:$PATH" run bundle-share "$@"; }
+  share() { STUB_LOG="$T/stub.log" STUB_DIR="$T" STUB_SOURCE="$p" PATH="$T/bin:$PATH" run bundle-share "$@"; }
   out="$(share "$p")"
   printf '%s\n' "$out" | grep -qx 'opened=share' || fail "the share sheet was not opened: $out"
   grep -q 'method scan_file' "$T/stub.log" || fail 'the archive was not indexed for the file picker'
   grep -q 'android.intent.extra.STREAM content://media/external/file/4242' "$T/stub.log" || fail 'the share sheet did not carry the archive'
   grep 'SEND' "$T/stub.log" | grep -q -- '-d content://media/external/file/4242 .*--grant-read-uri-permission' || fail 'the receiving app gets no read grant for the archive (Telegram: unsupported attachment)'
+  grep 'SEND' "$T/stub.log" | grep -q -- '-t application/octet-stream' || fail 'archive was not shared as a generic binary'
+  touch "$T/bad_uri"; rm -f "$T/stub.log"
+  out="$(share "$p")"
+  printf '%s\n' "$out" | grep -qx 'opened=telegram' || fail "unreadable provider did not fall back to manual attach: $out"
+  grep 'SEND' "$T/stub.log" >/dev/null && fail 'unreadable URI offered to the recipient'
+  rm -f "$T/bad_uri"
   touch "$T/no_share"; rm -f "$T/stub.log"
   out="$(share "$p")"
   printf '%s\n' "$out" | grep -qx 'opened=telegram' || fail "no Telegram fallback: $out"
@@ -11029,6 +11039,19 @@ STUB
   printf '%s\n' "$out" | grep -qx 'trimmed_files=1' || fail 'the trimmed file count is missing'
   tar -tf "$p" | grep -q 'raw_trace.bin' && fail 'the oversized file was packed'
   tar -tf "$p" | grep -qx 'asb_log_full_day_5/env.txt' || fail 'the small files of a trimmed capture are missing'
+  # A non-empty but damaged archive must not be published or reused.
+  mkdir -p "$T/broken-bin"
+  real_tar="$(command -v tar)"
+  cat > "$T/broken-bin/tar" <<'BROKEN_TAR'
+#!/bin/sh
+case "$1" in -czf) printf 'broken gzip data' > "$2"; exit 0 ;; esac
+exec "$REAL_TAR" "$@"
+BROKEN_TAR
+  chmod 755 "$T/broken-bin/tar"
+  rm -f "$T/st/bundle.last"
+  out="$(REAL_TAR="$real_tar" PATH="$T/broken-bin:$PATH" run bundle)"
+  printf '%s\n' "$out" | grep -qx 'error=bundle_failed' || fail "a corrupt archive was accepted: $out"
+  [ ! -f "$T/st/bundle.last" ] || fail 'a broken archive was recorded as reusable'
   echo 'PASS debug log bundle: newest asbdiag and infinite log packed into Download, partial files skipped, empty folder refused, old dumps ignored, running capture first, oversize trimmed'
 )
 
