@@ -56,6 +56,15 @@ _BT_OPTIN="$STATE_DIR/enable_bt_policy"
 # not mean that ASB silently overrides OxygenOS codec/offload/sniff policy on every boot.  Create
 # /data/adb/asb/enable_bt_policy only for an explicit experiment and remove it to return to stock.
 [ -f "$_BT_OPTIN" ] && _bt_policy_state="enabled_optin"
+
+# One snapshot lets the opt-out path avoid spawning resetprop for Bluetooth keys that
+# are already absent after boot. If getprop is unavailable or fails, retain the old
+# conservative deletion behavior. Never print the property snapshot.
+_bt_snapshot=''
+if [ "$_bt_policy_state" = "disabled_default" ] && command -v getprop >/dev/null 2>&1; then
+  _bt_snapshot="$(getprop 2>/dev/null)" || _bt_snapshot=''
+  case "$_bt_snapshot" in *']: ['* ) ;; *) _bt_snapshot='' ;; esac
+fi
 while IFS= read -r _line || [ -n "$_line" ]; do
   case "$_line" in
     '# ASB:'*:BEGIN)
@@ -93,7 +102,14 @@ while IFS= read -r _line || [ -n "$_line" ]; do
     # test an actual stock A/B experiment after upgrading from an older build; non-persistent
     # ro/vendor defaults and unrelated Android settings are never touched here.
     case "$_key" in
-      persist.*) resetprop --delete "$_key" >/dev/null 2>&1 || true ;;
+      persist.*)
+        # getprop's bracketed keys delimit exact matches (including empty values).
+        # Missing/empty snapshots fall back to deletion, never to assuming absence.
+        case "$_bt_snapshot" in
+          '') resetprop --delete "$_key" >/dev/null 2>&1 || true ;;
+          *"[$_key]: ["*) resetprop --delete "$_key" >/dev/null 2>&1 || true ;;
+        esac
+        ;;
     esac
     _skipped=$((_skipped + 1))
     continue

@@ -2155,7 +2155,7 @@
   "lr_brief_drain": "Off the charger the battery fell {drop}% over {h} - {pct}%/h on average, about {est} from a full charge at this pace.",
   "lr_brief_drain_segments": "Off the charger, total consumption was {drop}% over {h} across {segments} windows - {pct}%/h on average. This is a sum across windows, not one charge. Latest window: {lastdrop}% over {lasth} ({lastpct}%/h). At this average pace, a full charge would last about {est}.",
   "lr_brief_drain_segments_short": "Off the charger, total consumption was {drop}% over {h} across {segments} windows ({pct}%/h). This is a sum across windows, not one charge. Latest window: {lastdrop}% over {lasth} ({lastpct}%/h).",
-  "lr_brief_drain_short": "Off the charger the battery fell {drop}% over {h} ({pct}%/h).",
+  "lr_brief_drain_short": "Off the charger the battery fell {drop}% over {h} ({pct}%/h). This short estimate is sensitive to whole-percent steps; it cannot establish a sustained drain rate.",
   "lr_brief_heat": "The CPU spent {min} above 45 °C (peak {cpu}°).",
   "lr_brief_heat_ok": "No overheating: the CPU peaked at {cpu}°.",
   "lr_brief_heat_runs": "The CPU spent {min} above 45 °C across {n} warm spells (longest {longest}; peak {cpu}°).",

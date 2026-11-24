@@ -19724,7 +19724,7 @@ function logReportTips(d, all) {
     tips.push({ ic: 'info', key: 'lr_tip_ltpo', vars: { set: Tcfg('ltpo_video', 'name', 'Lowest Refresh for Video') } });
   if (crash && (+crash.count || 0) > 2 && !((+crash.asb || 0) > 0)) tips.push({ ic: 'info', key: 'lr_tip_crashes', vars: { n: String(crash.count) } });
   if (!tips.length) {
-    const hasEvidence = !!(s.drain || s.cover || s.night || s.thermal || s.jank || s.asbcost || s.crash || s.sysui);
+    const hasEvidence = !!(s.drain && (+s.drain.hours || 0) >= 1 && (+s.drain.total_drop || 0) >= 3);
     tips.push({ ic: hasEvidence ? 'ok' : 'info', key: hasEvidence ? 'lr_tip_ok' : 'lr_tip_wait', vars: {} });
   }
   return all ? tips : tips.slice(0, 6);
@@ -23938,7 +23938,7 @@ function logReportBrief(d, analysis) {
   if (analysis && analysis.actions && analysis.actions.length) add('lr_brief_next', {});
   const fb = {
     lr_brief_drain: 'Off the charger the battery fell {drop}% over {h} - {pct}%/h on average, about {est} from a full charge at this pace.',
-    lr_brief_drain_short: 'Off the charger the battery fell {drop}% over {h} ({pct}%/h).',
+    lr_brief_drain_short: 'Off the charger the battery fell {drop}% over {h} ({pct}%/h). This short estimate is sensitive to whole-percent steps; it cannot establish a sustained drain rate.',
     lr_brief_drain_segments: 'Off the charger, total consumption was {drop}% over {h} across {segments} windows - {pct}%/h on average. This is a sum across windows, not one charge. Latest window: {lastdrop}% over {lasth} ({lastpct}%/h). At this average pace, a full charge would last about {est}.',
     lr_brief_drain_segments_short: 'Off the charger, total consumption was {drop}% over {h} across {segments} windows ({pct}%/h). This is a sum across windows, not one charge. Latest window: {lastdrop}% over {lasth} ({lastpct}%/h).',
     lr_brief_split: 'Screen on for {on}: {onr}%/h. Screen off for {off}: {offr}%/h.',

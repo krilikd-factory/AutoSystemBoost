@@ -5420,7 +5420,7 @@ chk(logReportDur(469) === '7 h 49 min', 'en duration: ' + logReportDur(469));
 chk(logReportDurSec(8) === '8 sec', 'en sub-minute hold: ' + logReportDurSec(8));
 const clean = parseLogReport('meta\telapsed_min=10\ttarget_h=24\trunning=1\nwl\tnone=1\ncrash\tcount=0\tasb=0\tlatest=none\nsysui\tcount=0\n');
 const ct = logReportTips(clean);
-chk(ct.length === 1 && ct[0].key === 'lr_tip_ok' && ct[0].ic === 'ok', 'a clean capture gets the ok tip: ' + JSON.stringify(ct));
+chk(ct.length === 1 && ct[0].key === 'lr_tip_wait' && ct[0].ic === 'info', 'a short capture cannot claim healthy battery drain: ' + JSON.stringify(ct));
 chk(logReportT('lr_tip_ok', '', {}) === 'No serious issues found - drain looks healthy.', 'en ok tip');
 chk(parseLogReport('error\tno_capture\n').error === 'no_capture', 'no_capture error survives the parser');
 chk(parseLogReport('').error === 'empty', 'empty output is an error, not data');

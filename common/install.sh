@@ -2740,6 +2740,9 @@ asb_register_dsp_all_configs() {
     case "$_ec" in *_stub.xml) continue ;; esac
     _dsp_seen=$((_dsp_seen + 1))
     asb_register_dsp_effect "$_ec" "$_dsp_registration_mode"
+    # In blocked mode the operation intentionally removes ASB entries. A clean XML is
+    # success for the safety fuse, not a failed registration.
+    [ "$_dsp_registration_mode" = blocked ] && continue
     if grep -q 'asb_loudness' "$_ec" 2>/dev/null; then
       _dsp_reg=$((_dsp_reg + 1))
       # Paths were printed one per file - four lines of /vendor/etc/audio/sku_*/... that
@@ -2753,7 +2756,7 @@ asb_register_dsp_all_configs() {
   done
   if [ "$_dsp_reg" -gt 0 ]; then
     ui_print "      + DSP: $(printf "${ASB_L_DSP_REG_N:-registered in %s audio config file(s)}" "$_dsp_reg")"
-  elif [ "$_dsp_seen" -gt 0 ]; then
+  elif [ "$_dsp_seen" -gt 0 ] && [ "$_dsp_registration_mode" != blocked ]; then
     ui_print "    ! ASB DSP: $_dsp_seen config(s) present but none registered"
   fi
 
@@ -2761,7 +2764,11 @@ asb_register_dsp_all_configs() {
     [ -f "$_ecx" ] || continue
     grep -q 'asb_loudness' "$_ecx" 2>/dev/null && continue
     rm -f "$_ecx" 2>/dev/null
-    ui_print "        . removed unused clone $(basename "$_ecx") (registration did not land)"
+    if [ "$_dsp_registration_mode" = blocked ]; then
+      ui_print "        . removed unused DSP config clone while safety guard is active"
+    else
+      ui_print "        . removed unused clone $(basename "$_ecx") (registration did not land)"
+    fi
   done
   find "$MODPATH/system" -type d -empty -delete 2>/dev/null || true
 
@@ -2769,8 +2776,8 @@ asb_register_dsp_all_configs() {
   # The effects crash fuse tripped on this phone: audioserver kept dying with the effect
   # registered. Stay off until the user removes the flag (asbdiag says how).
   if [ -f /data/adb/asb/dsp_effects_blocked ]; then
-    ui_print "    ! ASB DSP: not registered - audioserver crashed with it on this phone"
-    ui_print "      (delete /data/adb/asb/dsp_effects_blocked to try again)"
+    ui_print "    ! ASB DSP: disabled by safety guard after repeated audio service restarts"
+    ui_print "      Audio remains on the device effects; send asbdiag and installation log for analysis."
     return 0
   fi
 

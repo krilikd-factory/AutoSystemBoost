@@ -1694,6 +1694,19 @@ grep -q '<root><libraries><library name="vendor"/></libraries><effects><effect n
 
 grep -q 'asb_register_dsp_effect "$_ec" "$_dsp_registration_mode"' "$I" || f "fuse mode not passed to registration"
 
+# Exercise the installer's full blocked path: clean stale ASB nodes but do not
+# report the deliberately omitted registration as an additional failure.
+mkdir -p "$T/mod/system/vendor/lib64/soundfx" "$T/mod/system/vendor/etc/audio/sku_test" "$T/state"
+: > "$T/mod/system/vendor/lib64/soundfx/libasbdsp.so"
+printf '%s\n' '<root><libraries><library name="asbdsp" path="libasbdsp.so"/><library name="vendor"/></libraries><effects><effect name="asb_loudness" library="asbdsp"/><effect name="vendor_effect"/></effects></root>' > "$T/mod/system/vendor/etc/audio/sku_test/audio_effects.xml"
+: > "$T/state/dsp_effects_blocked"
+sed -n '/^asb_register_dsp_all_configs() {/,/^}/p' "$I" | sed "s|/data/adb/asb|$T/state|g" > "$T/register-all.sh"
+output="$(MODPATH="$T/mod" ASB_AUDIO=true sh -c 'ui_print() { printf "%s\n" "$*"; }; . "$1"; . "$2"; asb_register_dsp_all_configs' sh "$T/register.sh" "$T/register-all.sh")"
+printf '%s\n' "$output" | grep -q 'disabled by safety guard' || f "blocked installer did not explain the guard: $output"
+printf '%s\n' "$output" | grep -Eq 'registration did not land|none registered' && f "blocked cleanup reported false registration failures: $output"
+grep -q 'asbdsp\|asb_loudness' "$T/mod/system/vendor/etc/audio/sku_test/audio_effects.xml" && f 'installer left blocked effect registered'
+grep -q 'vendor_effect' "$T/mod/system/vendor/etc/audio/sku_test/audio_effects.xml" || f 'installer removed the vendor effect'
+
 # --- runtime ---------------------------------------------------------------------------
 SH="${ASB_TEST_SH:-sh}"
 [ -x "$ROOT/../mksh_bin" ] && SH="$ROOT/../mksh_bin"
@@ -13249,6 +13262,46 @@ asb_preserve_wakeup_rules
 [ "$(cat "$MODPATH/config/wakeup_blocklist.conf")" = backup_rule ]
 [ "$(cat "$MODPATH/config/wakeup_blocklist_sleep.conf")" = backup_sleep ]
 echo 'PASS wakeup policy migration: active, empty and snapshot recovery'
+)
+
+t_managed_props_boot_optout() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/mod/runtime" "$T/bin" "$T/state"
+: > "$T/mod/module.prop"
+printf 'BT=1\nDISPLAY=1\n' > "$T/mod/features.conf"
+printf 'asb_device_pack_allows() { return 0; }\n' > "$T/mod/runtime/asb_device_tier.sh"
+cat > "$T/mod/runtime/asb_managed.props" <<'EOF'
+# ASB:BT:BEGIN
+persist.bt.present=old
+persist.bt.absent=old
+persist.bt.empty=old
+# ASB:BT:END
+# ASB:DISPLAY:BEGIN
+persist.example.changed=1
+# ASB:DISPLAY:END
+EOF
+cat > "$T/bin/getprop" <<'EOF'
+#!/bin/sh
+[ "${SNAP_FAIL:-0}" = 1 ] && exit 1
+printf '%s\n' '[persist.bt.present]: [yes]' '[persist.bt.empty]: []'
+EOF
+cat > "$T/bin/resetprop" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS"
+EOF
+chmod +x "$T/bin/getprop" "$T/bin/resetprop"
+export PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_CONFIG_STATE="$T/state" CALLS="$T/calls"
+sh "$ROOT/runtime/asb_apply_managed_props.sh"
+grep -Fx -- '--delete persist.bt.present' "$CALLS" >/dev/null
+grep -Fx -- '--delete persist.bt.empty' "$CALLS" >/dev/null
+! grep -Fq 'persist.bt.absent' "$CALLS"
+grep -Fx -- '-n persist.example.changed 1' "$CALLS" >/dev/null
+: > "$CALLS"; SNAP_FAIL=1; export SNAP_FAIL
+sh "$ROOT/runtime/asb_apply_managed_props.sh"
+grep -Fx -- '--delete persist.bt.absent' "$CALLS" >/dev/null
+printf 'PASS managed properties: absent Bluetooth deletes skipped, empty values and failed snapshot handled safely\n'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
