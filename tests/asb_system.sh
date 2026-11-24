@@ -4655,15 +4655,13 @@ rm -rf "$_OT"
 # Audit K3: a profile's GPU intent is GPU_MAX_PCT alone. thermal_pwrlevel belongs to the
 # vendor thermal engine - the governor reads it back as a vendor cap, so the profile's
 # static level (battery 7, balanced/performance 2) looked like one and double-capped the
-# GPU. Profiles carry the key no more; the shell releases a stale static level once per
-# boot (the engine re-asserts it when it actually needs to cool the GPU).
+# GPU. Profile changes and boot must preserve the live vendor cap.
 for _p in "$ROOT"/profiles/*.sh; do
   grep -q 'GPU_THERMAL_PWRLEVEL' "$_p" && fail "profile still pins thermal_pwrlevel: $_p"
 done
-grep -c 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" | grep '^[0-9]' >/dev/null || fail "profile_core lost the stale-level release"
-grep -qF 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" || fail "profile_core does not release a stale thermal_pwrlevel"
-grep -qF 'gpu_tpl_released' "$ROOT/service.sh" || fail "service.sh does not release a stale thermal_pwrlevel"
-grep -qF 'writef_retry "$_tpl" 0 2 0.06' "$ROOT/runtime/profile_core.sh" || fail "the release must write 0 (no cap), not another level"
+if grep -E 'gpu_tpl_released|writef_retry .*thermal_pwrlevel' "$ROOT/runtime/profile_core.sh" "$ROOT/service.sh"; then
+  fail "ASB must leave the vendor GPU thermal cap untouched"
+fi
 grep -qF 'vendor thermal cap, read-only for us' "$ROOT/src/asb_writer.h" || fail "the writer lost the vendor-cap reading of the node"
 # Audit K4: asbdiag probes the meter itself, not only the recorder's summary - a phone
 # without a usable charge_counter used to stay silently blind (Smart V5 learns nothing).

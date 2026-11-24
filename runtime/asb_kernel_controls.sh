@@ -333,6 +333,7 @@ asb_kc_bore_auto_hold() {
   [ "$_akb_cpu" -lt "$_akb_enter" ] || return 0
   for _akb_value in "$_akb_skin" "$_akb_surface" "$_akb_board"; do
     case "$_akb_value" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$_akb_value" -gt 0 ] || return 0
   done
   [ "$_akb_skin" -lt "$_akb_limit" ] || return 0
   _akb_hot=$((_akb_limit + 3))

@@ -4579,6 +4579,9 @@ set_case() {
     hot_cpu) TEMP=55; write_status ;;
     hot_skin) SKIN=47; write_status ;;
     hot_surface) SURFACE=50; write_status ;;
+    missing_board) BOARD=0; write_status ;;
+    missing_skin) SKIN=0; write_status ;;
+    missing_surface) SURFACE=0; write_status ;;
     hot_board) BOARD=50; write_status ;;
     thermal_cap) THERMAL=1; write_status ;;
     idle) STATE=DEEP_IDLE; write_status ;;
@@ -4597,7 +4600,7 @@ reset_fixture; out="$(run)"; want_applied initial
 PROFILE=performance; STATE=HEAVY; write_status; out="$(run)"; want_applied heavy
 for c in battery balanced smart battery_saver low_power_unknown settings_missing low_charge missing_capacity invalid_capacity \
          safe_mode watchdog missing_status stale_age stale_epoch future_epoch malformed_status invalid_temp_valid \
-         hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
+         missing_board missing_skin missing_surface hot_cpu hot_skin hot_surface hot_board thermal_cap idle light_idle gaming sustained unknown_state malformed_temp; do
   reset_fixture; out="$(run)"; want_applied "$c setup"
   set_case "$c"; out="$(run)"; want_restored "$c"
   reset_fixture; set_case "$c"; out="$(run)"; want_unowned "$c"
