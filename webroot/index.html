@@ -13103,6 +13103,8 @@ function cfgConsoleDedupe(row) {
   if (!row || !row.querySelector || !row.classList) return;
   const badge = row.querySelector('.cfg-status-row > .cfg-status');
   if (!badge || !badge.classList) return;
+  // Kernel read-back occupies the same slot while loading and after the read.
+  if (row.classList.contains('kernel-status-row')) { badge.classList.remove('asb-dup'); return; }
   if (badge.classList.contains('na') || badge.classList.contains('bad')) { badge.classList.remove('asb-dup'); return; }
   const on = row.querySelector('.cfg-seg button.on'), sel = row.querySelector('.cfg-sel-btn'),
     val = row.querySelector('.cfg-range-val'), sw = row.querySelector('.cfg-switch');
@@ -13821,6 +13823,7 @@ function kernelDefaultFact(key) {
 }
 function kernelDecorateControlRow(row, key) {
   if (!row) return;
+  if (row.classList) row.classList.add('kernel-status-row');
   const a = kernelControlAvailability(key);
   const badge = row.querySelector('.cfg-status');
   if (badge) {
