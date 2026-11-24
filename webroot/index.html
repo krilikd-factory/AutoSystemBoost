@@ -3094,6 +3094,14 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent);
 }
 .cfg-icon .tech-icon { width: 22px; height: 22px; }
+/* A neutral stock row uses a neutral glyph in every category and theme. */
+html .cfg-row:not(.is-on) > .cfg-row-top > .cfg-icon { --tech-icon: #929ba4 !important; }
+html[data-asb-theme="light"] .cfg-row:not(.is-on) > .cfg-row-top > .cfg-icon { --tech-icon: #68737d !important; }
+.kernel-sources-help-title { cursor:pointer; }
+#kernelWakeupSourcesHelp[hidden] { display:none !important; }
+.kernel-sources-help-title::before { content:'▸'; display:inline-block; margin-inline-end:6px; }
+.kernel-sources-help-title[aria-expanded="true"]::before { content:'▾'; }
+
 .cfg-status-row { display:flex; flex-direction:row; flex-wrap:nowrap; align-items:center; gap:6px; min-width:0; max-width:100%; }
 .cfg-status-row .cfg-status, .cfg-status-row .cfg-smart-owner { flex:0 1 auto; white-space:nowrap; }
 .cfg-main {
@@ -14134,7 +14142,8 @@ function kernelWakeupSourceDialogRender() {
   const wb = _kernelPanel.wakeup;
   const body = m.querySelector('#kernelWakeupSourcesBody');
   body.textContent = '';
-  body.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_dialog_hint_raw', 'Raw event/activation counters can keep increasing while a rule works: they describe source attempts, not successful wakeups. Only the active kernel rule and its blocked counter prove blocking. A screen-off rule is inactive while the screen is on. These are not energy measurements.')));
+  const help = bfxEl('div', 'kernel-note', T('kernel_wb_dialog_hint_raw', 'Raw event/activation counters can keep increasing while a rule works: they describe source attempts, not successful wakeups. Only the active kernel rule and its blocked counter prove blocking. A screen-off rule is inactive while the screen is on. These are not energy measurements.'));
+  help.id = 'kernelWakeupSourcesHelp'; help.hidden = !_wbSourceView.helpOpen; body.appendChild(help);
   const search = bfxEl('input', 'kernel-input kernel-sources-search');
   search.type = 'search'; search.id = 'kernelWakeupSourcesSearch'; search.maxLength = 63; search.value = _wbSourceView.query;
   search.placeholder = T('kernel_wb_search', 'Search exact source names'); search.setAttribute('aria-label', search.placeholder);
@@ -14165,6 +14174,7 @@ function kernelWakeupSourceDialogRender() {
   body.appendChild(bfxEl('div', 'kernel-sources-scroll'));
   const title = m.querySelector('#kernelWakeupSourcesTitle');
   title.textContent = T('kernel_wb_dialog_title', 'Observed wakeup sources') + ' · ' + (wb ? wb.sources.length : 0);
+  title.setAttribute('aria-expanded', _wbSourceView.helpOpen ? 'true' : 'false');
   kernelWakeupSourcesDrawList(m);
 }
 function kernelWakeupSourceDialogOpen() {
@@ -14174,7 +14184,12 @@ function kernelWakeupSourceDialogOpen() {
     const sheet = bfxEl('div', 'cfg-profile-sheet kernel-sources-sheet');
     sheet.setAttribute('role','dialog'); sheet.setAttribute('aria-modal','true'); sheet.setAttribute('aria-labelledby','kernelWakeupSourcesTitle');
     const head = bfxEl('div', 'cfg-profile-head');
-    head.appendChild(bfxEl('div', 'cfg-profile-title', '')).id = 'kernelWakeupSourcesTitle';
+    const helpTitle = bfxEl('div', 'cfg-profile-title kernel-sources-help-title', '');
+    helpTitle.id = 'kernelWakeupSourcesTitle'; helpTitle.setAttribute('role','button'); helpTitle.setAttribute('tabindex','0');
+    helpTitle.setAttribute('aria-controls','kernelWakeupSourcesHelp'); helpTitle.setAttribute('aria-expanded','false');
+    helpTitle.onclick = function () { _wbSourceView.helpOpen = !_wbSourceView.helpOpen; const h = m.querySelector('#kernelWakeupSourcesHelp'); if (h) h.hidden = !_wbSourceView.helpOpen; helpTitle.setAttribute('aria-expanded', _wbSourceView.helpOpen ? 'true' : 'false'); };
+    helpTitle.onkeydown = function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); helpTitle.onclick(); } };
+    head.appendChild(helpTitle);
     const close = bfxEl('button', 'cfg-profile-close', '×'); close.type = 'button'; close.id = 'kernelWakeupSourcesClose';
     close.setAttribute('aria-label', T('kernel_wb_close', 'Close')); close.onclick = kernelWakeupSourceDialogClose;
     const refresh = bfxEl('button', 'cfg-profile-close', '↻'); refresh.type = 'button'; refresh.id = 'kernelWakeupSourcesRefresh';
