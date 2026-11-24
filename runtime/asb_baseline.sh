@@ -66,6 +66,8 @@ asb_profile_baseline_restore() {
     if [ -n "${ASB_PB_GUARD:-}" ] && ! "$ASB_PB_GUARD"; then return 2; fi
     case "$_pb_type" in
       path)
+        # Older profiles captured the vendor thermal governor's live limit.
+        [ "$_pb_key" != /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] || continue
         [ -w "$_pb_key" ] && printf '%s\n' "$_pb_value" > "$_pb_key" 2>/dev/null || true
         ;;
       setting)
