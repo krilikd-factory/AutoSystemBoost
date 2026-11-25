@@ -26,7 +26,7 @@ on:
       telegram_private_chat:
         description: 'Private Telegram chat ID (required for private delivery)'
         required: false
-        default: ''
+        default: '5292976515'
         type: string
       telegram:
         description: 'Post the flashable zip to the public Telegram group'
