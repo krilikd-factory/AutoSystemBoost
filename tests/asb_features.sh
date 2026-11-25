@@ -13322,7 +13322,12 @@ printf '1100\n' > "$T/net/rmnet_data0/tx_queue_len"
 printf 'net_rps=stock\nnet_txqueue=smart\n' > "$T/mod/config/governor.conf"
 printf 'smart\n' > "$T/mod/current_profile"
 run_net() { MODDIR="$T/mod" ASB_NET_SYSFS="$T/net" ASB_NET_OFFLOAD_STATE="$T/prev" ASB_NET_SMART_PHASE_FILE="$T/phase" ASB_SAFE_MODE_FILE="$T/safe" sh "$ROOT/runtime/asb_net_offload.sh" >/dev/null 2>&1; }
-printf 'game\n' > "$T/phase"; run_net
+printf 'game\n' > "$T/phase"
+# An unwritable baseline must never cause an un-restorable queue write.
+mkdir -p "$T/bad-baseline"
+if MODDIR="$T/mod" ASB_NET_SYSFS="$T/net" ASB_NET_OFFLOAD_STATE="$T/bad-baseline" ASB_NET_SMART_PHASE_FILE="$T/phase" ASB_SAFE_MODE_FILE="$T/safe" sh "$ROOT/runtime/asb_net_offload.sh" >/dev/null 2>&1; then exit 1; fi
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 1000 ]
+run_net
 [ "$(cat "$T/net/wlan0/tx_queue_len")" = 256 ]
 [ "$(cat "$T/net/rmnet_data0/tx_queue_len")" = 1100 ]
 printf 'idle\n' > "$T/phase"; run_net

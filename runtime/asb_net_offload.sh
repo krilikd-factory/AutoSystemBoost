@@ -129,12 +129,12 @@ _mask() {
 _save_once() {
   mkdir -p "$(dirname "$STATE")" 2>/dev/null
   [ -f "$STATE" ] || touch "$STATE" 2>/dev/null || return 1
-  grep -q '^RFS_ENTRIES=' "$STATE" 2>/dev/null || printf 'RFS_ENTRIES=%s\n' "$(cat /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null)" >> "$STATE"
+  grep -q '^RFS_ENTRIES=' "$STATE" 2>/dev/null || printf 'RFS_ENTRIES=%s\n' "$(cat /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null)" >> "$STATE" || return 1
   for _i in $(_ifaces); do
-    grep -qF "TXQ:$_i=" "$STATE" 2>/dev/null || printf 'TXQ:%s=%s\n' "$_i" "$(cat "$NETSYS/$_i/tx_queue_len" 2>/dev/null)" >> "$STATE"
+    grep -qF "TXQ:$_i=" "$STATE" 2>/dev/null || printf 'TXQ:%s=%s\n' "$_i" "$(cat "$NETSYS/$_i/tx_queue_len" 2>/dev/null)" >> "$STATE" || return 1
     for _q in "$NETSYS/$_i"/queues/rx-*; do
       [ -r "$_q/rps_cpus" ] || continue
-      grep -qF "RPS:$_q=" "$STATE" 2>/dev/null || printf 'RPS:%s=%s\n' "$_q" "$(cat "$_q/rps_cpus" 2>/dev/null)" >> "$STATE"
+      grep -qF "RPS:$_q=" "$STATE" 2>/dev/null || printf 'RPS:%s=%s\n' "$_q" "$(cat "$_q/rps_cpus" 2>/dev/null)" >> "$STATE" || return 1
     done
   done
 }
@@ -219,7 +219,10 @@ if [ "$_rps" = "stock" ] && [ "$_txq" = "stock" ]; then
   exit 0
 fi
 
-_save_once
+if ! _save_once; then
+  echo "net offload: cannot save baseline; no settings changed" >&2
+  exit 1
+fi
 
 if [ "$_rps" != "stock" ]; then
   _m="$(_mask "$_rps")"
