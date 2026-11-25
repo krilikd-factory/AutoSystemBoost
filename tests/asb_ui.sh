@@ -10052,6 +10052,7 @@ function grab(sig,next){const a=h.indexOf(sig);if(a<0)throw Error('missing '+sig
 function E(tag){this.tag=tag;this.children=[];this.textContent='';this.className='';this.attrs={};this.style={};this.hidden=false;}
 E.prototype.appendChild=function(x){this.children.push(x);return x};
 E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
+Object.defineProperty(E.prototype,'classList',{get(){return {add:(c)=>{this.className+=' '+c}}}});
 (async()=>{
   const ids={};for(const id of ['deviceLine','liveDeviceLine','cfgDeviceLine','rpDeviceLine','devDeviceLine','zyDeviceLine','socBadge','liveSocBadge','cfgSocBadge','rpSocBadge','devSocBadge','zySocBadge'])ids[id]=new E('div');
   global.document={getElementById:id=>ids[id]||null};global.T=(k,f)=>f;
@@ -10074,7 +10075,7 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   const created=[];global.document={createElement:t=>{const e=new E(t);created.push(e);return e}};
   global.CFG_GROUPS=['iface','feel','net','camera','audio','battery','kernel','zygisk','ui'].map(id=>({id,icon:id,name:id}));
   global.CFG_ITEMS=CFG_GROUPS.map(g=>({key:g.id,def:'0'}));
-  global.cfgGroupOf=k=>k;global._cfgVals={iface:'1'};global.cfgIsActive=()=>{throw Error('structural totals must not count active values')};
+  global.cfgGroupOf=k=>k;global._cfgVals={iface:'1'};global.cfgHubActiveCount=(id,items,extras)=>(Number(_cfgVals[id]||0)+extras.filter(Boolean).length);
   global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',kernel:'Scheduler, MGLRU, wakeups',feel:'LTPO, vibration, touch',zygisk:'Master switch and status',ui:'Services, processes, diagnostics'};
   global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
   global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.cfgLoadFresh=()=>{throw Error('hub totals must not wait for Config freshness')};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};global.asbUiFrame={request:()=>{}};
@@ -10088,7 +10089,7 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
     chk(tile.className==='cfg-tile cat-'+wantedCat,'category hue alias differs at '+CFG_GROUPS[i].id+': '+tile.className);
     chk(tile.children[0].innerHTML.includes('data-kind="'+CFG_GROUPS[i].id+'"'),'icon is missing at '+i);
     chk(tile.attrs['aria-label'].includes(tile.children[2].textContent),'accessible label lacks the scope at '+i);
-    const foot=tile.children[3];chk(foot.children.length===1&&foot.children[0].className==='cfg-tile-count','footer must contain only one centred total at '+i);
+    const foot=tile.children[3];chk(foot.children.length===2&&foot.children[0].className==='cfg-tile-count'&&foot.children[1].className.startsWith('cfg-tile-active'),'footer must contain total and changed count at '+i);
     const expected=1+(CFG_GROUPS[i].id==='camera'?2:['kernel','battery'].includes(CFG_GROUPS[i].id)?1:0);
     chk(foot.children[0].textContent===expected+' controls','structural total differs at '+i+': '+foot.children[0].textContent);
     chk(!foot.children[0].className.includes('is-pending')&&!foot.children[0].className.includes('has-on'),'total still has an activation/pending state at '+i);
@@ -10096,7 +10097,8 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   const totals=hub.children.map(tile=>tile.children[3].children[0].textContent);
   _cfgVals.iface='0';const staleList=new E('div');renderHub(staleList);
   const afterHub=staleList.children[0];
-  chk(afterHub.children.every((tile,i)=>tile.children[3].children.length===1&&tile.children[3].children[0].textContent===totals[i]),'Config state changed structural totals');
+  chk(afterHub.children.every((tile,i)=>tile.children[3].children.length===2&&tile.children[3].children[0].textContent===totals[i]),'Config state changed structural totals');
+  chk(hub.children[0].children[3].children[1].textContent !== afterHub.children[0].children[3].children[1].textContent,'changed count did not respond to config');
   chk(JSON.stringify(staleList).indexOf('cfg-tile-bar')<0,'category hub created a bar node');
   console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});

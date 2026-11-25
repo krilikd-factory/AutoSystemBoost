@@ -931,7 +931,7 @@ printf '%s\n' "$_r" | grep 'multipoint headset switching' >/dev/null || fail "no
 _ad='Audio mode:
 - Requested mode = MODE_IN_COMMUNICATION
 - Actual mode = MODE_IN_COMMUNICATION
-- Mode owner: 
+- Mode owner:
    pid: 4437 uid: 10419 mode: MODE_IN_COMMUNICATION package: org.telegram.messenger'
 _mo="$(printf '%s\n' "$_ad" | awk '
       /[Mm]ode owner/ { sub(/.*[Mm]ode owner:?[ \t]*/, ""); if ($0 != "") { print; exit } own = 1; next }
@@ -12534,7 +12534,7 @@ grep -q '|notify_lang=ru$' <<<"$(sh "$S" status)" || fail 'stored language not r
 OUT="$(sh "$S" boot)"
 grep -q 'via user_state' "$T/state/log" || fail "authoritative unlock not detected with a pre-existing CE directory: $(cat "$T/state/log")"
 ! grep -q 'via ce_storage' "$T/state/log" || fail 'CE directory existence was still treated as unlock evidence'
-grep -q 'unlocked 60s after' "$T/state/log" || fail 'CE directory existence started the settle before authoritative unlock' 
+grep -q 'unlocked 60s after' "$T/state/log" || fail 'CE directory existence started the settle before authoritative unlock'
 grep -qx 'notification post -S bigtext -t Ремонт SOTER asb_soter SOTER восстановлен снова' "$T/notify" || fail "localized notification: $(cat "$T/notify")"
 reset_case; printf '1\n' > "$T/unlock_at"; printf 'fail\nok\nok\n' > "$T/clear"
 OUT="$(sh "$S" boot)"
@@ -13308,6 +13308,53 @@ grep -Fx -- '-n persist.example.changed 1' "$CALLS" >/dev/null
 sh "$ROOT/runtime/asb_apply_managed_props.sh"
 grep -Fx -- '--delete persist.bt.absent' "$CALLS" >/dev/null
 printf 'PASS managed properties: absent Bluetooth deletes skipped, empty values and failed snapshot handled safely\n'
+)
+
+t_smart_network_queue() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/mod/config" "$T/net/wlan0/queues/rx-0" "$T/net/rmnet_data0/queues/rx-0"
+printf '0\n' > "$T/net/wlan0/queues/rx-0/rps_cpus"
+printf '0\n' > "$T/net/rmnet_data0/queues/rx-0/rps_cpus"
+printf '1000\n' > "$T/net/wlan0/tx_queue_len"
+printf '1100\n' > "$T/net/rmnet_data0/tx_queue_len"
+printf 'net_rps=stock\nnet_txqueue=smart\n' > "$T/mod/config/governor.conf"
+printf 'smart\n' > "$T/mod/current_profile"
+run_net() { MODDIR="$T/mod" ASB_NET_SYSFS="$T/net" ASB_NET_OFFLOAD_STATE="$T/prev" ASB_NET_SMART_PHASE_FILE="$T/phase" ASB_SAFE_MODE_FILE="$T/safe" sh "$ROOT/runtime/asb_net_offload.sh" >/dev/null 2>&1; }
+printf 'game\n' > "$T/phase"; run_net
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 256 ]
+[ "$(cat "$T/net/rmnet_data0/tx_queue_len")" = 1100 ]
+printf 'idle\n' > "$T/phase"; run_net
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 1000 ]
+printf 'game\n' > "$T/phase"; run_net
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 256 ]
+touch "$T/safe"; run_net
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 1000 ]
+rm "$T/safe"; printf 'battery\n' > "$T/mod/current_profile"; run_net
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 1000 ]
+printf 'net_rps=stock\nnet_txqueue=shorter\n' > "$T/mod/config/governor.conf"; run_net
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 128 ]
+printf 'net_rps=stock\nnet_txqueue=stock\n' > "$T/mod/config/governor.conf"; run_net
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 1000 ]
+# Exercise the actual Smart transition hook, including a same-phase no-op.
+mkdir -p "$T/mod/runtime"
+cp "$ROOT/runtime/asb_net_offload.sh" "$T/mod/runtime/asb_net_offload.sh"
+printf 'net_rps=stock\nnet_txqueue=smart\n' > "$T/mod/config/governor.conf"
+printf 'smart\n' > "$T/mod/current_profile"
+cat > "$T/hook" <<'HOOK'
+#!/bin/sh
+_cfg() { sed -n "s/^$1=//p" "$ASB_CONF" | head -1; }
+HOOK
+sed -n '/^# Only an explicit Smart network-queue/,/^# The camera guard owns the VM knobs/{ /^# The camera guard owns the VM knobs/d; p; }' "$ROOT/runtime/smart_dynamic_tune.sh" >> "$T/hook"
+run_hook() { MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_NET_SYSFS="$T/net" ASB_NET_OFFLOAD_STATE="$T/prev" ASB_NET_SMART_PHASE_FILE="$T/phase" ASB_SAFE_MODE_FILE="$T/safe" HINT="$1" THERM="$2" SCREEN="$3" MODE="$4" sh "$T/hook"; }
+printf 'idle\n' > "$T/phase"; run_hook 4 0 1 smart
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 256 ]
+run_hook 4 1 1 smart
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 1000 ]
+run_hook 4 0 1 smart; run_hook 4 0 0 smart
+[ "$(cat "$T/net/wlan0/tx_queue_len")" = 1000 ]
+echo 'PASS smart network queue: game, idle, thermal and screen transitions, safe mode, profile, manual and cellular'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

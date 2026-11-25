@@ -27,7 +27,7 @@
 # Everything here is restored to the values captured before the first change.
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
-CONF="$MODDIR/config/governor.conf"
+CONF="${ASB_CONF:-$MODDIR/config/governor.conf}"
 STATE="${ASB_NET_OFFLOAD_STATE:-/data/adb/asb/net_offload_prev}"
 NETSYS="${ASB_NET_SYSFS:-/sys/class/net}"
 
@@ -127,18 +127,16 @@ _mask() {
 }
 
 _save_once() {
-  [ -f "$STATE" ] && return 0
-  mkdir -p /data/adb/asb 2>/dev/null
-  {
-    printf 'RFS_ENTRIES=%s\n' "$(cat /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null)"
-    for _i in $(_ifaces); do
-      printf 'TXQ:%s=%s\n' "$_i" "$(cat "$NETSYS/$_i/tx_queue_len" 2>/dev/null)"
-      for _q in "$NETSYS/$_i"/queues/rx-*; do
-        [ -r "$_q/rps_cpus" ] || continue
-        printf 'RPS:%s=%s\n' "$_q" "$(cat "$_q/rps_cpus" 2>/dev/null)"
-      done
+  mkdir -p "$(dirname "$STATE")" 2>/dev/null
+  [ -f "$STATE" ] || : > "$STATE" || return 1
+  grep -q '^RFS_ENTRIES=' "$STATE" 2>/dev/null || printf 'RFS_ENTRIES=%s\n' "$(cat /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null)" >> "$STATE"
+  for _i in $(_ifaces); do
+    grep -qF "TXQ:$_i=" "$STATE" 2>/dev/null || printf 'TXQ:%s=%s\n' "$_i" "$(cat "$NETSYS/$_i/tx_queue_len" 2>/dev/null)" >> "$STATE"
+    for _q in "$NETSYS/$_i"/queues/rx-*; do
+      [ -r "$_q/rps_cpus" ] || continue
+      grep -qF "RPS:$_q=" "$STATE" 2>/dev/null || printf 'RPS:%s=%s\n' "$_q" "$(cat "$_q/rps_cpus" 2>/dev/null)" >> "$STATE"
     done
-  } > "$STATE" 2>/dev/null
+  done
 }
 
 # Restore just one kind of record, leaving the other side of the file alone.
@@ -191,7 +189,17 @@ if [ "${1:-}" = "restore" ] || [ "${ASB_FORCE_RESTORE:-0}" = "1" ]; then
 fi
 
 _rps="$(_cfg net_rps)";      case "$_rps" in little|all) : ;; *) _rps=stock ;; esac
-_txq="$(_cfg net_txqueue)";  case "$_txq" in short|shorter) : ;; *) _txq=stock ;; esac
+_txq="$(_cfg net_txqueue)"
+if [ "$_txq" = smart ]; then
+  _phase="$(cat "${ASB_NET_SMART_PHASE_FILE:-/dev/.asb/net_smart_phase}" 2>/dev/null)"
+  _profile="$(cat "$MODDIR/current_profile" 2>/dev/null | tr -d ' \t\r\n')"
+  if [ "$_profile" = smart ] && [ "$_phase" = game ] && [ ! -e "${ASB_SAFE_MODE_FILE:-/dev/.asb/safe_mode}" ]; then
+    _txq=short
+  else
+    _txq=stock
+  fi
+fi
+case "$_txq" in short|shorter) : ;; *) _txq=stock ;; esac
 
 # Restore per resource, not only when both are stock.
 #

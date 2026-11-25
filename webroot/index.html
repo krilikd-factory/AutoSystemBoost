@@ -2922,6 +2922,8 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
   letter-spacing: 0.04em;
 }
 .cfg-tile-count.has-on { color: rgba(255,255,255,0.72); }
+.cfg-tile-active { margin-left: 5px; padding: 2px 6px; border-radius: 8px; color: var(--cat, var(--accent)); background: color-mix(in srgb,var(--cat,var(--accent)) 12%,transparent); font: 650 9px/1.1 var(--mono); white-space: nowrap; }
+.cfg-tile-active.is-zero { color: var(--text-secondary); background: transparent; opacity: .72; }
 
 /* The twelve per-category rgba rules that lived here collapsed into --cat + color-mix
  * (fix193) - one hue token per category instead of hand-tuned border/fill pairs that
@@ -11478,8 +11480,8 @@ const CFG_ITEMS = [
     desc:'Packet queue for mobile data only.\n\n🔋 Battery life: no measurable difference\n⚡ Low latency: fq_codel\n✋ Not sure: As global' },
   { key:'net_rps', type:'seg', def:'stock', stock:'stock', opts:['stock','little','all'], name:'Spread Network Load',
     desc:'Which CPU cores may process received Wi-Fi packets.\n\n🔋 Battery life: Stock or Little\n⚡ Performance: All\n✋ Not sure: Stock' },
-  { key:'net_txqueue', type:'seg', def:'stock', stock:'stock', opts:['stock','short','shorter'], name:'Transmit Queue',
-    desc:'How many packets may wait in the Wi-Fi transmit queue. Shorter queues can cut delay under load but may limit throughput on fast or unstable links.\n\n🔋 Battery life: no difference\n⚡ Low latency (games, calls): Short\n✋ Not sure: Stock' },
+  { key:'net_txqueue', type:'seg', def:'stock', stock:'stock', opts:['stock','smart','short','shorter'], name:'Transmit Queue',
+    desc:'How many packets may wait in the Wi-Fi transmit queue. Smart uses the shorter queue only in a cool, screen-on game and restores the original value otherwise. Shorter queues can cut delay under load but may limit throughput on fast or unstable links.\n\n🔋 Battery life: no difference\n⚡ Low latency (games, calls): Short\n✋ Not sure: Stock' },
   { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
     desc:'The size of the first burst of a new TCP connection. A larger burst speeds up page loads and short downloads; on poor links it can cause retransmissions.\n\n🔋 Battery life: Smart\n⚡ Performance: Aggressive\n✋ Not sure: Smart' },
   { key:'net_mtu_probing', type:'seg', def:'stock', stock:'stock', opts:['stock','on'], name:'TCP MTU Recovery',
@@ -15211,7 +15213,13 @@ function cfgRenderHub(list) {
     cnt.className = 'cfg-tile-count';
     cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', String(total));
     foot.appendChild(cnt);
-    tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + cnt.textContent);
+    const active = document.createElement('span');
+    active.className = 'cfg-tile-active';
+    const count = cfgHubActiveCount(g.id, items, extras);
+    if (count === 0) active.classList.add('is-zero');
+    active.textContent = count === null ? '…' : T('cfg_tile_active', '{n} changed').replace('{n}', String(count));
+    foot.appendChild(active);
+    tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + cnt.textContent + '. ' + active.textContent);
     tile.appendChild(foot);
 
     hub.appendChild(tile);
@@ -16212,8 +16220,26 @@ var _cfgShownScreen = null;
  * language and device class keeps the hub already in the page instead of rebuilding it
  * before the slide can start. Any other paint of the list clears it. */
 var _cfgHubSig = '';
+function cfgHubActiveCount(id, items, extras) {
+  if (!_cfgLoadedAt) return null;
+  return cfgConsoleActiveCount(items) + extras.filter(Boolean).length;
+}
+function cfgHubCountsSig() {
+  if (!_cfgLoadedAt) return 'unloaded';
+  const counts = Object.create(null), hidden = Object.create(null);
+  CFG_GROUPS.forEach(function(g) {
+    counts[g.id] = cfgGroupExtraCards(g.id).filter(Boolean).length;
+    hidden[g.id] = cfgGroupHiddenKeys(g.id);
+  });
+  CFG_ITEMS.forEach(function(it) {
+    const id = cfgGroupOf(it.key);
+    if (counts[id] === undefined || hidden[id].indexOf(it.key) >= 0) return;
+    if (cfgIsActive(it, _cfgVals[it.key] !== undefined ? _cfgVals[it.key] : it.def)) counts[id]++;
+  });
+  return CFG_GROUPS.map(function(g) { return counts[g.id]; }).join(',');
+}
 function cfgHubSig() {
-  return ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + CFG_GROUPS.map(function(g) { return cfgGroupHiddenKeys(g.id).join(','); }).join('|') + '|' + cfgHubExtraSig();
+  return cfgHubCountsSig() + '|' + ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + CFG_GROUPS.map(function(g) { return cfgGroupHiddenKeys(g.id).join(','); }).join('|') + '|' + cfgHubExtraSig();
 }
 // When the running entrance ends, and the one repaint waiting for it (fix145).
 var _cfgEnterUntil = 0, _cfgRepaintTimer = 0;
@@ -22630,6 +22656,11 @@ function lspLiteCard() {
   howTo.appendChild(logReportNote(g.auto ? T('lsp_auto_desc', 'Once a day ASB removes a module\'s scope from apps you have not opened for %d days that still start in the background, and from apps its hooks keep crashing. Messengers, mail, authenticators, wearables, alarms, navigation, your Doze keep list and notification-fixed apps are never touched, and no module is switched off. Every change is listed below with Undo.').replace('%d', String(g.unusedDays))
     : T('lsp_manual_desc', 'Nothing changes until you confirm it. Lighten removes a module\'s scope only from apps listed under it; the framework, SystemUI and the module itself are never touched.')));
   card.appendChild(howTo);
+  const actionsHelp = document.createElement('details'); actionsHelp.className = 'asb-disclosure zy-lsp-how';
+  const actionsSummary = document.createElement('summary'); actionsSummary.textContent = T('lsp_actions_help_title', 'What do the buttons do?');
+  actionsHelp.appendChild(actionsSummary);
+  actionsHelp.appendChild(logReportNote(T('lsp_actions_help_text', 'Lighten removes this module from the listed app scopes only; the module remains enabled. Switch off disables the entire LSPosed module. Changes take effect after a reboot and can be undone in the ASB changes journal.')));
+  card.appendChild(actionsHelp);
   const ab = lspLiteAbBlock(g, nm);
   if (ab) card.appendChild(ab);
   const abBusy = /^(a|b_wait|b)$/.test(g.ab.phase || '');

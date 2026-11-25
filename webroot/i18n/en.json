@@ -4336,5 +4336,8 @@
   "st_cool_gaming_battery": "idle in Battery: games stay out of game mode",
   "cfg_profile_restore_smart": "Restore saved Smart learning",
   "cfg_profile_restore_smart_hint": "Turn off to apply settings while keeping current Smart learning.",
-  "cfg_res_smart_kept_choice": "current learning kept (your choice)"
+  "cfg_res_smart_kept_choice": "current learning kept (your choice)",
+  "cfg_tile_active": "changed · {n}",
+  "lsp_actions_help_title": "What do the buttons do?",
+  "lsp_actions_help_text": "Lighten removes this module from the listed app scopes only; the module remains enabled. Switch off disables the entire LSPosed module. Changes take effect after a reboot and can be undone in the ASB changes journal."
 }

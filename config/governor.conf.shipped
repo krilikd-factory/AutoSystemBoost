@@ -474,7 +474,7 @@ net_mtu_probing=stock
 #   and loses on a slow one. Off by default.
 net_rps=stock
 
-# Transmit queue depth: stock|short|shorter (1000 / 256 / 128)
+# Transmit queue depth: stock|smart|short|shorter (driver value / Smart gaming 256 / 256 / 128)
 #   The stock 1000 is a wired-Ethernet default from the 1990s. On WiFi a deep queue adds
 #   latency under load more than it adds throughput.
 net_txqueue=stock

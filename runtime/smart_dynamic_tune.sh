@@ -85,6 +85,23 @@ if [ "$MODE" != manual ] && [ -r "${MODDIR:-/data/adb/modules/AutoSystemBoost}/r
     sh "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_kernel_controls.sh" smart "$HINT" "$THERM" "$SCREEN" >/dev/null 2>&1
 fi
 
+# Only an explicit Smart network-queue selection is scenario-owned. The queue
+# returns to its captured value outside an active, cool game. Do no work while
+# its desired phase is unchanged; manual network choices remain untouched.
+{
+  _ns_mod="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+  _ns_profile="$(cat "$_ns_mod/current_profile" 2>/dev/null | tr -d ' \t\r\n')"
+  _ns_file="${ASB_NET_SMART_PHASE_FILE:-/dev/.asb/net_smart_phase}"
+  _ns_phase=idle
+  if [ "$MODE" != manual ] && [ "$_ns_profile" = smart ] && [ "$HINT" = 4 ] && [ "$THERM" = 0 ] && [ "$SCREEN" = 1 ]; then _ns_phase=game; fi
+  if [ "$(cat "$_ns_file" 2>/dev/null)" != "$_ns_phase" ]; then
+    mkdir -p "$(dirname "$_ns_file")" 2>/dev/null || true
+    if printf '%s\n' "$_ns_phase" > "$_ns_file" 2>/dev/null && [ "$(_cfg net_txqueue)" = smart ]; then
+      MODDIR="$_ns_mod" ASB_CONF="${ASB_CONF:-$_ns_mod/config/governor.conf}" sh "$_ns_mod/runtime/asb_net_offload.sh" >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
 # The camera guard owns the VM knobs while a capture is streaming: it lowers swappiness for the
 # duration and restores exactly what it found.
 _cam_guard=0
