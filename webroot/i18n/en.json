@@ -1707,7 +1707,7 @@
   "dev_zygisk_feature_observer": "Observer",
   "dev_zygisk_invalid": "Enter up to 64 valid package names",
   "dev_zygisk_link_confirmed": "Channel confirmed",
-  "dev_zygisk_link_confirmed_detail": "Fresh companion evidence; this does not mean total control of Zygisk.",
+  "dev_zygisk_link_confirmed_detail": "Channel events were observed, but no connected processes are currently confirmed. Open a selected app or reboot.",
   "dev_zygisk_link_connected": "Connected",
   "dev_zygisk_link_connected_detail": "Validated live observed processes: {n}",
   "dev_zygisk_link_idle": "Enabled · nothing selected",

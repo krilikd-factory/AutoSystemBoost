@@ -1813,7 +1813,7 @@
   "dev_zygisk_feature_observer": "Наблюдатель",
   "dev_zygisk_invalid": "Укажите не более 64 корректных имён пакетов",
   "dev_zygisk_link_confirmed": "Канал подтверждён",
-  "dev_zygisk_link_confirmed_detail": "Есть свежие данные companion; это не означает полный контроль над Zygisk.",
+  "dev_zygisk_link_confirmed_detail": "Были события канала, но сейчас нет подтверждённых подключённых процессов. Откройте приложение из списка или перезагрузите устройство.",
   "dev_zygisk_link_connected": "Подключено",
   "dev_zygisk_link_connected_detail": "Проверенные живые наблюдаемые процессы: {n}",
   "dev_zygisk_link_idle": "Включено · ничего не выбрано",

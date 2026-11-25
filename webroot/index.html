@@ -3102,8 +3102,8 @@ html[data-asb-theme="light"] .cfg-row:not(.is-on) > .cfg-row-top > .cfg-icon { -
 .kernel-sources-help-title::before { content:'▸'; display:inline-block; margin-inline-end:6px; }
 .kernel-sources-help-title[aria-expanded="true"]::before { content:'▾'; }
 
-.cfg-status-row { display:flex; flex-direction:row; flex-wrap:nowrap; align-items:center; gap:6px; min-width:0; max-width:100%; }
-.cfg-status-row .cfg-status, .cfg-status-row .cfg-smart-owner { flex:0 1 auto; white-space:nowrap; }
+.cfg-status-row { display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; max-width:100%; }
+.cfg-status-row .cfg-status, .cfg-status-row .cfg-smart-owner { flex:0 1 auto; max-width:100%; white-space:normal; overflow-wrap:anywhere; }
 .cfg-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -18790,6 +18790,7 @@ async function cfgProfileOpen(mode) {
   cfgProfileResultStop(); _cfgProfile.result = null; _cfgProfile.opened = null;
   const m = _el('cfgProfileModal'); if (!m) return;
   m.hidden = false; m.setAttribute('aria-hidden', 'false');
+  cfgProfilePaint();
   if (mode === 'save') {
     try {
       const sa = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' smart-available');
@@ -18868,7 +18869,7 @@ function cfgProfilePaint() {
   if (save) {
     const lab = document.createElement('label'); lab.className = 'cfg-profile-label'; lab.textContent = T('cfg_profile_name','Profile name'); body.appendChild(lab);
     const inp = document.createElement('input'); inp.className = 'cfg-profile-name'; inp.id = 'cfgProfileNameInput'; inp.maxLength = 32;
-    inp.value = _cfgProfile.draft || cfgProfileSuggestedName(); inp.autocomplete = 'off'; inp.spellcheck = false;
+    inp.value = _cfgProfile.draft || cfgProfileSuggestedName(); inp.autocomplete = 'off'; inp.spellcheck = false; inp.disabled = _cfgProfile.busy;
     inp.oninput = function() { _cfgProfile.draft = inp.value.trim(); _cfgProfile.replace = ''; };
     body.appendChild(inp);
     if (_cfgProfile.smartAvail) {
@@ -18887,8 +18888,8 @@ function cfgProfilePaint() {
       body.appendChild(chk);
     }
     cfgProfileDestination(body);
-    const primary = cfgProfileButton(_cfgProfile.replace ? T('cfg_profile_replace','Replace saved configuration') : T('cfg_profile_save_action','Save configuration'), 'cfg-profile-primary', cfgProfileSave);
-    body.appendChild(primary);
+    const primary = cfgProfileButton(_cfgProfile.busy ? T('cfg_profile_save_action','Save configuration') + '…' : (_cfgProfile.replace ? T('cfg_profile_replace','Replace saved configuration') : T('cfg_profile_save_action','Save configuration')), 'cfg-profile-primary', cfgProfileSave);
+    primary.disabled = _cfgProfile.busy; body.appendChild(primary);
     const hint = document.createElement('div'); hint.className = 'cfg-profile-hint';
     hint.textContent = T('cfg_profile_name_hint','Use letters, digits, _ or -. Existing names require one extra Replace tap.'); body.appendChild(hint);
     return;
@@ -18953,11 +18954,16 @@ function cfgProfilePaint() {
   }
 }
 async function cfgProfileSave() {
+  if (_cfgProfile.busy) return;
   const inp = _el('cfgProfileNameInput'); const name = String(inp && inp.value || '').trim();
   _cfgProfile.draft = name;
   if (!cfgProfileNameOK(name)) { toast(T('cfg_profile_invalid','Use 1–32 letters, digits, _ or -'), 'err'); return; }
+  if (_cfgProfile.store === 'device' && !_cfgProfile.dir) { toast(T('cfg_fm_hint_folder', 'Open the folder you want, then press Save here.'), 'warn'); return; }
   const verb = _cfgProfile.replace === name ? 'replace' : 'create';
   const noSmart = (_cfgProfile.smartAvail && !_cfgProfile.withSmart) ? ' --no-smart' : '';
+  _cfgProfile.busy = true; cfgProfilePaint();
+  await cfgProfilePaintYield();
+  try {
   let r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' ' + verb + ' ' + shQuote(name) + noSmart + ' ' + cfgProfileArgs());
   if (r && r.errno === 3) { _cfgProfile.replace = name; cfgProfilePaint(); toast(T('cfg_profile_replace_ready','Tap Replace to overwrite this saved configuration.'), 'warn'); return; }
   if (!r || r.errno !== 0) {
@@ -18980,13 +18986,18 @@ async function cfgProfileSave() {
     // The helper names the file it wrote: NAME.asb, or NAME.conf where the device has no tar.
     const exm = /(^|\n)exported=([^\n]+)/.exec(String((ex && ex.stdout) || ''));
     const outFile = exm ? exm[2].replace(/^.*\//, '') : name + '.asb';
-    cfgProfileShowResult({ kind:'ok', title:T('cfg_res_saved_file_title', 'Configuration saved to a file'),
+    cfgProfileShowResult({ kind:'ok', keepOpen:true, title:T('cfg_res_saved_file_title', 'Configuration saved to a file'),
       lines: base.concat([[T('cfg_res_file', 'File'), _cfgProfile.dir.replace(CFG_FM_HOME, T('cfg_fm_storage', 'Storage')) + '/' + outFile],
                           [T('cfg_res_where', 'Where'), T('cfg_res_where_both', 'also kept inside ASB')]]) });
     return;
   }
-  cfgProfileShowResult({ kind:'ok', title:T('cfg_res_saved_title', 'Configuration saved'),
+  cfgProfileShowResult({ kind:'ok', keepOpen:true, title:T('cfg_res_saved_title', 'Configuration saved'),
     lines: base.concat([[T('cfg_res_where', 'Where'), T('cfg_res_where_asb', 'inside ASB (Open → ASB)')]]) });
+  } catch (e) {
+    cfgProfileShowResult({ kind:'err', title:T('cfg_res_save_failed_title', 'Configuration not saved'), lines:[T('cfg_export_err','Could not save profile')] });
+  } finally {
+    _cfgProfile.busy = false; cfgProfilePaint();
+  }
 }
 async function cfgProfileImportPath(file) {
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' import-path ' + shQuote(file));
@@ -21718,10 +21729,14 @@ function zygiskOffCard() {
   const actions = document.createElement('div'); actions.className = 'zy-off-actions';
   const enable = document.createElement('button'); enable.type = 'button';
   enable.className = 'live-chip zy-off-enable';
-  enable.textContent = _zygiskControlBusy === 'zygisk_enabled' ? T('zy_auto_working', 'Setting up…') : T('zy_off_enable', 'Enable ASB Zygisk');
+  enable.textContent = _zygiskModeBusy ? T('zy_auto_working', 'Setting up…') : T('zy_off_enable', 'Enable ASB Zygisk');
   zygiskButtonIcon(enable, 'zygisk_master');
-  enable.disabled = !!_zygiskControlBusy;
-  enable.onclick = function () { zygiskControlSet('zygisk_enabled', '1', enable); };
+  enable.disabled = !!_zygiskControlBusy || _zygiskModeBusy;
+  enable.onclick = function () {
+    // First enable from untouched defaults starts Auto; preserve any existing manual switches.
+    const fresh = ['zygisk_hints','zygisk_launch','zygisk_ledger'].every(function(k) { return String(_cfgVals[k]) === '0'; });
+    return fresh ? zygiskModeSet('auto') : zygiskControlSet('zygisk_enabled', '1', enable);
+  };
   actions.appendChild(enable);
   const settings = document.createElement('button'); settings.type = 'button';
   settings.className = 'live-chip zy-off-settings';
