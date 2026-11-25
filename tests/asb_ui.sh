@@ -14315,6 +14315,8 @@ assert 'cfgPaintAfterLoad();' in load and 'runBatch(parts)' in load
 hub=body('function cfgRenderHub(list) {')
 assert 'cfgLoadFresh' not in hub and 'cfgIsActive' not in hub and '_cfgVals' not in hub
 assert "cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', String(total));" in hub
+assert 'html .cfg-tile-count { display:inline-flex; flex-direction:column; flex-wrap:nowrap;' in s, 'category counts must use consistent two-row pills'
+assert 'border-left:' not in s[s.index('.cfg-tile-active {'):s.index('}', s.index('.cfg-tile-active {'))], 'a divider returned before the changed count'
 # Final cascade values, including both compact-fit fallbacks.
 for token in ('width:40px;\n  height:40px;\n  margin:0 0 3px;\n  border-radius:14px;',
               'html .cfg-tile-ico .tech-icon { width:25px; height:25px; margin:0; }',
