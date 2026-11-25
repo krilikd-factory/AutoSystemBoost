@@ -18,6 +18,7 @@ _write_state() {
     printf 'status=%s\n' "$1"
     printf 'reason=%s\n' "${2:-}"
     printf 'checked=%s\n' "${3:-0}"
+    [ -n "${4:-}" ] && printf 'target=%s\n' "$4"
     printf 'timestamp=%s\n' "$(date +%s 2>/dev/null || echo 0)"
   } > "$_tmp" 2>/dev/null && mv -f "$_tmp" "$STATE" 2>/dev/null || rm -f "$_tmp" 2>/dev/null
 }
@@ -25,11 +26,11 @@ _write_state() {
 _fail() {
   mkdir -p "$STATE_DIR" 2>/dev/null || true
   true > "$BLOCK" 2>/dev/null || true
-  _write_state blocked "$1" "${2:-0}"
+  _write_state blocked "$1" "${2:-0}" "${_target:-}"
   exit 1
 }
 
-[ -f "$BLOCK" ] && { _write_state blocked existing_block 0; exit 1; }
+[ -f "$BLOCK" ] && { [ -s "$STATE" ] || _write_state blocked existing_block 0; exit 1; }
 [ -f "$MAN" ] || { _write_state absent no_bind_manifest 0; exit 0; }
 
 _checked=0

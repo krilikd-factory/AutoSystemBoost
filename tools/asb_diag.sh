@@ -2328,6 +2328,12 @@ elif [ "$_dsp_on" = "1" ]; then
         NOTE "  $_dodm: no ASB entry and no runtime bind queued - check the active SKU and effects configuration before reinstalling"
       fi
     done
+    if [ -f /data/adb/asb/vendor_overlay_blocked ]; then
+      NOTE "  global vendor overlay safety block is active; do not clear it without finding its cause"
+      if [ -s /data/adb/asb/overlay_guard.state ]; then
+        sed -n '1,8p' /data/adb/asb/overlay_guard.state | while IFS= read -r _gs; do P "    $_gs"; done
+      fi
+    fi
     if [ -f /data/adb/asb/dsp_effects_blocked ]; then
       NOTE "  effects safety guard TRIPPED ($(cat /data/adb/asb/dsp_effects_blocked 2>/dev/null)): repeated audio-service PID changes were observed while effects were registered; the cause is not established"
       NOTE "  DSP remains disabled to protect audio. Preserve this report and investigate before retrying."
