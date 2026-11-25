@@ -17159,11 +17159,11 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/stage/config" "$T/stage/bin"
-printf 'setting=1\n' > "$T/stage/config/governor.conf"
+printf 'setting=1\n' > "$T/stage/config/governor.conf.shipped"
 printf 'binary\n' > "$T/stage/bin/asb"
 chmod 755 "$T/stage/bin/asb"
 payload="$(cd "$T/stage" && tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --exclude=./release-manifest.json --exclude='*.DS_Store' -cf - . | sha256sum | cut -d' ' -f1)"
-config="$(sha256sum "$T/stage/config/governor.conf" | cut -d' ' -f1)"
+config="$(sha256sum "$T/stage/config/governor.conf.shipped" | cut -d' ' -f1)"
 binary="$(sha256sum "$T/stage/bin/asb" | cut -d' ' -f1)"
 printf '{"distribution":"flashable-module","source_commit":"abc","payload_sha256":"%s","shipped_config_sha256":"%s","artifacts":{"bin/asb":{"sha256":"%s"}}}\n' "$payload" "$config" "$binary" > "$T/stage/release-manifest.json"
 (cd "$T/stage" && zip -rq "$T/good.zip" .)
@@ -17173,10 +17173,10 @@ cp "$T/good.zip" "$T/duplicate.zip"
 python3 - "$T/duplicate.zip" <<'JS'
 import sys, zipfile
 with zipfile.ZipFile(sys.argv[1], 'a') as z:
-    z.writestr('config/governor.conf', 'setting=1\n')
+    z.writestr('config/governor.conf.shipped', 'setting=1\n')
 JS
 if python3 "$ROOT/tools/asb_verify_package.py" "$T/stage" "$T/duplicate.zip" abc >/dev/null 2>&1; then echo 'FAIL duplicate ZIP entry accepted' >&2; exit 1; fi
-printf 'changed\n' > "$T/stage/config/governor.conf"
+printf 'changed\n' > "$T/stage/config/governor.conf.shipped"
 if python3 "$ROOT/tools/asb_verify_package.py" "$T/stage" "$T/good.zip" abc >/dev/null 2>&1; then echo 'FAIL staged change accepted' >&2; exit 1; fi
 echo 'PASS package verification: extracted ZIP bytes, modes, commit and embedded hashes'
 )

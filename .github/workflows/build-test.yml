@@ -634,7 +634,7 @@ jobs:
           done
           # Hash the final staged payload. Exclude its manifest to avoid a self-reference.
           content_sha=$(cd "$PKG_TEST" && tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --exclude=./release-manifest.json --exclude='*.DS_Store' -cf - . | sha256sum | cut -d' ' -f1)
-          config_sha=$(sha256sum "$PKG_TEST/config/governor.conf" | cut -d' ' -f1)
+          config_sha=$(sha256sum "$PKG_TEST/config/governor.conf.shipped" | cut -d' ' -f1)
           jq --arg payload "$content_sha" --arg config "$config_sha" '. + {payload_sha256:$payload, shipped_config_sha256:$config}' "$PKG_TEST/release-manifest.json" > "$RUNNER_TEMP/asb-manifest.json"
           cp "$RUNNER_TEMP/asb-manifest.json" "$PKG_TEST/release-manifest.json"
           ( cd "$PKG_TEST" && zip -rq "../$ZIP_TEST" . -x "*.DS_Store" )

@@ -70,7 +70,7 @@ def verify(stage, archive, commit):
         manifest = json.loads((root / 'release-manifest.json').read_text())
         if manifest.get('distribution') != 'flashable-module' or manifest.get('source_commit') != commit:
             raise ValueError('manifest distribution or source commit mismatch')
-        if sha(root / 'config/governor.conf') != manifest.get('shipped_config_sha256'):
+        if sha(root / 'config/governor.conf.shipped') != manifest.get('shipped_config_sha256'):
             raise ValueError('config hash mismatch')
         for name, entry in manifest.get('artifacts', {}).items():
             p = PurePosixPath(name)
@@ -99,7 +99,8 @@ def main():
     try:
         verify(a.stage, a.archive, a.commit)
     except (OSError, ValueError, KeyError, zipfile.BadZipFile, json.JSONDecodeError) as exc:
-        p.exit(1, 'Package verification failed: ' + str(exc) + '\n')
+        prefix = '::error::' if os.environ.get('GITHUB_ACTIONS') == 'true' else ''
+        p.exit(1, prefix + 'Package verification failed: ' + str(exc) + '\n')
 
 
 if __name__ == '__main__':
