@@ -2772,6 +2772,12 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   margin-top: 6px;
   color: rgba(231,234,238,0.72);
 }
+/* Category pages: keep the category heading, section label and its card together.
+ * Later sections retain breathing room above; the first section follows the title
+ * as closely as the first cards on Home and Monitor. */
+body.config-category-active #configPage .header + .sec { margin-bottom:6px !important; }
+body.config-category-active #cfgList > .cfg-section { padding:4px 8px 0; margin-top:8px; margin-bottom:-5px; }
+body.config-category-active #cfgList > .cfg-section:first-child { padding-top:0; margin-top:0; }
 .cfg-section-ico {
   grid-area: ico;
   width: 22px;
