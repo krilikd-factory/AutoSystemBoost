@@ -36,6 +36,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify clean source checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code
+          git diff --cached --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"
+
+      - name: Report public OTA metadata (advisory)
+        run: python3 tools/asb_ota_advisory.py
+
       - name: Normalize executable source script modes
         run: |
           # Browser uploads can turn git mode 100755 into 100644. Restore every helper whose
@@ -586,12 +596,23 @@ jobs:
           # the same objects, rules and code (tools/asb_slim_package.py checks it and restores the
           # originals on any difference).
           python3 tools/asb_slim_package.py "$PKG_REL" || { echo "::error::package slimming check failed"; exit 1; }
+          # Record hashes for every staged native payload, including Zygisk libraries.
+          for _native_dir in bin zygisk; do
+            [ -d "$PKG_REL/$_native_dir" ] || continue
+            find "$PKG_REL/$_native_dir" -type f -print | LC_ALL=C sort | while IFS= read -r _file; do
+              _path="${_file#"$PKG_REL"/}"
+              _sha="$(sha256sum "$_file" | cut -d' ' -f1)"
+              jq --arg path "$_path" --arg sha "$_sha" '.artifacts[$path] = ((.artifacts[$path] // {}) + {sha256:$sha})' "$PKG_REL/release-manifest.json" > "$RUNNER_TEMP/asb-native-manifest.json"
+              cp "$RUNNER_TEMP/asb-native-manifest.json" "$PKG_REL/release-manifest.json"
+            done
+          done
           # Hash the final staged payload. Exclude its manifest to avoid a self-reference.
           content_sha=$(cd "$PKG_REL" && tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --exclude=./release-manifest.json --exclude='*.DS_Store' -cf - . | sha256sum | cut -d' ' -f1)
           config_sha=$(sha256sum "$PKG_REL/config/governor.conf" | cut -d' ' -f1)
           jq --arg payload "$content_sha" --arg config "$config_sha" '. + {payload_sha256:$payload, shipped_config_sha256:$config}' "$PKG_REL/release-manifest.json" > "$RUNNER_TEMP/asb-manifest.json"
           cp "$RUNNER_TEMP/asb-manifest.json" "$PKG_REL/release-manifest.json"
           ( cd "$PKG_REL" && zip -rq "../$ZIP_REL" . -x "*.DS_Store" )
+          python3 tools/asb_verify_package.py "$PKG_REL" "$ZIP_REL" "$ASB_COMMIT"
           sha256sum "$ZIP_REL" > "$ZIP_REL.sha256"
           cat "$ZIP_REL.sha256" >> "$GITHUB_STEP_SUMMARY"
           echo "ZIP_REL=$ZIP_REL"   >> $GITHUB_ENV

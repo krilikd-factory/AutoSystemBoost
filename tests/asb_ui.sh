@@ -17154,6 +17154,48 @@ node "$T/test.js" "$ROOT/webroot/index.html" | grep -qx ok
 echo 'PASS ART history: current unknown, prior result, dates and mixed states'
 )
 
+t_package_exact_unpacked() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/stage/config" "$T/stage/bin"
+printf 'setting=1\n' > "$T/stage/config/governor.conf"
+printf 'binary\n' > "$T/stage/bin/asb"
+chmod 755 "$T/stage/bin/asb"
+payload="$(cd "$T/stage" && tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --format=gnu --exclude=./release-manifest.json --exclude='*.DS_Store' -cf - . | sha256sum | cut -d' ' -f1)"
+config="$(sha256sum "$T/stage/config/governor.conf" | cut -d' ' -f1)"
+binary="$(sha256sum "$T/stage/bin/asb" | cut -d' ' -f1)"
+printf '{"distribution":"flashable-module","source_commit":"abc","payload_sha256":"%s","shipped_config_sha256":"%s","artifacts":{"bin/asb":{"sha256":"%s"}}}\n' "$payload" "$config" "$binary" > "$T/stage/release-manifest.json"
+(cd "$T/stage" && zip -rq "$T/good.zip" .)
+python3 "$ROOT/tools/asb_verify_package.py" "$T/stage" "$T/good.zip" abc >/dev/null
+if python3 "$ROOT/tools/asb_verify_package.py" "$T/stage" "$T/good.zip" other >/dev/null 2>&1; then echo 'FAIL incorrect source commit accepted' >&2; exit 1; fi
+cp "$T/good.zip" "$T/duplicate.zip"
+python3 - "$T/duplicate.zip" <<'JS'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], 'a') as z:
+    z.writestr('config/governor.conf', 'setting=1\n')
+JS
+if python3 "$ROOT/tools/asb_verify_package.py" "$T/stage" "$T/duplicate.zip" abc >/dev/null 2>&1; then echo 'FAIL duplicate ZIP entry accepted' >&2; exit 1; fi
+printf 'changed\n' > "$T/stage/config/governor.conf"
+if python3 "$ROOT/tools/asb_verify_package.py" "$T/stage" "$T/good.zip" abc >/dev/null 2>&1; then echo 'FAIL staged change accepted' >&2; exit 1; fi
+echo 'PASS package verification: extracted ZIP bytes, modes, commit and embedded hashes'
+)
+
+t_ota_public_metadata_advisory() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+printf 'version=V66\nversionCode=660\n' > "$T/module.prop"
+printf '{"version":"V65","versionCode":650,"zipUrl":"https://github.com/o/r/releases/download/65/x.zip","changelog":"https://raw.githubusercontent.com/old/r/main/CHANGELOG.md"}' > "$T/update.json"
+out="$(cd "$T" && GITHUB_REPOSITORY=o/r python3 "$ROOT/tools/asb_ota_advisory.py")"
+printf '%s\n' "$out" | grep -q 'Public OTA: V65 / 650; source build: V66 / 660'
+printf '%s\n' "$out" | grep -q '^::warning::update.json changelog points to a different repository'
+printf invalid > "$T/update.json"
+out="$(cd "$T" && GITHUB_REPOSITORY=o/r python3 "$ROOT/tools/asb_ota_advisory.py")"
+printf '%s\n' "$out" | grep -q '^::warning::Unable to validate public OTA metadata'
+echo 'PASS OTA advisory: test/public version separation, old URL and malformed JSON'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

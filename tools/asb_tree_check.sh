@@ -32,6 +32,7 @@ case "${1:-check}" in
     echo "tree manifest: $(wc -l < "$MAN") files"
     ;;
   check)
+    echo "comparison mode: historical delivered-archive manifest (not current source or flashable ZIP)"
     if [ ! -s "$MAN" ]; then
       echo "tree manifest: none in this tree - nothing to compare"
       exit 0
@@ -46,9 +47,8 @@ case "${1:-check}" in
       echo "tree manifest: every delivered file is here and unchanged ($(wc -l < "$MAN") files)"
     else
       echo "tree manifest: this tree is NOT the delivered one - $_nd file(s) differ, $_nm missing, $_nx extra"
-      echo "  A file uploaded late or not at all shows up here first; the test that trips over it later"
-      echo "  is only a symptom. Upload the differing and missing files from the delivered archive and"
-      echo "  delete the extra ones (left over from an older delivery), then run again:"
+      echo "  This is a historical archive comparison, not evidence that current files are wrong."
+      echo "  Review differences against the named delivery before changing or removing any file:"
       sed 's/^/    differs: /' "$_diff"
       sed 's/^/    missing: /' "$_miss"
       sed 's/^/    extra: /' "$_extra"
