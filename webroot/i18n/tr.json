@@ -3961,6 +3961,8 @@
   "zy_aot_set_on": "Şarjda derleme: açık",
   "zy_aot_strong": "derlendi (%s)",
   "zy_aot_title": "Daha hızlı uygulama açılışı (ART)",
+  "zy_aot_previously_compiled": "Daha önce derlendi; geçerli durum doğrulanmadı",
+  "zy_aot_unknown_explain": "Bazı uygulamaların geçerli ART durumu okunamadı. Geçmiş önceki sonuçları gösterir ve geçerli durumu doğrulamaz.",
   "zy_aot_unknown": "derleme durumu bilinmiyor",
   "zy_aot_unread": "Derleme durumu henüz okunmadı.",
   "zy_aot_no_answer": "Derleme durumu betiği yanıt vermedi: %s",

@@ -3854,6 +3854,8 @@
   "zy_aot_set_on": "Compiling while charging: on",
   "zy_aot_strong": "compiled (%s)",
   "zy_aot_title": "Faster app starts (ART)",
+  "zy_aot_previously_compiled": "Previously compiled; current state unconfirmed",
+  "zy_aot_unknown_explain": "The current ART state could not be read for some apps. History records earlier results and does not confirm their current state.",
   "zy_aot_unknown": "compile state unknown",
   "zy_aot_unread": "The compile state has not been read yet.",
   "zy_aot_no_answer": "The compile-state script did not answer: %s",

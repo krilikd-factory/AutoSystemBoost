@@ -3961,6 +3961,8 @@
   "zy_aot_set_on": "充电时编译：开",
   "zy_aot_strong": "已编译（%s）",
   "zy_aot_title": "加快应用启动（ART）",
+  "zy_aot_previously_compiled": "此前已编译；当前状态未确认",
+  "zy_aot_unknown_explain": "无法读取部分应用当前的 ART 状态。历史记录显示的是过去的结果，不能确认当前状态。",
   "zy_aot_unknown": "编译状态未知",
   "zy_aot_unread": "尚未读取编译状态。",
   "zy_aot_no_answer": "编译状态脚本没有响应：%s",

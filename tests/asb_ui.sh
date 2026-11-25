@@ -2453,7 +2453,7 @@ python3 - "$ROOT" <<'PY' || fail 'source/locale contract'
 import sys, json, re, pathlib
 root = pathlib.Path(sys.argv[1]); s = (root / 'webroot/index.html').read_text(encoding='utf-8')
 head = s[:s.index('<style>\n:root {')]
-assert "window.__asbI18nEarly={code:w," in head and "x.open('GET','i18n/'+w+'.json?v=27-pill2',true)" in head
+assert "window.__asbI18nEarly={code:w," in head and "x.open('GET','i18n/'+w+'.json?v=27-art3',true)" in head
 hl = re.search(r"var L=\[([^\]]*)\]", head).group(1)
 ml = re.search(r"const ASB_LANGS = \[([^\]]*)\];", s).group(1)
 assert [x.strip(" '") for x in hl.split(',')] == [x.strip(" '") for x in ml.split(',')], (hl, ml)
@@ -2505,16 +2505,16 @@ async function scenario(saved, nav, broken) {
 }
 (async () => {
   let r = await scenario('ru', 'en-US', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/ru.json?v=27-pill2"]', 'ru opening read: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/ru.json?v=27-art3"]', 'ru opening read: ' + JSON.stringify(r.reqs));
   chk(r.I18N.ru && r.I18N.ru.hello === 'ru' && Object.keys(r.I18N.en).length === 0, 'ru dictionary: ' + JSON.stringify(r.I18N));
   r = await scenario('en', 'ru-RU', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/en.json?v=27-pill2"]' && r.I18N.en.hello === 'en', 'en opening: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/en.json?v=27-art3"]' && r.I18N.en.hello === 'en', 'en opening: ' + JSON.stringify(r.reqs));
   r = await scenario(null, 'de-DE', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/de.json?v=27-pill2"]' && r.I18N.de.hello === 'de', 'device language: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/de.json?v=27-art3"]' && r.I18N.de.hello === 'de', 'device language: ' + JSON.stringify(r.reqs));
   r = await scenario('xx', 'tr-TR', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/tr.json?v=27-pill2"]', 'invalid stored language: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/tr.json?v=27-art3"]', 'invalid stored language: ' + JSON.stringify(r.reqs));
   r = await scenario('uk', 'en', ['uk']);
-  chk(JSON.stringify(r.reqs) === '["i18n/uk.json?v=27-pill2","i18n/uk.json?v=27-pill2","i18n/en.json?v=27-pill2"]' && r.I18N.en.hello === 'en' && !r.I18N.uk,
+  chk(JSON.stringify(r.reqs) === '["i18n/uk.json?v=27-art3","i18n/uk.json?v=27-art3","i18n/en.json?v=27-art3"]' && r.I18N.en.hello === 'en' && !r.I18N.uk,
     'a missing locale falls back to English: ' + JSON.stringify(r.reqs));
   r = await scenario('fr', 'en', ['fr', 'en']);
   chk(r.reqs.length === 3 && Object.keys(r.I18N.en).length === 0, 'nothing readable still resolves: ' + JSON.stringify(r.reqs));
@@ -10868,7 +10868,7 @@ for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display
               'targets.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);',
               'id="zyLogsBtn"', 'id="zyTgBtn"', 'class="status-row has-back"',
               'font: 700 23px/1.15 var(--sans);',
-              "x.open('GET', 'i18n/' + code + '.json?v=27-pill2', true)", 'I18N_READY.then(boot);',
+              "x.open('GET', 'i18n/' + code + '.json?v=27-art3', true)", 'I18N_READY.then(boot);',
               "document.body.classList.contains('zygisk-active')"):
     assert token in h, token
 for token in ('#reportPage .logo-c', '#zygiskPage .logo-c', 'zoom: calc(1 / var(--asb-ui-scale))'):
@@ -17120,6 +17120,37 @@ const chk=(v,m)=>{if(!v)throw Error(m)};
 JS
 node "$T/test.js" "$ROOT/webroot/index.html" | grep -qx ok
 echo 'PASS Smart actual queue snapshot: readback, failure and out-of-order results'
+)
+
+t_webui_art_history_truth() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+const start = h.indexOf('let _zyAot = null'), end = h.indexOf('async function zygiskAotSet', start);
+if (start < 0 || end < 0) throw Error('ART UI missing');
+function el() { return {children: [], classList: {add() {}}, appendChild(x) {this.children.push(x);}}; }
+global.document = {createElement: el}; global.T = (k, fallback) => fallback;
+global.logReportSec = el; global.zyHowFold = el; global.logReportNote = x => ({textContent:x});
+global.logReportRow = (a,b) => ({textContent:a+' '+b}); global.dozeKeepLabels = () => ({});
+global.zyChipsOf = x => x; global.zyPanelButton = () => ({}); global.zyItemPanel = o => ({textContent:o.chips});
+global.zygiskGuardDay = () => '24.11'; global.zygiskGuardClock = () => '00:36';
+const body = h.slice(start,end) + `
+function texts(x) {return (x.textContent || '') + ' ' + (x.children || []).map(texts).join(' ');}
+function render(apps, events) { _zyAot = {ok:true, enabled:true, ledger:true, running:false, apps, events:events||[], excluded:[]}; return texts(zygiskAotCard()); }
+const base = {pkg:'com.test.app',n:48,filter:'unknown',result:'compiled',at:1,pre:0,post:0,cold:0};
+let x = render([base], [{at:1,pkg:base.pkg,what:'compiled',detail:'verify>speed-profile'}]);
+if (!x.includes('current state unconfirmed') || !x.includes('History records earlier') || x.includes('Every listed app already')) throw Error('unknown state misrepresented: '+x);
+if (!x.includes('24.11 00:36')) throw Error('history lacks date');
+x = render([{...base,filter:'speed-profile'}]); if (!x.includes('Every listed app already') || x.includes('current state unconfirmed')) throw Error('compiled state misrepresented');
+x = render([{...base,filter:'verify',result:'no_profile'}]); if (x.includes('Every listed app already')) throw Error('no-profile app called compiled');
+x = render([{...base,filter:'verify',result:'-'},base]); if (!x.includes('wait for the charger') || !x.includes('History records earlier')) throw Error('mixed states not shown');
+`;
+eval(body); console.log('ok');
+JS
+node "$T/test.js" "$ROOT/webroot/index.html" | grep -qx ok
+echo 'PASS ART history: current unknown, prior result, dates and mixed states'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -3961,6 +3961,8 @@
   "zy_aot_set_on": "Compilation en charge : activée",
   "zy_aot_strong": "compilée (%s)",
   "zy_aot_title": "Démarrage plus rapide des applis (ART)",
+  "zy_aot_previously_compiled": "Compilé auparavant ; état actuel non confirmé",
+  "zy_aot_unknown_explain": "L’état ART actuel de certaines applications n’a pas pu être lu. L’historique montre les résultats passés et ne confirme pas l’état actuel.",
   "zy_aot_unknown": "état de compilation inconnu",
   "zy_aot_unread": "L'état de compilation n'a pas encore été lu.",
   "zy_aot_no_answer": "Le script d’état de compilation n’a pas répondu : %s",

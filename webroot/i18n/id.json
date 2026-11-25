@@ -3961,6 +3961,8 @@
   "zy_aot_set_on": "Kompilasi saat mengisi daya: aktif",
   "zy_aot_strong": "terkompilasi (%s)",
   "zy_aot_title": "Aplikasi terbuka lebih cepat (ART)",
+  "zy_aot_previously_compiled": "Pernah dikompilasi; status saat ini belum dipastikan",
+  "zy_aot_unknown_explain": "Status ART saat ini untuk beberapa aplikasi tidak dapat dibaca. Riwayat mencatat hasil sebelumnya dan tidak memastikan status saat ini.",
   "zy_aot_unknown": "status kompilasi tidak diketahui",
   "zy_aot_unread": "Status kompilasi belum dibaca.",
   "zy_aot_no_answer": "Skrip status kompilasi tidak menjawab: %s",

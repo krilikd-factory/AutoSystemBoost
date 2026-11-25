@@ -3961,6 +3961,8 @@
   "zy_aot_set_on": "Compilar ao carregar: ligado",
   "zy_aot_strong": "compilado (%s)",
   "zy_aot_title": "Abertura mais rápida dos apps (ART)",
+  "zy_aot_previously_compiled": "Compilado anteriormente; estado atual não confirmado",
+  "zy_aot_unknown_explain": "Não foi possível ler o estado ART atual de alguns aplicativos. O histórico mostra resultados anteriores e não confirma o estado atual.",
   "zy_aot_unknown": "estado de compilação desconhecido",
   "zy_aot_unread": "O estado de compilação ainda não foi lido.",
   "zy_aot_no_answer": "O script do estado de compilação não respondeu: %s",

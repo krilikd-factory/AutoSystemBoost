@@ -21,7 +21,7 @@ html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f2f4f
 </style>
 <script>(function(){try{var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))document.documentElement.setAttribute('data-asb-theme','light');if(t==='glass')document.documentElement.setAttribute('data-asb-glass','1');}catch(e){}})();</script>
 <script>document.documentElement.classList.add('asb-home-pending');</script>
-<script>(function(){try{var L=['ru','uk','de','es','pt','tr','id','it','fr','ar','zh','hy'],w='en',s=null,i,l;try{s=localStorage.getItem('asb_lang');}catch(e){}if(s&&(s==='en'||L.indexOf(s)>=0))w=s;else{l=(navigator.language||navigator.userLanguage||'en').toLowerCase();for(i=0;i<L.length;i++)if(l.indexOf(L[i])===0){w=L[i];break;}}window.__asbI18nEarly={code:w,p:new Promise(function(r){var d=0,f=function(v){if(!d){d=1;r(v);}};try{var x=new XMLHttpRequest();x.open('GET','i18n/'+w+'.json?v=27-pill2',true);x.onload=function(){f((x.status===200||x.status===0)&&x.responseText?x.responseText:null);};x.onerror=x.onabort=x.ontimeout=function(){f(null);};x.send(null);}catch(e){f(null);}})};}catch(e){}})();</script>
+<script>(function(){try{var L=['ru','uk','de','es','pt','tr','id','it','fr','ar','zh','hy'],w='en',s=null,i,l;try{s=localStorage.getItem('asb_lang');}catch(e){}if(s&&(s==='en'||L.indexOf(s)>=0))w=s;else{l=(navigator.language||navigator.userLanguage||'en').toLowerCase();for(i=0;i<L.length;i++)if(l.indexOf(L[i])===0){w=L[i];break;}}window.__asbI18nEarly={code:w,p:new Promise(function(r){var d=0,f=function(v){if(!d){d=1;r(v);}};try{var x=new XMLHttpRequest();x.open('GET','i18n/'+w+'.json?v=27-art3',true);x.onload=function(){f((x.status===200||x.status===0)&&x.responseText?x.responseText:null);};x.onerror=x.onabort=x.ontimeout=function(){f(null);};x.send(null);}catch(e){f(null);}})};}catch(e){}})();</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <script>
@@ -8281,7 +8281,7 @@ var I18N_READY;
       }
       try {
         var x = new XMLHttpRequest();
-        x.open('GET', 'i18n/' + code + '.json?v=27-pill2', true);
+        x.open('GET', 'i18n/' + code + '.json?v=27-art3', true);
         x.onload = function () {
           try {
             if ((x.status === 200 || x.status === 0) && x.responseText) {
@@ -22322,7 +22322,7 @@ function zygiskGuardCard() {
       let what = T('zy_guard_ev_' + e.what, e.what.replace(/_/g, ' ')) + (e.n ? ' · ' + e.n : '');
       if (/^(loop|waker|loop_on|ghost)$/.test(e.extra)) what += ' · ' + zygiskGuardWhy(e.extra);
       else if (/^\d+$/.test(e.extra) && /^lifted_/.test(e.what)) what += ' · ' + T('zy_guard_after', 'starts while restricted: %s').replace('%s', e.extra);
-      ev.appendChild(logReportRow(zygiskGuardClock(e.at) + ' · ' + nm(e.pkg), what, false));
+      ev.appendChild(logReportRow((e.at ? zygiskGuardDay(e.at) + ' ' + zygiskGuardClock(e.at) + ' · ' : '') + nm(e.pkg), what, false));
     });
     card.appendChild(ev);
   }
@@ -22433,6 +22433,8 @@ function zygiskAotValue(a) {
   if (zygiskAotStrong(a.filter)) parts.push(T('zy_aot_strong', 'compiled (%s)').replace('%s', a.filter));
   else if (zygiskAotWeak(a.filter)) parts.push(T('zy_aot_weak', 'no AOT code (%s)').replace('%s', a.filter));
   else parts.push(T('zy_aot_unknown', 'compile state unknown'));
+  if (!zygiskAotStrong(a.filter) && !zygiskAotWeak(a.filter) && a.result === 'compiled' && a.at > 0)
+    parts.push(T('zy_aot_previously_compiled', 'Previously compiled; current state unconfirmed'));
   if (a.at > 0 && a.pre > 0 && a.post > 0)
     parts.push(T('zy_aot_cold_ba', 'cold start %1 → %2 ms').replace('%1', String(a.pre)).replace('%2', String(a.post)));
   else if (a.cold > 0) parts.push(T('zy_aot_cold', 'cold start %s ms').replace('%s', String(a.cold)));
@@ -22466,7 +22468,10 @@ function zygiskAotCard() {
     if (g.running) card.appendChild(logReportNote(T('zy_aot_running', 'Compiling now (background priority).')));
     else if (!g.apps.length) card.appendChild(logReportNote(T('zy_aot_empty', 'Not enough launches yet: apps are listed after you open them a few times.')));
     else if (weak) card.appendChild(logReportNote(T('zy_aot_waiting', '%s app(s) without AOT code wait for the charger with the screen off.').replace('%s', String(weak))));
-    else card.appendChild(logReportNote(T('zy_aot_all_good', 'Every listed app already has compiled code; nothing to do.')));
+    else if (g.apps.every(function (a) { return zygiskAotStrong(a.filter); }))
+      card.appendChild(logReportNote(T('zy_aot_all_good', 'Every listed app already has compiled code; nothing to do.')));
+    if (g.apps.some(function (a) { return !zygiskAotStrong(a.filter) && !zygiskAotWeak(a.filter); }))
+      card.appendChild(logReportNote(T('zy_aot_unknown_explain', 'The current ART state could not be read for some apps. History records earlier results and does not confirm their current state.')));
   }
   const names = dozeKeepLabels(g.apps.map(function (a) { return a.pkg; }).concat(g.events.map(function (e) { return e.pkg; }), g.excluded));
   const nm = function (p) { return names[p] || p; };
@@ -22495,7 +22500,7 @@ function zygiskAotCard() {
     ev.appendChild(sm);
     g.events.slice().reverse().forEach(function (e) {
       const what = T('zy_aot_ev_' + e.what, e.what.replace(/_/g, ' '));
-      ev.appendChild(logReportRow(zygiskGuardClock(e.at) + ' · ' + nm(e.pkg), what + (e.detail ? ' · ' + e.detail.replace('>', ' → ') : ''), false));
+      ev.appendChild(logReportRow((e.at ? zygiskGuardDay(e.at) + ' ' + zygiskGuardClock(e.at) + ' · ' : '') + nm(e.pkg), what + (e.detail ? ' · ' + e.detail.replace('>', ' → ') : ''), false));
     });
     card.appendChild(ev);
   }
