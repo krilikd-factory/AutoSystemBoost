@@ -4440,5 +4440,8 @@
   "st_only_perf": "tidak aktif: hanya di Performa",
   "st_off_in_stock": "tidak aktif di Stok",
   "st_only_battery": "tidak aktif: hanya di Hemat",
-  "st_cool_gaming_battery": "tidak aktif di Hemat: game tanpa mode game"
+  "st_cool_gaming_battery": "tidak aktif di Hemat: game tanpa mode game",
+  "cfg_profile_restore_smart": "Pulihkan pembelajaran Smart yang tersimpan",
+  "cfg_profile_restore_smart_hint": "Matikan untuk menerapkan pengaturan dan mempertahankan pembelajaran Smart saat ini.",
+  "cfg_res_smart_kept_choice": "Pembelajaran saat ini dipertahankan sesuai pilihan Anda"
 }

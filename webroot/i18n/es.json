@@ -4440,5 +4440,8 @@
   "st_only_perf": "inactivo: solo en Rendimiento",
   "st_off_in_stock": "inactivo en Stock",
   "st_only_battery": "inactivo: solo en Ahorro",
-  "st_cool_gaming_battery": "inactivo en Ahorro: los juegos quedan sin modo juego"
+  "st_cool_gaming_battery": "inactivo en Ahorro: los juegos quedan sin modo juego",
+  "cfg_profile_restore_smart": "Restaurar aprendizaje guardado de Smart",
+  "cfg_profile_restore_smart_hint": "Desactívalo para aplicar los ajustes y conservar el aprendizaje actual de Smart.",
+  "cfg_res_smart_kept_choice": "Se conservó el aprendizaje actual por tu elección"
 }

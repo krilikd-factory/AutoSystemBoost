@@ -4440,5 +4440,8 @@
   "st_only_perf": "etkin değil: yalnız Performans’ta",
   "st_off_in_stock": "Stok’ta etkin değil",
   "st_only_battery": "etkin değil: yalnız Tasarruf’ta",
-  "st_cool_gaming_battery": "Tasarruf’ta etkin değil: oyunlar oyun moduna girmez"
+  "st_cool_gaming_battery": "Tasarruf’ta etkin değil: oyunlar oyun moduna girmez",
+  "cfg_profile_restore_smart": "Kaydedilen Smart öğrenimini geri yükle",
+  "cfg_profile_restore_smart_hint": "Ayarları uygulayıp mevcut Smart öğrenimini korumak için kapatın.",
+  "cfg_res_smart_kept_choice": "Seçiminiz doğrultusunda mevcut öğrenim korundu"
 }

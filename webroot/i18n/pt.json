@@ -4440,5 +4440,8 @@
   "st_only_perf": "inativo: só em Desempenho",
   "st_off_in_stock": "inativo em Stock",
   "st_only_battery": "inativo: só em Poupança",
-  "st_cool_gaming_battery": "inativo em Poupança: os jogos ficam sem modo de jogo"
+  "st_cool_gaming_battery": "inativo em Poupança: os jogos ficam sem modo de jogo",
+  "cfg_profile_restore_smart": "Restaurar aprendizagem Smart guardada",
+  "cfg_profile_restore_smart_hint": "Desative para aplicar as definições e manter a aprendizagem Smart atual.",
+  "cfg_res_smart_kept_choice": "Aprendizagem atual mantida por escolha"
 }

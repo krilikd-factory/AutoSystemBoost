@@ -4440,5 +4440,8 @@
   "st_only_perf": "غير فعّال: في «الأداء» فقط",
   "st_off_in_stock": "غير فعّال في «الافتراضي»",
   "st_only_battery": "غير فعّال: في «التوفير» فقط",
-  "st_cool_gaming_battery": "غير فعّال في «التوفير»: الألعاب بلا وضع اللعب"
+  "st_cool_gaming_battery": "غير فعّال في «التوفير»: الألعاب بلا وضع اللعب",
+  "cfg_profile_restore_smart": "استعادة تعلم Smart المحفوظ",
+  "cfg_profile_restore_smart_hint": "أوقف الخيار لتطبيق الإعدادات مع الاحتفاظ بتعلم Smart الحالي.",
+  "cfg_res_smart_kept_choice": "تم الاحتفاظ بالتعلم الحالي حسب اختيارك"
 }

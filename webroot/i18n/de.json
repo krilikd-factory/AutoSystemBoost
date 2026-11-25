@@ -4440,5 +4440,8 @@
   "st_only_perf": "inaktiv: nur im Profil Leistung",
   "st_off_in_stock": "inaktiv im Profil Standard",
   "st_only_battery": "inaktiv: nur im Profil Akku",
-  "st_cool_gaming_battery": "inaktiv im Akkuprofil: Spiele ohne Spielmodus"
+  "st_cool_gaming_battery": "inaktiv im Akkuprofil: Spiele ohne Spielmodus",
+  "cfg_profile_restore_smart": "Gespeichertes Smart-Lernen wiederherstellen",
+  "cfg_profile_restore_smart_hint": "Deaktivieren, um Einstellungen anzuwenden und das aktuelle Smart-Lernen zu behalten.",
+  "cfg_res_smart_kept_choice": "Aktuelles Lernen auf Wunsch beibehalten"
 }
