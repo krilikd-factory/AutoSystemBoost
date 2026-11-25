@@ -2453,7 +2453,7 @@ python3 - "$ROOT" <<'PY' || fail 'source/locale contract'
 import sys, json, re, pathlib
 root = pathlib.Path(sys.argv[1]); s = (root / 'webroot/index.html').read_text(encoding='utf-8')
 head = s[:s.index('<style>\n:root {')]
-assert "window.__asbI18nEarly={code:w," in head and "x.open('GET','i18n/'+w+'.json',true)" in head
+assert "window.__asbI18nEarly={code:w," in head and "x.open('GET','i18n/'+w+'.json?v=27-pill2',true)" in head
 hl = re.search(r"var L=\[([^\]]*)\]", head).group(1)
 ml = re.search(r"const ASB_LANGS = \[([^\]]*)\];", s).group(1)
 assert [x.strip(" '") for x in hl.split(',')] == [x.strip(" '") for x in ml.split(',')], (hl, ml)
@@ -2491,7 +2491,7 @@ async function scenario(saved, nav, broken) {
     const x = this;
     x.open = (m, u) => { x.url = u; };
     x.send = () => { reqs.push(x.url); setImmediate(() => {
-      const code = x.url.replace(/^i18n\/|\.json$/g, '');
+      const code = x.url.split('?')[0].replace(/^i18n\/|\.json$/g, '');
       if (broken.indexOf(code) >= 0) { x.status = 404; x.responseText = ''; }
       else { x.status = 200; x.responseText = JSON.stringify({ hello: code }); }
       x.onload();
@@ -2505,16 +2505,16 @@ async function scenario(saved, nav, broken) {
 }
 (async () => {
   let r = await scenario('ru', 'en-US', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/ru.json"]', 'ru opening read: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/ru.json?v=27-pill2"]', 'ru opening read: ' + JSON.stringify(r.reqs));
   chk(r.I18N.ru && r.I18N.ru.hello === 'ru' && Object.keys(r.I18N.en).length === 0, 'ru dictionary: ' + JSON.stringify(r.I18N));
   r = await scenario('en', 'ru-RU', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/en.json"]' && r.I18N.en.hello === 'en', 'en opening: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/en.json?v=27-pill2"]' && r.I18N.en.hello === 'en', 'en opening: ' + JSON.stringify(r.reqs));
   r = await scenario(null, 'de-DE', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/de.json"]' && r.I18N.de.hello === 'de', 'device language: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/de.json?v=27-pill2"]' && r.I18N.de.hello === 'de', 'device language: ' + JSON.stringify(r.reqs));
   r = await scenario('xx', 'tr-TR', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/tr.json"]', 'invalid stored language: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/tr.json?v=27-pill2"]', 'invalid stored language: ' + JSON.stringify(r.reqs));
   r = await scenario('uk', 'en', ['uk']);
-  chk(JSON.stringify(r.reqs) === '["i18n/uk.json","i18n/uk.json","i18n/en.json"]' && r.I18N.en.hello === 'en' && !r.I18N.uk,
+  chk(JSON.stringify(r.reqs) === '["i18n/uk.json?v=27-pill2","i18n/uk.json?v=27-pill2","i18n/en.json?v=27-pill2"]' && r.I18N.en.hello === 'en' && !r.I18N.uk,
     'a missing locale falls back to English: ' + JSON.stringify(r.reqs));
   r = await scenario('fr', 'en', ['fr', 'en']);
   chk(r.reqs.length === 3 && Object.keys(r.I18N.en).length === 0, 'nothing readable still resolves: ' + JSON.stringify(r.reqs));
