@@ -17186,7 +17186,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 printf 'version=V66\nversionCode=660\n' > "$T/module.prop"
-printf '{"version":"V65","versionCode":650,"zipUrl":"https://github.com/o/r/releases/download/65/x.zip","changelog":"https://raw.githubusercontent.com/old/r/main/CHANGELOG.md"}' > "$T/update.json"
+printf '{"version":"V65","versionCode":650,"zipUrl":"https://github.com/o/r/releases/download/65/x.zip","changelog":"https://raw.githubusercontent.com/old/r/main/release-notes.txt"}' > "$T/update.json"
 out="$(cd "$T" && GITHUB_REPOSITORY=o/r python3 "$ROOT/tools/asb_ota_advisory.py")"
 printf '%s\n' "$out" | grep -q 'Public OTA: V65 / 650; source build: V66 / 660'
 printf '%s\n' "$out" | grep -q '^::warning::update.json changelog points to a different repository'
