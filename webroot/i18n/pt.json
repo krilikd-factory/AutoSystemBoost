@@ -4443,5 +4443,8 @@
   "st_cool_gaming_battery": "inativo em Poupança: os jogos ficam sem modo de jogo",
   "cfg_profile_restore_smart": "Restaurar aprendizagem Smart guardada",
   "cfg_profile_restore_smart_hint": "Desative para aplicar as definições e manter a aprendizagem Smart atual.",
-  "cfg_res_smart_kept_choice": "Aprendizagem atual mantida por escolha"
+  "cfg_res_smart_kept_choice": "Aprendizagem atual mantida por escolha",
+  "cfg_tile_active": "alterados · {n}",
+  "lsp_actions_help_title": "O que fazem os botões?",
+  "lsp_actions_help_text": "Aliviar remove apenas os âmbitos das aplicações indicadas; o módulo permanece ativo. Desativar desliga o módulo inteiro. As alterações entram em vigor após reiniciar e podem ser desfeitas no histórico."
 }

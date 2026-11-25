@@ -4443,5 +4443,8 @@
   "st_cool_gaming_battery": "inactivo en Ahorro: los juegos quedan sin modo juego",
   "cfg_profile_restore_smart": "Restaurar aprendizaje guardado de Smart",
   "cfg_profile_restore_smart_hint": "Desactívalo para aplicar los ajustes y conservar el aprendizaje actual de Smart.",
-  "cfg_res_smart_kept_choice": "Se conservó el aprendizaje actual por tu elección"
+  "cfg_res_smart_kept_choice": "Se conservó el aprendizaje actual por tu elección",
+  "cfg_tile_active": "cambiados · {n}",
+  "lsp_actions_help_title": "¿Qué hacen los botones?",
+  "lsp_actions_help_text": "Aligerar retira solo los ámbitos de las aplicaciones indicadas; el módulo sigue activo. Desactivar apaga el módulo completo. Los cambios se aplican al reiniciar y se pueden deshacer en el registro."
 }

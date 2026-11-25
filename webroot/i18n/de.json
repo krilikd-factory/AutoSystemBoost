@@ -4443,5 +4443,8 @@
   "st_cool_gaming_battery": "inaktiv im Akkuprofil: Spiele ohne Spielmodus",
   "cfg_profile_restore_smart": "Gespeichertes Smart-Lernen wiederherstellen",
   "cfg_profile_restore_smart_hint": "Deaktivieren, um Einstellungen anzuwenden und das aktuelle Smart-Lernen zu behalten.",
-  "cfg_res_smart_kept_choice": "Aktuelles Lernen auf Wunsch beibehalten"
+  "cfg_res_smart_kept_choice": "Aktuelles Lernen auf Wunsch beibehalten",
+  "cfg_tile_active": "geändert · {n}",
+  "lsp_actions_help_title": "Was bewirken die Schaltflächen?",
+  "lsp_actions_help_text": "Entlasten entfernt nur die aufgeführten App-Bereiche; das Modul bleibt aktiv. Ausschalten deaktiviert das gesamte Modul. Änderungen gelten nach dem Neustart und lassen sich im Protokoll rückgängig machen."
 }

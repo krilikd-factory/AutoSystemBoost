@@ -4443,5 +4443,8 @@
   "st_cool_gaming_battery": "inactif en Économie : les jeux restent hors mode jeu",
   "cfg_profile_restore_smart": "Restaurer l’apprentissage Smart enregistré",
   "cfg_profile_restore_smart_hint": "Désactivez pour appliquer les réglages et conserver l’apprentissage Smart actuel.",
-  "cfg_res_smart_kept_choice": "Apprentissage actuel conservé selon votre choix"
+  "cfg_res_smart_kept_choice": "Apprentissage actuel conservé selon votre choix",
+  "cfg_tile_active": "modifiés · {n}",
+  "lsp_actions_help_title": "Que font les boutons ?",
+  "lsp_actions_help_text": "Alléger retire uniquement les applications indiquées du périmètre ; le module reste actif. Désactiver coupe tout le module. Les changements prennent effet au redémarrage et peuvent être annulés dans le journal."
 }

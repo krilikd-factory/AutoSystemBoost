@@ -4443,5 +4443,8 @@
   "st_cool_gaming_battery": "inattivo in Risparmio: i giochi restano fuori dalla modalità gioco",
   "cfg_profile_restore_smart": "Ripristina apprendimento Smart salvato",
   "cfg_profile_restore_smart_hint": "Disattiva per applicare le impostazioni e mantenere l’apprendimento Smart attuale.",
-  "cfg_res_smart_kept_choice": "Apprendimento attuale mantenuto per tua scelta"
+  "cfg_res_smart_kept_choice": "Apprendimento attuale mantenuto per tua scelta",
+  "cfg_tile_active": "modificati · {n}",
+  "lsp_actions_help_title": "Cosa fanno i pulsanti?",
+  "lsp_actions_help_text": "Alleggerisci rimuove solo gli ambiti delle app elencate; il modulo resta attivo. Disattiva spegne l’intero modulo. Le modifiche valgono dopo il riavvio e si possono annullare nel registro."
 }

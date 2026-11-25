@@ -4443,5 +4443,8 @@
   "st_cool_gaming_battery": "在“省电”中未生效：游戏不进入游戏模式",
   "cfg_profile_restore_smart": "恢复已保存的 Smart 学习数据",
   "cfg_profile_restore_smart_hint": "关闭后仅应用设置，保留当前 Smart 学习数据。",
-  "cfg_res_smart_kept_choice": "已按您的选择保留当前学习数据"
+  "cfg_res_smart_kept_choice": "已按您的选择保留当前学习数据",
+  "cfg_tile_active": "已更改 · {n}",
+  "lsp_actions_help_title": "按钮有什么作用？",
+  "lsp_actions_help_text": "减轻只移除所列应用的作用域，模块仍保持启用。关闭会停用整个模块。更改将在重启后生效，并可在更改记录中撤销。"
 }

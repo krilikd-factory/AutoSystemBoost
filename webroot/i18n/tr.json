@@ -4443,5 +4443,8 @@
   "st_cool_gaming_battery": "Tasarruf’ta etkin değil: oyunlar oyun moduna girmez",
   "cfg_profile_restore_smart": "Kaydedilen Smart öğrenimini geri yükle",
   "cfg_profile_restore_smart_hint": "Ayarları uygulayıp mevcut Smart öğrenimini korumak için kapatın.",
-  "cfg_res_smart_kept_choice": "Seçiminiz doğrultusunda mevcut öğrenim korundu"
+  "cfg_res_smart_kept_choice": "Seçiminiz doğrultusunda mevcut öğrenim korundu",
+  "cfg_tile_active": "değişen · {n}",
+  "lsp_actions_help_title": "Düğmeler ne yapar?",
+  "lsp_actions_help_text": "Hafiflet yalnızca listelenen uygulama kapsamlarını kaldırır; modül etkin kalır. Kapat tüm modülü devre dışı bırakır. Değişiklikler yeniden başlatınca uygulanır ve geçmişten geri alınabilir."
 }
