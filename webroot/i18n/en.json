@@ -4029,7 +4029,7 @@
   "zy_nav_s7": "Budgets",
   "zy_off_desc": "ASB will not attach to Zygisk in newly started app processes. Apps that are already running keep their previous state until they are restarted.",
   "zy_off_enable": "Enable ASB Zygisk",
-  "zy_off_kept": "Your mode, automatic app selection, feature switches, guard and ART settings are preserved. Enabling again restores that setup; it does not silently choose a new preset.",
+  "zy_off_kept": "The first enable with untouched settings selects Auto. Previously configured switches are preserved when enabling again.",
   "zy_off_settings": "Settings → System",
   "zy_off_title": "ASB Zygisk is off",
   "zy_sec_activity": "Activity and cost",
