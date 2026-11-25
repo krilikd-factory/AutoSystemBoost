@@ -10089,16 +10089,16 @@ Object.defineProperty(E.prototype,'classList',{get(){return {add:(c)=>{this.clas
     chk(tile.className==='cfg-tile cat-'+wantedCat,'category hue alias differs at '+CFG_GROUPS[i].id+': '+tile.className);
     chk(tile.children[0].innerHTML.includes('data-kind="'+CFG_GROUPS[i].id+'"'),'icon is missing at '+i);
     chk(tile.attrs['aria-label'].includes(tile.children[2].textContent),'accessible label lacks the scope at '+i);
-    const foot=tile.children[3];chk(foot.children.length===1&&foot.children[0].className==='cfg-tile-count'&&foot.children[0].children.length===1&&foot.children[0].children[0].className.startsWith('cfg-tile-active'),'footer must contain one pill with both counts at '+i);
+    const foot=tile.children[3];chk(foot.children.length===1&&foot.children[0].className==='cfg-tile-count'&&foot.children[0].children.length===4&&foot.children[0].children[2].className.startsWith('cfg-tile-active'),'footer must contain one pill with both counts at '+i);
     const expected=1+(CFG_GROUPS[i].id==='camera'?2:['kernel','battery'].includes(CFG_GROUPS[i].id)?1:0);
-    chk(foot.children[0].textContent===expected+' controls','structural total differs at '+i+': '+foot.children[0].textContent);
+    chk(foot.children[0].children[0].textContent==='controls'&&foot.children[0].children[1].textContent===String(expected),'structural total differs at '+i+': '+foot.children[0].textContent);
     chk(!foot.children[0].className.includes('is-pending')&&!foot.children[0].className.includes('has-on'),'total still has an activation/pending state at '+i);
   });
-  const totals=hub.children.map(tile=>tile.children[3].children[0].textContent);
+  const totals=hub.children.map(tile=>tile.children[3].children[0].children[1].textContent);
   _cfgVals.iface='0';const staleList=new E('div');renderHub(staleList);
   const afterHub=staleList.children[0];
-  chk(afterHub.children.every((tile,i)=>tile.children[3].children.length===1&&tile.children[3].children[0].textContent===totals[i]),'Config state changed structural totals');
-  chk(hub.children[0].children[3].children[0].children[0].textContent !== afterHub.children[0].children[3].children[0].children[0].textContent,'changed count did not respond to config');
+  chk(afterHub.children.every((tile,i)=>tile.children[3].children.length===1&&tile.children[3].children[0].children[1].textContent===totals[i]),'Config state changed structural totals');
+  chk(hub.children[0].children[3].children[0].children[3].textContent !== afterHub.children[0].children[3].children[0].children[3].textContent,'changed count did not respond to config');
   chk(JSON.stringify(staleList).indexOf('cfg-tile-bar')<0,'category hub created a bar node');
   console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
@@ -14192,7 +14192,7 @@ assert 'liveMonitorSchedule(liveOpenRefreshDelay());' in open_live
 assert 'const LIVE_OPEN_SETTLE_MS = 240;' in s and 'const LIVE_OPEN_REUSE_MS = 1200;' in s
 hub = body('function cfgRenderHub(list) {')
 assert 'const total = items.length + extras.length;' in hub
-assert "cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', String(total));" in hub and "cnt.className = 'cfg-tile-count'" in hub
+assert "const totalLabel = T('cfg_tile_total', '{n} controls')" in hub and "cnt.className = 'cfg-tile-count'" in hub
 assert 'cfgLoadFresh' not in hub and 'cfgIsActive' not in hub and 'cfg-tile-bar' not in hub and 'foot.children.length' not in hub
 hub_sig = body('function cfgHubSig() {')
 assert 'cfgLoadFresh' not in hub_sig and '_cfgVals' not in hub_sig and 'cfgHubExtraSig()' in hub_sig
@@ -14314,8 +14314,8 @@ load=body('async function cfgLoadNow() {')
 assert 'cfgPaintAfterLoad();' in load and 'runBatch(parts)' in load
 hub=body('function cfgRenderHub(list) {')
 assert 'cfgLoadFresh' not in hub and 'cfgIsActive' not in hub and '_cfgVals' not in hub
-assert "cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', String(total));" in hub
-assert 'html .cfg-tile-count { display:inline-flex; flex-direction:column; flex-wrap:nowrap;' in s, 'category counts must use consistent two-row pills'
+assert "const totalLabel = T('cfg_tile_total', '{n} controls')" in hub
+assert 'html .cfg-tile-count { display:grid; grid-template-columns:minmax(0,auto) auto;' in s, 'category counts must use aligned label/value columns'
 assert 'border-left:' not in s[s.index('.cfg-tile-active {'):s.index('}', s.index('.cfg-tile-active {'))], 'a divider returned before the changed count'
 # Final cascade values, including both compact-fit fallbacks.
 for token in ('width:40px;\n  height:40px;\n  margin:0 0 3px;\n  border-radius:14px;',

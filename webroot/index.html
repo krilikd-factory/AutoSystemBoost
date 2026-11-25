@@ -6407,7 +6407,8 @@ html .cfg-tile-foot {
   padding:0;
 }
 html .cfg-tile-count { flex:0 0 auto; min-width:30px; box-sizing:border-box; padding:2px 4px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:6px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.1 var(--mono); letter-spacing:0; text-align:center; }
-html .cfg-tile-count { display:inline-flex; flex-direction:column; flex-wrap:nowrap; justify-content:center; align-items:center; gap:2px; width:max-content; max-width:100%; padding:3px 7px; border-radius:8px; font-size:9px; line-height:1.2; white-space:nowrap; }
+html .cfg-tile-count { display:grid; grid-template-columns:minmax(0,auto) auto; column-gap:8px; row-gap:2px; width:max-content; max-width:100%; padding:3px 7px; border-radius:8px; font-size:9px; line-height:1.2; white-space:nowrap; text-align:start; }
+.cfg-tile-count-value { text-align:end; font-variant-numeric:tabular-nums; }
 html[data-asb-theme="light"] .cfg-tile {
   background:linear-gradient(155deg,color-mix(in srgb,var(--cat) 8%,transparent),transparent 70%),#fff !important;
   border-color:color-mix(in srgb,var(--cat) 24%,var(--border)) !important;
@@ -15259,16 +15260,19 @@ function cfgRenderHub(list) {
     foot.className = 'cfg-tile-foot';
     const cnt = document.createElement('div');
     cnt.className = 'cfg-tile-count';
-    cnt.textContent = T('cfg_tile_total', '{n} controls').replace('{n}', String(total));
-    foot.appendChild(cnt);
-    const active = document.createElement('span');
-    active.className = 'cfg-tile-active';
+    // Two aligned label/value rows: the numbers remain in one column, including 9/10.
+    const totalLabel = T('cfg_tile_total', '{n} controls').replace('{n}', '').replace(/[·:]/g, '').trim();
+    const activeLabel = T('cfg_tile_active', '{n} changed').replace('{n}', '').replace(/[·:]/g, '').trim();
     const count = cfgHubActiveCount(g.id, items, extras);
-    if (count === 0) active.classList.add('is-zero');
-    active.textContent = count === null ? '…' : T('cfg_tile_active', '{n} changed').replace('{n}', String(count));
-    const totalLabel = cnt.textContent;
-    cnt.appendChild(active);
-    tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + totalLabel + '. ' + active.textContent);
+    const countText = count === null ? '…' : String(count);
+    const totalName = document.createElement('span'); totalName.textContent = totalLabel;
+    const totalValue = document.createElement('span'); totalValue.className = 'cfg-tile-count-value'; totalValue.textContent = String(total);
+    const active = document.createElement('span'); active.className = 'cfg-tile-active'; active.textContent = activeLabel;
+    const activeValue = document.createElement('span'); activeValue.className = 'cfg-tile-active cfg-tile-count-value'; activeValue.textContent = countText;
+    if (count === 0) { active.classList.add('is-zero'); activeValue.classList.add('is-zero'); }
+    cnt.appendChild(totalName); cnt.appendChild(totalValue); cnt.appendChild(active); cnt.appendChild(activeValue);
+    foot.appendChild(cnt);
+    tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + totalLabel + ' ' + total + '. ' + activeLabel + ' ' + countText);
     tile.appendChild(foot);
 
     hub.appendChild(tile);
