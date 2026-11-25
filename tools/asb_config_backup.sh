@@ -273,7 +273,9 @@ list_profiles() {
 }
 
 restore_profile() {
-  _name="$1"; shift; [ "$#" -gt 0 ] || { echo 'restore needs allowed keys' >&2; exit 2; }
+  _name="$1"; shift; _restore_smart=1
+  if [ "${1:-}" = "--no-smart" ]; then _restore_smart=0; shift; fi
+  [ "$#" -gt 0 ] || { echo 'restore needs allowed keys' >&2; exit 2; }
   _in="$(verify_profile "$_name")"
   # What changed, for the WebUI's outcome panel (fix142): the config before the import and
   # after it, key by key. Best effort - no copy, no figure.
@@ -293,7 +295,7 @@ restore_profile() {
       END { print c + 0 }' "$_rb_before" "$CONF" 2>/dev/null)"
     rm -f "$_rb_before"
   fi
-  smart_restore "$_name"
+  if [ "$_restore_smart" = 1 ]; then smart_restore "$_name"; else echo "smart_learning=kept_by_choice"; fi
 }
 delete_profile() {
   _name="$1"; _profile_ok "$_name" || { echo 'invalid profile name' >&2; exit 2; }

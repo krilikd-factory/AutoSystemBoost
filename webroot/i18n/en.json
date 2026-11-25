@@ -4333,5 +4333,8 @@
   "st_only_perf": "idle: works only in Performance",
   "st_off_in_stock": "idle in Stock",
   "st_only_battery": "idle: works only in Battery",
-  "st_cool_gaming_battery": "idle in Battery: games stay out of game mode"
+  "st_cool_gaming_battery": "idle in Battery: games stay out of game mode",
+  "cfg_profile_restore_smart": "Restore saved Smart learning",
+  "cfg_profile_restore_smart_hint": "Turn off to apply settings while keeping current Smart learning.",
+  "cfg_res_smart_kept_choice": "current learning kept (your choice)"
 }

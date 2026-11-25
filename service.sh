@@ -563,6 +563,20 @@ asb_migrate_governor_conf
           sh "$MODDIR/runtime/asb_odm_rebind.sh" effects-guard
         ) &
       fi
+      # Root-manager overlays can arrive after the first pass. Retry only effect configs,
+      # and only before the existing crash guard has blocked DSP. Restart audioserver only
+      # when the init-namespace readback proves an effect config actually changed.
+      if grep -q 'audio_effects' /data/adb/asb/odm_bind_manifest.txt 2>/dev/null; then
+        ( exec </dev/null >/dev/null 2>&1
+          sleep 60
+          if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ ! -f /data/adb/asb/dsp_effects_blocked ]; then
+            sh "$MODDIR/runtime/asb_odm_rebind.sh" apply effects
+            if [ "$?" = 10 ]; then
+              setprop ctl.restart audioserver 2>/dev/null || true
+            fi
+          fi
+        ) &
+      fi
       # A second camera-only pass a minute later: a layer the root manager adds at its own
       # boot-completed stage lands after us and can sit in front of the first bind. The pass
       # is a read-back per file when everything is already live, so it costs nothing then.

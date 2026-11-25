@@ -476,6 +476,10 @@ run list | grep '^daily|.*|ok|saved$' >/dev/null || fail "imported profile not l
 rm -f "$SMART/buckets.bin"
 run restore daily $KEYS | grep -x 'smart_learning=restored' >/dev/null || fail "restore from an imported file failed"
 [ -s "$SMART/buckets.bin" ] || fail "learning not restored from the file"
+printf 'current-learning-must-stay\n' > "$SMART/buckets.bin"
+run restore daily --no-smart $KEYS | grep -x 'smart_learning=kept_by_choice' >/dev/null || fail "restore ignored settings-only choice"
+[ "$(cat "$SMART/buckets.bin")" = 'current-learning-must-stay' ] || fail "settings-only restore changed Smart learning"
+
 
 # 3. Refused: tampered content, an extra entry, traversal, two profiles, a link.
 mk() {   # $1 = name of a staging dir already filled; $2 = output

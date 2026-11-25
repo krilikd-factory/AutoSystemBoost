@@ -18675,7 +18675,7 @@ async function nfApply() {
 const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';
 const _cfgProfile = { mode:'', store:'internal', rows:[], selected:'', replace:'', remove:'', draft:'', busy:false,
   /* fix134: Smart learning in a saved configuration is a choice, offered when there is some. */
-  smartAvail:false, smartFiles:0, withSmart:true,
+  smartAvail:false, smartFiles:0, withSmart:true, restoreSmart:true,
   /* fix142: the outcome of a save or an apply is shown in the window itself, and a file just
    * opened says plainly that it is not applied yet. */
   result:null, resultTimer:0, resultLeft:0, opened:null };
@@ -18770,6 +18770,7 @@ function cfgProfileSmartLine(state) {
   const map = {
     saved: T('cfg_res_smart_saved', 'saved with the settings'),
     skipped_by_choice: T('cfg_res_smart_skipped', 'not included (your choice)'),
+    kept_by_choice: T('cfg_res_smart_kept_choice', 'kept as it was (your choice)'),
     empty: T('cfg_res_smart_none', 'nothing learned yet'),
     unavailable: T('cfg_res_smart_none', 'nothing learned yet'),
     restored: T('cfg_res_smart_restored', 'restored'),
@@ -18785,7 +18786,7 @@ async function cfgProfileOpen(mode) {
   _cfgProfile.mode = mode; _cfgProfile.store = 'internal'; _cfgProfile.rows = [];
   _cfgProfile.selected = ''; _cfgProfile.replace = ''; _cfgProfile.remove = ''; _cfgProfile.draft = ''; _cfgProfile.busy = false;
   _cfgProfile.dir = ''; cfgFmInit();
-  _cfgProfile.smartAvail = false; _cfgProfile.smartFiles = 0; _cfgProfile.withSmart = true;
+  _cfgProfile.smartAvail = false; _cfgProfile.smartFiles = 0; _cfgProfile.withSmart = true; _cfgProfile.restoreSmart = true;
   cfgProfileResultStop(); _cfgProfile.result = null; _cfgProfile.opened = null;
   const m = _el('cfgProfileModal'); if (!m) return;
   m.hidden = false; m.setAttribute('aria-hidden', 'false');
@@ -18918,6 +18919,21 @@ function cfgProfilePaint() {
   });
   body.appendChild(list);
   if (!_cfgProfile.selected) return;
+  const chosen = _cfgProfile.rows.find(function(p) { return p.name === _cfgProfile.selected; });
+  if (chosen && chosen.smart === 'saved') {
+    const chk = document.createElement('button'); chk.type = 'button';
+    chk.className = 'cfg-profile-check' + (_cfgProfile.restoreSmart ? ' on' : '');
+    chk.setAttribute('role', 'checkbox'); chk.setAttribute('aria-checked', _cfgProfile.restoreSmart ? 'true' : 'false');
+    chk.disabled = _cfgProfile.busy;
+    const box = document.createElement('span'); box.className = 'cfg-profile-check-box'; box.textContent = _cfgProfile.restoreSmart ? '✓' : '';
+    const txt = document.createElement('span');
+    const title = document.createElement('div'); title.className = 'cfg-profile-check-title'; title.textContent = T('cfg_profile_restore_smart', 'Restore saved Smart learning');
+    const sub = document.createElement('div'); sub.className = 'cfg-profile-check-sub';
+    sub.textContent = T('cfg_profile_restore_smart_hint', 'Turn off to apply settings while keeping current Smart learning.');
+    txt.appendChild(title); txt.appendChild(sub); chk.appendChild(box); chk.appendChild(txt);
+    chk.onclick = function() { if (_cfgProfile.busy) return; _cfgProfile.restoreSmart = !_cfgProfile.restoreSmart; cfgProfilePaint(); };
+    body.appendChild(chk);
+  }
   const actions = document.createElement('div');
   actions.className = 'cfg-profile-actions' + (_cfgProfile.store === 'internal' ? ' has-delete' : '');
   const apply = cfgProfileButton(_cfgProfile.busy ? T('cfg_profile_apply_active','Applying saved configuration…') : T('cfg_profile_apply','Apply saved configuration'),
@@ -19012,7 +19028,7 @@ async function cfgProfileApply() {
   // be visible immediately, including on devices where profile restore needs a few seconds.
   await cfgProfilePaintYield();
   if (!(await cfgProfileEnsureInternal())) { _cfgProfile.busy = false; cfgProfilePaint(); return; }
-  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' restore ' + shQuote(_cfgProfile.selected) + ' ' + cfgProfileArgs());
+  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' restore ' + shQuote(_cfgProfile.selected) + (_cfgProfile.restoreSmart ? '' : ' --no-smart') + ' ' + cfgProfileArgs());
   const name = _cfgProfile.selected; const detail = String((r && r.stdout) || '');
   /* "restored=" is printed only after the settings were written: a failure after it is the
    * Smart learning part, and the settings are applied. Reporting that as "could not restore"

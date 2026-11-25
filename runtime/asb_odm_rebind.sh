@@ -112,6 +112,9 @@ do_apply() {
     case "$_t" in ''|'#'*) continue ;; esac
     case "$_t" in */camera/*) _is_cam=1 ;; *) _is_cam=0 ;; esac
     [ "${1:-}" = camera ] && [ "$_is_cam" = 0 ] && continue
+    if [ "${1:-}" = effects ]; then
+      case "$_t" in */audio_effects.xml|*/audio_effects_config.xml) : ;; *) continue ;; esac
+    fi
     _synced=0
     [ "$_is_cam" = 1 ] && _sync_payload "$_t" "$_p"
     _v="$(_one "$_t" "$_p")"
