@@ -10091,17 +10091,18 @@ Object.defineProperty(E.prototype,'classList',{get(){return {add:(c)=>{this.clas
     chk(tile.className==='cfg-tile cat-'+wantedCat,'category hue alias differs at '+CFG_GROUPS[i].id+': '+tile.className);
     chk(tile.children[0].innerHTML.includes('data-kind="'+CFG_GROUPS[i].id+'"'),'icon is missing at '+i);
     chk(tile.attrs['aria-label'].includes(tile.children[2].textContent),'accessible label lacks the scope at '+i);
-    const foot=tile.children[3];chk(foot.children.length===1&&foot.children[0].className==='cfg-tile-count'&&foot.children[0].children.length===4&&foot.children[0].children[2].className.startsWith('cfg-tile-active'),'footer must contain one pill with both counts at '+i);
+    const foot=tile.children[3], meter=foot.children[0];
+    chk(foot.children.length===1 && meter.className==='cfg-tile-count','one progress meter required at '+i);
     const expected=1+(CFG_GROUPS[i].id==='camera'?2:['kernel','battery'].includes(CFG_GROUPS[i].id)?1:0);
-    chk(foot.children[0].children[0].textContent==='controls'&&foot.children[0].children[1].textContent===String(expected),'structural total differs at '+i+': '+foot.children[0].textContent);
-    chk(!foot.children[0].className.includes('is-pending')&&!foot.children[0].className.includes('has-on'),'total still has an activation/pending state at '+i);
+    const changed=Number(_cfgVals[CFG_GROUPS[i].id]||0)+cfgGroupExtraCards(CFG_GROUPS[i].id).filter(Boolean).length;
+    chk(meter.textContent===changed+' / '+expected,'count order or structural total differs at '+i+': '+meter.textContent);
+    chk(meter.attrs.style==='--progress:'+Math.min(100,changed/expected*100)+'%','progress fill differs at '+i);
   });
-  const totals=hub.children.map(tile=>tile.children[3].children[0].children[1].textContent);
+  const totals=hub.children.map(tile=>tile.children[3].children[0].textContent.split(' / ')[1]);
   _cfgVals.iface='0';const staleList=new E('div');renderHub(staleList);
   const afterHub=staleList.children[0];
-  chk(afterHub.children.every((tile,i)=>tile.children[3].children.length===1&&tile.children[3].children[0].children[1].textContent===totals[i]),'Config state changed structural totals');
-  chk(hub.children[0].children[3].children[0].children[3].textContent !== afterHub.children[0].children[3].children[0].children[3].textContent,'changed count did not respond to config');
-  chk(JSON.stringify(staleList).indexOf('cfg-tile-bar')<0,'category hub created a bar node');
+  chk(afterHub.children.every((tile,i)=>tile.children[3].children[0].textContent.split(' / ')[1]===totals[i]),'Config state changed structural totals');
+  chk(hub.children[0].children[3].children[0].textContent !== afterHub.children[0].children[3].children[0].textContent,'changed count did not respond to config');
   console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
@@ -14317,13 +14318,11 @@ assert 'cfgPaintAfterLoad();' in load and 'runBatch(parts)' in load
 hub=body('function cfgRenderHub(list) {')
 assert 'cfgLoadFresh' not in hub and 'cfgIsActive' not in hub and '_cfgVals' not in hub
 assert "const totalLabel = T('cfg_tile_total', '{n} controls')" in hub
-assert 'html .cfg-tile-count { display:grid; grid-template-columns:minmax(0,auto) auto;' in s, 'category counts must use aligned label/value columns'
+assert 'var(--progress,0%)' in s and "cnt.textContent = countText + ' / ' + total" in hub
 assert 'border-left:' not in s[s.index('.cfg-tile-active {'):s.index('}', s.index('.cfg-tile-active {'))], 'a divider returned before the changed count'
 # Final cascade values, including both compact-fit fallbacks.
 for token in ('width:40px;\n  height:40px;\n  margin:0 0 3px;\n  border-radius:14px;',
               'html .cfg-tile-ico .tech-icon { width:25px; height:25px; margin:0; }',
-              'min-width:30px; box-sizing:border-box; padding:2px 4px;',
-              'font:650 9px/1.1 var(--mono); letter-spacing:0;',
               'html.asb-fit-c1 .cfg-tile-ico .tech-icon { width:24px; height:24px; }',
               'html.asb-fit-c2 .cfg-tile-ico { width:36px; height:36px; margin-bottom:3px; border-radius:12px; }',
               'html.asb-fit-c2 .cfg-tile-ico .tech-icon { width:22px; height:22px; }'):

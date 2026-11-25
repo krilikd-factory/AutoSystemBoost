@@ -6362,7 +6362,7 @@ html .cfg-tile {
   gap:0;
   padding:5px 7px;
   text-align:center;
-  background:linear-gradient(155deg,color-mix(in srgb,var(--cat,var(--accent)) 10%,transparent),color-mix(in srgb,var(--cat,var(--accent)) 3%,transparent) 62%,transparent),rgba(255,255,255,.018);
+  background:linear-gradient(155deg,color-mix(in srgb,var(--cat,var(--accent)) 17%,transparent),color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent) 62%,transparent),rgba(255,255,255,.018);
   border-color:color-mix(in srgb,var(--cat,var(--accent)) 24%,var(--border));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 8px 22px -18px color-mix(in srgb,var(--cat,var(--accent)) 60%,transparent);
 }
@@ -6406,11 +6406,16 @@ html .cfg-tile-foot {
   margin:4px 0 0;
   padding:0;
 }
-html .cfg-tile-count { flex:0 0 auto; min-width:30px; box-sizing:border-box; padding:2px 4px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:6px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.1 var(--mono); letter-spacing:0; text-align:center; }
-html .cfg-tile-count { display:grid; grid-template-columns:minmax(0,auto) auto; column-gap:8px; row-gap:2px; width:max-content; max-width:100%; padding:3px 7px; border-radius:8px; font-size:9px; line-height:1.2; white-space:nowrap; text-align:start; }
-.cfg-tile-count-value { text-align:end; font-variant-numeric:tabular-nums; }
+html .cfg-tile-count {
+  flex:0 0 auto; width:min(88px, 90%); box-sizing:border-box; padding:3px 6px;
+  border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 28%,var(--border));
+  border-radius:7px; overflow:hidden; white-space:nowrap; direction:ltr;
+  background:linear-gradient(to right, color-mix(in srgb,var(--cat,var(--accent)) 30%,transparent) var(--progress,0%), transparent var(--progress,0%)), color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent);
+  color:var(--text); font:650 10px/1.2 var(--mono); letter-spacing:0;
+  font-variant-numeric:tabular-nums; text-align:center;
+}
 html[data-asb-theme="light"] .cfg-tile {
-  background:linear-gradient(155deg,color-mix(in srgb,var(--cat) 8%,transparent),transparent 70%),#fff !important;
+  background:linear-gradient(155deg,color-mix(in srgb,var(--cat) 12%,transparent),transparent 70%),#fff !important;
   border-color:color-mix(in srgb,var(--cat) 24%,var(--border)) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.82),0 8px 20px -18px color-mix(in srgb,var(--cat) 35%,transparent) !important;
 }
@@ -15260,17 +15265,13 @@ function cfgRenderHub(list) {
     foot.className = 'cfg-tile-foot';
     const cnt = document.createElement('div');
     cnt.className = 'cfg-tile-count';
-    // Two aligned label/value rows: the numbers remain in one column, including 9/10.
     const totalLabel = T('cfg_tile_total', '{n} controls').replace('{n}', '').replace(/[·:]/g, '').trim();
     const activeLabel = T('cfg_tile_active', '{n} changed').replace('{n}', '').replace(/[·:]/g, '').trim();
     const count = cfgHubActiveCount(g.id, items, extras);
     const countText = count === null ? '…' : String(count);
-    const totalName = document.createElement('span'); totalName.textContent = totalLabel;
-    const totalValue = document.createElement('span'); totalValue.className = 'cfg-tile-count-value'; totalValue.textContent = String(total);
-    const active = document.createElement('span'); active.className = 'cfg-tile-active'; active.textContent = activeLabel;
-    const activeValue = document.createElement('span'); activeValue.className = 'cfg-tile-active cfg-tile-count-value'; activeValue.textContent = countText;
-    if (count === 0) { active.classList.add('is-zero'); activeValue.classList.add('is-zero'); }
-    cnt.appendChild(totalName); cnt.appendChild(totalValue); cnt.appendChild(active); cnt.appendChild(activeValue);
+    const progress = count === null || !total ? 0 : Math.max(0, Math.min(100, count / total * 100));
+    cnt.setAttribute('style', '--progress:' + progress + '%');
+    cnt.textContent = countText + ' / ' + total;
     foot.appendChild(cnt);
     tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + totalLabel + ' ' + total + '. ' + activeLabel + ' ' + countText);
     tile.appendChild(foot);
