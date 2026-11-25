@@ -10089,7 +10089,7 @@ Object.defineProperty(E.prototype,'classList',{get(){return {add:(c)=>{this.clas
     chk(tile.className==='cfg-tile cat-'+wantedCat,'category hue alias differs at '+CFG_GROUPS[i].id+': '+tile.className);
     chk(tile.children[0].innerHTML.includes('data-kind="'+CFG_GROUPS[i].id+'"'),'icon is missing at '+i);
     chk(tile.attrs['aria-label'].includes(tile.children[2].textContent),'accessible label lacks the scope at '+i);
-    const foot=tile.children[3];chk(foot.children.length===2&&foot.children[0].className==='cfg-tile-count'&&foot.children[1].className.startsWith('cfg-tile-active'),'footer must contain total and changed count at '+i);
+    const foot=tile.children[3];chk(foot.children.length===1&&foot.children[0].className==='cfg-tile-count'&&foot.children[0].children.length===1&&foot.children[0].children[0].className.startsWith('cfg-tile-active'),'footer must contain one pill with both counts at '+i);
     const expected=1+(CFG_GROUPS[i].id==='camera'?2:['kernel','battery'].includes(CFG_GROUPS[i].id)?1:0);
     chk(foot.children[0].textContent===expected+' controls','structural total differs at '+i+': '+foot.children[0].textContent);
     chk(!foot.children[0].className.includes('is-pending')&&!foot.children[0].className.includes('has-on'),'total still has an activation/pending state at '+i);
@@ -10097,8 +10097,8 @@ Object.defineProperty(E.prototype,'classList',{get(){return {add:(c)=>{this.clas
   const totals=hub.children.map(tile=>tile.children[3].children[0].textContent);
   _cfgVals.iface='0';const staleList=new E('div');renderHub(staleList);
   const afterHub=staleList.children[0];
-  chk(afterHub.children.every((tile,i)=>tile.children[3].children.length===2&&tile.children[3].children[0].textContent===totals[i]),'Config state changed structural totals');
-  chk(hub.children[0].children[3].children[1].textContent !== afterHub.children[0].children[3].children[1].textContent,'changed count did not respond to config');
+  chk(afterHub.children.every((tile,i)=>tile.children[3].children.length===1&&tile.children[3].children[0].textContent===totals[i]),'Config state changed structural totals');
+  chk(hub.children[0].children[3].children[0].children[0].textContent !== afterHub.children[0].children[3].children[0].children[0].textContent,'changed count did not respond to config');
   chk(JSON.stringify(staleList).indexOf('cfg-tile-bar')<0,'category hub created a bar node');
   console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});

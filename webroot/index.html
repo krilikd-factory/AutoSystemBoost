@@ -2922,9 +2922,9 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
   letter-spacing: 0.04em;
 }
 .cfg-tile-count.has-on { color: rgba(255,255,255,0.72); }
-.cfg-tile-active { margin-left: 5px; padding: 2px 6px; border-radius: 8px; color: var(--cat, var(--accent)); background: color-mix(in srgb,var(--cat,var(--accent)) 12%,transparent); font: 650 9px/1.1 var(--mono); white-space: nowrap; }
+.cfg-tile-active { display:inline-block; padding-left:4px; border-left:1px solid color-mix(in srgb,var(--cat,var(--accent)) 30%,transparent); color:var(--cat,var(--accent)); white-space:nowrap; }
 .cfg-smart-live { display:inline-flex; min-width:0; max-width:100%; padding:2px 6px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 24%,var(--border)); border-radius:8px; color:var(--text-secondary); font:600 9px/1.3 var(--mono); overflow-wrap:anywhere; }
-.cfg-tile-active.is-zero { color: var(--text-secondary); background: transparent; opacity: .72; }
+.cfg-tile-active.is-zero { color:var(--text-secondary); opacity:.72; }
 
 /* The twelve per-category rgba rules that lived here collapsed into --cat + color-mix
  * (fix193) - one hue token per category instead of hand-tuned border/fill pairs that
@@ -6401,6 +6401,7 @@ html .cfg-tile-foot {
   padding:0;
 }
 html .cfg-tile-count { flex:0 0 auto; min-width:30px; box-sizing:border-box; padding:2px 4px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:6px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.1 var(--mono); letter-spacing:0; text-align:center; }
+html .cfg-tile-count { display:inline-flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:2px 4px; max-width:100%; border-radius:999px; font-size:8px; line-height:1.3; }
 html[data-asb-theme="light"] .cfg-tile {
   background:linear-gradient(155deg,color-mix(in srgb,var(--cat) 8%,transparent),transparent 70%),#fff !important;
   border-color:color-mix(in srgb,var(--cat) 24%,var(--border)) !important;
@@ -15259,8 +15260,9 @@ function cfgRenderHub(list) {
     const count = cfgHubActiveCount(g.id, items, extras);
     if (count === 0) active.classList.add('is-zero');
     active.textContent = count === null ? '…' : T('cfg_tile_active', '{n} changed').replace('{n}', String(count));
-    foot.appendChild(active);
-    tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + cnt.textContent + '. ' + active.textContent);
+    const totalLabel = cnt.textContent;
+    cnt.appendChild(active);
+    tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + totalLabel + '. ' + active.textContent);
     tile.appendChild(foot);
 
     hub.appendChild(tile);
