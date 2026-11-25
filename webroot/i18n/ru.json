@@ -1143,7 +1143,7 @@
   "cfg_sw_off": "Выкл",
   "cfg_sw_on": "Вкл",
   "cfg_sysui_tile": "Перезапуск SystemUI",
-  "cfg_tile_total": "{n} параметров",
+  "cfg_tile_total": "параметров · {n}",
   "cfg_ui_section_diag": "Диагностика",
   "cfg_ui_section_diag_hint": "Управление диагностикой ASB и устройства без перехвата управления настройками LSPosed.",
   "cfg_ui_section_feel": "Экран и вибрация",
