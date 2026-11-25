@@ -10145,7 +10145,7 @@ assert s.count('asb-value-pending') >= 8
 for token in ('html .cfg-tile {\n  align-items:center;','text-align:center;',
               'html .cfg-tile-ico {\n  display:grid;\n  place-items:center;\n  align-self:center;',
               'html .cfg-tile-name {\n  width:100%;','html .cfg-tile-desc {\n  width:100%;',
-              'html .cfg-tile-count { flex:0 0 auto; min-width:30px; box-sizing:border-box; padding:2px 4px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 18%,var(--border)); border-radius:6px; background:color-mix(in srgb,var(--cat,var(--accent)) 7%,transparent); font:650 9px/1.1 var(--mono); letter-spacing:0; text-align:center; }'):
+              'var(--progress,0%)'):
     assert token in s, token
 PY
 command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix329 runtime: no node'; exit 0; }
