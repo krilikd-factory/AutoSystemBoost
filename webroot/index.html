@@ -2923,6 +2923,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 }
 .cfg-tile-count.has-on { color: rgba(255,255,255,0.72); }
 .cfg-tile-active { margin-left: 5px; padding: 2px 6px; border-radius: 8px; color: var(--cat, var(--accent)); background: color-mix(in srgb,var(--cat,var(--accent)) 12%,transparent); font: 650 9px/1.1 var(--mono); white-space: nowrap; }
+.cfg-smart-live { display:inline-flex; min-width:0; max-width:100%; padding:2px 6px; border:1px solid color-mix(in srgb,var(--cat,var(--accent)) 24%,var(--border)); border-radius:8px; color:var(--text-secondary); font:600 9px/1.3 var(--mono); overflow-wrap:anywhere; }
 .cfg-tile-active.is-zero { color: var(--text-secondary); background: transparent; opacity: .72; }
 
 /* The twelve per-category rgba rules that lived here collapsed into --cat + color-mix
@@ -6751,7 +6752,7 @@ html .cfg-row[class*="cat-"] .cfg-sel-pop.cfg-sel-pop button.active { color:var(
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row .cfg-status,
 .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row .cfg-smart-owner { font-size:10px; white-space:normal; }
 /* Keep the checking badge and SMART on the same baseline as the live value. */
-html .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row.cfg-status-row { flex-wrap:nowrap; min-width:0; }
+html .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row.cfg-status-row { flex-wrap:wrap; min-width:0; }
 html .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row > .cfg-status { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 html .dsp-console.asb-console-status .dsp-console-panel .cfg-status-row > .cfg-smart-owner { flex-shrink:0; white-space:nowrap; }
 .dsp-console .dsp-console-panel .cfg-name, .dsp-console .dsp-console-panel .cfg-name-text { hyphens:none; }
@@ -13579,9 +13580,44 @@ var _cfgGroup = null;
  * place, while a long category must never leave the hub's header above the viewport. */
 function cfgShowGroup(groupId) {
   _cfgGroup = groupId || null;
+  if (groupId === 'net' && _selectedProfile === 'smart') _cfgSmartNet.values = null;
   const page = _el('configPage');
   if (page) page.scrollTop = 0;
   cfgRender();
+  if (groupId === 'net' && _selectedProfile === 'smart' && _cfgVals.net_txqueue === 'smart') cfgSmartNetworkRefresh();
+  if (groupId === 'kernel' && _selectedProfile === 'smart' && _kernelPanel.loaded && !_kernelPanel.loading)
+    cfgAfterEnter(function () { if (_cfgGroup === 'kernel') kernelPanelLoad(true); });
+}
+
+let _cfgSmartNet = { seq:0, values:null };
+function cfgSmartNetworkParse(raw) {
+  const out = [];
+  String(raw || '').split(/\r?\n/).forEach(function (line) {
+    const m = /^(wlan[0-9]+)\|([0-9]{1,7})$/.exec(line.trim());
+    if (m && out.length < 4) out.push(m[1] + ': ' + m[2]);
+  });
+  return out;
+}
+function cfgSmartNetworkLabel() {
+  const v = _cfgSmartNet.values;
+  return v === null ? T('cfg_smart_reading', 'Reading…') :
+    T('cfg_smart_current', 'Now: {v}').replace('{v}', v.length ? v.join(' · ') : T('cfg_smart_unknown', 'unavailable'));
+}
+function cfgSmartNetworkRefresh() {
+  if (_selectedProfile !== 'smart' || _cfgGroup !== 'net') return;
+  const seq = ++_cfgSmartNet.seq;
+  _cfgSmartNet.values = null;
+  cfgAfterEnter(async function () {
+    if (_cfgGroup !== 'net' || seq !== _cfgSmartNet.seq) return;
+    let r = null;
+    try {
+      const cmd = 'for f in /sys/class/net/wlan[0-9]*/tx_queue_len; do [ -r "$f" ] || continue; d=${f%/tx_queue_len}; d=${d##*/}; printf "%s|" "$d"; cat "$f"; done';
+      r = await asbRunDetached('smartnet', cmd, 5000);
+    } catch (e) {}
+    if (_cfgGroup !== 'net' || seq !== _cfgSmartNet.seq) return;
+    _cfgSmartNet.values = r && r.errno === 0 ? cfgSmartNetworkParse(r.stdout) : [];
+    cfgRender();
+  });
 }
 
 /* One navigation category owns the whole visual chain: hub tile, subsection heading,
@@ -13756,6 +13792,7 @@ function kernelStateClass(state) {
 function kernelControlAvailability(key) {
   if (ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0) {
     const c = _kernelPanel.controls[key];
+    if (_kernelPanel.loading && typeof _selectedProfile !== 'undefined' && _selectedProfile === 'smart') return { state:'loading', live:'' };
     if (!c) return { state:(_kernelPanel.loading || _kernelPanel.queued) ? 'loading' : 'unknown', live:'' };
     return { state:c.state === 'writable' ? 'available' : (c.state === 'not_writable' ? 'read_only' : c.state), live:c.live, mode:c.mode };
   }
@@ -13842,7 +13879,10 @@ function kernelDecorateControlRow(row, key) {
     const showLive = a.live && a.live !== 'unknown' && a.state !== 'not_readable';
     /* The adjacent Smart owner already explains automatic control. The status badge itself
      * shows the actual kernel value, not a redundant "On · value" composite. */
-    badge.textContent = showLive ? String(a.live).slice(0, 16) : kernelStateText(a.state);
+    const item = typeof CFG_ITEMS !== 'undefined' ? CFG_ITEMS.find(function (it) { return it.key === key; }) : null;
+    const chosen = item && (_cfgVals[key] !== undefined ? _cfgVals[key] : item.def);
+    const smart = item && typeof cfgSmartOwner === 'function' && cfgSmartOwner(item, chosen);
+    badge.textContent = showLive ? (smart ? T('cfg_smart_current', 'Now: {v}').replace('{v}', String(a.live).slice(0, 16)) : String(a.live).slice(0, 16)) : kernelStateText(a.state);
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
@@ -14870,6 +14910,7 @@ function cfgSmartOwner(it, cur) {
   if (it.key === 'auto_battery_enable' && v === '1') return 'dynamic';
   if (it.key === 'sustained_temp_mode' && v === 'smart') return 'thermal';
   if (it.key === 'mglru_mode' && v === 'smart') return 'dynamic';
+  if (it.key === 'net_txqueue' && v === 'smart') return 'dynamic';
   if (it.key === 'wifi_powersave' && (v === 'screen_off' || v === 'always')) return 'dynamic';
   if ((it.key === 'net_screen_off_lte' || it.key === 'net_lte_light') && v === '1') return 'radio';
   if (it.key === 'perf_ceiling_pct' && v !== '100') return 'limit';
@@ -15568,6 +15609,11 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       };
       so.title = T(_smartOwner === 'profile' ? 'cfg_smart_profile' : 'cfg_smart_owner_' + _smartOwner, _smartWhy[_smartOwner]);
       statusRow.appendChild(so);
+      if (it.key === 'net_txqueue') {
+        const live = document.createElement('span'); live.className = 'cfg-smart-live';
+        live.textContent = cfgSmartNetworkLabel();
+        statusRow.appendChild(live);
+      }
     }
     top.appendChild(main);
 
@@ -16625,6 +16671,7 @@ async function cfgSet(key, val, ctl) {
       // and writes the sysfs entries directly - no reboot involved.
       if (key === 'net_rps' || key === 'net_txqueue') {
         try { await run('sh ' + MD + '/runtime/asb_net_offload.sh >/dev/null 2>&1'); } catch (e) {}
+        if (key === 'net_txqueue' && _cfgGroup === 'net') cfgSmartNetworkRefresh();
         toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');

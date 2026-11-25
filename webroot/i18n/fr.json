@@ -4446,5 +4446,8 @@
   "cfg_res_smart_kept_choice": "Apprentissage actuel conservé selon votre choix",
   "cfg_tile_active": "modifiés · {n}",
   "lsp_actions_help_title": "Que font les boutons ?",
-  "lsp_actions_help_text": "Alléger retire uniquement les applications indiquées du périmètre ; le module reste actif. Désactiver coupe tout le module. Les changements prennent effet au redémarrage et peuvent être annulés dans le journal."
+  "lsp_actions_help_text": "Alléger retire uniquement les applications indiquées du périmètre ; le module reste actif. Désactiver coupe tout le module. Les changements prennent effet au redémarrage et peuvent être annulés dans le journal.",
+  "cfg_smart_current": "Actuel : {v}",
+  "cfg_smart_reading": "Lecture…",
+  "cfg_smart_unknown": "indisponible"
 }

@@ -4446,5 +4446,8 @@
   "cfg_res_smart_kept_choice": "Aktuelles Lernen auf Wunsch beibehalten",
   "cfg_tile_active": "geändert · {n}",
   "lsp_actions_help_title": "Was bewirken die Schaltflächen?",
-  "lsp_actions_help_text": "Entlasten entfernt nur die aufgeführten App-Bereiche; das Modul bleibt aktiv. Ausschalten deaktiviert das gesamte Modul. Änderungen gelten nach dem Neustart und lassen sich im Protokoll rückgängig machen."
+  "lsp_actions_help_text": "Entlasten entfernt nur die aufgeführten App-Bereiche; das Modul bleibt aktiv. Ausschalten deaktiviert das gesamte Modul. Änderungen gelten nach dem Neustart und lassen sich im Protokoll rückgängig machen.",
+  "cfg_smart_current": "Jetzt: {v}",
+  "cfg_smart_reading": "Lesen…",
+  "cfg_smart_unknown": "nicht verfügbar"
 }

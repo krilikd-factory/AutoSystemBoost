@@ -4446,5 +4446,8 @@
   "cfg_res_smart_kept_choice": "Pembelajaran saat ini dipertahankan sesuai pilihan Anda",
   "cfg_tile_active": "diubah · {n}",
   "lsp_actions_help_title": "Apa fungsi tombol ini?",
-  "lsp_actions_help_text": "Ringankan hanya menghapus cakupan aplikasi yang tercantum; modul tetap aktif. Matikan menonaktifkan seluruh modul. Perubahan berlaku setelah mulai ulang dan dapat dibatalkan di riwayat."
+  "lsp_actions_help_text": "Ringankan hanya menghapus cakupan aplikasi yang tercantum; modul tetap aktif. Matikan menonaktifkan seluruh modul. Perubahan berlaku setelah mulai ulang dan dapat dibatalkan di riwayat.",
+  "cfg_smart_current": "Saat ini: {v}",
+  "cfg_smart_reading": "Membaca…",
+  "cfg_smart_unknown": "tidak tersedia"
 }

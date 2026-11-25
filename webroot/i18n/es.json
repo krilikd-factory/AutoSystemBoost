@@ -4446,5 +4446,8 @@
   "cfg_res_smart_kept_choice": "Se conservó el aprendizaje actual por tu elección",
   "cfg_tile_active": "cambiados · {n}",
   "lsp_actions_help_title": "¿Qué hacen los botones?",
-  "lsp_actions_help_text": "Aligerar retira solo los ámbitos de las aplicaciones indicadas; el módulo sigue activo. Desactivar apaga el módulo completo. Los cambios se aplican al reiniciar y se pueden deshacer en el registro."
+  "lsp_actions_help_text": "Aligerar retira solo los ámbitos de las aplicaciones indicadas; el módulo sigue activo. Desactivar apaga el módulo completo. Los cambios se aplican al reiniciar y se pueden deshacer en el registro.",
+  "cfg_smart_current": "Ahora: {v}",
+  "cfg_smart_reading": "Leyendo…",
+  "cfg_smart_unknown": "no disponible"
 }

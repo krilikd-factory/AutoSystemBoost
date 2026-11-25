@@ -17091,6 +17091,35 @@ console.log('PASS profile headers use selected mode immediately');
 JS
 )
 
+t_webui_smart_live_snapshot() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const a=h.indexOf('let _cfgSmartNet ='),b=h.indexOf('/* One navigation category',a);
+if(a<0||b<0)throw Error('missing Smart network snapshot');
+global._cfgGroup='net';global._selectedProfile='smart';global.cfgRender=()=>{};
+global.T=(k,f)=>f;global.cfgAfterEnter=fn=>fn();
+let pending=[];global.asbRunDetached=()=>new Promise(r=>pending.push(r));
+eval(h.slice(a,b)+';globalThis.parse=cfgSmartNetworkParse;globalThis.label=cfgSmartNetworkLabel;globalThis.refresh=cfgSmartNetworkRefresh;');
+const chk=(v,m)=>{if(!v)throw Error(m)};
+(async()=>{
+ chk(JSON.stringify(parse('wlan0|256\nrmnet0|9\nwlan1|abc\nwlan2|1024'))==='["wlan0: 256","wlan2: 1024"]','invalid readback accepted');
+ refresh();chk(label()==='Reading…','fresh read must not claim an old value');
+ refresh();pending[1]({errno:0,stdout:'wlan0|256\n'});await new Promise(r=>setImmediate(r));
+ chk(label()==='Now: wlan0: 256','actual queue not shown');
+ pending[0]({errno:0,stdout:'wlan0|1000\n'});await new Promise(r=>setImmediate(r));
+ chk(label()==='Now: wlan0: 256','older read replaced new value');
+ refresh();pending[2]({errno:1,stdout:''});await new Promise(r=>setImmediate(r));
+ chk(label()==='Now: unavailable','failure must not imply a value');
+ console.log('ok');
+})().catch(e=>{console.error(e.stack);process.exit(1)});
+JS
+node "$T/test.js" "$ROOT/webroot/index.html" | grep -qx ok
+echo 'PASS Smart actual queue snapshot: readback, failure and out-of-order results'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
