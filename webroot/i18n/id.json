@@ -696,7 +696,7 @@
       "name": "LTE saat layar mati"
     },
     "net_txqueue": {
-      "desc": "Berapa banyak paket yang boleh menunggu di antrean kirim Wi-Fi. Antrean lebih pendek dapat mengurangi jeda saat beban tinggi, tetapi bisa membatasi throughput pada koneksi cepat atau tidak stabil.\n\n🔋 Daya tahan baterai: tidak ada beda\n⚡ Latensi rendah (game, panggilan): Pendek\n✋ Jika ragu: Standar",
+      "desc": "Berapa banyak paket yang boleh menunggu di antrean kirim Wi-Fi. Antrean lebih pendek dapat mengurangi jeda saat beban tinggi, tetapi bisa membatasi throughput pada koneksi cepat atau tidak stabil. Smart memakai antrean pendek hanya saat bermain dengan layar menyala tanpa batas suhu, dan mengembalikan nilai awal pada kondisi lain.\n\n🔋 Daya tahan baterai: tidak ada beda\n⚡ Latensi rendah (game, panggilan): Pendek\n✋ Jika ragu: Standar",
       "descOpt": {
         "short": "256 paket. Dapat mengurangi latensi antrean, tetapi tidak cocok untuk setiap koneksi cepat.",
         "shorter": "128 paket. Uji throughput, kehilangan, dan latensi saat sibuk.",

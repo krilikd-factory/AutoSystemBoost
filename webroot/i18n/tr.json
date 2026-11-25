@@ -696,7 +696,7 @@
       "name": "Ekran kapalıyken LTE"
     },
     "net_txqueue": {
-      "desc": "Wi-Fi gönderim kuyruğunda kaç paketin bekleyebileceği. Daha kısa kuyruk yük altında gecikmeyi azaltabilir ama hızlı ya da kararsız bağlantılarda verimi sınırlayabilir.\n\n🔋 Pil ömrü: fark yok\n⚡ Düşük gecikme (oyunlar, aramalar): Kısa\n✋ Emin değilseniz: Varsayılan",
+      "desc": "Wi-Fi gönderim kuyruğunda kaç paketin bekleyebileceği. Daha kısa kuyruk yük altında gecikmeyi azaltabilir ama hızlı ya da kararsız bağlantılarda verimi sınırlayabilir. Smart kısa kuyruğu yalnızca ekran açıkken ısı sınırı olmayan oyunlarda kullanır; diğer durumlarda ilk değeri geri yükler.\n\n🔋 Pil ömrü: fark yok\n⚡ Düşük gecikme (oyunlar, aramalar): Kısa\n✋ Emin değilseniz: Varsayılan",
       "descOpt": {
         "short": "256 paket. Kuyruk gecikmesini azaltabilir, ancak her hızlı bağlantıya uymaz.",
         "shorter": "128 paket. Yük altında throughput, kayıp ve gecikmeyi test et.",

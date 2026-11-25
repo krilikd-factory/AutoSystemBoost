@@ -603,7 +603,7 @@
       "name": "LTE While Screen Off"
     },
     "net_txqueue": {
-      "desc": "How many packets may wait in the Wi-Fi transmit queue. Shorter queues can cut delay under load but may limit throughput on fast or unstable links.\n\n🔋 Battery life: no difference\n⚡ Low latency (games, calls): Short\n✋ Not sure: Stock",
+      "desc": "How many packets may wait in the Wi-Fi transmit queue. Smart uses the shorter queue only in a cool, screen-on game and restores the original value otherwise. Shorter queues can cut delay under load but may limit throughput on fast or unstable links.\n\n🔋 Battery life: no difference\n⚡ Low latency (games, calls): Short\n✋ Not sure: Stock",
       "descOpt": {
         "short": "Use 256 packets. Can reduce queued delay but may not suit every fast link.",
         "shorter": "Use 128 packets. Test throughput, loss and latency under load.",

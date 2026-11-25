@@ -696,7 +696,7 @@
       "name": "LTE bei ausgeschaltetem Bildschirm"
     },
     "net_txqueue": {
-      "desc": "Wie viele Pakete in der WLAN-Sendewarteschlange warten dürfen. Kürzere Warteschlangen können die Verzögerung unter Last senken, aber den Durchsatz auf schnellen oder instabilen Verbindungen begrenzen.\n\n🔋 Akkulaufzeit: kein Unterschied\n⚡ Niedrige Latenz (Spiele, Anrufe): Kürzer\n✋ Unsicher: Standard",
+      "desc": "Wie viele Pakete in der WLAN-Sendewarteschlange warten dürfen. Kürzere Warteschlangen können die Verzögerung unter Last senken, aber den Durchsatz auf schnellen oder instabilen Verbindungen begrenzen. Smart nutzt die kürzere Warteschlange nur beim Spielen mit eingeschaltetem Bildschirm ohne Wärmebegrenzung und stellt sonst den Ausgangswert wieder her.\n\n🔋 Akkulaufzeit: kein Unterschied\n⚡ Niedrige Latenz (Spiele, Anrufe): Kürzer\n✋ Unsicher: Standard",
       "descOpt": {
         "short": "256 Pakete. Kann Wartezeit senken, passt aber nicht zu jeder schnellen Verbindung.",
         "shorter": "128 Pakete. Durchsatz, Verluste und Latenz unter Last prüfen.",

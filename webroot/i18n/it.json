@@ -696,7 +696,7 @@
       "name": "LTE a schermo spento"
     },
     "net_txqueue": {
-      "desc": "Quanti pacchetti possono attendere nella coda di invio Wi-Fi. Code più corte possono ridurre il ritardo sotto carico, ma limitare il throughput su collegamenti veloci o instabili.\n\n🔋 Autonomia: nessuna differenza\n⚡ Bassa latenza (giochi, chiamate): Corta\n✋ Nel dubbio: Stock",
+      "desc": "Quanti pacchetti possono attendere nella coda di invio Wi-Fi. Code più corte possono ridurre il ritardo sotto carico, ma limitare il throughput su collegamenti veloci o instabili. Smart usa la coda breve solo nei giochi con schermo acceso e senza limite termico; negli altri casi ripristina il valore originale.\n\n🔋 Autonomia: nessuna differenza\n⚡ Bassa latenza (giochi, chiamate): Corta\n✋ Nel dubbio: Stock",
       "descOpt": {
         "short": "256 pacchetti. Può ridurre il ritardo in coda, ma non adatto a ogni collegamento veloce.",
         "shorter": "128 pacchetti. Verifica throughput, perdite e latenza sotto carico.",

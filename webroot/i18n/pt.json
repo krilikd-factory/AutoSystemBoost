@@ -696,7 +696,7 @@
       "name": "LTE com o ecrã apagado"
     },
     "net_txqueue": {
-      "desc": "Quantos pacotes podem esperar na fila de envio do Wi-Fi. Filas mais curtas podem reduzir o atraso sob carga, mas limitar a vazão em links rápidos ou instáveis.\n\n🔋 Autonomia: sem diferença\n⚡ Baixa latência (jogos, chamadas): Curta\n✋ Na dúvida: Stock",
+      "desc": "Quantos pacotes podem esperar na fila de envio do Wi-Fi. Filas mais curtas podem reduzir o atraso sob carga, mas limitar a vazão em links rápidos ou instáveis. Smart usa a fila curta apenas em jogos com ecrã ligado e sem limite térmico; nos outros casos repõe o valor original.\n\n🔋 Autonomia: sem diferença\n⚡ Baixa latência (jogos, chamadas): Curta\n✋ Na dúvida: Stock",
       "descOpt": {
         "short": "256 pacotes. Pode reduzir atraso em fila, mas não serve para todas as ligações rápidas.",
         "shorter": "128 pacotes. Teste débito, perdas e latência sob carga.",

@@ -696,7 +696,7 @@
       "name": "LTE écran éteint"
     },
     "net_txqueue": {
-      "desc": "Combien de paquets peuvent attendre dans la file d’émission Wi-Fi. Une file plus courte peut réduire le délai sous charge mais limiter le débit sur les liens rapides ou instables.\n\n🔋 Autonomie : aucune différence\n⚡ Faible latence (jeux, appels) : Courte\n✋ Dans le doute : Stock",
+      "desc": "Combien de paquets peuvent attendre dans la file d’émission Wi-Fi. Une file plus courte peut réduire le délai sous charge mais limiter le débit sur les liens rapides ou instables. Smart utilise la file courte en jeu, écran allumé et sans limite thermique ; sinon il rétablit la valeur initiale.\n\n🔋 Autonomie : aucune différence\n⚡ Faible latence (jeux, appels) : Courte\n✋ Dans le doute : Stock",
       "descOpt": {
         "short": "256 paquets. Peut réduire le délai en file, mais ne convient pas à tous les liens rapides.",
         "shorter": "128 paquets. Testez débit, pertes et latence sous charge.",

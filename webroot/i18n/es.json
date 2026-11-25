@@ -696,7 +696,7 @@
       "name": "LTE con la pantalla apagada"
     },
     "net_txqueue": {
-      "desc": "Cuántos paquetes pueden esperar en la cola de envío Wi-Fi. Colas más cortas pueden reducir el retraso con carga, pero limitar el caudal en enlaces rápidos o inestables.\n\n🔋 Autonomía: sin diferencia\n⚡ Baja latencia (juegos, llamadas): Corta\n✋ Si dudas: Stock",
+      "desc": "Cuántos paquetes pueden esperar en la cola de envío Wi-Fi. Colas más cortas pueden reducir el retraso con carga, pero limitar el caudal en enlaces rápidos o inestables. Smart usa la cola corta solo en juegos con la pantalla encendida y sin límite térmico; en otros casos restaura el valor original.\n\n🔋 Autonomía: sin diferencia\n⚡ Baja latencia (juegos, llamadas): Corta\n✋ Si dudas: Stock",
       "descOpt": {
         "short": "256 paquetes. Puede reducir el retraso en cola, pero no conviene a todos los enlaces rápidos.",
         "shorter": "128 paquetes. Comprueba rendimiento, pérdidas y latencia bajo carga.",
