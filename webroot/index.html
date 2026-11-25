@@ -16434,7 +16434,7 @@ async function cfgSet(key, val, ctl) {
     var AUDIO_LIVE_KEYS = ['dsp_outputs','audio_profile','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect','dsp_eq_target','bt_absvol_mode'];
     // DSP-only changes go through the daemon, which hands the value to the live effect -
     // no audioserver restart, so the audio never drops out while the slider moves.
-    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect','dsp_eq_target'];
+    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','dsp_true_peak','dsp_lookahead','dsp_dc_protect','dsp_eq_target','dsp_outputs'];
     // Overlay keys: media_loudness (volume curves) and audio_dac_hifi (mixer) are baked
     // into the mounted overlay and only read at boot - a restart cannot pick them up, so
     // be honest and say reboot.

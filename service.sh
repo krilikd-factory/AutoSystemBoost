@@ -551,6 +551,9 @@ asb_migrate_governor_conf
     # Each line is bound and then read back through init's namespace (asb_odm_rebind.sh):
     # "applied" used to mean "some mount returned 0", and a field diag showed it for a boot
     # in which neither camera file reached the camera. Exit 10 = an audio file changed.
+    if [ -f /data/adb/asb/vendor_overlay_blocked ] && [ -r "$MODDIR/runtime/asb_overlay_guard.sh" ]; then
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_overlay_guard.sh" recover >/dev/null 2>&1 || true
+    fi
     if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ] \
        && [ -r "$MODDIR/runtime/asb_odm_rebind.sh" ]; then
       ASB_ODM_RESTART_CAM=1 sh "$MODDIR/runtime/asb_odm_rebind.sh" apply >/dev/null 2>&1

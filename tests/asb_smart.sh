@@ -8059,6 +8059,40 @@ cc -std=c11 -Wall -Wextra -Werror "$T/helper.c" -o "$T/helper"
 "$T/helper"
 )
 
+t_overlay_zero_payload_recovery_runtime() (
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/state/odm_patched/odm/etc/camera/config" "$T/device/odm/etc/camera/config" "$T/mod/odm/etc/camera/config"
+touch "$T/mod/module.prop"
+sed -e "s|^STATE_DIR=.*|STATE_DIR=$T/state|" -e "s|/odm/etc/camera/|$T/device/odm/etc/camera/|g" -e "s|/odm/etc/\*|$T/device/odm/etc/*|g" "$ROOT/runtime/asb_overlay_guard.sh" > "$T/guard.sh"
+# Sed also rewrites the payload whitelist; restore the actual state payload prefix.
+sed -i -e "s|\$STATE_DIR/odm_patched$T/device/odm/etc/camera/|\$STATE_DIR/odm_patched/odm/etc/camera/|g" -e "s|\$MODDIR$T/device/odm/etc/camera/|\$MODDIR/odm/etc/camera/|g" "$T/guard.sh"
+for rel in conf_tuning_params.json config/video_beauty_default_config; do
+  printf '{"safe":1}\n' > "$T/mod/odm/etc/camera/$rel"
+  printf '{"stock":1}\n' > "$T/device/odm/etc/camera/$rel"
+  dd if=/dev/zero of="$T/state/odm_patched/odm/etc/camera/$rel" bs=16 count=1 2>/dev/null
+  printf '%s|%s\n' "$T/device/odm/etc/camera/$rel" "$T/state/odm_patched/odm/etc/camera/$rel" >> "$T/state/odm_bind_manifest.txt"
+done
+printf 'status=blocked\nreason=invalid_json_payload\nchecked=0\n' > "$T/state/overlay_guard.state"
+touch "$T/state/vendor_overlay_blocked"
+MODDIR="$T/mod" sh "$T/guard.sh" recover
+[ ! -e "$T/state/vendor_overlay_blocked" ] || { echo 'FAIL recovery retained valid block'; exit 1; }
+cmp "$T/mod/odm/etc/camera/conf_tuning_params.json" "$T/state/odm_patched/odm/etc/camera/conf_tuning_params.json"
+# A damaged source must leave the block in place, with no unsafe retry.
+dd if=/dev/zero of="$T/state/odm_patched/odm/etc/camera/conf_tuning_params.json" bs=16 count=1 2>/dev/null
+printf 'bad' > "$T/mod/odm/etc/camera/conf_tuning_params.json"
+printf 'status=blocked\nreason=invalid_json_payload\n' > "$T/state/overlay_guard.state"; touch "$T/state/vendor_overlay_blocked"
+if MODDIR="$T/mod" sh "$T/guard.sh" recover; then echo 'FAIL unsafe source accepted'; exit 1; fi
+[ -e "$T/state/vendor_overlay_blocked" ] || { echo 'FAIL unsafe source cleared block'; exit 1; }
+# An unrelated safety block must never initiate this recovery.
+printf '{"safe":1}\n' > "$T/mod/odm/etc/camera/conf_tuning_params.json"
+printf 'status=blocked\nreason=existing_block\n' > "$T/state/overlay_guard.state"
+if MODDIR="$T/mod" sh "$T/guard.sh" recover; then echo 'FAIL unrelated block cleared'; exit 1; fi
+[ "$(tr -d '\000' < "$T/state/odm_patched/odm/etc/camera/conf_tuning_params.json" | wc -c)" -eq 0 ] || { echo 'FAIL unrelated block mutated payload'; exit 1; }
+echo 'PASS zero camera payload recovery remains guarded'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
