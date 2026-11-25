@@ -10868,7 +10868,7 @@ for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display
               'targets.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);',
               'id="zyLogsBtn"', 'id="zyTgBtn"', 'class="status-row has-back"',
               'font: 700 23px/1.15 var(--sans);',
-              "x.open('GET', 'i18n/' + code + '.json', true)", 'I18N_READY.then(boot);',
+              "x.open('GET', 'i18n/' + code + '.json?v=27-pill2', true)", 'I18N_READY.then(boot);',
               "document.body.classList.contains('zygisk-active')"):
     assert token in h, token
 for token in ('#reportPage .logo-c', '#zygiskPage .logo-c', 'zoom: calc(1 / var(--asb-ui-scale))'):
