@@ -54,7 +54,7 @@ MD="${ASB_ODM_MODDIR:-${MODDIR:-/data/adb/modules/AutoSystemBoost}}"
 # bound payload held the stock table (0.35, 0.5, 0.7) - the bind was perfect and delivered
 # the wrong file. The module copy is the one post-fs-data re-grades from the stock baseline
 # with the current settings on every boot, so it is the source of truth; the payload is
-# rewritten in place (same inode), which also updates a bind that is already mounted.
+# replaced atomically; _one then binds the new inode over any earlier live mount.
 _sync_payload() {   # $1 target $2 payload
   case "$1" in
     */odm/etc/camera/*) _rel="${1#*/odm/etc/camera/}" ;;
@@ -79,12 +79,25 @@ _sync_payload() {   # $1 target $2 payload
   _so="$(tr -cd '{' < "$_src" 2>/dev/null | wc -c)"
   _sc="$(tr -cd '}' < "$_src" 2>/dev/null | wc -c)"
   [ "$_so" = "$_sc" ] && [ "${_so:-0}" -gt 0 ] 2>/dev/null || { rm -f "$2.sync.$$"; _log "action=odm_payload_sync target=$1 result=rejected_unbalanced"; return 0; }
-  if cat "$_src" > "$2" 2>/dev/null; then
-    _log "action=odm_payload_sync target=$1 result=updated"
-    _synced=1
+  # Never truncate the live payload in place: a reboot, failed write or two paths
+  # referring to the same inode could leave a nonempty file full of NUL bytes.
+  # Stage a distinct file and atomically replace the path; _one rebinds the new
+  # inode over the old mount after comparing their contents.
+  _staged="$2.stage.$$"
+  if cp -f "$_src" "$_staged" 2>/dev/null && cmp -s "$_src" "$_staged" 2>/dev/null; then
+    chmod --reference="$2" "$_staged" 2>/dev/null || chmod 0644 "$_staged" 2>/dev/null || true
+    _ctx="$(ls -Zd "$2" 2>/dev/null | awk '{print $1}')"
+    case "$_ctx" in u:object_r:*) chcon "$_ctx" "$_staged" 2>/dev/null || true ;; esac
+    if mv -f "$_staged" "$2" 2>/dev/null; then
+      _log "action=odm_payload_sync target=$1 result=updated"
+      _synced=1
+    else
+      _log "action=odm_payload_sync target=$1 result=write_failed"
+    fi
   else
     _log "action=odm_payload_sync target=$1 result=write_failed"
   fi
+  rm -f "$_staged" 2>/dev/null
   rm -f "$2.sync.$$" 2>/dev/null
 }
 
