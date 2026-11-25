@@ -128,7 +128,7 @@ _mask() {
 
 _save_once() {
   mkdir -p "$(dirname "$STATE")" 2>/dev/null
-  [ -f "$STATE" ] || : > "$STATE" || return 1
+  [ -f "$STATE" ] || touch "$STATE" 2>/dev/null || return 1
   grep -q '^RFS_ENTRIES=' "$STATE" 2>/dev/null || printf 'RFS_ENTRIES=%s\n' "$(cat /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null)" >> "$STATE"
   for _i in $(_ifaces); do
     grep -qF "TXQ:$_i=" "$STATE" 2>/dev/null || printf 'TXQ:%s=%s\n' "$_i" "$(cat "$NETSYS/$_i/tx_queue_len" 2>/dev/null)" >> "$STATE"
