@@ -4317,6 +4317,10 @@ ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep 'result=armed
 [ -f "$T/d/battery_fix.pending" ] || f "armed run wrote no pending flag"
 sh "$A" status | grep 'reset=pending' >/dev/null || f "status does not show the pending reset"
 
+# Never report an armed reset if its state cannot be written.
+printf blocked > "$T/not-a-dir"
+ASB_BFIX_STATE_DIR="$T/not-a-dir" ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run 2>/dev/null | grep 'result=failed reason=state_write' >/dev/null || f "unwritable state reported an armed reset"
+
 # boot deletes exactly the three files, keeps the decoy, clears the flag.
 sh "$A" boot
 for b in batterystats.bin batterystats-checkin.bin batterystats-daily.xml; do
@@ -13360,6 +13364,32 @@ run_hook 4 1 1 smart
 run_hook 4 0 1 smart; run_hook 4 0 0 smart
 [ "$(cat "$T/net/wlan0/tx_queue_len")" = 1000 ]
 echo 'PASS smart network queue: game, idle, thermal and screen transitions, safe mode, profile, manual and cellular'
+)
+
+t_battery_fix_package_list_fallback() (
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin" "$T/state"
+cat > "$T/bin/cmd" <<'EOF'
+#!/bin/sh
+case "$*" in
+  'package list packages') echo 'Failure calling service package: Failed transaction'; exit 0 ;;
+  'package compile '* ) echo Success ;;
+  *) exit 1 ;;
+esac
+EOF
+cat > "$T/bin/pm" <<'EOF'
+#!/bin/sh
+case "$*" in 'list packages') echo 'package:com.example.one';; *) exit 1;; esac
+EOF
+chmod +x "$T/bin/cmd" "$T/bin/pm"
+export PATH="$T/bin:$PATH" ASB_BFIX_STATE_DIR="$T/state" ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 ASB_BFIX_NO_BGJOB=1 ASB_BFIX_SYNC=1
+unset ASB_BFIX_FAKE_PKGS ASB_BFIX_NO_DEXOPT ASB_BFIX_COMPILE_CMD
+sh "$ROOT/runtime/asb_battery_fix.sh" run >/dev/null
+grep -qx 'total=1' "$T/state/battery_fix.compile"
+grep -qx 'ok=1' "$T/state/battery_fix.compile"
+echo 'PASS battery fix package listing: recover from a zero-exit Binder error'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

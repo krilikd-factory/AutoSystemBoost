@@ -2453,7 +2453,7 @@ python3 - "$ROOT" <<'PY' || fail 'source/locale contract'
 import sys, json, re, pathlib
 root = pathlib.Path(sys.argv[1]); s = (root / 'webroot/index.html').read_text(encoding='utf-8')
 head = s[:s.index('<style>\n:root {')]
-assert "window.__asbI18nEarly={code:w," in head and "x.open('GET','i18n/'+w+'.json?v=27-art3',true)" in head
+assert "window.__asbI18nEarly={code:w," in head and "x.open('GET','i18n/'+w+'.json?v=27-art4',true)" in head
 hl = re.search(r"var L=\[([^\]]*)\]", head).group(1)
 ml = re.search(r"const ASB_LANGS = \[([^\]]*)\];", s).group(1)
 assert [x.strip(" '") for x in hl.split(',')] == [x.strip(" '") for x in ml.split(',')], (hl, ml)
@@ -2505,16 +2505,16 @@ async function scenario(saved, nav, broken) {
 }
 (async () => {
   let r = await scenario('ru', 'en-US', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/ru.json?v=27-art3"]', 'ru opening read: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/ru.json?v=27-art4"]', 'ru opening read: ' + JSON.stringify(r.reqs));
   chk(r.I18N.ru && r.I18N.ru.hello === 'ru' && Object.keys(r.I18N.en).length === 0, 'ru dictionary: ' + JSON.stringify(r.I18N));
   r = await scenario('en', 'ru-RU', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/en.json?v=27-art3"]' && r.I18N.en.hello === 'en', 'en opening: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/en.json?v=27-art4"]' && r.I18N.en.hello === 'en', 'en opening: ' + JSON.stringify(r.reqs));
   r = await scenario(null, 'de-DE', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/de.json?v=27-art3"]' && r.I18N.de.hello === 'de', 'device language: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/de.json?v=27-art4"]' && r.I18N.de.hello === 'de', 'device language: ' + JSON.stringify(r.reqs));
   r = await scenario('xx', 'tr-TR', []);
-  chk(JSON.stringify(r.reqs) === '["i18n/tr.json?v=27-art3"]', 'invalid stored language: ' + JSON.stringify(r.reqs));
+  chk(JSON.stringify(r.reqs) === '["i18n/tr.json?v=27-art4"]', 'invalid stored language: ' + JSON.stringify(r.reqs));
   r = await scenario('uk', 'en', ['uk']);
-  chk(JSON.stringify(r.reqs) === '["i18n/uk.json?v=27-art3","i18n/uk.json?v=27-art3","i18n/en.json?v=27-art3"]' && r.I18N.en.hello === 'en' && !r.I18N.uk,
+  chk(JSON.stringify(r.reqs) === '["i18n/uk.json?v=27-art4","i18n/uk.json?v=27-art4","i18n/en.json?v=27-art4"]' && r.I18N.en.hello === 'en' && !r.I18N.uk,
     'a missing locale falls back to English: ' + JSON.stringify(r.reqs));
   r = await scenario('fr', 'en', ['fr', 'en']);
   chk(r.reqs.length === 3 && Object.keys(r.I18N.en).length === 0, 'nothing readable still resolves: ' + JSON.stringify(r.reqs));
@@ -7828,6 +7828,8 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
   await paint(B + 'reset=pending compile=refused phase=refused total=560 done=1 ok=0 fail=1 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failure calling service package: Failed transaction (2147483646)');
   chk(/rejected both package-scoped compile calls/.test(step('bfxStepArt').text) && /no all-package fallback or ART\/Dalvik cleanup was used/.test(step('bfxStepArt').text) && /Android said: cmd: Failure calling service package: Failed transaction \(2147483646\)/.test(step('bfxStepArt').text) && !/\{err\}/.test(step('bfxStepArt').text), 'Binder refusal hides Android response, leaves a placeholder or fabricates completion: ' + step('bfxStepArt').text);
 
+  await paint(B + 'reset=none compile=refused phase=refused total=560 done=3 ok=0 fail=3 cur=- started=1000 finished=1002' + tail + '\nerr_text=cmd: Failed transaction');
+  chk(!/reset.*scheduled/i.test(step('bfxStepArt').text) && /Not scheduled/.test(step('bfxStepReset').text), 'old compilation error fabricated a pending reset');
   await paint(B + 'reset=pending compile=scheduled phase=scheduled total=560 done=1 ok=0 fail=0 cur=- started=1000 finished=1002' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-wait' && /background optimisation job was started/.test(step('bfxStepArt').text) && /does not confirm speed-profile/.test(step('bfxStepArt').text), 'background scheduling was presented as verified compilation: ' + step('bfxStepArt').text);
   await paint(B + 'reset=none compile=interrupted phase=compile total=300 done=40 ok=40 fail=0 cur=x started=1000 finished=-' + tail);
@@ -10868,7 +10870,7 @@ for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display
               'targets.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);',
               'id="zyLogsBtn"', 'id="zyTgBtn"', 'class="status-row has-back"',
               'font: 700 23px/1.15 var(--sans);',
-              "x.open('GET', 'i18n/' + code + '.json?v=27-art3', true)", 'I18N_READY.then(boot);',
+              "x.open('GET', 'i18n/' + code + '.json?v=27-art4', true)", 'I18N_READY.then(boot);',
               "document.body.classList.contains('zygisk-active')"):
     assert token in h, token
 for token in ('#reportPage .logo-c', '#zygiskPage .logo-c', 'zoom: calc(1 / var(--asb-ui-scale))'):

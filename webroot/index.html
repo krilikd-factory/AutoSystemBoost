@@ -21,7 +21,7 @@ html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f2f4f
 </style>
 <script>(function(){try{var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))document.documentElement.setAttribute('data-asb-theme','light');if(t==='glass')document.documentElement.setAttribute('data-asb-glass','1');}catch(e){}})();</script>
 <script>document.documentElement.classList.add('asb-home-pending');</script>
-<script>(function(){try{var L=['ru','uk','de','es','pt','tr','id','it','fr','ar','zh','hy'],w='en',s=null,i,l;try{s=localStorage.getItem('asb_lang');}catch(e){}if(s&&(s==='en'||L.indexOf(s)>=0))w=s;else{l=(navigator.language||navigator.userLanguage||'en').toLowerCase();for(i=0;i<L.length;i++)if(l.indexOf(L[i])===0){w=L[i];break;}}window.__asbI18nEarly={code:w,p:new Promise(function(r){var d=0,f=function(v){if(!d){d=1;r(v);}};try{var x=new XMLHttpRequest();x.open('GET','i18n/'+w+'.json?v=27-art3',true);x.onload=function(){f((x.status===200||x.status===0)&&x.responseText?x.responseText:null);};x.onerror=x.onabort=x.ontimeout=function(){f(null);};x.send(null);}catch(e){f(null);}})};}catch(e){}})();</script>
+<script>(function(){try{var L=['ru','uk','de','es','pt','tr','id','it','fr','ar','zh','hy'],w='en',s=null,i,l;try{s=localStorage.getItem('asb_lang');}catch(e){}if(s&&(s==='en'||L.indexOf(s)>=0))w=s;else{l=(navigator.language||navigator.userLanguage||'en').toLowerCase();for(i=0;i<L.length;i++)if(l.indexOf(L[i])===0){w=L[i];break;}}window.__asbI18nEarly={code:w,p:new Promise(function(r){var d=0,f=function(v){if(!d){d=1;r(v);}};try{var x=new XMLHttpRequest();x.open('GET','i18n/'+w+'.json?v=27-art4',true);x.onload=function(){f((x.status===200||x.status===0)&&x.responseText?x.responseText:null);};x.onerror=x.onabort=x.ontimeout=function(){f(null);};x.send(null);}catch(e){f(null);}})};}catch(e){}})();</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <script>
@@ -8281,7 +8281,7 @@ var I18N_READY;
       }
       try {
         var x = new XMLHttpRequest();
-        x.open('GET', 'i18n/' + code + '.json?v=27-art3', true);
+        x.open('GET', 'i18n/' + code + '.json?v=27-art4', true);
         x.onload = function () {
           try {
             if ((x.status === 200 || x.status === 0) && x.responseText) {
@@ -12212,13 +12212,13 @@ function bfxPaintFrom(f) {
     if (f.cur && f.cur !== '-') nowText = bfxT('bfx_art_now', 'Now: {pkg}', { pkg: f.cur });
   } else if (cs === 'scheduled') {
     artState = 'wait'; ratio = -1;
-    artText = bfxT('bfx_art_scheduled', 'Immediate recompilation was rejected, so Android’s background optimisation job was started instead. This does not confirm speed-profile compilation; its result will be decided by Android. The battery reset remains scheduled.');
+    artText = bfxT('bfx_art_scheduled', 'Immediate recompilation was rejected, so Android’s background optimisation job was started instead. This does not confirm speed-profile compilation; its result will be decided by Android. ');
   } else if (cs === 'done') {
     artState = 'ok'; ratio = 1;
     artText = bfxT('bfx_art_done', 'Done: {ok} succeeded, failed: {fail} · {min} min', { ok: ok, fail: fail, min: Math.max(1, Math.round((finished - started) / 60)) });
   } else if (cs === 'partial') {
     artState = 'wait'; ratio = total ? done / total : 0;
-    artText = bfxT('bfx_art_partial', 'Stopped early after repeated Binder refusals: {ok} succeeded, {fail} failed, {left} not attempted. Only package-scoped results are counted; no aggregate success is inferred. The battery reset remains scheduled.', { ok: ok, fail: fail, left: Math.max(0, total - done) });
+    artText = bfxT('bfx_art_partial', 'Stopped early after repeated Binder refusals: {ok} succeeded, {fail} failed, {left} not attempted. Only package-scoped results are counted; no aggregate success is inferred. ', { ok: ok, fail: fail, left: Math.max(0, total - done) });
   } else if (cs === 'stopped') {
     artState = 'wait'; ratio = total ? done / total : 0;
     artText = bfxT('bfx_art_stopped', 'Stopped at {done} of {total}', { done: done, total: total });
@@ -12232,7 +12232,7 @@ function bfxPaintFrom(f) {
     artState = 'fail';
     const artErr = f.err_text || T('bfx_art_refused_none', 'no reason given');
     artText = /Failed transaction/i.test(artErr)
-      ? bfxT('bfx_art_binder', 'Android repeatedly rejected both package-scoped compile calls. The run stopped early; unprocessed apps were not counted as compiled, and no all-package fallback or ART/Dalvik cleanup was used. The battery reset is still scheduled. Android said: {err}', { fail: fail, done: done, err: artErr })
+      ? bfxT('bfx_art_binder', 'Android repeatedly rejected both package-scoped compile calls. The run stopped early; unprocessed apps were not counted as compiled, and no all-package fallback or ART/Dalvik cleanup was used. Android said: {err}', { fail: fail, done: done, err: artErr })
       : bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: artErr });
   }
   bfxSetStep('bfxStepArt', artState, artText);

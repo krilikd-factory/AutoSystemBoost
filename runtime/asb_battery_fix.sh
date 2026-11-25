@@ -59,7 +59,11 @@ _bf_packages() {
     for _x in $ASB_BFIX_FAKE_PKGS; do printf '%s\n' "$_x"; done
     return
   fi
-  { cmd package list packages 2>/dev/null || pm list packages 2>/dev/null; } | sed -n 's/^package://p' | tr -d '\r' | sort -u
+  _bf_list="$(cmd package list packages 2>/dev/null)"
+  if ! printf '%s\n' "$_bf_list" | grep -q '^package:'; then
+    _bf_list="$(pm list packages 2>/dev/null)"
+  fi
+  printf '%s\n' "$_bf_list" | sed -n 's/^package://p' | tr -d '\r' | sort -u
 }
 _bf_compile_one() {
   _bf_binder=0
@@ -233,8 +237,10 @@ case "${1:-status}" in
       echo "result=refused ${_e#eligible=0 }"
       exit 1
     fi
-    mkdir -p "$STATE_DIR" 2>/dev/null
-    printf 'armed_at=%s\nlevel=%s\n' "$(_now)" "$(_bf_level)" > "$PENDING" 2>/dev/null
+    if ! mkdir -p "$STATE_DIR" 2>/dev/null || ! printf 'armed_at=%s\nlevel=%s\n' "$(_now)" "$(_bf_level)" > "$PENDING" 2>/dev/null; then
+      echo 'result=failed reason=state_write'
+      exit 1
+    fi
     if [ "${ASB_BFIX_NO_DEXOPT:-0}" = 1 ]; then
       _c=skipped
     elif [ "$(_bf_compile_state)" = running ]; then
