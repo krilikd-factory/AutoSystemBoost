@@ -1012,6 +1012,15 @@ bundle_current_diag() {
   _bc_inst="$(bundle_mtime "$MODDIR/module.prop")"
   [ -n "$_bc_ver" ] && [ -n "$_bc_code" ] && [ "$_bc_v" = "$_bc_ver  ($_bc_code)" ] &&
     [ "$_bc_inst" -gt 0 ] && [ "$_bc_t" -ge "$_bc_inst" ] || return 1
+  # Test builds can share a version number. If the installation exposes a payload
+  # hash, require the diagnostic to identify that exact payload as well.
+  if [ -r "$MODDIR/release-manifest.json" ]; then
+    _bc_hash="$(sed -n 's/.*"payload_sha256"[[:space:]]*:[[:space:]]*"\([a-fA-F0-9]*\)".*/\1/p' "$MODDIR/release-manifest.json" | head -n 1)"
+    if [ -n "$_bc_hash" ]; then
+      _bc_report_hash="$(sed -n 's/^[[:space:]]*payload_sha256[[:space:]]*:[[:space:]]*//p' "$_bc_p" | head -n 1)"
+      [ "$_bc_report_hash" = "$_bc_hash" ] || return 1
+    fi
+  fi
   printf '%s\n' "$_bc_d"
 }
 

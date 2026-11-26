@@ -10966,6 +10966,12 @@ t_debug_log_bundle_runtime() (
   out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=1' || fail 'current-build manual diagnostic not reusable'
   out="$(run bundle)"; p="$(printf '%s\n' "$out" | sed -n 's/^path=//p')"
   tar -tf "$p" | grep -qx asbdiag_current.txt || fail 'reusable old diagnostic missing from archive'
+  printf '{"payload_sha256":"abc123"}\n' > "$T/mod/release-manifest.json"
+  out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=0' || fail 'diagnostic without installed payload identity was trusted'
+  printf ' payload_sha256 : abc123\n' >> "$T/logs/asbdiag_current.txt"
+  touch -d '-5 days' "$T/logs/asbdiag_current.txt"
+  out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=1' || fail 'matching payload identity not recognized'
+  rm -f "$T/mod/release-manifest.json"
   touch "$T/mod/module.prop"
   out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=0' || fail 'diagnostic older than installation was trusted'
   rm -f "$T/logs/asbdiag_current.txt" "$T/out"/*
