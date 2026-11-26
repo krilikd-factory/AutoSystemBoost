@@ -4457,13 +4457,13 @@
   "kc_value_off": "désactivé",
   "screenshot_fix_title": "Screenshot fix",
   "screenshot_fix_checking": "Checking…",
-  "screenshot_fix_desc": "Experimental: allows screenshots in selected apps on Android 17, 64-bit processes. Requires ASB Zygisk and an app restart; protected media may remain unavailable.",
-  "screenshot_fix_choose": "Choose an app",
-  "screenshot_fix_add": "Enable for app",
+  "screenshot_fix_desc": "Expérimental : captures dans les applications 64 bits sélectionnées sur Android 17. Nécessite ASB Zygisk et un redémarrage de l’application ; les médias protégés peuvent rester bloqués.",
+  "screenshot_fix_choose": "Choisir une application",
+  "screenshot_fix_add": "Activer pour l’application",
   "screenshot_fix_experimental": "Experimental",
-  "screenshot_fix_unavailable": "Unavailable: check Zygisk, Android 17 and current user",
+  "screenshot_fix_unavailable": "Indisponible : vérifier Zygisk, Android 17 et l’utilisateur",
   "screenshot_fix_remove": "Remove",
-  "screenshot_fix_restart": "Restart the chosen app after enabling or removing the fix. Existing windows can keep their previous state.",
-  "screenshot_fix_failed": "Could not save selection",
-  "screenshot_fix_saved": "Selection saved · restart the app to apply"
+  "screenshot_fix_restart": "Redémarrez l’application après activation ou suppression ; les fenêtres ouvertes peuvent garder leur état.",
+  "screenshot_fix_failed": "Impossible d’enregistrer la sélection",
+  "screenshot_fix_saved": "Sélection enregistrée · redémarrez l’application"
 }

@@ -4457,13 +4457,13 @@
   "kc_value_off": "անջատ.",
   "screenshot_fix_title": "Screenshot fix",
   "screenshot_fix_checking": "Checking…",
-  "screenshot_fix_desc": "Experimental: allows screenshots in selected apps on Android 17, 64-bit processes. Requires ASB Zygisk and an app restart; protected media may remain unavailable.",
-  "screenshot_fix_choose": "Choose an app",
-  "screenshot_fix_add": "Enable for app",
+  "screenshot_fix_desc": "Փորձնական՝ էկրանի նկարահանում ընտրված 64-բիթանոց հավելվածներում Android 17-ում։ Անհրաժեշտ է ASB Zygisk և հավելվածի վերագործարկում․ պաշտպանված մեդիան կարող է անհասանելի մնալ։",
+  "screenshot_fix_choose": "Ընտրել հավելված",
+  "screenshot_fix_add": "Միացնել հավելվածի համար",
   "screenshot_fix_experimental": "Experimental",
-  "screenshot_fix_unavailable": "Unavailable: check Zygisk, Android 17 and current user",
+  "screenshot_fix_unavailable": "Անհասանելի է․ ստուգեք Zygisk-ը, Android 17-ը և օգտատիրոջը",
   "screenshot_fix_remove": "Remove",
-  "screenshot_fix_restart": "Restart the chosen app after enabling or removing the fix. Existing windows can keep their previous state.",
-  "screenshot_fix_failed": "Could not save selection",
-  "screenshot_fix_saved": "Selection saved · restart the app to apply"
+  "screenshot_fix_restart": "Միացնելուց կամ հեռացնելուց հետո վերագործարկեք հավելվածը․ բաց պատուհանները կարող են պահպանել նախկին վիճակը։",
+  "screenshot_fix_failed": "Չհաջողվեց պահպանել ընտրությունը",
+  "screenshot_fix_saved": "Ընտրությունը պահպանված է · վերագործարկեք հավելվածը"
 }

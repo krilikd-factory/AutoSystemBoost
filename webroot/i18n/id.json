@@ -4457,13 +4457,13 @@
   "kc_value_off": "nonaktif",
   "screenshot_fix_title": "Screenshot fix",
   "screenshot_fix_checking": "Checking…",
-  "screenshot_fix_desc": "Experimental: allows screenshots in selected apps on Android 17, 64-bit processes. Requires ASB Zygisk and an app restart; protected media may remain unavailable.",
-  "screenshot_fix_choose": "Choose an app",
-  "screenshot_fix_add": "Enable for app",
+  "screenshot_fix_desc": "Eksperimental: tangkapan layar untuk aplikasi 64-bit terpilih di Android 17. Memerlukan ASB Zygisk dan mulai ulang aplikasi; media terlindungi mungkin tetap tidak tersedia.",
+  "screenshot_fix_choose": "Pilih aplikasi",
+  "screenshot_fix_add": "Aktifkan untuk aplikasi",
   "screenshot_fix_experimental": "Experimental",
-  "screenshot_fix_unavailable": "Unavailable: check Zygisk, Android 17 and current user",
+  "screenshot_fix_unavailable": "Tidak tersedia: periksa Zygisk, Android 17, dan pengguna",
   "screenshot_fix_remove": "Remove",
-  "screenshot_fix_restart": "Restart the chosen app after enabling or removing the fix. Existing windows can keep their previous state.",
-  "screenshot_fix_failed": "Could not save selection",
-  "screenshot_fix_saved": "Selection saved · restart the app to apply"
+  "screenshot_fix_restart": "Mulai ulang aplikasi setelah mengaktifkan atau menghapus; jendela terbuka dapat mempertahankan keadaan sebelumnya.",
+  "screenshot_fix_failed": "Pilihan tidak dapat disimpan",
+  "screenshot_fix_saved": "Pilihan disimpan · mulai ulang aplikasi"
 }
