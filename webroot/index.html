@@ -1331,6 +1331,9 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
 
 .toast.t-good, .toast.t-ok { background: rgba(10,30,15,0.95); color: #7bed9f; border-color: rgba(46,213,115,0.35);
   box-shadow: 0 0 25px rgba(46,213,115,0.15), 0 8px 32px rgba(0,0,0,0.4); }
+.toast.t-asb { background: rgba(3,33,29,.97); color: #28e6c1; border-color: rgba(0,220,175,.45);
+  box-shadow: 0 0 25px rgba(0,220,175,.16), 0 8px 32px rgba(0,0,0,.4); }
+#deviceMeta[hidden] { display: none; }
 .toast.t-warn { background: rgba(35,25,5,0.95); color: #ffc048; border-color: rgba(255,165,2,0.35);
   box-shadow: 0 0 25px rgba(255,165,2,0.15), 0 8px 32px rgba(0,0,0,0.4); }
 .toast.t-bad, .toast.t-error { background: rgba(40,10,10,0.95); color: #ff6b6b; border-color: rgba(255,26,26,0.35);
@@ -3954,6 +3957,9 @@ html[data-asb-theme="light"] .cfg-inf-emblem svg { filter: drop-shadow(0 1px 1px
 html[dir="rtl"] .bfx-bar > i { transform-origin: right center; }
 .bfx-actions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 .bfx-btn { flex: 1 1 auto; min-height: 40px; padding: 9px 14px; border-radius: 12px; font: 700 13px/1.2 var(--sans); cursor: pointer; }
+.screenshot-fix-card select { width:100%; max-width:100%; margin:8px 0; }
+.screenshot-fix-card .wl-manual-row { gap:8px; }
+.screenshot-fix-card .wl-manual-name { min-width:0; overflow-wrap:anywhere; }
 .bfx-primary { color: #04261a; border: 1px solid rgba(96,242,178,.65); background: linear-gradient(135deg, #6cf2b8, #2fd3a6); box-shadow: 0 4px 14px rgba(26,200,140,.22); }
 .bfx-primary:disabled { color: var(--text-tertiary); background: var(--surface-hover, rgba(255,255,255,.05)); border-color: var(--border); box-shadow: none; cursor: default; }
 .bfx-primary[data-mode="stop"] { color: #fff; background: linear-gradient(135deg, #ff8a6b, #e2574c); border-color: rgba(255,140,120,.6); box-shadow: 0 4px 14px rgba(226,87,76,.22); }
@@ -7566,7 +7572,7 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] .log-menu { background: #f
       <div class="sec-label" data-i18n="dev_title">Device diagnostics</div>
       <div class="sec-line"></div>
     </div>
-    <div class="rpt-meta-row">
+    <div class="rpt-meta-row" id="deviceMeta" hidden>
       <span class="lgr-status" id="deviceStatus" role="status" aria-live="polite"></span>
       <div class="rpt-actions">
         <button class="live-chip" id="devSave" type="button" onclick="asbSavePage('device')" aria-label="Save the whole page as a text file" disabled>
@@ -8869,7 +8875,7 @@ async function asbDebugStopFullDay() {
        cancels the resume at once, there is no report to wait for. */
     if (info.status === 'stopped') {
       uiSound('success');
-      toast(T('dbg_log_stopped', 'Infinite log stopped') + (info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : ''), 'good');
+      toast(T('dbg_log_stopped', 'Infinite log stopped') + (info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : ''), 'asb');
       return;
     }
     toast(T('dbg_log_stopping', 'Stopping the infinite log · the report is being finalised'), 'warn');
@@ -8897,7 +8903,7 @@ async function asbSendLogs(manual) {
     if (!chk.diag || chk.diag_current !== '1') {
       debugActionWaitOpen('diag'); waitOpen = true;
       await debugFrame();
-      toast(T('dbg_send_diag_first', 'Making a fresh asbdiag first · please wait'), 'warn');
+      toast(T('dbg_send_diag_first', 'Making a fresh asbdiag first · please wait'), 'asb');
       const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh diag-start 2>/dev/null');
       const i = debugActionText(r);
       if (r && r.errno === 0 && !i.error) await debugDiagPoll();
@@ -8916,7 +8922,7 @@ async function asbSendLogs(manual) {
     const shortPath = b.path.replace(/^\/(sdcard|storage\/emulated\/0)\//, '');
     await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + (manual ? 'bundle-open ' : 'bundle-share ') + JSON.stringify(b.path) + ' 2>/dev/null');
     if (b.reused === '1') toast(T('dbg_send_reused', 'No new logs since %s - attach it if it was not sent yet').replace('%s', shortPath), 'warn');
-    else toast(T('dbg_send_saved', 'Saved %s - attach it in the Bugs topic').replace('%s', shortPath), 'good');
+    else toast(T('dbg_send_saved', 'Saved %s - attach it in the Bugs topic').replace('%s', shortPath), 'asb');
   } catch (e) {
     toast(T('dbg_send_failed', 'Could not pack the logs'), 'bad');
   } finally {
@@ -8941,7 +8947,7 @@ async function asbDebugAction(action) {
   // acknowledgement. Yield twice before KSU work so the first pulse is on-screen.
   await debugFrame();
   toast(T(action === 'diag' ? 'dbg_diag_wait' : 'dbg_log_wait',
-          action === 'diag' ? 'asbdiag started · please wait' : 'Infinite log is starting · please wait'), 'warn');
+          action === 'diag' ? 'asbdiag started · please wait' : 'Infinite log is starting · please wait'), 'asb');
   try {
     const cmd = action === 'diag' ? 'diag-start' : 'full-day-start';
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + cmd + ' 2>/dev/null');
@@ -8953,7 +8959,7 @@ async function asbDebugAction(action) {
     }
     if (action === 'diag') {
       if (info.status === 'already_running') {
-        toast(T('dbg_diag_wait', 'asbdiag started · please wait'), 'warn');
+        toast(T('dbg_diag_wait', 'asbdiag started · please wait'), 'asb');
         return;
       }
       const done = await debugDiagPoll();
@@ -8962,7 +8968,7 @@ async function asbDebugAction(action) {
         return;
       }
       uiSound('success');
-      toast(T('dbg_diag_saved', 'asbdiag saved') + (done.info.path ? ': ' + done.info.path : ''), 'good');
+      toast(T('dbg_diag_saved', 'asbdiag saved') + (done.info.path ? ': ' + done.info.path : ''), 'asb');
     } else if (info.status === 'already_running') {
       _asbLogRunning = true;
       _asbLogCaptureState = info.capture_state || 'unknown';
@@ -8981,7 +8987,7 @@ async function asbDebugAction(action) {
       }
       uiSound('success');
       toast(T('dbg_log_started', 'Infinite log started') + ((started.info.pid || info.pid) ? ' · PID ' + (started.info.pid || info.pid) : '') +
-          ' — ' + T('dbg_log_started_hint', 'it keeps recording across reboots until you stop it in this menu'), 'good');
+          ' — ' + T('dbg_log_started_hint', 'it keeps recording across reboots until you stop it in this menu'), 'asb');
     } else {
       toast(T('dbg_log_failed', 'Could not start the infinite log'), 'bad');
     }
@@ -12183,6 +12189,73 @@ function cfgRenderComponentManagerCard(list) {
   list.appendChild(card);
   cfgAfterEnter(function () { if (_el('componentManagerCard')) wlComponentCardLoad(); });
 }
+
+const SCREENSHOT_FIX_SCRIPT = MD + '/runtime/asb_screenshot_policy.sh';
+let _screenshotUser = '', _screenshotBusy = false, _screenshotSeq = 0;
+function cfgRenderScreenshotFixCard(list) {
+  const card = bfxEl('div', 'cfg-row bfx-card screenshot-fix-card'); card.id = 'screenshotFixCard';
+  const head = bfxEl('div', 'bfx-head');
+  const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon('camera'); head.appendChild(em);
+  const titles = bfxEl('div', 'bfx-titles');
+  titles.appendChild(bfxEl('div', 'bfx-title', T('screenshot_fix_title', 'Screenshot fix')));
+  const chip = bfxEl('span', 'bfx-chip is-wait', T('screenshot_fix_checking', 'Checking…')); chip.id = 'screenshotFixChip'; titles.appendChild(chip);
+  head.appendChild(titles); card.appendChild(head);
+  card.appendChild(bfxEl('div', 'bfx-desc', T('screenshot_fix_desc', 'Experimental: allows screenshots in selected apps on Android 17, 64-bit processes. Requires ASB Zygisk and an app restart; protected media may remain unavailable.')));
+  const select = bfxEl('select', 'bfx-btn bfx-secondary'); select.id = 'screenshotFixApps'; select.disabled = true;
+  select.setAttribute('aria-label', T('screenshot_fix_choose', 'Choose an app')); card.appendChild(select);
+  const actions = bfxEl('div', 'bfx-actions');
+  const add = bfxEl('button', 'bfx-btn bfx-primary', T('screenshot_fix_add', 'Enable for app')); add.type = 'button'; add.id = 'screenshotFixAdd'; add.disabled = true;
+  add.onclick = function () { screenshotFixChange('add', select.value); }; actions.appendChild(add);
+  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('dev_refresh', 'Refresh')); refresh.type = 'button'; refresh.onclick = screenshotFixLoad; actions.appendChild(refresh);
+  card.appendChild(actions);
+  const selected = bfxEl('div', 'junk-cats'); selected.id = 'screenshotFixSelected'; card.appendChild(selected);
+  const note = bfxEl('div', 'bfx-note', T('screenshot_fix_restart', 'Restart the chosen app after enabling or removing the fix. Existing windows can keep their previous state.')); card.appendChild(note);
+  list.appendChild(card); cfgAfterEnter(function () { if (_el('screenshotFixCard')) screenshotFixLoad(); });
+}
+async function screenshotFixLoad() {
+  const card = _el('screenshotFixCard'); if (!card || _screenshotBusy) return;
+  const seq = ++_screenshotSeq, chip = _el('screenshotFixChip'), select = _el('screenshotFixApps'), add = _el('screenshotFixAdd'), selected = _el('screenshotFixSelected');
+  select.disabled = true; add.disabled = true; chip.textContent = T('screenshot_fix_checking', 'Checking…');
+  await asbPaintYield();
+  if (seq !== _screenshotSeq || !_el('screenshotFixCard')) return;
+  const cmd = 'sh ' + shQuote(SCREENSHOT_FIX_SCRIPT) + ' status; echo __ASB_LIST__; sh ' + shQuote(SCREENSHOT_FIX_SCRIPT) + ' list; echo __ASB_USER__; am get-current-user 2>/dev/null; echo __ASB_SDK__; getprop ro.build.version.sdk; echo __ASB_ABI__; getprop ro.product.cpu.abilist64';
+  let r; try { r = await run(cmd); } catch (e) { r = null; }
+  if (seq !== _screenshotSeq || !_el('screenshotFixCard')) return;
+  const parts = String(r && r.stdout || '').split(/__ASB_(?:LIST|USER|SDK|ABI)__/);
+  const status = bfxParse(parts[0] || ''), user = String(parts[2] || '').trim(), sdk = String(parts[3] || '').trim(), abi = String(parts[4] || '').trim();
+  _screenshotUser = /^\d{1,3}$/.test(user) && Number(user) <= 999 ? String(Number(user)) : '';
+  const supported = sdk === '37' && !!abi && status.zygisk_enabled === '1' && !!_screenshotUser && status.policy !== 'invalid';
+  chip.className = 'bfx-chip ' + (supported ? 'is-ready' : 'is-wait');
+  chip.textContent = supported ? T('screenshot_fix_experimental', 'Experimental') : T('screenshot_fix_unavailable', 'Unavailable: check Zygisk, Android 17 and current user');
+  selected.textContent = '';
+  String(parts[1] || '').split('\n').forEach(function (line) {
+    const m = /^entry\|(\d{1,3})\|([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)$/.exec(line.trim()); if (!m) return;
+    const row = bfxEl('div', 'wl-manual-row'), text = bfxEl('div', 'wl-manual-name', m[2] + ' · u' + m[1]); row.appendChild(text);
+    const remove = bfxEl('button', 'wl-manual-action is-restore', T('screenshot_fix_remove', 'Remove')); remove.type = 'button';
+    remove.onclick = function () { screenshotFixChange('remove', m[2], m[1]); }; row.appendChild(remove); selected.appendChild(row);
+  });
+  select.textContent = '';
+  if (!supported) return;
+  await asbPaintYield();
+  if (seq !== _screenshotSeq || !_el('screenshotFixCard')) return;
+  let apps; try { apps = await run('pm list packages -3 --user ' + _screenshotUser + ' 2>/dev/null'); } catch (e) { apps = null; }
+  if (seq !== _screenshotSeq || !_el('screenshotFixCard')) return;
+  const pkgs = String(apps && apps.stdout || '').split('\n').map(x => x.replace(/^package:/, '').trim()).filter(x => dozePkgOk(x));
+  const labels = dozeKeepLabels(pkgs);
+  Array.from(new Set(pkgs)).sort().forEach(function (p) { const opt = bfxEl('option', '', labels[p] ? labels[p] + ' · ' + p : p); opt.value = p; select.appendChild(opt); });
+  select.disabled = add.disabled = !select.options.length;
+}
+async function screenshotFixChange(action, pkg, user) {
+  if (_screenshotBusy || !/^(add|remove)$/.test(action) || !dozePkgOk(pkg)) return;
+  const u = user == null ? _screenshotUser : String(user); if (!/^\d{1,3}$/.test(u) || Number(u) > 999) return;
+  _screenshotBusy = true;
+  let r; try { r = await run('sh ' + shQuote(SCREENSHOT_FIX_SCRIPT) + ' ' + action + ' ' + shQuote(u) + ' ' + shQuote(pkg)); } catch (e) { r = null; }
+  _screenshotBusy = false;
+  if (!r || r.errno !== 0 || !/^status=saved\b/m.test(String(r.stdout || ''))) {
+    toast(T('screenshot_fix_failed', 'Could not save selection'), 'bad');
+  } else toast(T('screenshot_fix_saved', 'Selection saved · restart the app to apply'), 'asb');
+  await screenshotFixLoad();
+}
 function bfxParse(txt) {
   const f = {};
   String(txt || '').split('\n').forEach(function (line) {
@@ -13287,6 +13360,7 @@ function cfgRenderGroup(list, groupId) {
       cfgRenderInfirmaryAdvice(list);
       cfgRenderBatteryFixCard(list);
       cfgRenderComponentManagerCard(list);
+      cfgRenderScreenshotFixCard(list);
       /* Keep the two package repairs as the final cards on the Infirmary page. */
       cfgRenderSoterFixCard(list);
     }
@@ -16133,6 +16207,7 @@ function cfgRenderSearch(list) {
  * is a jump row that opens the card's category and scrolls to it. */
 const CFG_SEARCH_CARDS = [
   { id:'componentManagerCard', group:'infirmary', title:['cmp_card_title', 'Activities & Services'], words:'activity activities service services component компонент активност сервис' },
+  { id:'screenshotFixCard', group:'infirmary', title:['screenshot_fix_title', 'Screenshot fix'], words:'screenshot screen capture скриншот скрин экрана' },
   { id:'bfxCard', group:'infirmary', title:['bfx_title', 'Battery Fix'], words:'battery fix батаре' },
   { id:'soterCard', group:'infirmary', title:['soter_title', 'SOTER Repair'], words:'soter fingerprint отпечат' },
   { id:'junkCard', group:'infirmary', title:['junk_title', 'Junk Cleanup'], words:'junk cache clean мусор шлак очист' }
@@ -23692,6 +23767,7 @@ function deviceInfoPresentSnapshot() {
   status.classList.remove('dev-status-busy');
   status.textContent = T('dev_snapshot_status', 'Snapshot from %s · tap Refresh to collect again').replace('%s', deviceInfoStamp(snap.t));
   const save = _el('devSave'), refresh = _el('devRefresh');
+  const meta = _el('deviceMeta'); if (meta) meta.hidden = false;
   if (save) save.disabled = !snap.raw;
   if (refresh) refresh.disabled = false;
   asbUiFrame.request(asbFitPages);
@@ -23704,7 +23780,9 @@ async function asbDeviceInfoLoad() {
   const seq = ++_deviceLoadSeq;
   const saveBtn = _el('devSave');
   const page = _el('devicePage');
+  const meta = _el('deviceMeta');
   if (!background) {
+    if (meta) meta.hidden = true;
     window._asbDeviceInfoData = null;
     window._asbDeviceInfoRaw = '';
     if (saveBtn) saveBtn.disabled = true;
@@ -23745,6 +23823,7 @@ async function asbDeviceInfoLoad() {
     return;
   }
   status.classList.remove('dev-status-busy');
+  if (meta) meta.hidden = false;
   if ((!r || r.errno !== 0 || !d.count) && body.dataset.devShown === '1') {
     status.textContent = T('dev_cached_failed', 'Could not refresh · the snapshot from %s is shown').replace('%s', deviceInfoStamp(parseInt(body.dataset.devAt, 10) || Date.now()));
     if (btn) btn.disabled = false;
@@ -25905,7 +25984,7 @@ async function asbLogStopWatch(output) {
     asbLogMenuPaint();
     uiSound('success');
     const out = output ? ' · ' + output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '';
-    toast(T('dbg_log_stopped', 'Infinite log stopped') + out, 'good');
+    toast(T('dbg_log_stopped', 'Infinite log stopped') + out, 'asb');
   } else {
     toast(T('dbg_log_stop_slow', 'The infinite log is still finishing its report'), 'warn');
   }

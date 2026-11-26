@@ -377,9 +377,9 @@ t_profile_trial_audit() (
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 python3 - "$ROOT/tools" <<'PYTEST'
-import sys
+import hashlib, pathlib, subprocess, sys, tempfile
 sys.path.insert(0, sys.argv[1])
-from asb_profile_trial import evaluate, template
+from asb_profile_trial import evaluate, template, verify_artifacts
 trial = template()
 for field in ("model", "rom_fingerprint", "kernel", "device_alias", "workload", "A", "B"):
     trial[field] = field
@@ -393,9 +393,31 @@ for i, order in enumerate(("AA", "AB", "BA", "AB")):
 assert evaluate(trial)["status"] == "incomplete_provenance"
 trial["provenance"] = {"asb_commit": "a" * 40, "asb_zip_sha256": "b" * 64,
                        "kernel_buildinfo_sha256": "c" * 64, "config_sha256": "d" * 64}
-assert evaluate(trial)["status"] == "repeatable_gain_in_this_cohort"
+assert evaluate(trial)["status"] == "unverified_provenance"
+assert evaluate(trial)["observed_status"] == "repeatable_gain_in_this_cohort"
+with tempfile.TemporaryDirectory() as d:
+    p = pathlib.Path(d); repo = p/'repo'; repo.mkdir()
+    subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+    subprocess.run(['git', '-C', str(repo), '-c', 'commit.gpgsign=false', '-c', 'user.email=test@example.invalid', '-c', 'user.name=Test', 'commit', '--allow-empty', '-qm', 'fixture'], check=True)
+    files = [p/name for name in ('asb.zip', 'kernel.json', 'config')]
+    for i, f in enumerate(files): f.write_text(f'fixture {i}')
+    trial['provenance'] = dict(asb_commit=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'], text=True).strip(),
+                               **dict(zip(('asb_zip_sha256','kernel_buildinfo_sha256','config_sha256'), (hashlib.sha256(f.read_bytes()).hexdigest() for f in files))))
+    assert verify_artifacts(trial['provenance'], *files, repo)
+    assert evaluate(trial, artifacts_match=True)['status'] == 'repeatable_gain_in_this_cohort'
+    files[0].write_text('modified')
+    try: verify_artifacts(trial['provenance'], *files, repo)
+    except ValueError: pass
+    else: raise AssertionError('tampered archive was accepted')
+    files[0].write_text('fixture 0')
+    (repo/'uncommitted').write_text('dirty')
+    try: verify_artifacts(trial['provenance'], *files, repo)
+    except ValueError: pass
+    else: raise AssertionError('dirty repository was accepted')
 trial["runs"][-1]["values"]["surface_peak_c"] = 11
 assert evaluate(trial)["status"] == "regression"
+trial['provenance'] = {}
+assert evaluate(trial)["status"] == "regression", 'missing provenance must not hide an observed regression'
 trial["runs"][-1]["excluded_reason"] = "charging"
 result = evaluate(trial)
 assert result["status"] == "insufficient_data" and result["excluded_pairs"] == {"3": "charging"}
@@ -6879,7 +6901,7 @@ function zygiskHeaderPublish() {} function zygiskHeaderRefresh() {}
 function logReportSec() { return { classList: { add() {} }, appendChild() {} }; } function logReportNote() { return {}; }
 function runText(r) { return r.stdout || ''; }
 let runOut = null;
-async function run(c) { log.push('run:' + _el('deviceStatus').textContent); return runOut; }
+async function run(c) { if (!_el('deviceMeta').hidden) throw new Error('device actions visible during collection'); log.push('run:' + _el('deviceStatus').textContent); return runOut; }
 async function asbPaintYield() { log.push('yield'); }
 const MD = "/mod"; const window = {};
 JS
@@ -6897,6 +6919,7 @@ let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; 
   chk(log.join('|') === 'loading|yield|run:Collecting read-only data…|render:2:Collecting read-only data…', 'first visit order: ' + log.join('|'));
   chk(nodes.deviceBody.dataset.devShown === '1' && JSON.parse(store.asb_device_cache).raw === fresh, 'fresh snapshot not kept for the next visit');
   chk(!nodes.devSave.disabled && !nodes.deviceStatus.cls.has('dev-status-busy'), 'save or busy state after a fresh read');
+  chk(nodes.deviceMeta.hidden === false, 'device actions stayed hidden after a fresh read');
   delete nodes.deviceBody; log.length = 0;
   runOut = { errno: 0, stdout: fresh + 'D\tkernel\trelease\t6.12\n' };
   await asbDeviceInfoLoad();
@@ -6907,6 +6930,7 @@ let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; 
   await asbDeviceInfoLoad();
   chk(log.filter(x => x.indexOf('render:') === 0).length === 1 && /^Could not refresh · the snapshot from /.test(nodes.deviceStatus.textContent), 'a failed refresh lost the snapshot: ' + nodes.deviceStatus.textContent);
   chk(nodes.devSave.disabled === true && nodes.devRefresh.disabled === false, 'a stale snapshot can be saved or not refreshed');
+  chk(nodes.deviceMeta.hidden === false, 'device actions stayed hidden after a failed refresh');
   store.asb_device_cache = JSON.stringify({ t: Date.now() - 8 * 86400000, raw: fresh });
   chk(deviceInfoCacheGet() === null, 'an 8-day-old snapshot was used');
   const kv = lvMonCacheRom({ tsms: '5', ts: '6', cpustat: '1 2 3 4', 'thermal.cpu': '41000', uptime: '99', big: 'x'.repeat(300) });
@@ -17254,6 +17278,35 @@ const d=card.children[3];d.open=true;d.onToggle();d.onToggle();if(calls!==5||d.c
 card=el();ctx.zyListFold(card,[1,2,3],x=>({x}));if(card.children.length!==3)throw Error('unnecessary fold');
 JS
 echo 'PASS ART and LSPosed lazy list folding'
+)
+
+t_webui_screenshot_fix_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+node - "$ROOT/webroot/index.html" <<'JS'
+const fs=require('fs'),vm=require('vm'),h=fs.readFileSync(process.argv[2],'utf8');
+function extract(name){const re=new RegExp('(?:async )?function '+name+'\\('),m=re.exec(h);if(!m)throw Error(name);const e=h.indexOf('\n}',m.index);if(e<0)throw Error('end '+name);return h.slice(m.index,e+2)}
+const nodes={};
+function el(tag){const n={tag,children:[],dataset:{},disabled:false,hidden:false,className:'',value:'',setAttribute(){},appendChild(x){this.children.push(x);if(x.id)nodes[x.id]=x; if(this.tag==='select'&&!this.value)this.value=x.value;},set textContent(v){this.text=String(v);this.children=[]},get textContent(){return this.text||''},get options(){return this.children}}; return n}
+let calls=[], toasts=[];
+const ctx={console,document:{createElement:el},MD:'/mod',nodes,_el:id=>nodes[id]||null,
+  T:(k,d)=>d,bfxEl:(tag,cls,text)=>{let x=el(tag);x.className=cls||'';if(text!=null)x.textContent=text;return x;},
+  techIcon:()=>'',cfgAfterEnter:()=>{},asbPaintYield:async()=>{},shQuote:s=>"'"+s+"'",
+  dozePkgOk:p=>/^[A-Za-z0-9_.]+$/.test(p),dozeKeepLabels:()=>({}),toast:(m,t)=>toasts.push([m,t]),
+  run:async cmd=>{calls.push(cmd);if(cmd.includes(' status;'))return {errno:0,stdout:'backend=experimental selected=1 policy=ok zygisk_enabled=1\n__ASB_LIST__\nentry|0|org.example.one\n__ASB_USER__\n0\n__ASB_SDK__\n37\n__ASB_ABI__\narm64-v8a\n'};
+    if(cmd.startsWith('pm list'))return {errno:0,stdout:'package:org.example.one\npackage:org.example.two\n'};
+    return {errno:0,stdout:'status=saved backend=experimental selected=1\n'};}};
+vm.createContext(ctx);vm.runInContext("const SCREENSHOT_FIX_SCRIPT=MD+'/runtime/asb_screenshot_policy.sh'; let _screenshotUser='',_screenshotBusy=false,_screenshotSeq=0;\n"+
+  ['bfxParse','cfgRenderScreenshotFixCard','screenshotFixLoad','screenshotFixChange'].map(extract).join('\n'),ctx);
+(async()=>{let list=el('div');ctx.cfgRenderScreenshotFixCard(list);await ctx.screenshotFixLoad();
+  if(!nodes.screenshotFixCard || nodes.screenshotFixApps.options.length!==2 || nodes.screenshotFixAdd.disabled)throw Error('supported app picker');
+  if(nodes.screenshotFixSelected.children.length!==1)throw Error('selected entry missing');
+  await ctx.screenshotFixChange('add','org.example.two');
+  if(!calls.some(x=>x.includes(" add '0' 'org.example.two'")) || !toasts.length)throw Error('validated save');
+  let before=calls.length;await ctx.screenshotFixChange('add','org.example.two;bad');if(calls.length!==before)throw Error('unsafe input');
+})().catch(e=>{console.error(e);process.exitCode=1});
+JS
+echo 'PASS screenshot UI: capability gate, per-user selection and validated save'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

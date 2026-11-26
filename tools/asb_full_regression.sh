@@ -64,6 +64,7 @@ run_queue() {
   local limit="${ASB_REGRESSION_TEST_TIMEOUT:-600}"
   [[ "$limit" =~ ^[1-9][0-9]*$ ]] || { echo 'ERROR: ASB_REGRESSION_TEST_TIMEOUT must be positive seconds' >&2; return 1; }
   command -v timeout >/dev/null 2>&1 || { echo 'ERROR: timeout is required to bound regression tests' >&2; return 1; }
+  command -v setsid >/dev/null 2>&1 || { echo 'ERROR: setsid is required to isolate regression test processes' >&2; return 1; }
   local out; out="$(mktemp -d)"
   local i n=${#_Q_CMD[@]} running=0
   local order=()
@@ -75,7 +76,7 @@ run_queue() {
   done
   for i in "${order[@]}"; do
     ( set +e
-      timeout --kill-after=5 "$limit" bash -c "${_Q_CMD[$i]}" >"$out/$i.log" 2>&1
+      timeout --signal=USR1 --kill-after=5 "$limit" bash tools/asb_regression_worker.sh bash -c "${_Q_CMD[$i]}" >"$out/$i.log" 2>&1
       rc=$?
       if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
         printf '\nTIMEOUT after %s seconds: %s\n' "$limit" "${_Q_TITLE[$i]}" >>"$out/$i.log"

@@ -74,7 +74,7 @@ for _zabi in arm64-v8a armeabi-v7a; do
     -D_FORTIFY_SOURCE=2 -Wall -Wextra -Werror -Wno-unused-parameter \
     -ffunction-sections -fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
     -fvisibility=hidden -static-libstdc++ -I"$SCRIPT_DIR/zygisk" \
-    -DASB_ABI_TAG=\"$_zabi\" "$SCRIPT_DIR/zygisk/asb_observer.cpp" \
+    -DASB_ABI_TAG=\"$_zabi\" "$SCRIPT_DIR/zygisk/asb_observer.cpp" "$SCRIPT_DIR/zygisk/asb_screenshot_hook.cpp" \
     -o "$_zout/$_zabi.so"
   "$STRIP" "$_zout/$_zabi.so" || true
   chmod 0644 "$_zout/$_zabi.so"

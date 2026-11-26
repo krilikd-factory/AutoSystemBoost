@@ -74,7 +74,7 @@ jobs:
           echo "=== expecting ~8 cores and ~32 GB RAM for the DSP build ==="
 
       - name: Checkout module sources (shallow)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: asb-src
 
@@ -532,7 +532,7 @@ jobs:
           cat "$GITHUB_WORKSPACE/asb-aosp-changed-files.tsv"
 
       - name: Upload AOSP mutation audit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: asb-aosp-mutation-audit-attach
           path: |
@@ -543,7 +543,7 @@ jobs:
           retention-days: 30
 
       - name: Upload attacher artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: asb_dsp_attach-prebuilt
           path: prebuilt/arm64-v8a/

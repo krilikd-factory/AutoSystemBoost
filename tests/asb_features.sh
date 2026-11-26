@@ -3051,6 +3051,32 @@ if _lpm_wakeup_restore; then fail 'missing restore target reported success'; fi
 [ -f "$ST" ] || fail 'failed restore discarded its ledger'
 rm -f "$ST"
 
+# Exercise the complete transition: an unavailable wakeup node must not block
+# independent radio and TCP restoration, and its ledger must remain retryable.
+python3 - "$SRC" "$TMP" <<'PY' || fail 'independent LPM recovery after wakeup failure'
+import os, pathlib, subprocess, sys
+src, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]) / 'transition'
+for name in ('mod/config', 'mod/profiles', 'asb', 'dev', 'sys/net/ipv4', 'bin'):
+    (root / name).mkdir(parents=True, exist_ok=True)
+(root/'mod/features.conf').write_text('LPM=1\n')
+(root/'mod/config/governor.conf').write_text('radio_policy_enable=1\n')
+(root/'mod/profiles/balanced.sh').write_text('NET_TCP_KEEPIDLE=600\n')
+(root/'asb/lpm_baseline.conf').write_text('BASE_MDAO=1\nBASE_KEEPIDLE=300\nBASE_KEEPINTVL=75\nBASE_KEEPPROBES=9\n')
+(root/'asb/lpm_wakeup_prev').write_text('missing=enabled\n')
+names = ('tcp_keepalive_time', 'tcp_keepalive_intvl', 'tcp_keepalive_probes')
+for name in names: (root/'sys/net/ipv4'/name).write_text('5\n')
+settings = root/'bin/settings'
+settings.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "' + str(root/'calls') + '"\n')
+settings.chmod(0o755)
+script = src.read_text().replace('/data/adb/asb', str(root/'asb')).replace('/dev/.asb', str(root/'dev')).replace('/proc/sys', str(root/'sys'))
+(root/'lpm.sh').write_text(script)
+env = dict(os.environ, MODDIR=str(root/'mod'), ASB_LPM_SYSCLASS=str(root/'sysclass'), PATH=str(root/'bin')+':'+os.environ['PATH'])
+r = subprocess.run(['sh', str(root/'lpm.sh'), 'normal'], env=env, capture_output=True)
+assert r.returncode != 0 and (root/'asb/lpm_wakeup_prev').exists()
+assert 'put global mobile_data_always_on 1' in (root/'calls').read_text()
+assert [(root/'sys/net/ipv4'/n).read_text().strip() for n in names] == ['600', '75', '9']
+PY
+
 # The CPH2745 case: a kernel that exposes NOTHING gateable. The gate must still leave a
 # result file saying so - this is the whole point of the change.
 SYS2="$TMP/sys2/class"
@@ -13399,6 +13425,77 @@ sh "$ROOT/runtime/asb_battery_fix.sh" run >/dev/null
 grep -qx 'total=1' "$T/state/battery_fix.compile"
 grep -qx 'ok=1' "$T/state/battery_fix.compile"
 echo 'PASS battery fix package listing: recover from a zero-exit Binder error'
+)
+
+t_action_active_bluetooth_codec_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin"
+cat > "$T/bin/dumpsys" <<'EOF'
+#!/bin/sh
+[ "$1" = bluetooth_manager ] && cat "$ASB_TEST_AUDIO_DUMP"
+EOF
+chmod +x "$T/bin/dumpsys"
+python3 - "$ROOT/action.sh" "$T/parse.sh" <<'PY'
+import pathlib, sys
+s = pathlib.Path(sys.argv[1]).read_text()
+a = s.index('_a_link="$(dumpsys bluetooth_manager ')
+b = s.index('\nif [ -n "$_a_link" ]', a)
+pathlib.Path(sys.argv[2]).write_text(s[a:b] + '\n')
+PY
+printf '%s\n' 'printf "%s\n" "$_a_link"' >> "$T/parse.sh"
+export PATH="$T/bin:$PATH" ASB_TEST_AUDIO_DUMP="$T/dump"
+cat > "$T/dump" <<'EOF'
+=== A2dpStateMachine for inactive ===
+mCodecConfig: {codecName:SBC,mSampleRate:0x1(44100),mBitsPerSample:0x1(16)}
+=== A2dpStateMachine for active (Active) ===
+mCodecConfig: {codecName:LDAC,mSampleRate:0x4(96000),mBitsPerSample:0x2(24)}
+EOF
+[ "$(sh "$T/parse.sh")" = 'LDAC · 96000 Hz · 24-bit' ] || { echo 'FAIL active codec'; exit 1; }
+sed 's/ (Active)//' "$T/dump" > "$T/no-active"; mv "$T/no-active" "$T/dump"
+[ -z "$(sh "$T/parse.sh")" ] || { echo 'FAIL inactive codec was presented'; exit 1; }
+echo 'PASS action audio: active A2DP codec and link format only'
+)
+
+t_action_active_audio_output_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin"
+cat > "$T/bin/dumpsys" <<'EOF'
+#!/bin/sh
+[ "$*" = '-t 3 media.audio_flinger' ] && cat "$ASB_TEST_AUDIO_DUMP"
+EOF
+chmod +x "$T/bin/dumpsys"
+python3 - "$ROOT/action.sh" "$T/parse.sh" <<'PY'
+import pathlib, sys
+s = pathlib.Path(sys.argv[1]).read_text()
+a = s.index('_a_output="$(dumpsys -t 3 media.audio_flinger ')
+b = s.index('\nif [ -n "$_a_output" ]', a)
+pathlib.Path(sys.argv[2]).write_text(s[a:b] + '\nprintf "%s\\n" "$_a_output"\n')
+PY
+export PATH="$T/bin:$PATH" ASB_TEST_AUDIO_DUMP="$T/dump"
+cat > "$T/dump" <<'EOF'
+Output thread inactive (MIXER):
+  Sample rate: 44100 Hz
+  Standby: yes
+Output thread active (MIXER):
+  Sample rate: 48000 Hz
+  Format: AUDIO_FORMAT_PCM_24_BIT_PACKED
+  Standby: no
+Input thread microphone (RECORD):
+  Sample rate: 16000 Hz
+  Standby: no
+EOF
+[ "$(sh "$T/parse.sh")" = '48000 Hz · 24-bit PCM' ] || { echo 'FAIL active audio output'; exit 1; }
+cp "$T/dump" "$T/one-output"
+printf 'Output thread unknown (DIRECT):\n  Sample rate: 96000 Hz\n' >> "$T/dump"
+[ -z "$(sh "$T/parse.sh")" ] || { echo 'FAIL unknown standby presented'; exit 1; }
+cp "$T/one-output" "$T/dump"
+printf 'Output thread another (DIRECT):\n  Sample rate: 96000 Hz\n  Standby: no\n' >> "$T/dump"
+[ -z "$(sh "$T/parse.sh")" ] || { echo 'FAIL ambiguous output presented'; exit 1; }
+echo 'PASS action audio output: one active output only; input and ambiguous routes excluded'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

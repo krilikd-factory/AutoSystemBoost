@@ -133,6 +133,14 @@ _zygisk_sync_done() {
 
 _zygisk_sync() {
   _s_en="$(_zygisk_cfg zygisk_enabled)"
+  # Republish only an existing screenshot selection. Its helper withdraws the
+  # live file when Zygisk or safe mode is off and never invents a selection.
+  if [ -f "$MODDIR/runtime/asb_screenshot_policy.sh" ] && [ -f "${ASB_SCREENSHOT_STATE_DIR:-/data/adb/asb/screenshot_fix}/selection.policy" ]; then
+    if ! MODDIR="$MODDIR" ASB_SCREENSHOT_ZYGISK_DIR="$ZMOD" sh "$MODDIR/runtime/asb_screenshot_policy.sh" publish >/dev/null 2>&1; then
+      rm -f "$ZMOD/screenshot.policy" 2>/dev/null
+      echo 'policy=screenshot_sync_failed'; return 1
+    fi
+  fi
   _s_mode="$(_zygisk_cfg zygisk_mode)"
   _s_hints="$(_zygisk_cfg zygisk_hints)"
   _s_launch="$(_zygisk_cfg zygisk_launch)"

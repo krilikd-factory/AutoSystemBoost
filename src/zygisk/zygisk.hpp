@@ -62,6 +62,7 @@ struct AppSpecializeArgs {
 struct ServerSpecializeArgs {
     jint &uid;
     jint &gid;
+    jintArray &gids;
     jint &runtime_flags;
     jlong &permitted_capabilities;
     jlong &effective_capabilities;
@@ -89,6 +90,7 @@ struct Api {
     void setOption(Option opt);
     uint32_t getFlags();
     bool exemptFd(int fd);
+    bool supportsJniHooks() const;
     void hookJniNativeMethods(JNIEnv *env, const char *className, JNINativeMethod *methods, int numMethods);
     void pltHookRegister(dev_t dev, ino_t inode, const char *symbol, void *newFunc, void **oldFunc);
     bool pltHookCommit();
@@ -163,6 +165,7 @@ inline uint32_t Api::getFlags() {
 inline bool Api::exemptFd(int fd) {
     return tbl->exemptFd != nullptr && tbl->exemptFd(fd);
 }
+inline bool Api::supportsJniHooks() const { return tbl && tbl->hookJniNativeMethods; }
 inline void Api::hookJniNativeMethods(JNIEnv *env, const char *className, JNINativeMethod *methods, int numMethods) {
     if (tbl->hookJniNativeMethods) tbl->hookJniNativeMethods(env, className, methods, numMethods);
 }

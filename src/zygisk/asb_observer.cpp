@@ -1,5 +1,6 @@
 #include "zygisk.hpp"
 #include "asb_observer_core.h"
+#include "asb_screenshot_policy.h"
 
 #include <cerrno>
 #include <cstddef>
@@ -31,6 +32,16 @@
 #define ASB_GOVERNOR_CLIENT_DIR "/dev/.asb"
 #endif
 #define ASB_GOVERNOR_HINT_TIMEOUT_US 100000
+#ifndef ASB_SCREENSHOT_POLICY_ABS
+#define ASB_SCREENSHOT_POLICY_ABS "/data/adb/modules/AutoSystemBoost/zygisk/screenshot.policy"
+#endif
+#ifndef ASB_SCREENSHOT_SAFE_MODE
+#define ASB_SCREENSHOT_SAFE_MODE "/dev/.asb/safe_mode"
+#endif
+#ifndef ASB_SCREENSHOT_ZYGISK_DISABLE
+#define ASB_SCREENSHOT_ZYGISK_DISABLE "/data/adb/asb/zygisk_observer/disable"
+#endif
+extern bool asb_screenshot_install(zygisk::Api *, JNIEnv *) __attribute__((weak));
 #ifndef __NR_pidfd_open
 #define __NR_pidfd_open 434
 #endif
@@ -715,8 +726,10 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        screenshot_selected_ = false;
         if (!args || (args->is_child_zygote && *args->is_child_zygote) ||
             !asb_observer_regular_app_uid(args->uid)) return skip();
+        screenshot_selected_ = screenshot_match(args);
         AsbObserverPolicy policy;
         if (!read_policy(policy) || !policy.active()) return skip();
         const bool top = args->is_top_app && *args->is_top_app;
@@ -763,9 +776,44 @@ public:
         return skip();
     }
 
+    void postAppSpecialize(const zygisk::AppSpecializeArgs *) override {
+        if (!screenshot_selected_) return;
+        if (!asb_screenshot_install || !asb_screenshot_install(api_, env_)) {
+            screenshot_selected_ = false;
+            api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+        }
+    }
+
     void preServerSpecialize(zygisk::ServerSpecializeArgs *) override { skip(); }
 
 private:
+    bool screenshot_match(zygisk::AppSpecializeArgs *args) {
+        if (!args || !args->nice_name || !asb_screenshot_install) return false;
+        int fd = open(ASB_SCREENSHOT_POLICY_ABS, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+        if (fd < 0 && errno == ENOENT) return false;
+        if (fd < 0) {
+            const int dir = api_->getModuleDir();
+            if (dir < 0) return false;
+            fd = openat(dir, "zygisk/screenshot.policy", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+            if (fd < 0) return false;
+        }
+        if (env_->ExceptionCheck()) { close(fd); return false; }
+        // An unreadable safety marker is unknown, not permission to hook. Check
+        // only after a live policy exists, so the disabled path is one failed open.
+        for (const char *path : {ASB_SCREENSHOT_SAFE_MODE, ASB_SCREENSHOT_ZYGISK_DISABLE}) {
+            errno = 0;
+            if (access(path, F_OK) == 0 || errno != ENOENT) { close(fd); return false; }
+        }
+        char buf[asb_screenshot::kMaxBytes + 1];
+        const ssize_t n = read_small(fd, buf, sizeof(buf)); close(fd);
+        if (n <= 0 || static_cast<size_t>(n) > asb_screenshot::kMaxBytes) return false;
+        const char *raw = env_->GetStringUTFChars(args->nice_name, nullptr);
+        if (!raw) { if (env_->ExceptionCheck()) env_->ExceptionClear(); return false; }
+        std::string base = asb_observer_base_package(raw);
+        env_->ReleaseStringUTFChars(args->nice_name, raw);
+        if (!asb_observer_package_valid(base) || asb_observer_package_denied(base)) return false;
+        return asb_screenshot::selected(buf, static_cast<size_t>(n), args->uid, base.c_str());
+    }
     /* Absent policy = dormant: one failed open, nothing parsed, no IPC. Called from
      * preAppSpecialize, which runs in the freshly forked app process, so anything stored here
      * stays in that process: the V66 dev23 stat-keyed cache could not carry over to the next
@@ -789,10 +837,11 @@ private:
         return false;
     }
 
-    void skip() { api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); }
+    void skip() { if (!screenshot_selected_) api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); }
     zygisk::Api *api_ = nullptr;
     JNIEnv *env_ = nullptr;
     bool abs_path_ = true;
+    bool screenshot_selected_ = false;
 };
 
 void companion_handler(int client) { Broker::instance().handle(client); }

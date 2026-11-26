@@ -177,12 +177,19 @@ _lpm_wakeup_restore() {
 
 # Feature or explicit radio policy off: restore whatever we saved, once, then stay out of the way.
 if ! _feat_on LPM || ! _radio_policy_enabled; then
-  _lpm_wakeup_restore || exit 1
+  _wake_rc=0
+  _lpm_wakeup_restore || _wake_rc=1
   if [ -f "$BASE" ]; then
     . "$BASE" 2>/dev/null
     [ -n "${BASE_MDAO:-}" ] && [ "$BASE_MDAO" != "null" ] && _sset mobile_data_always_on "$BASE_MDAO"
-    rm -f "$BASE" "$STATE" 2>/dev/null
+    for _entry in "tcp_keepalive_time:${BASE_KEEPIDLE:-}" "tcp_keepalive_intvl:${BASE_KEEPINTVL:-}" "tcp_keepalive_probes:${BASE_KEEPPROBES:-}"; do
+      _key="${_entry%%:*}"; _value="${_entry#*:}"
+      case "$_value" in ''|*[!0-9]*) continue ;; esac
+      _sysc "net.ipv4.$_key" "$_value"
+    done
+    if [ "$_wake_rc" = 0 ]; then rm -f "$BASE" "$STATE" 2>/dev/null; fi
   fi
+  [ "$_wake_rc" = 0 ] || exit 1
   exit 0
 fi
 
@@ -242,7 +249,11 @@ STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
 
 # Re-apply when either LPM or the user-facing handover choice changed. Older state files
 # contain only MODE, so the first run after an update safely refreshes them once.
-[ -r "$STATE" ] && [ "$(cat "$STATE" 2>/dev/null)" = "$STATE_TAG" ] && exit 0
+if [ -r "$STATE" ] && [ "$(cat "$STATE" 2>/dev/null)" = "$STATE_TAG" ]; then
+  # A ledger during night is expected while wakeups are gated. In other modes it
+  # means a previous restore failed, so the next transition must retry it.
+  if [ "$MODE" = night ] || [ ! -f "$_ASB_WAKEUP_STATE" ]; then exit 0; fi
+fi
 
 
 # ── modem-path wakeup gating ────────────────────────────────────────────────
@@ -270,9 +281,10 @@ STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
 # a device left with wakeup disabled after the module goes away is a phone that silently
 # stops receiving overnight - the worst failure this file could produce.
 
+_wake_rc=0
 case "$MODE" in
   fast)
-    _lpm_wakeup_restore || exit 1
+    _lpm_wakeup_restore || _wake_rc=1
     # Data call stays up: coming back from an idle RRC state is the latency spike that matters
     # in an online match, and it costs far more than the power saved.
     _sset mobile_data_always_on 1
@@ -306,7 +318,7 @@ case "$MODE" in
     _sysc net.ipv4.tcp_keepalive_probes 5
     ;;
   save)
-    _lpm_wakeup_restore || exit 1
+    _lpm_wakeup_restore || _wake_rc=1
     # Screen off. Let the framework drop the always-on data call so the radio can sit
     # idle, and stretch keepalives so fewer sockets drag it back up - that traffic is
     # the biggest single modem drain overnight.
@@ -319,7 +331,7 @@ case "$MODE" in
     ;;
   *)
     # Default/normal mode: the phone is in use, the data path must wake it.
-    _lpm_wakeup_restore || exit 1
+    _lpm_wakeup_restore || _wake_rc=1
     MODE="normal"
     STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
     if [ "$HANDOVER_FAST" = "1" ]; then
@@ -339,6 +351,7 @@ case "$MODE" in
     ;;
 esac
 
+[ "$_wake_rc" = 0 ] || exit 1
 mkdir -p /dev/.asb 2>/dev/null
 echo "$STATE_TAG" > "$STATE" 2>/dev/null
 exit 0

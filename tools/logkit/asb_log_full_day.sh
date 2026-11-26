@@ -1812,6 +1812,7 @@ lk_emit_full_day_report() {
     echo "* Bluetooth evidence: 'hfp_audio_disconnect' is an HFP/SCO audio-link detach, not a device loss;"
     echo "  'a2dp_profile_disconnect' is the media-profile disconnect evidence. Use context to correlate route/playback."
     echo "* kernel_params.txt captures governors, sched, io, walt and vm tunables"
+    echo "* io_scheduler_trace.tsv records sampled queue/phase changes, not every transient; plan is last successful Smart apply"
     echo "  (stock vs custom kernel); network_trace.txt captures the data path,"
     echo "  signal, tcp tunables and rmnet/wlan counters."
     # ── what the user changed during the capture ─────────────────────────
@@ -2431,6 +2432,7 @@ lk_capture_battery_trace_row
 lk_snapshot_audio "$LK_TAG_BEFORE"
 lk_bt_reconnect_snapshot "$LK_TAG_BEFORE"
 lk_detect_phase "$(date +%s)"; _phase="$LK_PHASE_OUT"
+lk_io_scheduler_capture "$(date +%s)" "$_phase" || true
 lk_capture_screenoff_class_row "$_phase"
 lk_phase_ledger_open "$_phase"
 if [ "$LK_RESUME" = 1 ] && [ "${ASB_LK_RESUME_KIND:-}" = restart ]; then
@@ -2497,6 +2499,7 @@ while : ; do
 
   # per-poll capture. Dumpsys calls replace this group stage with their own service name.
   lk_stage power_traces
+  lk_io_scheduler_capture "$_now" "$_phase" || true
   lk_capture_perf_trace_row
   lk_capture_battery_trace_row
   lk_stage display_jank

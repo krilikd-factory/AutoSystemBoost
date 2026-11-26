@@ -1016,9 +1016,11 @@ bundle_current_diag() {
   # hash, require the diagnostic to identify that exact payload as well.
   if [ -r "$MODDIR/release-manifest.json" ]; then
     _bc_hash="$(sed -n 's/.*"payload_sha256"[[:space:]]*:[[:space:]]*"\([a-fA-F0-9]*\)".*/\1/p' "$MODDIR/release-manifest.json" | head -n 1)"
-    if [ -n "$_bc_hash" ]; then
+    if grep -q '"payload_sha256"[[:space:]]*:' "$MODDIR/release-manifest.json"; then
+      [ "${#_bc_hash}" = 64 ] || return 1
       _bc_report_hash="$(sed -n 's/^[[:space:]]*payload_sha256[[:space:]]*:[[:space:]]*//p' "$_bc_p" | head -n 1)"
-      [ "$_bc_report_hash" = "$_bc_hash" ] || return 1
+      [ "${#_bc_report_hash}" = 64 ] || return 1
+      [ "$(printf '%s' "$_bc_report_hash" | tr 'A-F' 'a-f')" = "$(printf '%s' "$_bc_hash" | tr 'A-F' 'a-f')" ] || return 1
     fi
   fi
   printf '%s\n' "$_bc_d"
@@ -1168,7 +1170,7 @@ bundle_id_new() {
 
 bundle_logs() {
   _bo="${ASB_DEBUG_SUPPORT_BUNDLE_DIR:-/sdcard/Download}"
-  _d="$(bundle_current_diag 2>/dev/null || bundle_newest 'asbdiag_*.txt' f 259200 2>/dev/null || true)"
+  _d="$(bundle_current_diag 2>/dev/null || true)"
   _l="$(bundle_log_dir 2>/dev/null || true)"
   _r="$(bundle_newest 'asb_report_*.txt' f 259200 2>/dev/null || true)"
   [ -n "$_d" ] && _d="${_d#* }"; [ -n "$_l" ] && _l="${_l#* }"; [ -n "$_r" ] && _r="${_r#* }"

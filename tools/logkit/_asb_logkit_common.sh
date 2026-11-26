@@ -292,10 +292,10 @@ lk_run_bounded() {
   [ "$_lbr_s" -ge 1 ] 2>/dev/null || _lbr_s=12
   shift
   if command -v timeout >/dev/null 2>&1; then
-    timeout "$_lbr_s" "$@"
+    timeout -k 1 "$_lbr_s" "$@"
     return $?
   elif [ -x /system/bin/timeout ]; then
-    /system/bin/timeout "$_lbr_s" "$@"
+    /system/bin/timeout -k 1 "$_lbr_s" "$@"
     return $?
   fi
   "$@" &
@@ -3847,6 +3847,54 @@ lk_snapshot_audio() {
   } >> "$_af" 2>/dev/null || true
 }
 
+# Reuse the existing recorder cadence; emit only observed changes.  The saved
+# plan is the last successfully applied Smart request, not the current intent.
+lk_io_scheduler_capture() {
+  _lkio_epoch="$1"; _lkio_phase="$2"; _lkio_root="${ASB_LK_IO_BLOCK_ROOT:-/sys/block}"
+  _lkio_plan_file="${ASB_LK_IO_PLAN:-/data/adb/asb/io_scheduler/smart.plan}"
+  _lkio_mode=unknown; _lkio_profile=unknown
+  _lkio_mod="${LK_MODDIR:-${MODDIR:-/data/adb/modules/AutoSystemBoost}}"
+  if [ -r "$_lkio_mod/config/governor.conf" ]; then
+    while IFS= read -r _lkio_line; do
+      case "$_lkio_line" in io_scheduler=*)
+        _lkio_candidate="${_lkio_line#io_scheduler=}"
+        case "$_lkio_candidate" in ''|*[!a-z0-9_-]*) : ;; *) _lkio_mode="$_lkio_candidate" ;; esac
+        break ;;
+      esac
+    done < "$_lkio_mod/config/governor.conf"
+  fi
+  if [ -r "$_lkio_mod/current_profile" ]; then
+    IFS= read -r _lkio_candidate < "$_lkio_mod/current_profile" || :
+    case "${_lkio_candidate:-}" in stock|smart|balanced|battery|performance) _lkio_profile="$_lkio_candidate" ;; esac
+  fi
+  _lkio_plan=unknown
+  if [ -r "$_lkio_plan_file" ]; then
+    IFS=' ' read -r _lkio_hint _lkio_screen _lkio_extra < "$_lkio_plan_file" || :
+    case "${_lkio_hint:-}:${_lkio_screen:-}:${_lkio_extra:-}" in
+      [0-4]:[01]:) _lkio_plan="${_lkio_hint},${_lkio_screen}" ;;
+    esac
+  fi
+  _lkio_rows=''
+  for _lkio_dir in "$_lkio_root"/*; do
+    [ -d "$_lkio_dir/queue" ] || continue
+    _lkio_name="${_lkio_dir##*/}"
+    case "$_lkio_name" in sd[a-z]*|mmcblk[0-9]*|nvme[0-9]*n[0-9]*|dm-[0-9]*) ;; *) continue ;; esac
+    case "$_lkio_name" in *[!A-Za-z0-9_-]*) continue ;; esac
+    [ -r "$_lkio_dir/queue/scheduler" ] || continue
+    IFS= read -r _lkio_opts < "$_lkio_dir/queue/scheduler" || continue
+    case "$_lkio_opts" in *[!A-Za-z0-9_\[\]\ -]*) continue ;; esac
+    _lkio_rows="${_lkio_rows}${_lkio_name}=${_lkio_opts};"
+  done
+  [ -n "$_lkio_rows" ] || _lkio_rows=unavailable
+  _lkio_sig="${_lkio_phase}|${_lkio_profile}|${_lkio_mode}|${_lkio_plan}|${_lkio_rows}"
+  [ "$_lkio_sig" != "${LK_IO_LAST_SIG:-}" ] || return 0
+  if [ ! -s "$LK_OUT_DIR/io_scheduler_trace.tsv" ]; then
+    printf 'epoch|phase|profile|configured_mode|last_applied_hint,screen|observed_queues\n' >> "$LK_OUT_DIR/io_scheduler_trace.tsv" || return 1
+  fi
+  printf '%s|%s|%s|%s|%s|%s\n' "$_lkio_epoch" "$_lkio_phase" "$_lkio_profile" "$_lkio_mode" "$_lkio_plan" "$_lkio_rows" >> "$LK_OUT_DIR/io_scheduler_trace.tsv" || return 1
+  LK_IO_LAST_SIG="$_lkio_sig"
+}
+
 lk_snapshot_kernel() {
   _tag="$1"
   _kf="$LK_OUT_DIR/kernel_params.txt"
@@ -3880,7 +3928,8 @@ lk_snapshot_kernel() {
       for f in "$w"/*; do [ -f "$f" ] && [ -r "$f" ] && echo "    $(basename "$f")=$(cat "$f" 2>/dev/null | tr '\n' ' ' | cut -c1-90)"; done
     done
     echo "# io scheduler"
-    for b in /sys/block/sda /sys/block/mmcblk0 /sys/block/dm-0; do
+    for b in /sys/block/*; do
+      case "${b##*/}" in sd[a-z]*|mmcblk[0-9]*|nvme[0-9]*n[0-9]*|dm-[0-9]*) ;; *) continue ;; esac
       [ -r "$b/queue/scheduler" ] && echo "  $(basename "$b"): $(cat "$b/queue/scheduler" 2>/dev/null) read_ahead_kb=$(cat "$b/queue/read_ahead_kb" 2>/dev/null) nr_requests=$(cat "$b/queue/nr_requests" 2>/dev/null)"
     done
     echo "# thermal"

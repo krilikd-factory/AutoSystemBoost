@@ -9663,6 +9663,7 @@ printf '%s\n' "$out" | grep -x 'stage=badstagex' >/dev/null || fail "unsafe stag
 cat > "$T/bin/dumpsys" <<'X'
 #!/bin/sh
 [ "${1:-}" != hang ] || { sleep 5; exit 0; }
+[ "${1:-}" != ignore_term ] || { trap '' TERM; exec sleep 30; }
 printf 'collector-ok\n'
 X
 chmod +x "$T/bin/dumpsys"
@@ -9676,6 +9677,15 @@ case "$rc" in 124|137|143) ;; *) fail "hung dumpsys was not bounded: rc=$rc out=
 grep -Eq '^[0-9]+\|1000\|dumpsys:hang\|(124|137|143)$' "$T/cap/collector_events.tsv" || fail 'timeout gap was not journaled'
 out="$(PATH="$T/bin:$PATH" LK_OUT_DIR="$T/cap" ASB_LK_UPTIME_FILE="$T/uptime" sh -c '. "$1"; lk_dumpsys power' x "$T/collector.sh")"
 [ "$out" = collector-ok ] || fail "quick collector output regressed: $out"
+# A collector that ignores TERM must still be killed; otherwise the recorder can
+# wait forever despite having a nominal timeout.
+set +e
+PATH="$T/bin:$PATH" LK_OUT_DIR="$T/cap" ASB_LK_UPTIME_FILE="$T/uptime" ASB_LK_DUMPSYS_TIMEOUT_S=1 \
+  timeout -k 1 6 sh -c '. "$1"; lk_dumpsys ignore_term' x "$T/collector.sh" >/dev/null 2>&1
+rc=$?
+set -e
+case "$rc" in 124|137|143) ;; *) fail "TERM-resistant collector did not terminate: $rc" ;; esac
+grep -Eq '^[0-9]+\|1000\|dumpsys:ignore_term\|(124|137|143)$' "$T/cap/collector_events.tsv" || fail 'forced-kill gap not journaled'
 # Fallback path: hide timeout, retain only the utilities used by the functions/fixture.
 mkdir -p "$T/fallback"
 for x in sleep awk tail cut tr date mv rm; do ln -s "$(command -v "$x")" "$T/fallback/$x"; done
@@ -9685,7 +9695,7 @@ PATH="$T/fallback" LK_OUT_DIR="$T/cap" ASB_LK_UPTIME_FILE="$T/uptime" ASB_LK_DUM
 rc=$?
 set -e
 case "$rc" in 124|137|143) ;; *) fail "watchdog fallback did not bound dumpsys: rc=$rc" ;; esac
-[ "$(wc -l < "$T/cap/collector_events.tsv")" -eq 2 ] || fail 'fallback timeout was not recorded'
+[ "$(wc -l < "$T/cap/collector_events.tsv")" -eq 3 ] || fail 'fallback timeout was not recorded'
 # Infinite logging must not turn repeated collector failures into an unbounded file.
 i=0; while [ $i -lt 210 ]; do
   LK_OUT_DIR="$T/cap" ASB_LK_UPTIME_FILE="$T/uptime" sh -c '. "$1"; lk_collector_event dumpsys:test 124' x "$T/collector.sh"
@@ -10719,6 +10729,22 @@ cat > "$out" <<'J'
 J
 EOF
 chmod 755 "$T/bin/fio"
+# Inject failure in each pre-trap ledger write without changing the queue. The
+# new lock is owned by this run and must disappear even if the second write fails.
+mkdir -p "$T/failbin"
+cat > "$T/failbin/mkdir" <<'EOF'
+#!/bin/sh
+/bin/mkdir "$@" || exit
+ln -s /dev/full "$1/$ASB_TEST_FAIL_LEDGER"
+EOF
+chmod 755 "$T/failbin/mkdir"
+for item in boot_id pid; do
+  if PATH="$T/failbin:$T/bin:$PATH" ASB_TEST_FAIL_LEDGER="$item" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/pretrap" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/pretrap.fio" --seconds 2 >"$T/pretrap.out" 2>&1; then fail "$item write failure returned success"; fi
+  grep -F 'error=ledger_write_failed' "$T/pretrap.out" >/dev/null || fail "$item failure not reported"
+  [ ! -e "$T/state/pretrap" ] || fail "$item failure retained its new lock"
+  [ ! -e "$T/data/local/tmp/pretrap.fio" ] || fail "$item failure created a test file"
+  [ "$(cat "$T/block/sda/queue/scheduler")" = 'kyber [adios] mq-deadline bfq none' ] || fail "$item failure modified scheduler"
+done
 # Host-only bounded sysfs emulator. The shipped utility itself has no worker or polling loop.
 # buildfix43: a read between the runner's truncate and its write is empty; converting that
 # wiped the active marker (CI run 44894672322: "dm-0 restore after fio failure"). Empty reads
@@ -10966,20 +10992,31 @@ t_debug_log_bundle_runtime() (
   out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=1' || fail 'current-build manual diagnostic not reusable'
   out="$(run bundle)"; p="$(printf '%s\n' "$out" | sed -n 's/^path=//p')"
   tar -tf "$p" | grep -qx asbdiag_current.txt || fail 'reusable old diagnostic missing from archive'
-  printf '{"payload_sha256":"abc123"}\n' > "$T/mod/release-manifest.json"
+  hash="$(printf 'a%.0s' {1..64})"
+  printf '{"payload_sha256":"%s"}\n' "$hash" > "$T/mod/release-manifest.json"
   out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=0' || fail 'diagnostic without installed payload identity was trusted'
-  printf ' payload_sha256 : abc123\n' >> "$T/logs/asbdiag_current.txt"
+  mkdir -p "$T/logs/asb_log_full_day_99"; echo data > "$T/logs/asb_log_full_day_99/env.txt"
+  out="$(run bundle)"; p="$(printf '%s\n' "$out" | sed -n 's/^path=//p')"
+  tar -tf "$p" | grep -q 'asbdiag_current.txt' && fail 'missing payload hash was packed'
+  rm -rf "$T/logs/asb_log_full_day_99"; rm -f "$T/out"/*
+  printf ' payload_sha256 : %s\n' "$hash" >> "$T/logs/asbdiag_current.txt"
   touch -d '-5 days' "$T/logs/asbdiag_current.txt"
   out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=1' || fail 'matching payload identity not recognized'
+  printf '{"payload_sha256":"wrong-hash"}\n' > "$T/mod/release-manifest.json"
+  out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=0' || fail 'malformed payload identity accepted'
+  printf '{"payload_sha256":"%s"}\n' "$(printf '%064d' 1)" > "$T/mod/release-manifest.json"
+  out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=0' || fail 'different payload identity accepted'
+  printf '{"payload_sha256":"%s"}\n' "$hash" > "$T/mod/release-manifest.json"
   rm -f "$T/mod/release-manifest.json"
   touch "$T/mod/module.prop"
   out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=0' || fail 'diagnostic older than installation was trusted'
   rm -f "$T/logs/asbdiag_current.txt" "$T/out"/*
   out="$(run bundle)"; printf '%s\n' "$out" | grep -qx 'error=nothing_to_send' || fail 'an empty log folder must not produce an archive'
   out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag=' || fail 'no asbdiag must read as missing'
+  touch -d '-10 days' "$T/mod/module.prop"
   mkdir -p "$T/logs/asb_log_full_day_7"; echo 'model: X' > "$T/logs/asb_log_full_day_7/env.txt"
-  echo old > "$T/logs/asbdiag_20260101_000000.txt"; touch -d '-5 hours' "$T/logs/asbdiag_20260101_000000.txt"
-  echo new > "$T/logs/asbdiag_20260102_000000.txt"; touch -d '-1 hours' "$T/logs/asbdiag_20260102_000000.txt"
+  printf ' version : V66-test27  (660)\n' > "$T/logs/asbdiag_20260101_000000.txt"; touch -d '-5 hours' "$T/logs/asbdiag_20260101_000000.txt"
+  printf ' version : V66-test27  (660)\n' > "$T/logs/asbdiag_20260102_000000.txt"; touch -d '-1 hours' "$T/logs/asbdiag_20260102_000000.txt"
   echo part > "$T/logs/asbdiag_20260103_000000.txt.tmp.9"
   out="$(run bundle-check)"
   printf '%s\n' "$out" | grep -q '^diag=.*asbdiag_20260102_000000.txt$' || fail 'the newest asbdiag is not chosen'
@@ -11007,7 +11044,7 @@ t_debug_log_bundle_runtime() (
   printf '%s\n' "$out2b" | grep -qx 'reused=1' && fail 'a log changed by one byte (same disk usage) reused the old archive'
   tar -xOf "$(printf '%s\n' "$out2b" | sed -n 's/^path=//p')" asb_bundle.txt | grep -q '^source_fingerprint=[0-9]' || fail 'the archive carries no source fingerprint'
   id1="$(printf '%s\n' "$out2b" | sed -n 's/^id=//p')"
-  echo newer > "$T/logs/asbdiag_20260104_000000.txt"
+  printf ' version : V66-test27  (660)\n' > "$T/logs/asbdiag_20260104_000000.txt"
   out3="$(run bundle)"
   id3="$(printf '%s\n' "$out3" | sed -n 's/^id=//p')"
   [ -n "$id3" ] && [ "$id3" != "$id1" ] || fail 'new logs reused the old id'
@@ -11117,6 +11154,67 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 ln -s "$(command -v mksh)" "$T/sh"
 PATH="$T:$PATH" bash "$ROOT/tests/asb_system.sh" profile_capture_serialization bt_ldac_quality_runtime stock_switch_fast_runtime
 echo 'PASS mksh flock: shared baseline and Bluetooth locks survive child exec'
+)
+
+t_io_scheduler_trace_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/block/nvme0n1/queue" "$T/block/mmcblk0/queue" "$T/block/loop0/queue" "$T/out" "$T/mod/config"
+printf 'io_scheduler=auto\n' > "$T/mod/config/governor.conf"
+printf 'smart\n' > "$T/mod/current_profile"
+export LK_MODDIR="$T/mod"
+printf '%s\n' 'none [mq-deadline] kyber' > "$T/block/nvme0n1/queue/scheduler"
+printf '%s\n' '[bfq]' > "$T/block/mmcblk0/queue/scheduler"
+printf '%s\n' '[none]' > "$T/block/loop0/queue/scheduler"
+printf '%s\n' '3 1' > "$T/plan"
+export ASB_LK_IO_BLOCK_ROOT="$T/block" ASB_LK_IO_PLAN="$T/plan"
+. "$ROOT/tools/logkit/_asb_logkit_common.sh"
+LK_OUT_DIR="$T/out"
+lk_io_scheduler_capture 10 active
+lk_io_scheduler_capture 11 active
+lk_io_scheduler_capture 12 gaming
+printf '%s\n' '0 0' > "$T/plan"
+printf '%s\n' '[none] mq-deadline kyber' > "$T/block/nvme0n1/queue/scheduler"
+lk_io_scheduler_capture 13 sleep
+F="$T/out/io_scheduler_trace.tsv"
+[ "$(wc -l < "$F" | tr -d ' ')" = 4 ] || { echo 'FAIL scheduler trace dedup'; exit 1; }
+grep -Fq '10|active|smart|auto|3,1|' "$F" && grep -Fq '12|gaming|smart|auto|3,1|' "$F" && grep -Fq '13|sleep|smart|auto|0,0|' "$F" || { echo 'FAIL scheduler trace phases'; exit 1; }
+grep -Fq 'nvme0n1=none [mq-deadline] kyber;' "$F" && grep -Fq 'mmcblk0=[bfq];' "$F" || { echo 'FAIL scheduler trace queues'; exit 1; }
+if grep -q 'loop0=' "$F"; then echo 'FAIL unrelated queue'; exit 1; fi
+printf 'invalid\n' > "$T/plan"; lk_io_scheduler_capture 14 active
+grep -Fq '14|active|smart|auto|unknown|' "$F" || { echo 'FAIL malformed plan'; exit 1; }
+echo 'PASS scheduler trace: adaptive samples, phase changes, per-device options and malformed plan'
+)
+
+t_regression_timeout_process_group() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+export ASB_TIMEOUT_TEST_DIR="$T"
+if timeout --signal=USR1 --kill-after=5 1 bash "$ROOT/tools/asb_regression_worker.sh" bash -c 'sleep 100 & echo "$!" > "$ASB_TIMEOUT_TEST_DIR/child"; wait' > "$T/out" 2>&1; then
+  echo 'FAIL timed-out test returned success' >&2; exit 1
+fi
+grep -q 'TIMEOUT process group' "$T/out" || { echo 'FAIL no process snapshot' >&2; exit 1; }
+pid="$(cat "$T/child")"
+state="$(ps -o stat= -p "$pid" 2>/dev/null || true)"
+case "$state" in ''|Z*) ;; *) echo 'FAIL timed-out descendant is still running' >&2; exit 1 ;; esac
+echo 'PASS regression timeout reports and terminates the test process group'
+)
+
+t_workflows_external_actions_pinned() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PY'
+import pathlib, re, sys
+for path in (pathlib.Path(sys.argv[1]) / '.github/workflows').glob('*.yml'):
+    for target in re.findall(r'^\s*uses:\s*([^\s#]+)', path.read_text(), re.M):
+        if target.startswith('./'):
+            continue
+        if not re.fullmatch(r'[^@\s]+@[0-9a-f]{40}', target):
+            raise SystemExit(f'FAIL unpinned workflow action: {path.name}: {target}')
+print('PASS workflow external action references are full commit IDs')
+PY
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

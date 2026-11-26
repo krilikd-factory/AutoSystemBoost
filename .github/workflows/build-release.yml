@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Verify clean source checkout
         run: |
@@ -68,6 +68,7 @@ jobs:
             runtime/asb_junk_cleanup.sh \
             runtime/asb_pressure_snapshot.sh \
             runtime/asb_soter_fix.sh \
+            runtime/asb_screenshot_policy.sh \
             runtime/asb_camera_tools.sh \
             runtime/asb_module_desc.sh \
             tools/asb_kernel_uv_coexist.sh \
@@ -177,11 +178,15 @@ jobs:
             "runtime/asb_pressure.sh" \
             "runtime/asb_pressure_snapshot.sh" \
             "runtime/asb_soter_fix.sh" \
+            "runtime/asb_screenshot_policy.sh" \
             "runtime/asb_camera_tools.sh" \
             "runtime/asb_module_desc.sh" \
             src/zygisk/zygisk.hpp \
             src/zygisk/asb_observer_protocol.h \
             src/zygisk/asb_observer_core.h \
+            src/zygisk/asb_screenshot_policy.h \
+            src/zygisk/asb_screenshot_filter.h \
+            src/zygisk/asb_screenshot_hook.cpp \
             src/zygisk/asb_observer.cpp; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
@@ -228,7 +233,7 @@ jobs:
 
       - name: Cache Android NDK
         id: cache-ndk
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: android-ndk-r28c
           # The exact key pins both runner platform and immutable NDK release.
@@ -823,7 +828,7 @@ jobs:
       # system/bin/*, runtime/*.sh, tools/*.sh) during installation.
       - name: Upload release artifact (flashable, not double-zipped)
         id: upload-artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ASB-${{ env.ASB_VER }}
           path: pkg-release/
@@ -831,7 +836,7 @@ jobs:
 
       - name: Attach to GitHub release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             ${{ env.ZIP_REL }}

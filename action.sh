@@ -1897,6 +1897,54 @@ echo "  🎵  ${H_AUDIO}"
 _audio_l="$(_s "$T_A_PROFILE" "$_a_prof")"
 [ "$_a_dac" = "1" ] && _audio_l="$(_join "$_audio_l" "$T_A_DAC")"
 printf '       %s\n' "$_audio_l"
+# This is the negotiated Bluetooth transport, not the source file's codec or bit rate.
+# A2DP state-machine dumps differ across Android versions; absent fields remain unknown.
+_a_link="$(dumpsys bluetooth_manager 2>/dev/null | awk '
+  /A2dpStateMachine for / { active = ($0 ~ /\(Active\)/); next }
+  active && /mCodecConfig:/ {
+    s=$0; name=""; rate=""; bits=""
+    if (s ~ /codecName:[^,]+/) { name=s; sub(/.*codecName:[[:space:]]*/,"",name); sub(/,.*/,"",name) }
+    if (s ~ /mSampleRate:[^(]*\([0-9]+\)/) { rate=s; sub(/.*mSampleRate:[^(]*\(/,"",rate); sub(/\).*/,"",rate) }
+    if (s ~ /mBitsPerSample:[^(]*\([0-9]+\)/) { bits=s; sub(/.*mBitsPerSample:[^(]*\(/,"",bits); sub(/\).*/,"",bits) }
+    if (name != "" && length(name) < 40 && name ~ /^[A-Za-z0-9 _+.-]+$/) {
+      printf "%s",name; if (rate != "" && rate+0 >= 8000 && rate+0 <= 384000) printf " · %s Hz",rate
+      if (bits == 16 || bits == 24 || bits == 32) printf " · %s-bit",bits; print ""
+    }
+    exit
+  }')"
+if [ -n "$_a_link" ]; then
+  case "$_asb_loc" in ru|ru-*|ru_*) printf '       Bluetooth: %s (параметры соединения)\n' "$_a_link" ;;
+    *) printf '       Bluetooth: %s (link format)\n' "$_a_link" ;; esac
+fi
+# AudioFlinger reports the output mixer/HAL, not the encoding of the source
+# track. Only report an explicitly non-standby output when it is unambiguous.
+_a_output="$(dumpsys -t 3 media.audio_flinger 2>/dev/null | awk '
+  function flush() {
+    if (output && !standby_known) uncertain=1
+    if (output && active) {
+      count++; found_rate=rate; found_format=format
+    }
+  }
+  /Output thread / { flush(); output=1; active=0; standby_known=0; rate=0; format=""; next }
+  /^[[:space:]]*(Input|Record) thread / { flush(); output=0; active=0; next }
+  output && tolower($0) ~ /^[[:space:]]*standby:[[:space:]]*(no|false|0)([[:space:]]|$)/ { active=1; standby_known=1; next }
+  output && tolower($0) ~ /^[[:space:]]*standby:[[:space:]]*(yes|true|1)([[:space:]]|$)/ { active=0; standby_known=1; next }
+  output && /^[[:space:]]*Sample rate:[[:space:]]*[0-9]+[[:space:]]*Hz/ { rate=$3+0; next }
+  output && /AUDIO_FORMAT_PCM_(16_BIT|24_BIT_PACKED|24_BIT|32_BIT|FLOAT)/ {
+    if (match($0,/AUDIO_FORMAT_PCM_(16_BIT|24_BIT_PACKED|24_BIT|32_BIT|FLOAT)/)) {
+      raw=substr($0,RSTART,RLENGTH)
+      if (raw == "AUDIO_FORMAT_PCM_16_BIT") format="16-bit PCM"
+      else if (raw == "AUDIO_FORMAT_PCM_24_BIT_PACKED" || raw == "AUDIO_FORMAT_PCM_24_BIT") format="24-bit PCM"
+      else if (raw == "AUDIO_FORMAT_PCM_32_BIT") format="32-bit PCM"
+      else if (raw == "AUDIO_FORMAT_PCM_FLOAT") format="32-bit float PCM"
+    }
+  }
+  END { flush(); if (!uncertain && count == 1 && found_rate >= 8000 && found_rate <= 384000) { printf "%d Hz",found_rate; if (found_format != "") printf " · %s",found_format; print "" } }
+')"
+if [ -n "$_a_output" ]; then
+  case "$_asb_loc" in ru|ru-*|ru_*) printf '       Аудиовыход: %s (не формат трека)\n' "$_a_output" ;;
+    *) printf '       Audio output: %s (not source format)\n' "$_a_output" ;; esac
+fi
 _loud_l="$(_s "$T_A_LOUD" "$_a_loud")"
 [ "$_a_dsp" != "off" ] && _loud_l="$(_join "$_loud_l" "$(_s "$T_A_DSPGAIN" "$_a_dsp")")"
 printf '       %s\n' "$_loud_l"

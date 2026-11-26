@@ -289,8 +289,18 @@ t_zygisk_native_contract() (
 #include <cstdint>
 typedef int32_t jint; typedef int64_t jlong; typedef uint8_t jboolean; typedef void* jobject; typedef jobject jstring; typedef jobject jintArray; typedef jobject jobjectArray;
 struct JNINativeMethod { const char* name; const char* signature; void* fnPtr; };
-struct JNIEnv { const char* GetStringUTFChars(jstring, void*){return nullptr;} void ReleaseStringUTFChars(jstring,const char*){} };
+struct JNIEnv { const char* GetStringUTFChars(jstring, void*){return nullptr;} void ReleaseStringUTFChars(jstring,const char*){} bool ExceptionCheck(){return false;} void ExceptionClear(){} };
 JNI
+    cat > "$T/server_abi.cpp" <<'CPP'
+#include "zygisk.hpp"
+struct ExpectedServerArgs {
+  jint &uid; jint &gid; jintArray &gids; jint &runtime_flags;
+  jlong &permitted_capabilities; jlong &effective_capabilities;
+};
+static_assert(sizeof(zygisk::ServerSpecializeArgs) == sizeof(ExpectedServerArgs),
+              "Zygisk API 5 server argument layout must include gids");
+CPP
+    g++ -std=c++17 -Wall -Wextra -Werror -I"$T" -I"$ROOT/src/zygisk" -fsyntax-only "$T/server_abi.cpp" || fail 'server specialization ABI'
     g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-parameter -I"$T" -I"$ROOT/src/zygisk" \
       -DASB_ABI_TAG='"arm64-v8a"' -fsyntax-only "$S" || fail 'native source syntax'
     cat > "$T/ipc.cpp" <<'CPP'
@@ -361,7 +371,7 @@ t_zygisk_policy_read_runtime() (
 #include <cstdint>
 typedef int32_t jint; typedef int64_t jlong; typedef uint8_t jboolean; typedef void* jobject; typedef jobject jstring; typedef jobject jintArray; typedef jobject jobjectArray;
 struct JNINativeMethod { const char* name; const char* signature; void* fnPtr; };
-struct JNIEnv { const char* GetStringUTFChars(jstring, void*){return nullptr;} void ReleaseStringUTFChars(jstring,const char*){} };
+struct JNIEnv { const char* GetStringUTFChars(jstring, void*){return nullptr;} void ReleaseStringUTFChars(jstring,const char*){} bool ExceptionCheck(){return false;} void ExceptionClear(){} };
 JNI
   cat > "$T/read.cpp" <<'CPP'
 #include <string>
@@ -575,7 +585,7 @@ t_zygisk_hot_path_runtime() (
 typedef int32_t jint; typedef int64_t jlong; typedef uint8_t jboolean; typedef void* jobject; typedef jobject jstring; typedef jobject jintArray; typedef jobject jobjectArray;
 struct JNINativeMethod { const char* name; const char* signature; void* fnPtr; };
 extern std::string g_nice;
-struct JNIEnv { const char* GetStringUTFChars(jstring, void*){return g_nice.c_str();} void ReleaseStringUTFChars(jstring,const char*){} };
+struct JNIEnv { const char* GetStringUTFChars(jstring, void*){return g_nice.c_str();} void ReleaseStringUTFChars(jstring,const char*){} bool ExceptionCheck(){return false;} void ExceptionClear(){} };
 JNI
   cat > "$T/hot.cpp" <<'CPP'
 #include <string>
@@ -1946,6 +1956,222 @@ grep -Fq "const incomplete = isFinite(counted) && counted !== listed;" "$H" && g
   || fail 'the editor can still save a list that does not match its count'
 grep -Fq "'dev_zygisk_list_incomplete'" "$H" || fail 'an incomplete list is not explained'
 echo "PASS zygisk package list: 64 long names survive the 600-character collector cap whole, and the editor never saves a list that disagrees with its count"
+)
+
+t_screenshot_observer_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+command -v g++ >/dev/null 2>&1 || { echo 'SKIP screenshot observer: no C++ compiler'; return 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/inc"
+cat > "$T/inc/jni.h" <<'JNI'
+#pragma once
+#include <cstdint>
+#include <string>
+typedef int32_t jint; typedef int64_t jlong; typedef uint8_t jboolean; typedef void* jobject; typedef jobject jstring; typedef jobject jintArray; typedef jobject jobjectArray;
+struct JNINativeMethod { const char* name; const char* signature; void* fnPtr; };
+extern std::string g_package;
+struct JNIEnv { const char* GetStringUTFChars(jstring,void*) {return g_package.c_str();} void ReleaseStringUTFChars(jstring,const char*) {} bool ExceptionCheck(){return false;} void ExceptionClear(){} };
+JNI
+cat > "$T/test.cpp" <<'CPP'
+#include <string>
+std::string g_package, screen_path, safe_path, disable_path, observer_path;
+#define ASB_SCREENSHOT_POLICY_ABS (screen_path.c_str())
+#define ASB_SCREENSHOT_SAFE_MODE (safe_path.c_str())
+#define ASB_SCREENSHOT_ZYGISK_DISABLE (disable_path.c_str())
+#define ASB_ZYGISK_POLICY_ABS (observer_path.c_str())
+#include "asb_observer.cpp"
+#include <cassert>
+#include <fstream>
+static int unloads=0, installs=0; static bool install_ok=true;
+bool asb_screenshot_install(zygisk::Api *,JNIEnv *) { ++installs; return install_ok; }
+static zygisk::internal::module_abi *abi=nullptr;
+static bool reg(zygisk::internal::api_table *,zygisk::internal::module_abi *a){abi=a;return true;}
+static void option(void *,zygisk::Option o){ if(o==zygisk::DLCLOSE_MODULE_LIBRARY) ++unloads; }
+static int moddir(void *){return -1;}
+int main(int argc,char **argv) {
+  assert(argc==2); const std::string d=argv[1]; screen_path=d+"/screen"; safe_path=d+"/safe"; disable_path=d+"/disabled"; observer_path=d+"/observer";
+  zygisk::internal::api_table host{};host.registerModule=reg;host.setOption=option;host.getModuleDir=moddir;
+  JNIEnv env;zygisk_module_entry(&host,&env);assert(abi);
+  jint uid=10123,gid=10123,flags=0,mount=0;jintArray gids=nullptr;jobjectArray rlimits=nullptr;
+  jstring se=nullptr,name=reinterpret_cast<jstring>(1),isa=nullptr,dir=nullptr;jboolean child=0,top=0;
+  zygisk::AppSpecializeArgs a{uid,gid,gids,flags,rlimits,mount,se,name,isa,dir,nullptr,&child,&top,nullptr,nullptr,nullptr,nullptr,nullptr};
+  auto pre=[&]{abi->preAppSpecialize(abi->impl,&a);};auto post=[&]{abi->postAppSpecialize(abi->impl,&a);};
+  g_package="org.example.one";pre();post();assert(unloads==1 && installs==0);
+  {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=1\n";}
+  pre();assert(unloads==1);post();assert(installs==1);
+  uid=1010123;pre();post();assert(unloads==2 && installs==1);uid=10123;
+  {std::ofstream f(safe_path);f<<"1";} pre();post();assert(unloads==3 && installs==1);unlink(safe_path.c_str());
+  {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=2\n";} pre();post();assert(unloads==4 && installs==1);
+  {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=1\n";}
+  install_ok=false;pre();post();assert(unloads==5 && installs==2);
+}
+CPP
+g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-parameter -pthread -I"$T/inc" -I"$ROOT/src/zygisk" "$T/test.cpp" -o "$T/test"
+"$T/test" "$T"
+echo 'PASS screenshot observer: opt-in app/user, safe mode, malformed policy and failed hook'
+)
+
+t_screenshot_parcel_hook_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+command -v g++ >/dev/null 2>&1 || { echo 'SKIP screenshot hook: no C++ compiler'; return 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-parameter \
+  -I"$ROOT/tests/fixtures/screenshot_jni" -I"$ROOT/src/zygisk" \
+  "$ROOT/tests/fixtures/screenshot_jni/test.cpp" -o "$T/test"
+"$T/test"
+echo 'PASS screenshot hook: known window parcel only, mask preservation and position restoration'
+)
+
+t_screenshot_filter_contract() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+command -v g++ >/dev/null 2>&1 || { echo 'SKIP screenshot filter: no C++ compiler'; return 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.cpp" <<'CPP'
+#include "asb_screenshot_filter.h"
+#include <cassert>
+using namespace asb_screenshot;
+int main() {
+  assert(supported(37,8)); assert(!supported(36,8)); assert(!supported(37,4));
+  assert(is_window_session("android.view.IWindowSession"));
+  assert(!is_window_session("android.view.IWindowSession.bad"));
+  assert(!is_window_session(nullptr));
+  WindowFields w{-1,-2,0,0,1,0x40002001};
+  assert(candidate(w)); assert(filtered(w.flags)==0x40000001);
+  w.type=0; assert(!candidate(w)); w.type=3000; assert(!candidate(w));
+  w.type=1; w.width=-3; assert(!candidate(w)); w.width=16385; assert(!candidate(w));
+  w.width=1; w.y=16385; assert(!candidate(w)); w.y=0; w.flags=1; assert(!candidate(w));
+}
+CPP
+g++ -std=c++17 -Wall -Wextra -Werror -I"$ROOT/src/zygisk" "$T/test.cpp" -o "$T/test"
+"$T/test"
+echo 'PASS screenshot filter: exact interface, supported ABI and fail-closed window fields'
+)
+
+t_screenshot_policy_writer_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin"
+cat > "$T/bin/cmd" <<'EOF'
+#!/bin/sh
+case "$*" in 'package path --user 0 org.example.one'|'package path --user 999 org.example.one'|'package path --user 0 org.example.two') echo 'package:/data/app/example/base.apk';; *) echo 'Failure calling service package' ;; esac
+EOF
+chmod +x "$T/bin/cmd"
+printf 'zygisk_enabled=1\n' > "$T/governor.conf"
+export PATH="$T/bin:$PATH" MODDIR="$ROOT" ASB_SCREENSHOT_STATE_DIR="$T/state" ASB_SCREENSHOT_ZYGISK_DIR="$T/zygisk" ASB_SCREENSHOT_CONF="$T/governor.conf" ASB_SCREENSHOT_SAFE_MODE="$T/safe" ASB_SCREENSHOT_ZYGISK_DISABLE="$T/disabled"
+S="$ROOT/runtime/asb_screenshot_policy.sh"
+[ "$(sh "$S" status)" = 'backend=experimental selected=0 policy=empty zygisk_enabled=1' ] || { echo 'FAIL initial status'; exit 1; }
+[ ! -e "$T/state" ] || { echo 'FAIL status mutated state'; exit 1; }
+sh "$S" add 0 org.example.one | grep -q 'status=saved backend=experimental selected=1'
+sh "$S" add 999 org.example.one | grep -q 'selected=2'
+sh "$S" add 0 org.example.one | grep -q 'selected=2'
+cmp -s "$T/state/selection.policy" "$T/zygisk/screenshot.policy"
+[ "$(stat -c %a "$T/zygisk/screenshot.policy")" = 600 ] || { echo 'FAIL selection permissions'; exit 1; }
+grep -qx '0|org.example.one' "$T/zygisk/screenshot.policy"
+grep -qx '999|org.example.one' "$T/zygisk/screenshot.policy"
+printf 'zygisk_enabled=0\n' > "$T/governor.conf"
+sh "$S" publish >/dev/null
+[ ! -e "$T/zygisk/screenshot.policy" ] && [ -f "$T/state/selection.policy" ] || { echo 'FAIL master off'; exit 1; }
+printf 'zygisk_enabled=1\n' > "$T/governor.conf"
+sh "$S" publish >/dev/null
+touch "$T/safe"; sh "$S" publish >/dev/null
+[ ! -e "$T/zygisk/screenshot.policy" ] || { echo 'FAIL safe mode'; exit 1; }
+rm "$T/safe"; sh "$S" publish >/dev/null
+if command -v g++ >/dev/null 2>&1; then
+  cat > "$T/reader.cpp" <<'CPP'
+#include "asb_screenshot_policy.h"
+#include <cassert>
+#include <fstream>
+#include <iterator>
+#include <string>
+int main(int argc, char **argv) {
+  assert(argc==2); std::ifstream f(argv[1]); std::string s((std::istreambuf_iterator<char>(f)),{});
+  assert(asb_screenshot::selected(s.data(),s.size(),10123,"org.example.one"));
+  assert(asb_screenshot::selected(s.data(),s.size(),99910123,"org.example.one"));
+  assert(!asb_screenshot::selected(s.data(),s.size(),10123,"org.example.two"));
+}
+CPP
+  g++ -std=c++17 -Wall -Wextra -Werror -I"$ROOT/src/zygisk" "$T/reader.cpp" -o "$T/reader"
+  "$T/reader" "$T/zygisk/screenshot.policy"
+fi
+if sh "$S" add 0 'org.example.one;bad' >/dev/null 2>&1; then echo 'FAIL invalid package accepted'; exit 1; fi
+if sh "$S" add 0 org.example.missing >/dev/null 2>&1; then echo 'FAIL uninstalled package accepted'; exit 1; fi
+sh "$S" remove 0 org.example.one | grep -q 'selected=1'
+! grep -q '^0|' "$T/zygisk/screenshot.policy"
+grep -qx '999|org.example.one' "$T/zygisk/screenshot.policy"
+mkdir -p "$T/failbin"
+printf '#!/bin/sh\nexit 1\n' > "$T/failbin/chmod"; chmod +x "$T/failbin/chmod"
+if PATH="$T/failbin:$PATH" sh "$S" add 0 org.example.two >/dev/null 2>&1; then echo 'FAIL publish failure accepted'; exit 1; fi
+[ ! -e "$T/zygisk/screenshot.policy" ] || { echo 'FAIL old live policy survived failed publish'; exit 1; }
+sh "$S" publish | grep -q 'status=published backend=experimental'
+grep -qx '0|org.example.two' "$T/zygisk/screenshot.policy" || { echo 'FAIL pending selection did not recover'; exit 1; }
+cat > "$T/failbin/mktemp" <<'EOF'
+#!/bin/sh
+case "$1" in */zygisk/.screenshot-policy.*) exit 1;; *) exec /usr/bin/mktemp "$@";; esac
+EOF
+chmod +x "$T/failbin/mktemp"
+if PATH="$T/failbin:$PATH" sh "$S" remove 0 org.example.two >/dev/null 2>&1; then echo 'FAIL live temporary failure accepted'; exit 1; fi
+[ ! -e "$T/zygisk/screenshot.policy" ] || { echo 'FAIL stale policy after temporary failure'; exit 1; }
+sh "$S" publish | grep -q 'status=published backend=experimental'
+sh "$S" add 0 org.example.two >/dev/null
+printf '#!/bin/sh\nexit 0\n' > "$T/failbin/sleep"; chmod +x "$T/failbin/sleep"
+ln -s "$$" "$T/state/selection.lock"
+if PATH="$T/failbin:$PATH" sh "$S" remove 0 org.example.two >/dev/null 2>&1; then echo 'FAIL live writer lock stolen'; exit 1; fi
+grep -qx '0|org.example.two' "$T/zygisk/screenshot.policy" || { echo 'FAIL busy writer changed selection'; exit 1; }
+rm "$T/state/selection.lock"
+printf 'corrupted\n' > "$T/state/selection.policy"
+[ "$(sh "$S" status)" = 'backend=experimental selected=unknown policy=invalid zygisk_enabled=1' ] || { echo 'FAIL corrupt status'; exit 1; }
+if sh "$S" add 0 org.example.two >/dev/null 2>&1; then echo 'FAIL corrupt policy accepted'; exit 1; fi
+[ ! -e "$T/zygisk/screenshot.policy" ] || { echo 'FAIL corrupt selection retained live policy'; exit 1; }
+sh "$S" clear | grep -q 'selected=0'
+grep -qx 'END=0' "$T/state/selection.policy" || { echo 'FAIL corrupt selection cannot be cleared'; exit 1; }
+[ ! -e "$T/zygisk/screenshot.policy" ] || { echo 'FAIL empty selection left live policy'; exit 1; }
+mkdir -p "$T/parked/runtime" "$T/parked/config" "$T/parked/zygisk.off"
+cp "$ROOT/runtime/asb_ltpo_lock.sh" "$T/parked/runtime/"
+printf 'zygisk_enabled=1\n' > "$T/parked/config/governor.conf"
+env -u ASB_SCREENSHOT_ZYGISK_DIR -u ASB_SCREENSHOT_CONF MODDIR="$T/parked" ASB_SCREENSHOT_STATE_DIR="$T/parked-state" \
+  sh "$S" add 0 org.example.one >/dev/null
+[ ! -d "$T/parked/zygisk" ] && [ -f "$T/parked/zygisk.off/screenshot.policy" ] || { echo 'FAIL parked Zygisk layout'; exit 1; }
+echo 'PASS screenshot policy writer: per-user selection, validation, atomic publication and corrupt-state fail closed'
+)
+
+t_screenshot_policy_contract() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+command -v g++ >/dev/null 2>&1 || { echo 'SKIP screenshot policy: no C++ compiler'; return 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.cpp" <<'CPP'
+#include "asb_screenshot_policy.h"
+#include <cassert>
+#include <string>
+using asb_screenshot::selected;
+static bool check(const std::string &s, int uid, const char *pkg) { return selected(s.data(),s.size(),uid,pkg); }
+int main() {
+  const std::string valid="ASB_SCREENSHOT_V1\n0|org.example.app\n999|org.example.app\nEND=2\n";
+  assert(check(valid,10123,"org.example.app"));
+  assert(check(valid,99910123,"org.example.app"));
+  assert(!check(valid,1010123,"org.example.app"));
+  assert(!check(valid,10123,"org.example.other"));
+  assert(!check(valid,1000,"org.example.app"));
+  assert(!check(valid,99000,"org.example.app"));
+  assert(!check(valid.substr(0,valid.size()-1),10123,"org.example.app"));
+  assert(!check("ASB_SCREENSHOT_V1\n0|org.example.app\nEND=2\n",10123,"org.example.app"));
+  assert(!check("ASB_SCREENSHOT_V1\n0|org.example.app\nEND=1\n0|org.example.app\n",10123,"org.example.app"));
+  assert(!check("ASB_SCREENSHOT_V1\n0|*\nEND=1\n",10123,"org.example.app"));
+  assert(!check("ASB_SCREENSHOT_V1\n0|org.example.app\n0|bad package\nEND=2\n",10123,"org.example.app"));
+  assert(!check("ASB_SCREENSHOT_V1\n0|org.example.app\n0|org.example.app\nEND=2\n",10123,"org.example.app"));
+  assert(!check("ASB_SCREENSHOT_V1\n00|org.example.app\nEND=1\n",10123,"org.example.app"));
+  std::string too_many="ASB_SCREENSHOT_V1\n";
+  for (int i=0;i<65;i++) too_many += "0|org.example.app\n";
+  too_many += "END=65\n"; assert(!check(too_many,10123,"org.example.app"));
+}
+CPP
+g++ -std=c++17 -Wall -Wextra -Werror -I"$ROOT/src/zygisk" "$T/test.cpp" -o "$T/test"
+"$T/test"
+echo 'PASS screenshot policy: per-user scope, bounded entries, fail-closed malformed input'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

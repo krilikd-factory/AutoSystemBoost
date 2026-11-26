@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Evaluate one controlled profile experiment on one phone, ROM and kernel."""
 import argparse
+import hashlib
 import json
 import math
 import re
 import statistics
+import subprocess
 import sys
 from pathlib import Path
 
@@ -36,7 +38,7 @@ def known(value):
         "", "?", "unknown", "n/a", "not_measured"}
 
 
-def evaluate(spec):
+def evaluate(spec, artifacts_match=False):
     for key in ("model", "rom_fingerprint", "kernel", "device_alias", "workload", "factor", "A", "B"):
         if not known(spec.get(key)):
             raise ValueError(f"missing experiment identity: {key}")
@@ -115,18 +117,60 @@ def evaluate(spec):
                              ("kernel_buildinfo_sha256", r"[0-9a-fA-F]{64}"),
                              ("config_sha256", r"[0-9a-fA-F]{64}")))
     if not valid:
-        result["observed_status"] = result["status"]
-        result["status"] = "incomplete_provenance"
+        result["artifact_evidence"] = "incomplete"
+        if result["status"] == "repeatable_gain_in_this_cohort":
+            result["observed_status"] = result["status"]
+            result["status"] = "incomplete_provenance"
+    elif not artifacts_match:
+        result["artifact_evidence"] = "not_verified"
+        if result["status"] == "repeatable_gain_in_this_cohort":
+            result["observed_status"] = result["status"]
+            result["status"] = "unverified_provenance"
+    else:
+        # Matching supplied files is not proof that this commit built the ZIP or
+        # that the files were actually running during the measured session.
+        result["artifact_evidence"] = "supplied_files_match_declared_hashes"
     return result
+
+
+def verify_artifacts(provenance, archive, buildinfo, config, repository):
+    def digest(path):
+        h = hashlib.sha256()
+        with path.open('rb') as src:
+            for block in iter(lambda: src.read(1024 * 1024), b''):
+                h.update(block)
+        return h.hexdigest()
+    for name, path in (("asb_zip_sha256", archive), ("kernel_buildinfo_sha256", buildinfo),
+                       ("config_sha256", config)):
+        if digest(path) != str(provenance.get(name, '')).lower():
+            raise ValueError(f"{name} does not match supplied file")
+    commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
+    if commit.lower() != str(provenance.get('asb_commit', '')).lower():
+        raise ValueError('asb_commit does not match supplied repository HEAD')
+    if subprocess.check_output(['git', '-C', str(repository), 'status', '--porcelain'], text=True).strip():
+        raise ValueError('supplied repository has uncommitted changes')
+    return True
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("trial", nargs="?", type=Path, help="JSON trial; omit to print a blank template")
+    parser.add_argument('--asb-zip', type=Path)
+    parser.add_argument('--kernel-buildinfo', type=Path)
+    parser.add_argument('--config', type=Path)
+    parser.add_argument('--repository', type=Path)
     args = parser.parse_args()
     try:
-        result = evaluate(json.loads(args.trial.read_text())) if args.trial else template()
-    except (OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
+        artifacts = (args.asb_zip, args.kernel_buildinfo, args.config, args.repository)
+        if any(artifacts) and (not args.trial or not all(artifacts)):
+            raise ValueError('verification needs a trial and all four artifact arguments')
+        if args.trial:
+            spec = json.loads(args.trial.read_text())
+            verified = verify_artifacts(spec.get('provenance') or {}, *artifacts) if all(artifacts) else False
+            result = evaluate(spec, artifacts_match=verified)
+        else:
+            result = template()
+    except (OSError, KeyError, TypeError, ValueError, AttributeError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f"trial: {exc}\n")
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
     print()
