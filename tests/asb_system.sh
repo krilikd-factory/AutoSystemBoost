@@ -11192,7 +11192,19 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 export ASB_TIMEOUT_TEST_DIR="$T"
-if timeout --signal=USR1 --kill-after=5 1 bash "$ROOT/tools/asb_regression_worker.sh" bash -c 'sleep 100 & echo "$!" > "$ASB_TIMEOUT_TEST_DIR/child"; wait' > "$T/out" 2>&1; then
+bash "$ROOT/tools/asb_regression_worker.sh" bash -c 'sleep 100 & echo "$!" > "$ASB_TIMEOUT_TEST_DIR/child"; wait' > "$T/out" 2>&1 &
+supervisor=$!
+# Wait for the supervised child, so a busy runner cannot deliver the signal
+# before the supervisor has installed its trap.
+ready=0
+for _ in $(seq 1 100); do
+  if [ -s "$T/child" ]; then ready=1; break; fi
+  kill -0 "$supervisor" 2>/dev/null || break
+  sleep 0.1
+done
+if [ "$ready" != 1 ]; then kill "$supervisor" 2>/dev/null || true; wait "$supervisor" 2>/dev/null || true; echo 'FAIL supervisor did not become ready' >&2; exit 1; fi
+kill -USR1 "$supervisor"
+if wait "$supervisor"; then
   echo 'FAIL timed-out test returned success' >&2; exit 1
 fi
 grep -q 'TIMEOUT process group' "$T/out" || { echo 'FAIL no process snapshot' >&2; exit 1; }
