@@ -22,6 +22,7 @@
 asb_smart_mode.sh
 asb_config_backup.sh
 asb_intent.sh
+asb_io_scheduler_ab.sh
 
 # Diagnostics and support. asb_diag.sh is THE diagnostic users are asked to run;
 # it is also mirrored on-device as system/bin/asbdiag.

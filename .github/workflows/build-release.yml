@@ -761,6 +761,7 @@ jobs:
             "config/governor.conf.shipped" \
             "release-manifest.json" \
             "tools/asb_smart_mode.sh" \
+            "tools/asb_io_scheduler_ab.sh" \
             "tools/asb_kernel_uv_coexist.sh" \
             "tools/asb_device_info.sh" \
             "tools/asb_discover.sh" \

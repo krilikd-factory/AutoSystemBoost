@@ -4580,6 +4580,7 @@ AutoSystemBoost' $APIOCXM
 asb_smart_mode.sh
 asb_config_backup.sh
 asb_intent.sh
+asb_io_scheduler_ab.sh
 asb_diag.sh
 asb_doctor.sh
 asb_audit_state.sh
