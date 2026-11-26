@@ -1928,6 +1928,9 @@ lk_emit_full_day_report() {
         _ph() { awk -v n="${1:-0}" -v u="$_hu" 'BEGIN { printf "%d", n * 3600 / u }'; }
         echo ""
         echo "── ASB COST (per hour of uptime) ──────────────────────────────"
+        echo "  Scope: governor process counters over its uptime, not all ASB processes or energy."
+        echo "  Timer events are not measurements of waking the device from suspend."
+        echo "  Rates under one hour use a one-hour denominator; do not extrapolate them."
         # Per hour, like every other line under this header. It printed the lifetime total
         # here, and an audit read "4371 ms" as 4371 ms/h - three times the real figure.
         printf "  governor cpu             : %s ms/h (%s ms total)\n" "$(_ph "$(_mc_get governor_cpu_ms)")" "$(_mc_get governor_cpu_ms)"

@@ -10710,7 +10710,9 @@ printf 'kyber [adios] mq-deadline bfq none\n' > "$T/block/sda/queue/scheduler"
 cat > "$T/bin/fio" <<'EOF'
 #!/bin/sh
 out=;file=;while [ $# -gt 0 ];do case "$1" in --output)out=$2;shift 2;;--output=*)out=${1#*=};shift;;--filename)file=$2;shift 2;;--filename=*)file=${1#*=};shift;;*)shift;;esac;done
+[ -z "${ASB_TEST_FIO_FILES:-}" ] || printf '%s\n' "$file" >> "$ASB_TEST_FIO_FILES"
 printf x > "$file"
+[ "${ASB_TEST_FIO_SLEEP:-0}" = 0 ] || sleep "$ASB_TEST_FIO_SLEEP"
 [ "${ASB_TEST_FIO_FAIL:-0}" != 1 ] || exit 42
 cat > "$out" <<'J'
 {"jobs":[{"clat_ns":{"percentile":{"50.000000":1000,"95.000000":2000,"99.000000":3000}}}]}
@@ -10725,18 +10727,28 @@ chmod 755 "$T/bin/fio"
 trap 'touch "$T/stop"; kill "$wp" 2>/dev/null || true; rm -rf "$T"' EXIT HUP INT TERM
 ASB_IO_AB_READBACK_TRIES=500; export ASB_IO_AB_READBACK_TRIES
 PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock" sh "$U" status | grep -F 'queue=sda active=adios' >/dev/null || fail 'status evidence'
-out="$(PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/new.fio" --seconds 2 --rounds 1)" || fail "$out"
+out="$(PATH="$T/bin:$PATH" ASB_TEST_FIO_FILES="$T/fio.files" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/new.fio" --seconds 2 --rounds 1)" || fail "$out"
 printf '%s\n' "$out" | grep -F 'scheduler=adios round=1 p50=1000 p95=2000 p99=3000' >/dev/null || fail "latency evidence: $out"
-printf '%s\n' "$out" | grep -F 'verdict=complete_no_auto_selection' >/dev/null || fail 'auto-selection boundary'
+printf '%s\n' "$out" | grep -F 'verdict=complete_no_auto_selection original_schedulers_restored=1' >/dev/null || fail 'auto-selection boundary'
 [ "$(cat "$T/block/sda/queue/scheduler")" = 'kyber [adios] mq-deadline bfq none' ] || fail 'baseline not restored'
 [ ! -e "$T/data/local/tmp/new.fio" ] && [ ! -d "$T/state/lock" ] || fail 'cleanup failed'
+[ "$(wc -l < "$T/fio.files")" = "$(sort -u "$T/fio.files" | wc -l)" ] || fail 'test files reused across schedulers'
+
 printf old > "$T/data/local/tmp/existing"
 if PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock2" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/existing" --seconds 2 >"$T/refused" 2>&1; then fail 'existing file accepted'; fi
 grep -F 'error=test_file_must_be_new' "$T/refused" >/dev/null || fail 'unsafe-file refusal'
+PATH="$T/bin:$PATH" ASB_TEST_FIO_SLEEP=2 ASB_TEST_FIO_FILES="$T/interrupt.files" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/interrupt" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/interrupted.fio" --seconds 2 --rounds 1 > "$T/interrupt.out" 2>&1 & testpid=$!
+for _i in $(seq 1 100); do [ -s "$T/interrupt.files" ] && break; sleep .02; done
+[ -s "$T/interrupt.files" ] || fail 'interrupt fixture never started fio'
+kill -TERM "$testpid"
+if wait "$testpid"; then fail 'interrupted run returned success'; fi
+grep -F 'verdict=degraded original_schedulers_restored=1' "$T/interrupt.out" >/dev/null || fail 'interrupted run did not report restored degradation'
+[ ! -d "$T/state/interrupt" ] || fail 'interrupted run retained a restored ledger'
 mkdir -p "$T/block/dm-0/queue" "$T/block/dm-0/device"
 printf '0\n' > "$T/block/dm-0/queue/rotational"
 printf 'adios [none]\n' > "$T/block/dm-0/queue/scheduler"
-out="$(PATH="$T/bin:$PATH" ASB_TEST_FIO_FAIL=1 ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock3" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/partial.fio" --seconds 2 --rounds 1)" || fail "$out"
+if out="$(PATH="$T/bin:$PATH" ASB_TEST_FIO_FAIL=1 ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/lock3" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/partial.fio" --seconds 2 --rounds 1)"; then fail "fio failure returned success"; fi
+printf '%s\n' "$out" | grep -F 'verdict=degraded original_schedulers_restored=1' >/dev/null || fail "fio failure verdict: $out"
 printf '%s\n' "$out" | grep -F 'skip scheduler=kyber reason=not_exposed_on_every_queue' >/dev/null || fail 'partial exposure was not excluded'
 printf '%s\n' "$out" | grep -F 'scheduler=adios round=1 verdict=fio_failed' >/dev/null || fail 'fio failure not reported'
 printf '%s\n' "$out" | grep -F 'scheduler=none round=1 verdict=fio_failed' >/dev/null || fail 'common scheduler missing'
@@ -10744,6 +10756,22 @@ printf '%s\n' "$out" | grep -F 'scheduler=kyber round=1' >/dev/null && fail 'par
 [ "$(cat "$T/block/sda/queue/scheduler")" = 'kyber [adios] mq-deadline bfq none' ] || fail 'sda restore after fio failure'
 [ "$(cat "$T/block/dm-0/queue/scheduler")" = 'adios [none]' ] || fail 'dm-0 restore after fio failure'
 [ ! -e "$T/data/local/tmp/partial.fio" ] && [ ! -d "$T/state/lock3" ] || fail 'failure cleanup'
+mkdir "$T/state/failed-restore"
+printf '%s\n' "$(cat /proc/sys/kernel/random/boot_id)" > "$T/state/failed-restore/boot_id"
+printf '99999999\n' > "$T/state/failed-restore/pid"
+printf 'adios\n' > "$T/state/failed-restore/sdb.orig"
+printf 'ready\n' > "$T/state/failed-restore/ready"
+if ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/failed-restore" ASB_IO_AB_READBACK_TRIES=1 sh "$U" recover > "$T/recover.out" 2>&1; then fail 'missing queue restore reported success'; fi
+[ -f "$T/state/failed-restore/sdb.orig" ] || fail 'failed restore removed baseline'
+grep -F 'recovery_ledger_retained=1' "$T/recover.out" >/dev/null || fail 'failed restore evidence missing'
+mkdir -p "$T/isolated/sdb/queue"
+printf '[none] adios\n' > "$T/isolated/sdb/queue/scheduler"
+if ASB_IO_BLOCK_ROOT="$T/isolated" ASB_IO_AB_LOCK="$T/state/failed-restore" ASB_IO_AB_READBACK_TRIES=1 sh "$U" recover > "$T/mismatch.out" 2>&1; then fail 'readback mismatch reported success'; fi
+[ -f "$T/state/failed-restore/sdb.orig" ] || fail 'readback mismatch removed baseline'
+grep -F 'restore_failed queue=sdb' "$T/mismatch.out" >/dev/null || fail 'readback mismatch was not reported'
+printf 'different-boot\n' > "$T/state/failed-restore/boot_id"
+if ASB_IO_BLOCK_ROOT="$T/isolated" ASB_IO_AB_LOCK="$T/state/failed-restore" sh "$U" recover > "$T/boot.out" 2>&1; then fail 'old boot ledger accepted'; fi
+grep -F 'error=boot_identity_mismatch' "$T/boot.out" >/dev/null || fail 'boot mismatch not reported'
 mkdir "$T/state/busy"
 if PATH="$T/bin:$PATH" ASB_IO_BLOCK_ROOT="$T/block" ASB_IO_AB_LOCK="$T/state/busy" ASB_IO_AB_TEST_ROOT="$T/data/local/tmp" sh "$U" run --file "$T/data/local/tmp/busy.fio" --seconds 2 >"$T/busy.out" 2>&1; then fail 'busy lock accepted'; fi
 grep -F 'error=busy' "$T/busy.out" >/dev/null || fail 'busy error missing'

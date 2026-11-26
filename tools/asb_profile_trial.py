@@ -3,6 +3,7 @@
 import argparse
 import json
 import math
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -15,6 +16,7 @@ SCENARIOS = {"screen_off_overhead": 3600, "screen_on_battery": 1800,
 def template():
     return {
         "model": "", "rom_fingerprint": "", "kernel": "", "device_alias": "",
+        "provenance": {"asb_commit": "", "asb_zip_sha256": "", "kernel_buildinfo_sha256": "", "config_sha256": ""},
         "scenario": "scroll_launch", "workload": "", "factor": "schedutil up rate",
         "A": "", "B": "", "primary": "frame_p95_ms",
         "metrics": {"frame_p95_ms": {"direction": "lower", "tolerance": 0},
@@ -105,6 +107,16 @@ def evaluate(spec):
         result["status"] = "repeatable_gain_in_this_cohort"
     else:
         result["status"] = "inconclusive"
+    provenance = spec.get("provenance") or {}
+    valid = isinstance(provenance, dict) and all(
+        isinstance(provenance.get(key), str) and re.fullmatch(pattern, provenance[key])
+        for key, pattern in (("asb_commit", r"[0-9a-fA-F]{40}"),
+                             ("asb_zip_sha256", r"[0-9a-fA-F]{64}"),
+                             ("kernel_buildinfo_sha256", r"[0-9a-fA-F]{64}"),
+                             ("config_sha256", r"[0-9a-fA-F]{64}")))
+    if not valid:
+        result["observed_status"] = result["status"]
+        result["status"] = "incomplete_provenance"
     return result
 
 

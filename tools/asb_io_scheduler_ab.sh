@@ -12,6 +12,7 @@ usage() {
   cat <<'EOF'
 Usage:
   asb_io_scheduler_ab.sh status
+  asb_io_scheduler_ab.sh recover
   asb_io_scheduler_ab.sh run --file /data/local/tmp/asb-io-ab.fio [--seconds 8] [--size 64M] [--rounds 2]
 
 Runs interleaved fio randrw passes only on schedulers exposed by every physical queue,
@@ -54,18 +55,58 @@ status() {
   _discover || { echo 'status=not_exposed'; return 0; }
   for n in $DEVS; do node=$(_node "$n"); printf 'queue=%s active=%s available=%s\n' "$n" "$(_current "$node")" "$(_options "$node" | tr -s ' ')"; done
 }
+_bootid() { cat "${ASB_IO_AB_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null; }
 _restore() {
-  trap - EXIT HUP INT TERM
-  for n in $DEVS; do
-    orig="$(cat "$LOCK/$n.orig" 2>/dev/null)"; node=$(_node "$n") || continue
-    _name "$orig" || continue
-    printf '%s\n' "$orig" > "$node" 2>/dev/null || true
-    _readback "$node" "$orig" || printf 'restore_failed queue=%s wanted=%s actual=%s\n' "$n" "$orig" "$(_current "$node")"
-    rm -f -- "$LOCK/$n.orig" 2>/dev/null || true
+  [ -f "$LOCK/ready" ] || { echo 'restore_failed reason=incomplete_baseline'; return 1; }
+  _restore_failed=0
+  for _entry in "$LOCK"/*.orig; do
+    [ -f "$_entry" ] || continue
+    n=${_entry##*/}; n=${n%.orig}
+    _dev "$n" || { _restore_failed=1; continue; }
+    orig="$(cat "$_entry" 2>/dev/null)"; node=$(_node "$n") || { _restore_failed=1; continue; }
+    _name "$orig" || { _restore_failed=1; continue; }
+    if ! printf '%s\n' "$orig" > "$node" 2>/dev/null || ! _readback "$node" "$orig"; then
+      printf 'restore_failed queue=%s wanted=%s actual=%s\n' "$n" "$orig" "$(_current "$node")"
+      _restore_failed=1
+    fi
   done
-  [ -n "$TEST_FILE" ] && rm -f -- "$TEST_FILE" 2>/dev/null || true
+  [ "$_restore_failed" = 0 ] || return 1
+  for _entry in "$LOCK"/*.orig; do [ ! -f "$_entry" ] || rm -f -- "$_entry"; done
+  rm -f -- "$LOCK/boot_id" "$LOCK/pid" "$LOCK/ready"
+  return 0
+}
+_finish() {
+  _exit=$1
+  trap - EXIT HUP INT TERM
+  [ -z "${_cur_file:-}" ] || rm -f -- "$_cur_file" 2>/dev/null || true
   for o in $OUTS; do rm -f -- "$o" 2>/dev/null || true; done
-  rmdir "$LOCK" 2>/dev/null || true
+  if _restore; then
+    rmdir "$LOCK" 2>/dev/null || true
+    if [ "$_exit" = 0 ] && [ "${_run_failed:-0}" = 0 ]; then
+      echo 'verdict=complete_no_auto_selection original_schedulers_restored=1'
+      exit 0
+    fi
+    echo 'verdict=degraded original_schedulers_restored=1'
+    [ "$_exit" -ne 0 ] || _exit=1
+    exit "$_exit"
+  fi
+  echo 'verdict=restore_failed original_schedulers_restored=0 recovery_ledger_retained=1'
+  exit 1
+}
+recover() {
+  [ -d "$LOCK" ] || { echo 'error=no_recovery_ledger'; return 1; }
+  _saved_boot="$(cat "$LOCK/boot_id" 2>/dev/null)"; _current_boot="$(_bootid)"
+  [ -n "$_saved_boot" ] && [ "$_saved_boot" = "$_current_boot" ] || { echo 'error=boot_identity_mismatch'; return 1; }
+  _pid="$(cat "$LOCK/pid" 2>/dev/null)"
+  case "$_pid" in ''|*[!0-9]*) ;; *) kill -0 "$_pid" 2>/dev/null && { echo 'error=worker_running'; return 1; } ;; esac
+  if _restore; then
+    for _result in "$LOCK"/fio.*.json; do [ ! -f "$_result" ] || rm -f -- "$_result"; done
+    if rmdir "$LOCK" 2>/dev/null; then
+      echo 'verdict=recovered original_schedulers_restored=1'
+    else
+      echo 'verdict=recovered original_schedulers_restored=1 lock_retained=1'
+    fi
+  else echo 'error=restore_failed recovery_ledger_retained=1'; return 1; fi
 }
 _fail() { echo "error=$*"; return 1; }
 _pct() {
@@ -86,9 +127,13 @@ run() {
   command -v fio >/dev/null 2>&1 || { _fail fio_not_installed; return 1; }
   _discover || { _fail no_physical_queues; return 1; }
   mkdir "$LOCK" 2>/dev/null || { _fail busy; return 1; }
-  trap '_restore' EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
+  _boot="$(_bootid)"; [ -n "$_boot" ] || { rmdir "$LOCK" 2>/dev/null || true; _fail boot_identity_unknown; return 1; }
+  printf '%s\n' "$_boot" > "$LOCK/boot_id" && printf '%s\n' "$$" > "$LOCK/pid" || { _fail ledger_write_failed; return 1; }
+  _run_failed=0; _cur_file=""
+  trap '_finish $?' EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
   for n in $DEVS; do node=$(_node "$n"); orig=$(_current "$node"); _name "$orig" || { _fail invalid_baseline; return 1; }
     printf '%s\n' "$orig" > "$LOCK/$n.orig" || { _fail baseline_save_failed; return 1; }; done
+  printf '%s\n' ready > "$LOCK/ready" || { _fail baseline_save_failed; return 1; }
   usable=""
   for s in $CANDIDATES; do ok=1; for n in $DEVS; do _has_opt "$(_node "$n")" "$s" || ok=0; done
     [ "$ok" = 1 ] && usable="$usable $s" || printf 'skip scheduler=%s reason=not_exposed_on_every_queue\n' "$s"; done
@@ -98,14 +143,15 @@ run() {
     for s in $usable; do
       ok=1; for n in $DEVS; do node=$(_node "$n"); printf '%s\n' "$s" > "$node" 2>/dev/null || ok=0
         _readback "$node" "$s" || ok=0; done
-      [ "$ok" = 1 ] || { printf 'run scheduler=%s round=%s verdict=write_or_readback_failed\n' "$s" "$r"; continue; }
+      [ "$ok" = 1 ] || { _run_failed=1; printf 'run scheduler=%s round=%s verdict=write_or_readback_failed\n' "$s" "$r"; continue; }
+      _cur_file="$(mktemp "${TEST_FILE}.r${r}.${s}.XXXXXX")" || { _run_failed=1; continue; }
       o="$LOCK/fio.$r.$s.json"; OUTS="$OUTS $o"
-      if fio --name=asb_scheduler_ab --filename="$TEST_FILE" --rw=randrw --rwmixread=70 \
+      if fio --name=asb_scheduler_ab --filename="$_cur_file" --rw=randrw --rwmixread=70 \
           --bs=128k --size="$SIZE" --runtime="$SECS" --time_based=1 --direct=1 \
           --ioengine=psync --numjobs=1 --group_reporting=1 --output-format=json --output="$o" >/dev/null 2>&1; then
         printf 'run scheduler=%s round=%s %s\n' "$s" "$r" "$(_pct "$o")"
-      else printf 'run scheduler=%s round=%s verdict=fio_failed\n' "$s" "$r"; fi
+      else _run_failed=1; printf 'run scheduler=%s round=%s verdict=fio_failed\n' "$s" "$r"; fi
+      rm -f -- "$_cur_file"; _cur_file=""
     done; r=$((r+1)); done
-  echo 'verdict=complete_no_auto_selection original_schedulers_restored_on_exit=1'
 }
-case "${1:-}" in status) status;; run) shift; run "$@";; *) usage; exit 2;; esac
+case "${1:-}" in status) status;; recover) recover;; run) shift; run "$@";; *) usage; exit 2;; esac

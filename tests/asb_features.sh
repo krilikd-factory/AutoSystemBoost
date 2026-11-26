@@ -185,14 +185,11 @@ run_case sm8550 3 devfreq 20
 [ "$(get gpu_idle_trim_bonus_pct "$TMP/active_efficiency.env")" = "1" ] || fail "SM8550 gpu bonus"
 assert_monotonic
 
-# A complete but unnamed platform gets only the universal capability baseline: it is
-# percentage/uclamp-only and strictly smaller than family-specific tiers.
+# Unknown hardware must not activate a policy merely from topology.
 run_case sm9999 3 devfreq 20
-[ "$(get status "$TMP/active_efficiency.env")" = "active" ] || fail "complete unknown SoC should use capability baseline"
-[ "$(get tier "$TMP/active_efficiency.env")" = "capability" ] || fail "capability baseline tier"
-[ "$(get reason "$TMP/active_efficiency.env")" = "capability_baseline" ] || fail "capability baseline reason"
-[ "$(get budget_moderate_bonus_pct "$TMP/active_efficiency.env")" = "1" ] || fail "capability baseline moderate bonus"
-[ "$(get bg_uclamp_moderate_delta "$TMP/active_efficiency.env")" = "32" ] || fail "capability baseline bg delta"
+[ "$(get status "$TMP/active_efficiency.env")" = "generic" ] || fail "unknown SoC must remain inactive"
+[ "$(get reason "$TMP/active_efficiency.env")" = "unknown_soc_unvalidated" ] || fail "unknown SoC reason"
+[ "$(get budget_moderate_bonus_pct "$TMP/active_efficiency.env")" = "0" ] || fail "unknown SoC gained a bonus"
 assert_monotonic
 
 run_case sm8650 1 devfreq 20

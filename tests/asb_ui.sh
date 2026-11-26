@@ -390,6 +390,9 @@ for i, order in enumerate(("AA", "AB", "BA", "AB")):
         trial["runs"].append({"id": f"{i}-{j}", "pair": str(i), "variant": variant,
                               "duration_s": 30, "conditions": "fixed",
                               "values": {key: 10 if variant == "A" else 8 for key in trial["metrics"]}})
+assert evaluate(trial)["status"] == "incomplete_provenance"
+trial["provenance"] = {"asb_commit": "a" * 40, "asb_zip_sha256": "b" * 64,
+                       "kernel_buildinfo_sha256": "c" * 64, "config_sha256": "d" * 64}
 assert evaluate(trial)["status"] == "repeatable_gain_in_this_cohort"
 trial["runs"][-1]["values"]["surface_peak_c"] = 11
 assert evaluate(trial)["status"] == "regression"
@@ -17194,6 +17197,23 @@ printf invalid > "$T/update.json"
 out="$(cd "$T" && GITHUB_REPOSITORY=o/r python3 "$ROOT/tools/asb_ota_advisory.py")"
 printf '%s\n' "$out" | grep -q '^::warning::Unable to validate public OTA metadata'
 echo 'PASS OTA advisory: test/public version separation, old URL and malformed JSON'
+)
+
+t_asb_wakeup_shared_contract() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PYTEST'
+import json, sys
+from pathlib import Path
+r=Path(sys.argv[1]); contract=json.loads((r/'docs/field_baseline/asb-kernel-contract.json').read_text())
+s=(r/'runtime/asb_wakeup_blocker.sh').read_text()
+assert contract['abi']==2 and contract['runtime_discovery_required']
+assert all(contract['root']+'/'+name in s for name in contract['paths'])
+assert '[ "${#1}" -le '+str(contract['max_name_bytes'])+' ]' in s
+assert '[ "$_wb_count" -le '+str(contract['max_rules'])+' ]' in s
+assert contract['commands']==['add','del','clear']
+PYTEST
+echo 'PASS shared AWL fixture: ASB paths, bounds and runtime discovery'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -71,13 +71,8 @@ if _num "$_policies" && _num "$_zones" && [ "$_policies" -ge 2 ] 2>/dev/null && 
       _light=1; _moderate=2; _severe=2; _gpu_bonus=1; _bg_moderate=64; _bg_severe=112
       ;;
     *)
-      # Universal capability baseline. A SoC name alone is not trusted, but a device that
-      # exposes the required CPU topology, GPU backend and thermal domain can safely use this
-      # smallest percentage/uclamp-only envelope. It deliberately has no fixed OPP/frequency,
-      # voltage, scheduler or vendor-thermal writes; unsupported or incomplete hardware stays
-      # a transparent no-op before reaching this branch.
-      _status="active"; _reason="capability_baseline"; _tier="capability"
-      _light=1; _moderate=1; _severe=1; _gpu_bonus=1; _bg_moderate=32; _bg_severe=64
+      # A topology match does not establish a safe policy for an unknown SoC.
+      _status="generic"; _reason="unknown_soc_unvalidated"; _tier="generic"
       ;;
   esac
 else

@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "abi": 2,
+  "root": "/sys/kernel/asb_wakeup",
+  "max_rules": 16,
+  "max_name_bytes": 63,
+  "commands": [
+    "add",
+    "del",
+    "clear"
+  ],
+  "paths": [
+    "blocklist",
+    "blocked_events",
+    "abi_version",
+    "rule_stats"
+  ],
+  "runtime_discovery_required": true
+}
