@@ -18,7 +18,8 @@ ASB_PROFILE_BASELINE="${ASB_PROFILE_BASELINE:-/data/adb/asb/profile_runtime_base
 asb_pb_locked() (
   mkdir -p "${ASB_PROFILE_BASELINE%/*}" || exit 1
   exec 9>>"$ASB_PROFILE_BASELINE.lock" || exit 1
-  flock -x 9 || exit 1
+  # Explicit duplication keeps mksh from closing fd 9 in the external flock process.
+  flock -x 9 9>&9 || exit 1
   "$@"
 )
 

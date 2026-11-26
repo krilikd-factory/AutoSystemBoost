@@ -11092,6 +11092,16 @@ BROKEN_TAR
   echo 'PASS debug log bundle: newest asbdiag and infinite log packed into Download, partial files skipped, empty folder refused, old dumps ignored, running capture first, oversize trimmed'
 )
 
+t_mksh_flock_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+if ! command -v mksh >/dev/null 2>&1; then echo 'SKIP mksh flock runtime: mksh is not installed'; exit 0; fi
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+ln -s "$(command -v mksh)" "$T/sh"
+PATH="$T:$PATH" bash "$ROOT/tests/asb_system.sh" profile_capture_serialization bt_ldac_quality_runtime stock_switch_fast_runtime
+echo 'PASS mksh flock: shared baseline and Bluetooth locks survive child exec'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

@@ -76,7 +76,7 @@ case "${1:-status}" in
   apply|stop)
     mkdir -p "$STATE_DIR" || exit 1
     exec 9>>"$STATE_DIR/bt_ldac.lock" || exit 1
-    flock -x 9 || exit 1 ;;
+    flock -x 9 9>&9 || exit 1 ;;
 esac
 
 case "${1:-status}" in
