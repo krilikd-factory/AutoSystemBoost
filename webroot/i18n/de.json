@@ -4451,5 +4451,8 @@
   "lsp_actions_help_text": "Entlasten entfernt nur die aufgeführten App-Bereiche; das Modul bleibt aktiv. Ausschalten deaktiviert das gesamte Modul. Änderungen gelten nach dem Neustart und lassen sich im Protokoll rückgängig machen.",
   "cfg_smart_current": "Jetzt: {v}",
   "cfg_smart_reading": "Lesen…",
-  "cfg_smart_unknown": "nicht verfügbar"
+  "cfg_smart_unknown": "nicht verfügbar",
+  "zy_show_more": "Weitere anzeigen (%s)",
+  "kc_value_on": "ein",
+  "kc_value_off": "aus"
 }

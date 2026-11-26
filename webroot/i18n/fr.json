@@ -4451,5 +4451,8 @@
   "lsp_actions_help_text": "Alléger retire uniquement les applications indiquées du périmètre ; le module reste actif. Désactiver coupe tout le module. Les changements prennent effet au redémarrage et peuvent être annulés dans le journal.",
   "cfg_smart_current": "Actuel : {v}",
   "cfg_smart_reading": "Lecture…",
-  "cfg_smart_unknown": "indisponible"
+  "cfg_smart_unknown": "indisponible",
+  "zy_show_more": "Afficher les autres (%s)",
+  "kc_value_on": "activé",
+  "kc_value_off": "désactivé"
 }

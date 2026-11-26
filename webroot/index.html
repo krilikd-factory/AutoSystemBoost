@@ -18,6 +18,7 @@
 html,body{background:#000}
 html{color-scheme:dark}
 html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f2f4f6;color-scheme:light}
+
 </style>
 <script>(function(){try{var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))document.documentElement.setAttribute('data-asb-theme','light');if(t==='glass')document.documentElement.setAttribute('data-asb-glass','1');}catch(e){}})();</script>
 <script>document.documentElement.classList.add('asb-home-pending');</script>
@@ -6850,6 +6851,9 @@ html:root[data-asb-glass="1"] .dsp-eq-console .dsp-eq-editor .cfg-row.cfg-row + 
 .dsp-eq-console .dsp-eq-routes button.on { color:var(--cat-ink,var(--cat,var(--accent))); background:color-mix(in srgb,var(--cat-ink,var(--cat,var(--accent))) 12%,transparent); }
 @media (max-width:360px) { .dsp-eq-console { padding:13px !important; } .dsp-eq-console .dsp-eq-editor { padding:2px 10px; } .dsp-eq-console .dsp-eq-editor .cfg-row-top { grid-template-columns:80px minmax(0,1fr); gap:7px; } }
 
+/* The log menu must obscure live metrics even when glass mode is enabled. */
+html:root[data-asb-glass="1"] .log-menu { background: #101a19 !important; }
+html:root[data-asb-glass="1"][data-asb-theme="light"] .log-menu { background: #f5faf8 !important; }
 </style>
 </head>
 <body>
@@ -8570,11 +8574,20 @@ function asbPaintYield() {
 function run(cmd) {
   return new Promise(ok => {
     const cb = 'asb_' + (++_id) + '_' + Date.now();
-    window[cb] = (e,o,r) => { ok({errno:e, stdout:o||'', stderr:r||''}); delete window[cb]; };
+    let done = false;
+    const timer = setTimeout(() => finish(1, '', 'root bridge timeout'), 180000);
+    function finish(e, o, r) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      delete window[cb];
+      ok({errno:e, stdout:o || '', stderr:r || ''});
+    }
+    window[cb] = finish;
     try {
       if (typeof ksu !== 'undefined') ksu.exec(cmd, '{}', cb);
-      else ok({errno:1, stdout:'', stderr:'no ksu'});
-    } catch(x) { ok({errno:1, stdout:'', stderr:''+x}); }
+      else finish(1, '', 'no ksu');
+    } catch (x) { finish(1, '', '' + x); }
   });
 }
 
@@ -8870,7 +8883,7 @@ async function asbDebugStopFullDay() {
 }
 
 /* Logs for the developer leave the phone only by the user's own hand: the module carries no
- * token, so it packs the newest asbdiag (a fresh one if none is under two hours old), the newest
+ * token, so it packs the newest asbdiag from the installed build (or a fresh one), the newest
  * infinite-log folder and report into Download, then opens the group's Bugs topic, where the
  * user attaches the archive. A bot collects archives from Bugs and General for analysis. */
 const ASB_BUGS_URL = 'https://t.me/AutoSystemBoost/3';
@@ -8881,8 +8894,7 @@ async function asbSendLogs(manual) {
   let waitOpen = false;
   try {
     const chk = debugActionText(await run('sh ' + MD + '/runtime/asb_debug_support.sh bundle-check 2>/dev/null'));
-    const age = Number(chk.diag_age_s);
-    if (!chk.diag || !(age >= 0 && age < 7200)) {
+    if (!chk.diag || chk.diag_current !== '1') {
       debugActionWaitOpen('diag'); waitOpen = true;
       await debugFrame();
       toast(T('dbg_send_diag_first', 'Making a fresh asbdiag first · please wait'), 'warn');
@@ -13895,7 +13907,11 @@ function kernelDecorateControlRow(row, key) {
     const item = typeof CFG_ITEMS !== 'undefined' ? CFG_ITEMS.find(function (it) { return it.key === key; }) : null;
     const chosen = item && (_cfgVals[key] !== undefined ? _cfgVals[key] : item.def);
     const smart = item && typeof cfgSmartOwner === 'function' && cfgSmartOwner(item, chosen);
-    badge.textContent = showLive ? (smart ? T('cfg_smart_current', 'Now: {v}').replace('{v}', String(a.live).slice(0, 16)) : String(a.live).slice(0, 16)) : kernelStateText(a.state);
+    const binaryKeys = ['kernel_bore', 'kernel_timer_migration', 'kernel_sched_child_runs_first', 'kernel_sched_stats'];
+    const rawLive = String(a.live).slice(0, 16);
+    const labelLive = binaryKeys.indexOf(key) >= 0 && (rawLive === '0' || rawLive === '1')
+      ? (rawLive === '1' ? T('kc_value_on', 'on') : T('kc_value_off', 'off')) : rawLive;
+    badge.textContent = showLive ? (smart ? T('cfg_smart_current', 'Now: {v}').replace('{v}', labelLive) : labelLive) : kernelStateText(a.state);
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
@@ -22441,6 +22457,22 @@ function zygiskAotValue(a) {
   else if (a.cold > 0) parts.push(T('zy_aot_cold', 'cold start %s ms').replace('%s', String(a.cold)));
   return parts.map(function (x) { return x.replace(/-/g, '\u2011').replace(/(\d) /g, '$1\u00a0').replace(/ → /g, '\u00a0→ '); }).join(' · ');
 }
+/* Keep long evidence lists compact and build the hidden rows only when opened. */
+function zyListFold(card, rows, render) {
+  rows.slice(0, 3).forEach(function (row) { card.appendChild(render(row)); });
+  if (rows.length <= 3) return;
+  const fold = document.createElement('details'); fold.className = 'zy-evidence';
+  const label = document.createElement('summary');
+  label.textContent = T('zy_show_more', 'Show remaining (%s)').replace('%s', String(rows.length - 3));
+  fold.appendChild(label);
+  let built = false;
+  fold.addEventListener('toggle', function () {
+    if (!fold.open || built) return;
+    built = true;
+    rows.slice(3).forEach(function (row) { fold.appendChild(render(row)); });
+  });
+  card.appendChild(fold);
+}
 function zygiskAotCard() {
   const g = _zyAot || zygiskAotParse('');
   const card = logReportSec(T('zy_aot_title', 'Faster app starts (ART)'), 'zygisk_art');
@@ -22478,12 +22510,12 @@ function zygiskAotCard() {
   const nm = function (p) { return names[p] || p; };
   if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_list_scope', 'Observed apps below: waiting, compiled and unknown states are listed together.')));
   if (g.apps.length) aotHow.appendChild(logReportNote(T('zy_aot_exclude_hint', 'If an app misbehaves, exclude it: ASB will not compile it or handle its new processes through the Zygisk observer, ledger or launch assistant. If ASB compiled it, the compile state returns to the one Android installed it with. Restart an already running app.')));
-  g.apps.forEach(function (a) {
+  zyListFold(card, g.apps, function (a) {
     const strong = zygiskAotStrong(a.filter), weakF = zygiskAotWeak(a.filter);
-    card.appendChild(zyItemPanel({ name: nm(a.pkg), tone: strong ? 'light' : weakF ? 'watch' : 'off',
+    return zyItemPanel({ name: nm(a.pkg), tone: strong ? 'light' : weakF ? 'watch' : 'off',
       badge: strong ? T('zy_badge_compiled', 'Compiled') : weakF ? T('zy_badge_waiting', 'Waiting') : T('zy_badge_unknown', 'Not known'),
       chips: zyChipsOf(zygiskAotValue(a)),
-      actions: [zyPanelButton(T('zy_aot_exclude_btn', 'Exclude'), function () { zygiskAotPackage('exclude', a.pkg); })] }));
+      actions: [zyPanelButton(T('zy_aot_exclude_btn', 'Exclude'), function () { zygiskAotPackage('exclude', a.pkg); })] });
   });
   if (g.excluded.length) {
     card.appendChild(logReportNote(T('zy_aot_excluded_title', 'Excluded by you (%s): no ART compilation or ASB Zygisk handling for new processes.').replace('%s', String(g.excluded.length))));
@@ -22746,7 +22778,7 @@ function lspLiteCard() {
     });
     card.appendChild(sum);
   }
-  g.mods.forEach(function (m) {
+  zyListFold(card, g.mods, function (m) {
     const w = document.createElement('div'); w.className = 'zy-lsp-mod zy-lsp-mod-' + m.verdict;
     const head = document.createElement('div'); head.className = 'zy-lsp-head';
     const name = document.createElement('span'); name.className = 'zy-lsp-name'; name.textContent = nm(m.pkg);
@@ -22781,7 +22813,7 @@ function lspLiteCard() {
       if (m.on && !abBusy) acts.appendChild(lspLiteButton(T('lsp_ab_start', 'A/B test'), 'ab:' + m.pkg, function () { lspLiteAct('ab-start', m.pkg); }, T('lsp_ab_confirm', 'Tap again: 2 days, 2 reboots'), 'test'));
     }
     if (acts.childNodes.length) { acts.style.setProperty('--zy-lsp-n', String(acts.childNodes.length)); w.appendChild(acts); }
-    card.appendChild(w);
+    return w;
   });
   const active = g.journal.filter(function (j) { return j.active && j.kind !== 'ab'; });
   if (g.journal.length) {

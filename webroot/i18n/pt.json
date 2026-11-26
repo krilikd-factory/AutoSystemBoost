@@ -4451,5 +4451,8 @@
   "lsp_actions_help_text": "Aliviar remove apenas os âmbitos das aplicações indicadas; o módulo permanece ativo. Desativar desliga o módulo inteiro. As alterações entram em vigor após reiniciar e podem ser desfeitas no histórico.",
   "cfg_smart_current": "Agora: {v}",
   "cfg_smart_reading": "A ler…",
-  "cfg_smart_unknown": "indisponível"
+  "cfg_smart_unknown": "indisponível",
+  "zy_show_more": "Mostrar restantes (%s)",
+  "kc_value_on": "ligado",
+  "kc_value_off": "desligado"
 }

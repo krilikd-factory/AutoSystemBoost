@@ -4344,5 +4344,8 @@
   "lsp_actions_help_text": "Lighten removes this module from the listed app scopes only; the module remains enabled. Switch off disables the entire LSPosed module. Changes take effect after a reboot and can be undone in the ASB changes journal.",
   "cfg_smart_current": "Now: {v}",
   "cfg_smart_reading": "Reading…",
-  "cfg_smart_unknown": "unavailable"
+  "cfg_smart_unknown": "unavailable",
+  "zy_show_more": "Show remaining (%s)",
+  "kc_value_on": "on",
+  "kc_value_off": "off"
 }

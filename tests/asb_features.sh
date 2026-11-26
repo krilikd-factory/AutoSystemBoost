@@ -2985,7 +2985,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 # Extract the variable block plus both functions (two top-level closing braces).
-awk '/^_ASB_WAKEUP_STATE=\/data\/adb\/asb\/lpm_wakeup_prev$/{f=1} f{print} f&&/^}$/{c++; if(c==2) exit}' "$SRC" \
+awk '/^_ASB_WAKEUP_STATE=\/data\/adb\/asb\/lpm_wakeup_prev$/{f=1} f{print} f&&/^}$/{c++; if(c==3) exit}' "$SRC" \
   | sed "s|/data/adb/asb|$TMP/asb|g" > "$TMP/lpm.sh"
 [ -s "$TMP/lpm.sh" ] || fail 'function block not found'
 grep -q '_lpm_wakeup_gate()' "$TMP/lpm.sh" || fail 'gate function not extracted'
@@ -3038,6 +3038,18 @@ _lpm_wakeup_restore
 [ "$(cat "$SYS/net/rmnet_data3/device/power/wakeup")" = 'enabled' ] || fail 'rmnet not restored'
 [ "$(cat "$SYS/net/wlan0/device/power/wakeup")" = 'enabled' ] || fail 'wlan not restored'
 [ ! -f "$ST" ] || fail 'state file not removed after restore'
+
+# A failed baseline save must leave the node untouched and report failure.
+_orig_state="$_ASB_WAKEUP_STATE"
+_ASB_WAKEUP_STATE="$TMP/missing/ledger"
+if _lpm_wakeup_gate disabled; then fail 'failed baseline save reported success'; fi
+[ "$(cat "$SYS/net/wlan0/device/power/wakeup")" = enabled ] || fail 'node changed without baseline'
+_ASB_WAKEUP_STATE="$_orig_state"
+# An unavailable node retains the ledger for recovery and returns failure.
+printf 'wlan_missing=enabled\n' > "$ST"
+if _lpm_wakeup_restore; then fail 'missing restore target reported success'; fi
+[ -f "$ST" ] || fail 'failed restore discarded its ledger'
+rm -f "$ST"
 
 # The CPH2745 case: a kernel that exposes NOTHING gateable. The gate must still leave a
 # result file saying so - this is the whole point of the change.

@@ -1000,9 +1000,26 @@ bundle_fingerprint() {
   } | cksum 2>/dev/null | cut -d' ' -f1
 }
 
+# A manually collected diagnostic is reusable only if it belongs to the installed
+# version and is no older than the installation's module.prop.
+bundle_current_diag() {
+  _bc_d="$(bundle_newest 'asbdiag_*.txt' f 315360000 2>/dev/null || true)"
+  [ -n "$_bc_d" ] || return 1
+  _bc_t="${_bc_d%% *}"; _bc_p="${_bc_d#* }"
+  _bc_v="$(sed -n 's/^[[:space:]]*version[[:space:]]*:[[:space:]]*//p' "$_bc_p" | head -n 1)"
+  _bc_ver="$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -n 1)"
+  _bc_code="$(sed -n 's/^versionCode=//p' "$MODDIR/module.prop" 2>/dev/null | head -n 1)"
+  _bc_inst="$(bundle_mtime "$MODDIR/module.prop")"
+  [ -n "$_bc_ver" ] && [ -n "$_bc_code" ] && [ "$_bc_v" = "$_bc_ver  ($_bc_code)" ] &&
+    [ "$_bc_inst" -gt 0 ] && [ "$_bc_t" -ge "$_bc_inst" ] || return 1
+  printf '%s\n' "$_bc_d"
+}
+
 bundle_check() {
   _now="$(date +%s 2>/dev/null || echo 0)"
-  _d="$(bundle_newest 'asbdiag_*.txt' f 259200 2>/dev/null || true)"
+  _d="$(bundle_current_diag 2>/dev/null || true)"
+  if [ -n "$_d" ]; then echo 'diag_current=1'
+  else echo 'diag_current=0'; _d="$(bundle_newest 'asbdiag_*.txt' f 259200 2>/dev/null || true)"; fi
   _l="$(bundle_log_dir 2>/dev/null || true)"
   if [ -n "$_d" ]; then _dt="${_d%% *}"; echo "diag=${_d#* }"; echo "diag_age_s=$(( _now - _dt ))"; else echo 'diag='; fi
   if [ -n "$_l" ]; then _lt="${_l%% *}"; echo "log=${_l#* }"; echo "log_age_s=$(( _now - _lt ))"; else echo 'log='; fi
@@ -1142,7 +1159,7 @@ bundle_id_new() {
 
 bundle_logs() {
   _bo="${ASB_DEBUG_SUPPORT_BUNDLE_DIR:-/sdcard/Download}"
-  _d="$(bundle_newest 'asbdiag_*.txt' f 259200 2>/dev/null || true)"
+  _d="$(bundle_current_diag 2>/dev/null || bundle_newest 'asbdiag_*.txt' f 259200 2>/dev/null || true)"
   _l="$(bundle_log_dir 2>/dev/null || true)"
   _r="$(bundle_newest 'asb_report_*.txt' f 259200 2>/dev/null || true)"
   [ -n "$_d" ] && _d="${_d#* }"; [ -n "$_l" ] && _l="${_l#* }"; [ -n "$_r" ] && _r="${_r#* }"

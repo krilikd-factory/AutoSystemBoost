@@ -59,8 +59,125 @@ _sysc() { [ -w "/proc/sys/$(echo "$1" | tr . /)" ] && echo "$2" > "/proc/sys/$(e
 # cannot get mobile-data context or TCP keepalive changes merely by selecting Balanced/Smart.
 _radio_policy_enabled() { [ "$(_cfg radio_policy_enable)" = "1" ]; }
 
+_ASB_WAKEUP_STATE=/data/adb/asb/lpm_wakeup_prev
+# Result of the last gate pass. On a CPH2745 the gate runs every night and matches ZERO
+# nodes (no IPA/rmnet wakeup-class entries, no writable interface wakeup attrs), which in
+# a field log is indistinguishable from "never ran". This file makes the difference
+# visible: asbdiag and the day log can say "ran, nothing gateable" instead of guessing.
+_ASB_GATE_RESULT=/data/adb/asb/lpm_gate_result
+# Test hook: fixtures point this at a synthetic sysfs tree. Unset on a real device.
+_SYSCLASS="${ASB_LPM_SYSCLASS:-/sys/class}"
+
+# Never modify a wakeup node unless its original state has been durably recorded.
+_lpm_gate_one() {
+  _key="$1"; _path="$2"; _value="$3"
+  if ! grep -Fxq -- "$_key=enabled" "$_ASB_WAKEUP_STATE" 2>/dev/null && ! grep -Fxq -- "$_key=disabled" "$_ASB_WAKEUP_STATE" 2>/dev/null; then
+    printf '%s=%s\n' "$_key" "$_value" >> "$_ASB_WAKEUP_STATE" 2>/dev/null || return 1
+    grep -Fxq -- "$_key=$_value" "$_ASB_WAKEUP_STATE" 2>/dev/null || return 1
+  fi
+  printf '%s\n' disabled > "$_path" 2>/dev/null || return 1
+  [ "$(cat "$_path" 2>/dev/null)" = disabled ]
+}
+
+_lpm_wakeup_gate() {
+  # $1 = "disabled" to gate, "enabled" to release
+  _want="$1"
+  [ -d "$_SYSCLASS/net" ] || return 0
+  mkdir -p /data/adb/asb 2>/dev/null
+  _g_ws=0
+  _g_if=0
+  _gate_failed=0
+  # Wi-Fi as well as the modem path.
+  #
+  # The first version covered rmnet* only, because the capture that prompted it was all IPA
+  # and rmnet_ctl. A later capture on another device shows the same modem traffic plus
+  # "300 WLAN_CE_2" 76 times - the Wi-Fi copy engine resuming the SoC on its own. Gating one
+  # radio and leaving the other is half a fix: that phone spent 62% of "sleep" awake.
+  #
+  # Same rule as before: this is a wakeup-timing change on the data path, not a power or
+  # association change. Wi-Fi stays connected and calls are unaffected; a push that arrives
+  # over Wi-Fi may wait for the next wake, which is the deal this tweak already states.
+  # The IPA device itself, not only the interfaces it feeds.
+  #
+  # A kernel wake-source table shows where the night actually goes: rmnet_ctl 177 wakeups,
+  # IPA_CLIENT_APPS_WAN_LOW_LAT_CONS 177, IPA_CLIENT_APPS_LAN_CONS 182 - about 500 in an
+  # hour, holding the SoC for ~101 s, with mobile traffic near zero. Those are kernel
+  # wakelocks held by the packet accelerator, and gating /sys/class/net/rmnet* does not
+  # reach them: the interface is what carries traffic, the IPA device is what wakes up.
+  #
+  # There is no API to release a named kernel wakelock, so the only lever is the device's
+  # own wakeup attribute - the same one already used for the interfaces, applied one level
+  # down. Recorded and restored by the same loop, so a device that does not expose it, or
+  # ignores the write, is left exactly as it was.
+  # Find the wakeup node by the name the kernel reports, not by a guessed path.
+  #
+  # The previous version hard-coded /sys/devices/platform/soc/*ipa*/power/wakeup and
+  # /sys/bus/platform/devices/*ipa*/power/wakeup. Neither exists on a CPH2745 - the user
+  # checked, both globs came back empty - so the gate silently did nothing while the
+  # night capture still showed 73 IPA wakeups. A path I invented is not evidence.
+  #
+  # /sys/class/wakeup is the canonical index: every wakeup source registers there with a
+  # name file, whatever its device path. Matching on the name the wake_reason log itself
+  # prints means the lookup follows the kernel rather than my model of it.
+  for _wsdir in "$_SYSCLASS"/wakeup/wakeup*; do
+    [ -d "$_wsdir" ] || continue
+    _wsname="$(cat "$_wsdir/name" 2>/dev/null)"
+    case "$_wsname" in
+      *IPA_CLIENT*|*ipa*|*rmnet_ctl*) : ;;
+      *) continue ;;
+    esac
+    # The wakeup class entry is a symlink into the device; its power/wakeup is what the
+    # runtime-PM interface actually honours.
+    _ipa="$(readlink -f "$_wsdir/device/power/wakeup" 2>/dev/null)"
+    [ -n "$_ipa" ] && [ -e "$_ipa" ] || continue
+    _cur="$(cat "$_ipa" 2>/dev/null)"
+    case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
+    _g_ws=$((_g_ws + 1))
+    if [ "$_want" = disabled ]; then
+      _lpm_gate_one "$_ipa" "$_ipa" "$_cur" || _gate_failed=1
+    fi
+  done
+
+  for _if in "$_SYSCLASS"/net/rmnet* "$_SYSCLASS"/net/wlan*; do
+    [ -e "$_if/device/power/wakeup" ] || continue
+    _n="$(basename "$_if")"
+    _cur="$(cat "$_if/device/power/wakeup" 2>/dev/null)"
+    case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
+    _g_if=$((_g_if + 1))
+    if [ "$_want" = disabled ]; then
+      _lpm_gate_one "$_n" "$_if/device/power/wakeup" "$_cur" || _gate_failed=1
+    fi
+  done
+  # "Ran and matched nothing" must be on disk, not only in my head: the day-log snapshot
+  # has no other way to tell a no-op gate from a gate that never fired.
+  printf 'ts=%s action=%s wakeup_nodes=%s net_ifaces=%s\n' \
+    "$(date +%s 2>/dev/null)" "$1" "$_g_ws" "$_g_if" > "$_ASB_GATE_RESULT" 2>/dev/null
+  [ "$_gate_failed" = 0 ]
+}
+
+_lpm_wakeup_restore() {
+  [ -f "$_ASB_WAKEUP_STATE" ] || return 0
+  _restore_failed=0
+  while IFS='=' read -r _n _v; do
+    case "$_v" in enabled|disabled) : ;; *) _restore_failed=1; continue ;; esac
+    case "$_n" in
+      /*) _restore_path="$_n" ;;
+      ''|*[!A-Za-z0-9_]*) _restore_failed=1; continue ;;
+      *) _restore_path="$_SYSCLASS/net/$_n/device/power/wakeup" ;;
+    esac
+    if [ ! -e "$_restore_path" ] || ! printf '%s\n' "$_v" > "$_restore_path" 2>/dev/null ||
+       [ "$(cat "$_restore_path" 2>/dev/null)" != "$_v" ]; then
+      _restore_failed=1
+    fi
+  done < "$_ASB_WAKEUP_STATE"
+  [ "$_restore_failed" = 0 ] || return 1
+  rm -f "$_ASB_WAKEUP_STATE" 2>/dev/null
+}
+
+
 # Feature or explicit radio policy off: restore whatever we saved, once, then stay out of the way.
 if ! _feat_on LPM || ! _radio_policy_enabled; then
+  _lpm_wakeup_restore || exit 1
   if [ -f "$BASE" ]; then
     . "$BASE" 2>/dev/null
     [ -n "${BASE_MDAO:-}" ] && [ "$BASE_MDAO" != "null" ] && _sset mobile_data_always_on "$BASE_MDAO"
@@ -152,117 +269,10 @@ STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
 # Every interface touched is recorded with its previous value and restored on exit, because
 # a device left with wakeup disabled after the module goes away is a phone that silently
 # stops receiving overnight - the worst failure this file could produce.
-_ASB_WAKEUP_STATE=/data/adb/asb/lpm_wakeup_prev
-# Result of the last gate pass. On a CPH2745 the gate runs every night and matches ZERO
-# nodes (no IPA/rmnet wakeup-class entries, no writable interface wakeup attrs), which in
-# a field log is indistinguishable from "never ran". This file makes the difference
-# visible: asbdiag and the day log can say "ran, nothing gateable" instead of guessing.
-_ASB_GATE_RESULT=/data/adb/asb/lpm_gate_result
-# Test hook: fixtures point this at a synthetic sysfs tree. Unset on a real device.
-_SYSCLASS="${ASB_LPM_SYSCLASS:-/sys/class}"
-
-_lpm_wakeup_gate() {
-  # $1 = "disabled" to gate, "enabled" to release
-  _want="$1"
-  [ -d "$_SYSCLASS/net" ] || return 0
-  mkdir -p /data/adb/asb 2>/dev/null
-  _g_ws=0
-  _g_if=0
-  # Wi-Fi as well as the modem path.
-  #
-  # The first version covered rmnet* only, because the capture that prompted it was all IPA
-  # and rmnet_ctl. A later capture on another device shows the same modem traffic plus
-  # "300 WLAN_CE_2" 76 times - the Wi-Fi copy engine resuming the SoC on its own. Gating one
-  # radio and leaving the other is half a fix: that phone spent 62% of "sleep" awake.
-  #
-  # Same rule as before: this is a wakeup-timing change on the data path, not a power or
-  # association change. Wi-Fi stays connected and calls are unaffected; a push that arrives
-  # over Wi-Fi may wait for the next wake, which is the deal this tweak already states.
-  # The IPA device itself, not only the interfaces it feeds.
-  #
-  # A kernel wake-source table shows where the night actually goes: rmnet_ctl 177 wakeups,
-  # IPA_CLIENT_APPS_WAN_LOW_LAT_CONS 177, IPA_CLIENT_APPS_LAN_CONS 182 - about 500 in an
-  # hour, holding the SoC for ~101 s, with mobile traffic near zero. Those are kernel
-  # wakelocks held by the packet accelerator, and gating /sys/class/net/rmnet* does not
-  # reach them: the interface is what carries traffic, the IPA device is what wakes up.
-  #
-  # There is no API to release a named kernel wakelock, so the only lever is the device's
-  # own wakeup attribute - the same one already used for the interfaces, applied one level
-  # down. Recorded and restored by the same loop, so a device that does not expose it, or
-  # ignores the write, is left exactly as it was.
-  # Find the wakeup node by the name the kernel reports, not by a guessed path.
-  #
-  # The previous version hard-coded /sys/devices/platform/soc/*ipa*/power/wakeup and
-  # /sys/bus/platform/devices/*ipa*/power/wakeup. Neither exists on a CPH2745 - the user
-  # checked, both globs came back empty - so the gate silently did nothing while the
-  # night capture still showed 73 IPA wakeups. A path I invented is not evidence.
-  #
-  # /sys/class/wakeup is the canonical index: every wakeup source registers there with a
-  # name file, whatever its device path. Matching on the name the wake_reason log itself
-  # prints means the lookup follows the kernel rather than my model of it.
-  for _wsdir in "$_SYSCLASS"/wakeup/wakeup*; do
-    [ -d "$_wsdir" ] || continue
-    _wsname="$(cat "$_wsdir/name" 2>/dev/null)"
-    case "$_wsname" in
-      *IPA_CLIENT*|*ipa*|*rmnet_ctl*) : ;;
-      *) continue ;;
-    esac
-    # The wakeup class entry is a symlink into the device; its power/wakeup is what the
-    # runtime-PM interface actually honours.
-    _ipa="$(readlink -f "$_wsdir/device/power/wakeup" 2>/dev/null)"
-    [ -n "$_ipa" ] && [ -e "$_ipa" ] || continue
-    _cur="$(cat "$_ipa" 2>/dev/null)"
-    case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
-    _g_ws=$((_g_ws + 1))
-    if [ "$1" = "disabled" ]; then
-      grep -q "^$_ipa=" "$_ASB_WAKEUP_STATE" 2>/dev/null || \
-        printf '%s=%s\n' "$_ipa" "$_cur" >> "$_ASB_WAKEUP_STATE" 2>/dev/null
-    fi
-    echo "$1" > "$_ipa" 2>/dev/null || true
-  done
-
-  for _if in "$_SYSCLASS"/net/rmnet* "$_SYSCLASS"/net/wlan*; do
-    [ -e "$_if/device/power/wakeup" ] || continue
-    _n="$(basename "$_if")"
-    _cur="$(cat "$_if/device/power/wakeup" 2>/dev/null)"
-    case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
-    _g_if=$((_g_if + 1))
-    if [ "$_want" = "disabled" ]; then
-      # Record the first time only: a second pass must not overwrite the real baseline
-      # with a value this script itself wrote.
-      grep -q "^$_n=" "$_ASB_WAKEUP_STATE" 2>/dev/null ||         echo "$_n=$_cur" >> "$_ASB_WAKEUP_STATE" 2>/dev/null
-    fi
-    echo "$_want" > "$_if/device/power/wakeup" 2>/dev/null || true
-  done
-  # "Ran and matched nothing" must be on disk, not only in my head: the day-log snapshot
-  # has no other way to tell a no-op gate from a gate that never fired.
-  printf 'ts=%s action=%s wakeup_nodes=%s net_ifaces=%s\n' \
-    "$(date +%s 2>/dev/null)" "$1" "$_g_ws" "$_g_if" > "$_ASB_GATE_RESULT" 2>/dev/null
-  return 0
-}
-
-_lpm_wakeup_restore() {
-  [ -f "$_ASB_WAKEUP_STATE" ] || return 0
-  while IFS='=' read -r _n _v; do
-    # Two record kinds: a bare interface name, and an absolute sysfs path for the IPA
-    # device. Restoring only the first would leave the accelerator gated after everything
-    # else was released - a phone that quietly stops waking for data, with nothing on disk
-    # to explain why.
-    case "$_n" in
-      /*) [ -e "$_n" ] && echo "$_v" > "$_n" 2>/dev/null || true
-          continue ;;
-      ''|*[!A-Za-z0-9_]*) continue ;;
-    esac
-    case "$_v" in enabled|disabled) : ;; *) continue ;; esac
-    [ -e "$_SYSCLASS/net/$_n/device/power/wakeup" ] &&       echo "$_v" > "$_SYSCLASS/net/$_n/device/power/wakeup" 2>/dev/null || true
-  done < "$_ASB_WAKEUP_STATE"
-  rm -f "$_ASB_WAKEUP_STATE" 2>/dev/null
-  return 0
-}
 
 case "$MODE" in
   fast)
-    _lpm_wakeup_restore
+    _lpm_wakeup_restore || exit 1
     # Data call stays up: coming back from an idle RRC state is the latency spike that matters
     # in an online match, and it costs far more than the power saved.
     _sset mobile_data_always_on 1
@@ -273,7 +283,10 @@ case "$MODE" in
     _sysc net.ipv4.tcp_keepalive_time "$_kaf"
     ;;
   night)
-    _lpm_wakeup_gate disabled
+    if ! _lpm_wakeup_gate disabled; then
+      _lpm_wakeup_restore || :
+      exit 1
+    fi
     # Inside the learner's own sleep window: the same idea as "save", taken further.
     #
     # save halves the radio's reasons to wake; night removes most of them. Keepalives go
@@ -293,7 +306,7 @@ case "$MODE" in
     _sysc net.ipv4.tcp_keepalive_probes 5
     ;;
   save)
-    _lpm_wakeup_restore
+    _lpm_wakeup_restore || exit 1
     # Screen off. Let the framework drop the always-on data call so the radio can sit
     # idle, and stretch keepalives so fewer sockets drag it back up - that traffic is
     # the biggest single modem drain overnight.
@@ -306,7 +319,7 @@ case "$MODE" in
     ;;
   *)
     # Default/normal mode: the phone is in use, the data path must wake it.
-    _lpm_wakeup_restore
+    _lpm_wakeup_restore || exit 1
     MODE="normal"
     STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
     if [ "$HANDOVER_FAST" = "1" ]; then

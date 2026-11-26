@@ -4451,5 +4451,8 @@
   "lsp_actions_help_text": "Alleggerisci rimuove solo gli ambiti delle app elencate; il modulo resta attivo. Disattiva spegne l’intero modulo. Le modifiche valgono dopo il riavvio e si possono annullare nel registro.",
   "cfg_smart_current": "Ora: {v}",
   "cfg_smart_reading": "Lettura…",
-  "cfg_smart_unknown": "non disponibile"
+  "cfg_smart_unknown": "non disponibile",
+  "zy_show_more": "Mostra i rimanenti (%s)",
+  "kc_value_on": "attivo",
+  "kc_value_off": "disattivo"
 }

@@ -4451,5 +4451,8 @@
   "lsp_actions_help_text": "Aligerar retira solo los ámbitos de las aplicaciones indicadas; el módulo sigue activo. Desactivar apaga el módulo completo. Los cambios se aplican al reiniciar y se pueden deshacer en el registro.",
   "cfg_smart_current": "Ahora: {v}",
   "cfg_smart_reading": "Leyendo…",
-  "cfg_smart_unknown": "no disponible"
+  "cfg_smart_unknown": "no disponible",
+  "zy_show_more": "Mostrar los restantes (%s)",
+  "kc_value_on": "activado",
+  "kc_value_off": "desactivado"
 }

@@ -8994,7 +8994,7 @@ nrButtons.forEach(b=>{b.disabled=false;b['aria-disabled']='false'});nrPop.hidden
 kernelDecorateControlRow(nrRow,'kernel_hrtimer_migration');
 if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||nrBadge.textContent!=='0'||nrBadge.title!=='kernel: 0')throw Error('covered HR timer control remains actionable or does not show its live value '+JSON.stringify({buttons:nrButtons,pop:nrPop,badge:nrBadge,availability:kernelControlAvailability('kernel_hrtimer_migration')}));
 global._selectedProfile='smart';nrBadge.textContent='';nrBadge.title='';kernelDecorateControlRow(nrRow,'kernel_bore');
-if(nrBadge.textContent!=='1'||nrBadge.title!=='kernel: 1')throw Error('BORE card does not show only the current Smart value '+JSON.stringify({badge:nrBadge,availability:kernelControlAvailability('kernel_bore')}));
+if(nrBadge.textContent!=='on'||nrBadge.title!=='kernel: 1')throw Error('BORE card does not show only the current Smart value '+JSON.stringify({badge:nrBadge,availability:kernelControlAvailability('kernel_bore')}));
 (async()=>{
  await cfgSet('kernel_sched_nr_migrate','stock',null);
  await cfgSet('kernel_hrtimer_migration','on',null);
@@ -17214,6 +17214,46 @@ assert '[ "$_wb_count" -le '+str(contract['max_rules'])+' ]' in s
 assert contract['commands']==['add','del','clear']
 PYTEST
 echo 'PASS shared AWL fixture: ASB paths, bounds and runtime discovery'
+)
+
+t_webui_bridge_settle_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+node - "$ROOT/webroot/index.html" <<'JS'
+const fs = require('fs'), vm = require('vm');
+const html = fs.readFileSync(process.argv[2], 'utf8');
+const start = html.indexOf('function run(cmd) {'), end = html.indexOf('\n}\n',start) + 2;
+if (start < 0 || end < 3) throw Error('bridge not found');
+let fire; const ctx = {window:{}, setTimeout(f){fire=f;return 7}, clearTimeout(){}, console};
+vm.createContext(ctx); vm.runInContext('let _id=0; '+html.slice(start,end),ctx);
+(async()=>{
+  let r=await ctx.run('x'); if(r.errno!==1 || Object.keys(ctx.window).length) throw Error('no ksu cleanup');
+  ctx.ksu={exec(){throw Error('bridge error')}}; r=await ctx.run('x');
+  if(r.errno!==1 || Object.keys(ctx.window).length) throw Error('throw cleanup');
+  let saved; ctx.ksu={exec(c,o,k){saved=ctx.window[k]}};
+  const p=ctx.run('x'); saved(0,'ok',''); saved(1,'late',''); r=await p;
+  if(r.errno!==0 || r.stdout!=='ok' || Object.keys(ctx.window).length) throw Error('settle once');
+  const q=ctx.run('x'); fire(); r=await q;
+  if(r.errno!==1 || !/timeout/.test(r.stderr) || Object.keys(ctx.window).length) throw Error('timeout cleanup');
+})().catch(e=>{console.error(e);process.exitCode=1});
+JS
+echo 'PASS root bridge cleanup, settle once, and bounded timeout'
+)
+
+t_webui_zy_fold_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+node - "$ROOT/webroot/index.html" <<'JS'
+const fs=require('fs'),vm=require('vm'),h=fs.readFileSync(process.argv[2],'utf8');
+const a=h.indexOf('function zyListFold('),b=h.indexOf('\n}\n',a)+2;if(a<0||b<3)throw Error('fold missing');
+function el(){return {children:[],appendChild(x){this.children.push(x)},addEventListener(n,f){this.onToggle=f}}}
+const ctx={document:{createElement:el},T:(k,d)=>d};vm.createContext(ctx);vm.runInContext(h.slice(a,b),ctx);
+let card=el(),calls=0;ctx.zyListFold(card,[1,2,3,4,5],x=>{calls++;return {x}});
+if(card.children.length!==4||calls!==3)throw Error('first three or fold incorrect');
+const d=card.children[3];d.open=true;d.onToggle();d.onToggle();if(calls!==5||d.children.length!==3)throw Error('lazy rows duplicated');
+card=el();ctx.zyListFold(card,[1,2,3],x=>({x}));if(card.children.length!==3)throw Error('unnecessary fold');
+JS
+echo 'PASS ART and LSPosed lazy list folding'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

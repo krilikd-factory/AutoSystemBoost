@@ -61,6 +61,9 @@ run_queue() {
     [ "$jobs" -lt 4 ] && jobs=4
     [ "$jobs" -gt 12 ] && jobs=12
   fi
+  local limit="${ASB_REGRESSION_TEST_TIMEOUT:-600}"
+  [[ "$limit" =~ ^[1-9][0-9]*$ ]] || { echo 'ERROR: ASB_REGRESSION_TEST_TIMEOUT must be positive seconds' >&2; return 1; }
+  command -v timeout >/dev/null 2>&1 || { echo 'ERROR: timeout is required to bound regression tests' >&2; return 1; }
   local out; out="$(mktemp -d)"
   local i n=${#_Q_CMD[@]} running=0
   local order=()
@@ -71,7 +74,14 @@ run_queue() {
     _regression_long_test "${_Q_TITLE[$i]}" || order+=("$i")
   done
   for i in "${order[@]}"; do
-    ( set +e; eval "${_Q_CMD[$i]}" >"$out/$i.log" 2>&1; echo $? >"$out/$i.rc" ) &
+    ( set +e
+      timeout --kill-after=5 "$limit" bash -c "${_Q_CMD[$i]}" >"$out/$i.log" 2>&1
+      rc=$?
+      if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
+        printf '\nTIMEOUT after %s seconds: %s\n' "$limit" "${_Q_TITLE[$i]}" >>"$out/$i.log"
+      fi
+      echo "$rc" >"$out/$i.rc"
+    ) &
     running=$((running + 1))
     if [ "$running" -ge "$jobs" ]; then wait -n 2>/dev/null || true; running=$((running - 1)); fi
   done

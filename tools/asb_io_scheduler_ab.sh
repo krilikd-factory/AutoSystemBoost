@@ -128,7 +128,12 @@ run() {
   _discover || { _fail no_physical_queues; return 1; }
   mkdir "$LOCK" 2>/dev/null || { _fail busy; return 1; }
   _boot="$(_bootid)"; [ -n "$_boot" ] || { rmdir "$LOCK" 2>/dev/null || true; _fail boot_identity_unknown; return 1; }
-  printf '%s\n' "$_boot" > "$LOCK/boot_id" && printf '%s\n' "$$" > "$LOCK/pid" || { _fail ledger_write_failed; return 1; }
+  printf '%s\n' "$_boot" > "$LOCK/boot_id" && printf '%s\n' "$$" > "$LOCK/pid" || {
+    # No scheduler write or baseline has happened yet; only remove our own fresh lock.
+    rm -f "$LOCK/boot_id" "$LOCK/pid" 2>/dev/null || true
+    rmdir "$LOCK" 2>/dev/null || true
+    _fail ledger_write_failed; return 1;
+  }
   _run_failed=0; _cur_file=""
   trap '_finish $?' EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
   for n in $DEVS; do node=$(_node "$n"); orig=$(_current "$node"); _name "$orig" || { _fail invalid_baseline; return 1; }

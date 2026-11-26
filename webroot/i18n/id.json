@@ -4451,5 +4451,8 @@
   "lsp_actions_help_text": "Ringankan hanya menghapus cakupan aplikasi yang tercantum; modul tetap aktif. Matikan menonaktifkan seluruh modul. Perubahan berlaku setelah mulai ulang dan dapat dibatalkan di riwayat.",
   "cfg_smart_current": "Saat ini: {v}",
   "cfg_smart_reading": "Membaca…",
-  "cfg_smart_unknown": "tidak tersedia"
+  "cfg_smart_unknown": "tidak tersedia",
+  "zy_show_more": "Tampilkan sisanya (%s)",
+  "kc_value_on": "aktif",
+  "kc_value_off": "nonaktif"
 }

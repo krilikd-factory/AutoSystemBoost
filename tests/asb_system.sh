@@ -7868,7 +7868,7 @@ def before(first: str, second: str, message: str) -> None:
 
 # WebUI bridge contract: ksu.exec resolves {errno, stdout, stderr}; a shell failure does not
 # reject the Promise. Trial/Ledger must therefore never treat a result object as a string.
-require("ok({errno:e, stdout:o||'', stderr:r||''})", 'run() result object contract missing')
+require("ok({errno:e, stdout:o || '', stderr:r || ''})", 'run() result object contract missing')
 require("function runText(result)", 'missing safe bridge output helper')
 require("function runOk(result)", 'missing bridge errno helper')
 require("const raw = (result && result.stdout) || '';", 'ledger/trial loader does not use run().stdout')
@@ -10958,6 +10958,17 @@ t_debug_log_bundle_runtime() (
   echo 'id=AutoSystemBoost' > "$T/mod/module.prop"
   run() { ASB_DEBUG_SUPPORT_MODDIR="$T/mod" ASB_DEBUG_SUPPORT_STATE_DIR="$T/st" ASB_DEBUG_SUPPORT_DIAG_OUTDIR="$T/logs" \
     ASB_DEBUG_SUPPORT_BUNDLE_DIR="$T/out" sh "$ROOT/runtime/asb_debug_support.sh" "$@"; }
+  # Same version and installation timestamp permit an older manual diagnostic.
+  printf 'id=AutoSystemBoost\nversion=V66-test27\nversionCode=660\n' > "$T/mod/module.prop"
+  touch -d '-10 days' "$T/mod/module.prop"
+  printf ' version : V66-test27  (660)\n' > "$T/logs/asbdiag_current.txt"
+  touch -d '-5 days' "$T/logs/asbdiag_current.txt"
+  out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=1' || fail 'current-build manual diagnostic not reusable'
+  out="$(run bundle)"; p="$(printf '%s\n' "$out" | sed -n 's/^path=//p')"
+  tar -tf "$p" | grep -qx asbdiag_current.txt || fail 'reusable old diagnostic missing from archive'
+  touch "$T/mod/module.prop"
+  out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag_current=0' || fail 'diagnostic older than installation was trusted'
+  rm -f "$T/logs/asbdiag_current.txt" "$T/out"/*
   out="$(run bundle)"; printf '%s\n' "$out" | grep -qx 'error=nothing_to_send' || fail 'an empty log folder must not produce an archive'
   out="$(run bundle-check)"; printf '%s\n' "$out" | grep -qx 'diag=' || fail 'no asbdiag must read as missing'
   mkdir -p "$T/logs/asb_log_full_day_7"; echo 'model: X' > "$T/logs/asb_log_full_day_7/env.txt"

@@ -4451,5 +4451,8 @@
   "lsp_actions_help_text": "Hafiflet yalnızca listelenen uygulama kapsamlarını kaldırır; modül etkin kalır. Kapat tüm modülü devre dışı bırakır. Değişiklikler yeniden başlatınca uygulanır ve geçmişten geri alınabilir.",
   "cfg_smart_current": "Şimdi: {v}",
   "cfg_smart_reading": "Okunuyor…",
-  "cfg_smart_unknown": "kullanılamıyor"
+  "cfg_smart_unknown": "kullanılamıyor",
+  "zy_show_more": "Kalanları göster (%s)",
+  "kc_value_on": "açık",
+  "kc_value_off": "kapalı"
 }
