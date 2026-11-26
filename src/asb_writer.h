@@ -173,6 +173,32 @@ static int writer_node_is_uclamp(asb_write_node_t n) {
            n == ASB_WRITE_UCL_SYBG;
 }
 
+/* Parse only exact whole percentages; never mistake "max" or a fractional value for 0. */
+static int writer_parse_uclamp(const char *s, int *value) {
+    const unsigned char *p = (const unsigned char *)s;
+    int n = 0;
+    if (!p || !value) return 0;
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+    if (strncmp((const char *)p, "max", 3) == 0) {
+        n = 100; p += 3;
+    } else {
+        if (*p < '0' || *p > '9') return 0;
+        while (*p >= '0' && *p <= '9') {
+            n = n * 10 + (*p++ - '0');
+            if (n > 100) return 0;
+        }
+        if (*p == '.') {
+            p++;
+            if (*p < '0' || *p > '9') return 0;
+            while (*p >= '0' && *p <= '9') if (*p++ != '0') return 0;
+        }
+    }
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+    if (*p) return 0;
+    *value = n;
+    return 1;
+}
+
 static int writer_node_is_cpu_max(asb_write_node_t node) {
     return node >= ASB_WRITE_CPU_MAX0 && node <= ASB_WRITE_CPU_MAX2;
 }
@@ -234,20 +260,14 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
      * caller asked about. Reporting it as a skip would make the health line look like
      * something was refused.
      */
-    /* The uclamp nodes are excluded from this shortcut.
-     *
-     * They answer in percent-with-decimals or with the literal word "max", and
-     * sysfs_read_int turns "max" into 0. So a tier sitting at "max" reads back as 0, and a
-     * tick that legitimately wants 0 there matched and skipped the write - after which the
-     * cache said 0, the node still said "max", and nothing ever corrected it. A capture
-     * shows the result: all four tiers at ROM stock with writer health reporting 192 of
-     * 193 writes applied, because the skipped ones were counted as successes.
-     *
-     * The text-aware comparison further down handles these correctly; this fast path
-     * cannot, so it does not try. */
     int pre = INT_MIN;
-    if (!writer_node_is_uclamp(node)) {
-        g_stat_precheck_reads++;
+    g_stat_precheck_reads++;
+    if (writer_node_is_uclamp(node)) {
+        char buf[32] = {0};
+        int parsed;
+        if (sysfs_read_str(path, buf, sizeof(buf)) > 0 &&
+            writer_parse_uclamp(buf, &parsed)) pre = parsed;
+    } else {
         pre = sysfs_read_int(path, INT_MIN);
     }
     if (pre != INT_MIN && pre == requested) {
@@ -272,7 +292,7 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         observed = sysfs_read_int(path, INT_MIN);
     }
     h->observed = observed;
-    if (rc == 0 && observed == requested) {
+    if (rc == 0 && !writer_node_is_uclamp(node) && observed == requested) {
         h->applied++;
         h->consecutive_failures = 0;
         /* "Three CONSECUTIVE holds" (below) - a clean write ends the run. Only the
@@ -297,8 +317,7 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
      * That is an hour of the app on screen having no scheduler ceiling while background
      * work had none either.
      *
-     * Confirmed by re-reading as text and comparing the integer part, which is the only
-     * part ASB ever asks for.
+     * Confirmed by reading the complete textual percentage, including its fractional part.
      */
     if (rc == 0 && writer_node_is_uclamp(node)) {
         char _uc_buf[32] = {0};
@@ -308,24 +327,23 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
          * write still counted as a failure. The device kept reporting 0.00 with
          * writer health failures=8, which is what sent me looking here a second time. */
         g_stat_readbacks++;
-        if (sysfs_read_str(path, _uc_buf, sizeof(_uc_buf)) > 0) {
-            int _uc_seen;
-            if (strncmp(_uc_buf, "max", 3) == 0) {
-                _uc_seen = 100;                    /* "max" is 100% by definition */
-            } else {
-                _uc_seen = atoi(_uc_buf);          /* "85.00" -> 85 */
-            }
+        int _uc_seen;
+        if (sysfs_read_str(path, _uc_buf, sizeof(_uc_buf)) > 0 &&
+            writer_parse_uclamp(_uc_buf, &_uc_seen)) {
+            h->observed = _uc_seen;
             if (_uc_seen == requested) {
-                h->observed = _uc_seen;
                 h->applied++;
                 h->consecutive_failures = 0;
+                h->floor_holds = 0;
                 h->retry_at = 0;
                 snprintf(h->status, sizeof(h->status), "%s", "applied");
                 return 0;
             }
-            h->observed = _uc_seen;
+        } else {
+            h->observed = INT_MIN;
         }
     }
+
     /* A smaller live CPU maximum still satisfies ASB's request: a ceiling is an
      * upper bound, and a vendor PowerHAL/thermal owner that holds a stricter bound
      * is already doing the energy/heat-safe thing. Treat it as cooperative success

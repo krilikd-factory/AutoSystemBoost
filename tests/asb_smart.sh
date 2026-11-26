@@ -8093,6 +8093,44 @@ if MODDIR="$T/mod" sh "$T/guard.sh" recover; then echo 'FAIL unrelated block cle
 echo 'PASS zero camera payload recovery remains guarded'
 )
 
+t_writer_uclamp_live_precheck() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+sed -n '/^typedef enum {$/,/^static void writer_write_health_dump(FILE \*f) {$/p' "$ROOT/src/asb_writer.h" | sed '$d' > "$T/w.c"
+cat > "$T/t.c" <<'X'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include <time.h>
+#include <unistd.h>
+static char live[32]; static int writes;
+static int sysfs_read_int(const char *p, int d) { (void)p; (void)d; return atoi(live); }
+static int sysfs_read_str(const char *p, char *b, size_t n) { (void)p; snprintf(b,n,"%s",live); return strlen(b); }
+static int sysfs_write_int(const char *p, int v) { (void)p; writes++; snprintf(live,sizeof(live),"%d.00",v); return 0; }
+#include "w.c"
+int main(void) {
+ int v;
+ if (!writer_parse_uclamp("max\n",&v) || v != 100 || writer_parse_uclamp("maximum",&v) || writer_parse_uclamp("85.01",&v) || writer_parse_uclamp("bad",&v)) return 1;
+ strcpy(live,"max\n");
+ if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP,"/tmp/node",100) || writes) return 2;
+ if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP,"/tmp/node",0) || writes != 1) return 3;
+ if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP,"/tmp/node",0) || writes != 1) return 4;
+ strcpy(live,"85.50");
+ if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP,"/tmp/node",85) || writes != 2) return 5;
+ strcpy(live,"40.00"); /* another owner changed the live node */
+ if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP,"/tmp/node",85) || writes != 3) return 6;
+ strcpy(live,"bad");
+ if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP,"/tmp/node",0) || writes != 4) return 7;
+ return 0;
+}
+X
+${CC:-cc} -O1 -Wall -Wno-unused-function -I"$T" -o "$T/t" "$T/t.c"
+"$T/t"
+echo 'PASS uclamp live precheck and exact readback'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
