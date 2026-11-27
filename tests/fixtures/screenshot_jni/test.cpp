@@ -34,6 +34,7 @@ static FixtureParcel make_parcel(const char *name, int &flags_at) {
 }
 int main() {
   JNIEnv env;
+  assert(!original_surface_create && !original_surface_set_flags);
   assert(wrapped_surface_create(&env,nullptr,nullptr,nullptr,1,2,3,0x5c4,0,nullptr)==0);
   wrapped_surface_set_flags(&env,nullptr,1,2,0x1c1,0x1c1);
   zygisk::internal::api_table host{}; host.registerModule=register_module; host.hookJniNativeMethods=hook;
