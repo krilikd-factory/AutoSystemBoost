@@ -14,11 +14,13 @@ SurfaceSetFlags original_surface_set_flags = nullptr;
 jlong wrapped_surface_create(JNIEnv *env, jclass cls, jobject session, jstring name,
                              jint width, jint height, jint format, jint flags,
                              jlong parent, jobject metadata) {
+    if (!original_surface_create) return 0;
     return original_surface_create(env, cls, session, name, width, height, format,
                                    asb_screenshot::surface_filtered(flags), parent, metadata);
 }
 void wrapped_surface_set_flags(JNIEnv *env, jclass cls, jlong transaction, jlong surface,
                                jint flags, jint mask) {
+    if (!original_surface_set_flags) return;
     // Preserve the caller's mask and every unrelated bit; masked capture flags
     // are explicitly cleared instead of being applied to the layer.
     original_surface_set_flags(env, cls, transaction, surface,

@@ -2000,11 +2000,13 @@ int main(int argc,char **argv) {
   g_package="org.example.one";pre();post();assert(unloads==1 && installs==0);
   {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=1\n";}
   pre();assert(unloads==1);post();assert(installs==1);
-  uid=1010123;pre();post();assert(unloads==2 && installs==1);uid=10123;
-  {std::ofstream f(safe_path);f<<"1";} pre();post();assert(unloads==3 && installs==1);unlink(safe_path.c_str());
-  {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=2\n";} pre();post();assert(unloads==4 && installs==1);
+  g_package="org.example.one:player"; pre();post();assert(unloads==1 && installs==2);
+  g_package="org.example.other:player"; pre();post();assert(unloads==2 && installs==2);
+  g_package="org.example.one"; uid=1010123;pre();post();assert(unloads==3 && installs==2);uid=10123;
+  {std::ofstream f(safe_path);f<<"1";} pre();post();assert(unloads==4 && installs==2);unlink(safe_path.c_str());
+  {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=2\n";} pre();post();assert(unloads==5 && installs==2);
   {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=1\n";}
-  install_ok=false;pre();post();assert(unloads==5 && installs==2);
+  install_ok=false;pre();post();assert(unloads==6 && installs==3);
 }
 CPP
 g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-parameter -pthread -I"$T/inc" -I"$ROOT/src/zygisk" "$T/test.cpp" -o "$T/test"
@@ -2063,12 +2065,13 @@ chmod +x "$T/bin/cmd"
 printf 'zygisk_enabled=1\n' > "$T/governor.conf"
 export PATH="$T/bin:$PATH" MODDIR="$ROOT" ASB_SCREENSHOT_STATE_DIR="$T/state" ASB_SCREENSHOT_ZYGISK_DIR="$T/zygisk" ASB_SCREENSHOT_CONF="$T/governor.conf" ASB_SCREENSHOT_SAFE_MODE="$T/safe" ASB_SCREENSHOT_ZYGISK_DISABLE="$T/disabled"
 S="$ROOT/runtime/asb_screenshot_policy.sh"
-[ "$(sh "$S" status)" = 'backend=experimental selected=0 policy=empty zygisk_enabled=1' ] || { echo 'FAIL initial status'; exit 1; }
+[ "$(sh "$S" status)" = 'backend=experimental selected=0 policy=empty zygisk_enabled=1 policy_published=0' ] || { echo 'FAIL initial status'; exit 1; }
 [ ! -e "$T/state" ] || { echo 'FAIL status mutated state'; exit 1; }
 sh "$S" add 0 org.example.one | grep -q 'status=saved backend=experimental selected=1'
 sh "$S" add 999 org.example.one | grep -q 'selected=2'
 sh "$S" add 0 org.example.one | grep -q 'selected=2'
 cmp -s "$T/state/selection.policy" "$T/zygisk/screenshot.policy"
+sh "$S" status | grep -q 'policy_published=1' || { echo 'FAIL matching live policy not reported'; exit 1; }
 [ "$(stat -c %a "$T/zygisk/screenshot.policy")" = 600 ] || { echo 'FAIL selection permissions'; exit 1; }
 grep -qx '0|org.example.one' "$T/zygisk/screenshot.policy"
 grep -qx '999|org.example.one' "$T/zygisk/screenshot.policy"
@@ -2079,6 +2082,7 @@ printf 'zygisk_enabled=1\n' > "$T/governor.conf"
 sh "$S" publish >/dev/null
 touch "$T/safe"; sh "$S" publish >/dev/null
 [ ! -e "$T/zygisk/screenshot.policy" ] || { echo 'FAIL safe mode'; exit 1; }
+sh "$S" status | grep -q 'policy_published=0' || { echo 'FAIL safe mode reported live policy'; exit 1; }
 rm "$T/safe"; sh "$S" publish >/dev/null
 if command -v g++ >/dev/null 2>&1; then
   cat > "$T/reader.cpp" <<'CPP'
@@ -2123,7 +2127,7 @@ if PATH="$T/failbin:$PATH" sh "$S" remove 0 org.example.two >/dev/null 2>&1; the
 grep -qx '0|org.example.two' "$T/zygisk/screenshot.policy" || { echo 'FAIL busy writer changed selection'; exit 1; }
 rm "$T/state/selection.lock"
 printf 'corrupted\n' > "$T/state/selection.policy"
-[ "$(sh "$S" status)" = 'backend=experimental selected=unknown policy=invalid zygisk_enabled=1' ] || { echo 'FAIL corrupt status'; exit 1; }
+[ "$(sh "$S" status)" = 'backend=experimental selected=unknown policy=invalid zygisk_enabled=1 policy_published=0' ] || { echo 'FAIL corrupt status'; exit 1; }
 if sh "$S" add 0 org.example.two >/dev/null 2>&1; then echo 'FAIL corrupt policy accepted'; exit 1; fi
 [ ! -e "$T/zygisk/screenshot.policy" ] || { echo 'FAIL corrupt selection retained live policy'; exit 1; }
 sh "$S" clear | grep -q 'selected=0'

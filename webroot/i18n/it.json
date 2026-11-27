@@ -1894,7 +1894,7 @@
   "dev_zygisk_observer_launch_vetoed": "Avvii a freddo rifiutati",
   "dev_zygisk_observer_ledger_events": "Voci del registro",
   "dev_zygisk_observer_ledger_restart_loops": "Cicli di riavvio a schermo spento (picco di avvii per 5 min)",
-  "dev_zygisk_observer_ledger_top_screen_off": "Più avvii a schermo spento (app spento/acceso)",
+  "dev_zygisk_observer_ledger_top_screen_off": "Più avvii a schermo spento",
   "dev_zygisk_observer_lifecycle_coverage": "Copertura del ciclo di vita",
   "dev_zygisk_observer_lifecycle_hints": "Suggerimenti del ciclo di vita",
   "dev_zygisk_observer_link_state": "Verdetto del collegamento ASB (stato macchina)",
@@ -4473,5 +4473,8 @@
   "screenshot_fix_no_matches": "Nessuna app corrispondente",
   "inf_advice_observations": "Osservazioni dal registro",
   "inf_advice_observations_chip": "Osservazioni",
-  "lr_zy_zero_explain": "Questi contatori misurano richieste facoltative del ciclo di vita e di avvio a freddo, distinte dagli eventi dei processi. Zero può indicare che la funzione è disattivata o che non ci sono state richieste valide; controlla gli stati sotto."
+  "lr_zy_zero_explain": "Questi contatori misurano richieste facoltative del ciclo di vita e di avvio a freddo, distinte dagli eventi dei processi. Zero può indicare che la funzione è disattivata o che non ci sono state richieste valide; controlla gli stati sotto.",
+  "screenshot_fix_runtime_unknown": "Stato degli hook sconosciuto; la selezione non ne conferma l’attivazione. Arresta completamente e riapri l’app prima della prova.",
+  "screenshot_fix_policy_live": "Selezione pubblicata",
+  "screenshot_fix_policy_not_live": "Pubblicazione della selezione non confermata"
 }

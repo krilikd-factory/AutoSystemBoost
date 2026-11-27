@@ -1894,7 +1894,7 @@
   "dev_zygisk_observer_launch_vetoed": "Reddedilen soğuk başlatmalar",
   "dev_zygisk_observer_ledger_events": "Kayıt girdileri",
   "dev_zygisk_observer_ledger_restart_loops": "Ekran kapalıyken yeniden başlatma döngüleri (5 dk içindeki en yüksek başlatma)",
-  "dev_zygisk_observer_ledger_top_screen_off": "Ekran kapalıyken en çok başlatma (uygulama kapalı/açık)",
+  "dev_zygisk_observer_ledger_top_screen_off": "Ekran kapalıyken en çok başlatılanlar",
   "dev_zygisk_observer_lifecycle_coverage": "Yaşam döngüsü kapsamı",
   "dev_zygisk_observer_lifecycle_hints": "Yaşam döngüsü ipuçları",
   "dev_zygisk_observer_link_state": "ASB bağlantı kararı (makine durumu)",
@@ -4473,5 +4473,8 @@
   "screenshot_fix_no_matches": "Eşleşen uygulama yok",
   "inf_advice_observations": "Günlükten gözlemler",
   "inf_advice_observations_chip": "Gözlemler",
-  "lr_zy_zero_explain": "Bu sayaçlar süreç olaylarından ayrı olarak isteğe bağlı yaşam döngüsü ve soğuk başlatma isteklerini ölçer. Sıfır, özelliğin kapalı olduğu veya uygun istek kaydedilmediği anlamına gelebilir; aşağıdaki durumları kontrol edin."
+  "lr_zy_zero_explain": "Bu sayaçlar süreç olaylarından ayrı olarak isteğe bağlı yaşam döngüsü ve soğuk başlatma isteklerini ölçer. Sıfır, özelliğin kapalı olduğu veya uygun istek kaydedilmediği anlamına gelebilir; aşağıdaki durumları kontrol edin.",
+  "screenshot_fix_runtime_unknown": "Hook durumu bilinmiyor; seçim etkinleşmeyi doğrulamaz. Testten önce uygulamayı zorla durdurup yeniden açın.",
+  "screenshot_fix_policy_live": "Seçim yayımlandı",
+  "screenshot_fix_policy_not_live": "Seçimin yayımlandığı doğrulanmadı"
 }

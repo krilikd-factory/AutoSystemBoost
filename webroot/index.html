@@ -3972,8 +3972,6 @@ html[dir="rtl"] .bfx-bar > i { transform-origin: right center; }
 .screenshot-fix-card .wl-manual-name { min-width:0; overflow-wrap:anywhere; }
 .wl-components-app { margin:8px 0; padding:8px; border:1px solid var(--border); border-radius:14px; }
 .wl-components-app-title { padding:4px 4px 8px; font-weight:700; overflow-wrap:anywhere; color:var(--accent); }
-.inf-advice-observations-title { margin:12px 0 6px; font-weight:700; font-size:12px; color:var(--accent); }
-.inf-advice-observation { margin:5px 0; padding:9px 10px; border:1px solid var(--border); border-radius:11px; }
 .lgr-screen-off-starts { margin:12px 0; padding:12px; border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border)); border-radius:15px; background:color-mix(in srgb,var(--accent) 6%,transparent); }
 .lgr-screen-off-starts > .lgr-note { font-weight:700; }
 .bfx-primary { color: #04261a; border: 1px solid rgba(96,242,178,.65); background: linear-gradient(135deg, #6cf2b8, #2fd3a6); box-shadow: 0 4px 14px rgba(26,200,140,.22); }
@@ -12256,11 +12254,15 @@ async function screenshotFixLoad() {
   chip.className = 'bfx-chip ' + (supported ? 'is-ready' : 'is-wait');
   chip.textContent = supported ? T('screenshot_fix_experimental', 'Experimental') : T('screenshot_fix_unavailable', 'Unavailable: check Zygisk, Android 15–17 and current user');
   selected.textContent = ''; _screenshotSelected = new Set();
+  const runtimeNote = T('screenshot_fix_runtime_unknown', 'Hook status is unknown; selection alone does not confirm activation. Force-stop and reopen the app before testing.');
+  const policyNote = status.policy_published === '1'
+    ? T('screenshot_fix_policy_live', 'Selection published')
+    : T('screenshot_fix_policy_not_live', 'Selection is not confirmed as published');
   const selectedEntries = [];
   String(parts[1] || '').split('\n').forEach(function (line) {
     const m = /^entry\|(\d{1,3})\|([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)$/.exec(line.trim()); if (!m) return;
     selectedEntries.push(m); if (m[1] === _screenshotUser) _screenshotSelected.add(m[2]);
-    const row = bfxEl('div', 'wl-manual-row screenshot-fix-row'), text = bfxEl('div', 'wl-manual-name', m[2] + ' · u' + m[1]); row.appendChild(text);
+    const row = bfxEl('div', 'wl-manual-row screenshot-fix-row'), text = bfxEl('div', 'wl-manual-name', m[2] + ' · u' + m[1] + ' · ' + policyNote + ' · ' + runtimeNote); row.appendChild(text);
     const remove = bfxEl('button', 'wl-manual-action is-restore', T('screenshot_fix_remove', 'Remove')); remove.type = 'button';
     remove.onclick = function () { screenshotFixChange('remove', m[2], m[1]); }; row.appendChild(remove); selected.appendChild(row);
   });
@@ -12283,7 +12285,7 @@ async function screenshotFixLoad() {
   _screenshotApps = pkgs.map(function (p) { return { pkg:p, label:labels[p] || p }; });
   selectedEntries.forEach(function (m, i) {
     const name = selected.children[i] && selected.children[i].firstChild;
-    if (name && labels[m[2]]) name.textContent = labels[m[2]] + ' · ' + m[2] + ' · u' + m[1];
+    if (name && labels[m[2]]) name.textContent = labels[m[2]] + ' · ' + m[2] + ' · u' + m[1] + ' · ' + policyNote + ' · ' + runtimeNote;
   });
   search.disabled = false; screenshotFixFilterApps();
 }
@@ -12546,19 +12548,6 @@ function infAdvicePaint() {
     });
     if (chip) { chip.className = 'bfx-chip is-ready'; chip.textContent = bfxT('inf_advice_count', '{n} change(s)', { n: recs.length }); }
   }
-  /* The capture can reveal a problem without proving that a config change will help.
-   * Keep those observations visible and informational; only the closed operation
-   * whitelist above can ever enable Apply. */
-  if (_infAdviceData && !_infAdviceLoading) {
-    const notes = logReportTips(_infAdviceData, true).filter(function (tip) {
-      return tip && !tip.op && (tip.ic === 'warn' || tip.ic === 'info') && tip.key !== 'lr_tip_wait' && tip.key !== 'lr_tip_ltpo';
-    }).sort(function (a, b) { return (a.ic === 'warn' ? 0 : 1) - (b.ic === 'warn' ? 0 : 1); }).slice(0, 6);
-    if (notes.length) {
-      host.appendChild(bfxEl('div', 'inf-advice-observations-title', T('inf_advice_observations', 'Observations from the capture')));
-      notes.forEach(function (tip) { host.appendChild(bfxEl('div', 'bfx-note inf-advice-observation', logReportTipText(tip))); });
-      if (chip && !recs.length) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('inf_advice_observations_chip', 'Observations'); }
-    }
-  }
   _infAdviceResults.forEach(function (res) {
     const text = Tcfg(res.key, 'name', res.key) + ' · ' + T('inf_advice_result_' + res.state, res.state);
     host.appendChild(bfxEl('div', 'bfx-note', text));
@@ -12634,6 +12623,7 @@ async function infAdviceApply() {
 function cfgRenderInfirmaryAdvice(list) {
   const card = bfxEl('div', 'cfg-row bfx-card inf-advice-card'); card.id = 'infAdviceCard';
   const head = bfxEl('div', 'bfx-head');
+  const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon('smart'); head.appendChild(em);
   const titles = bfxEl('div', 'bfx-titles');
   titles.appendChild(bfxEl('div', 'bfx-title', T('inf_advice_title', 'Infinite Log recommendations')));
   const chip = bfxEl('span', 'bfx-chip is-off'); chip.id = 'infAdviceChip'; titles.appendChild(chip);
@@ -17763,11 +17753,19 @@ function wlServiceEnsure() {
     + '<div class="wl-manual-meta" id="wlServiceMeta"></div>'
     + '<input class="cfg-profile-name doze-keep-search" id="wlServiceSearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false">'
     + '<div class="wl-manual-list" id="wlServiceList"></div>'
+    + '<button class="wl-manual-action" id="wlServiceManual" type="button"></button>'
     + '<button class="cfg-profile-primary" id="wlServiceDone" type="button"></button></div>';
   document.body.appendChild(m);
   m.addEventListener('click', function (e) { if (e.target === m) wlServiceClose(); });
   _el('wlServiceX').onclick = wlServiceClose; _el('wlServiceDone').onclick = wlServiceClose;
   _el('wlServiceRefresh').onclick = function () { if (!_wlService.busy) wlServiceLoad(); };
+  _el('wlServiceManual').onclick = async function () {
+    if (_wlService.busy || !dozePkgOk(_wlService.pkg)) return;
+    const pkg = _wlService.pkg; wlServiceClose(); await wlComponentsOpen();
+    const name = _el('wlComponentsName'), details = _el('wlComponentsAdd');
+    if (name) name.value = pkg + '/';
+    if (details) details.open = true;
+  };
   _el('wlServiceSearch').oninput = function () {
     _wlService.query = this.value.trim().toLowerCase();
     wlServicePaint({ scan:'ok', selected:_wlService.rows.filter(function (x) { return x.selected; }).length, rows:_wlService.rows });
@@ -17850,6 +17848,7 @@ async function wlServiceLoad() {
   _el('wlServiceCopy').textContent = T('wl_component_copy', 'Disable one exact Android Activity or Service component, not the whole app. Disable persists until you tap Restore; there is no automatic screen-off component mode. This is not a process freezer. The list combines current records, declared package components and exact Android job history. Declared components can be disabled after a second tap; a Worker name is not a separate Service. Presence here does not prove energy cost. Restore returns the recorded default/enabled state.');
   _el('wlServiceSearch').placeholder = '🔍  ' + T('wl_component_search', 'Search class or component');
   _el('wlServiceDone').textContent = T('doze_keep_done', 'Done');
+  _el('wlServiceManual').textContent = T('cmp_add_title', 'Add an Activity/Service manually');
   _el('wlServiceMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
   const list = _el('wlServiceList'); list.textContent = '';
   const loading = document.createElement('div'); loading.className = 'wl-manual-loading';
@@ -20635,6 +20634,11 @@ function logReportScreenOffStarts(raw) {
     if (m && dozePkgOk(m[1])) out.push({ pkg:m[1], off:m[2], total:m[3] });
   });
   return out;
+}
+function logReportRestartLoops(raw) {
+  return String(raw || '').split(',').map(function (entry) {
+    return /^\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\s+(\d{1,9})\/5min\s*$/.exec(entry);
+  }).filter(function (m) { return m && dozePkgOk(m[1]); });
 }
 function logReportSec(title, icon) {
   const s = document.createElement('div');
@@ -25032,13 +25036,17 @@ function logReportZygisk(d) {
     const starts = logReportScreenOffStarts(z.ledger_top_screen_off);
     if (starts.length) {
       const box = document.createElement('div'); box.className = 'lgr-screen-off-starts';
-      box.appendChild(logReportNote(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)')));
-      starts.forEach(function (a) { box.appendChild(logReportPackageRow(a.pkg, a.pkg, a.off + '/' + a.total)); });
+      box.appendChild(logReportNote(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off')));
+      starts.forEach(function (a) { box.appendChild(logReportPackageRow(a.pkg, a.pkg, T('lv_scr_off', 'Screen off') + ': ' + a.off + ' · ' + T('lv_scr_on', 'Screen on') + ': ' + a.total)); });
       sec.appendChild(box);
-    } else sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)'), String(z.ledger_top_screen_off)));
+    } else sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off'), String(z.ledger_top_screen_off)));
   }
-  if (!unknown(z.ledger_restart_loops))
-    sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_restart_loops', 'Restart loops with the screen off (peak starts per 5 min)'), String(z.ledger_restart_loops), z.ledger_restart_loops !== 'none'));
+  if (!unknown(z.ledger_restart_loops)) {
+    const loops = logReportRestartLoops(z.ledger_restart_loops);
+    const title = T('dev_zygisk_observer_ledger_restart_loops', 'Restart loops with the screen off (peak starts per 5 min)');
+    if (loops.length) loops.forEach(function (m) { sec.appendChild(logReportPackageRow(title, m[1], m[2] + '/5min', true)); });
+    else sec.appendChild(logReportRow(title, String(z.ledger_restart_loops), z.ledger_restart_loops !== 'none'));
+  }
   const launchRows = ['launch_long', 'launch_short', 'launch_class_fallback', 'launch_vetoed', 'launch_screen_off', 'launch_unavailable', 'launch_throttled'].filter(function (k) { return numericDelta(k) !== null; });
   if (z.launch_hints === '1' && launchRows.length) {
     const labels = { launch_long: 'dev_zygisk_observer_launch_long', launch_short: 'dev_zygisk_observer_launch_short', launch_class_fallback: 'lr_zy_launch_fallback', launch_vetoed: 'dev_zygisk_observer_launch_vetoed', launch_screen_off: 'dev_zygisk_observer_launch_screen_off', launch_unavailable: 'dev_zygisk_observer_launch_unavailable', launch_throttled: 'dev_zygisk_observer_launch_throttled' };

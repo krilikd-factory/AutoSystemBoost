@@ -1894,7 +1894,7 @@
   "dev_zygisk_observer_launch_vetoed": "Inícios a frio recusados",
   "dev_zygisk_observer_ledger_events": "Entradas do registro",
   "dev_zygisk_observer_ledger_restart_loops": "Ciclos de reinício com a tela desligada (pico de inicializações por 5 min)",
-  "dev_zygisk_observer_ledger_top_screen_off": "Mais inícios com a tela desligada (app desligada/ligada)",
+  "dev_zygisk_observer_ledger_top_screen_off": "Mais arranques com o ecrã desligado",
   "dev_zygisk_observer_lifecycle_coverage": "Cobertura do ciclo de vida",
   "dev_zygisk_observer_lifecycle_hints": "Dicas do ciclo de vida",
   "dev_zygisk_observer_link_state": "Veredito da ligação ASB (estado interno)",
@@ -4473,5 +4473,8 @@
   "screenshot_fix_no_matches": "Nenhum aplicativo correspondente",
   "inf_advice_observations": "Observações do registro",
   "inf_advice_observations_chip": "Observações",
-  "lr_zy_zero_explain": "Estes contadores medem pedidos opcionais de ciclo de vida e arranque a frio, separadamente dos eventos dos processos. Zero pode indicar função desativada ou ausência de pedidos elegíveis; consulte os estados abaixo."
+  "lr_zy_zero_explain": "Estes contadores medem pedidos opcionais de ciclo de vida e arranque a frio, separadamente dos eventos dos processos. Zero pode indicar função desativada ou ausência de pedidos elegíveis; consulte os estados abaixo.",
+  "screenshot_fix_runtime_unknown": "Estado dos hooks desconhecido; a seleção não confirma a ativação. Force a paragem e reabra a aplicação antes do teste.",
+  "screenshot_fix_policy_live": "Seleção publicada",
+  "screenshot_fix_policy_not_live": "Publicação da seleção não confirmada"
 }

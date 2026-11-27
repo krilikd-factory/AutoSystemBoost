@@ -1894,7 +1894,7 @@
   "dev_zygisk_observer_launch_vetoed": "Start dingin ditolak",
   "dev_zygisk_observer_ledger_events": "Entri catatan",
   "dev_zygisk_observer_ledger_restart_loops": "Loop mulai ulang saat layar mati (puncak start per 5 mnt)",
-  "dev_zygisk_observer_ledger_top_screen_off": "Start terbanyak saat layar mati (aplikasi mati/nyala)",
+  "dev_zygisk_observer_ledger_top_screen_off": "Mulai terbanyak saat layar mati",
   "dev_zygisk_observer_lifecycle_coverage": "Cakupan siklus hidup",
   "dev_zygisk_observer_lifecycle_hints": "Petunjuk siklus hidup",
   "dev_zygisk_observer_link_state": "Verdik tautan ASB (status mesin)",
@@ -4473,5 +4473,8 @@
   "screenshot_fix_no_matches": "Tidak ada aplikasi yang cocok",
   "inf_advice_observations": "Pengamatan dari log",
   "inf_advice_observations_chip": "Pengamatan",
-  "lr_zy_zero_explain": "Penghitung ini mencatat permintaan siklus hidup dan mulai dingin opsional, terpisah dari peristiwa proses. Nol dapat berarti fitur mati atau tidak ada permintaan yang memenuhi syarat; periksa status fitur di bawah."
+  "lr_zy_zero_explain": "Penghitung ini mencatat permintaan siklus hidup dan mulai dingin opsional, terpisah dari peristiwa proses. Nol dapat berarti fitur mati atau tidak ada permintaan yang memenuhi syarat; periksa status fitur di bawah.",
+  "screenshot_fix_runtime_unknown": "Status hook tidak diketahui; pilihan saja tidak memastikan aktivasi. Paksa berhenti dan buka kembali aplikasi sebelum menguji.",
+  "screenshot_fix_policy_live": "Pilihan diterbitkan",
+  "screenshot_fix_policy_not_live": "Penerbitan pilihan belum dikonfirmasi"
 }

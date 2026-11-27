@@ -1894,7 +1894,7 @@
   "dev_zygisk_observer_launch_vetoed": "تشغيل بارد مرفوض",
   "dev_zygisk_observer_ledger_events": "سجلات الدفتر",
   "dev_zygisk_observer_ledger_restart_loops": "حلقات إعادة التشغيل والشاشة مطفأة (ذروة مرات البدء لكل 5 دقائق)",
-  "dev_zygisk_observer_ledger_top_screen_off": "الأكثر بدءًا والشاشة مطفأة (تطبيق مطفأة/مضاءة)",
+  "dev_zygisk_observer_ledger_top_screen_off": "أكثر عمليات البدء عند إيقاف الشاشة",
   "dev_zygisk_observer_lifecycle_coverage": "تغطية دورة الحياة",
   "dev_zygisk_observer_lifecycle_hints": "تلميحات دورة الحياة",
   "dev_zygisk_observer_link_state": "حكم اتصال ASB (حالة آلية)",
@@ -4473,5 +4473,8 @@
   "screenshot_fix_no_matches": "لا توجد تطبيقات مطابقة",
   "inf_advice_observations": "ملاحظات من السجل",
   "inf_advice_observations_chip": "ملاحظات",
-  "lr_zy_zero_explain": "تقيس هذه العدادات طلبات دورة الحياة والبدء البارد الاختيارية بشكل منفصل عن أحداث العمليات. قد يعني الصفر أن الميزة متوقفة أو لم يُسجل طلب مؤهل؛ تحقق من الحالات أدناه."
+  "lr_zy_zero_explain": "تقيس هذه العدادات طلبات دورة الحياة والبدء البارد الاختيارية بشكل منفصل عن أحداث العمليات. قد يعني الصفر أن الميزة متوقفة أو لم يُسجل طلب مؤهل؛ تحقق من الحالات أدناه.",
+  "screenshot_fix_runtime_unknown": "حالة الاعتراض غير معروفة؛ اختيار التطبيق وحده لا يؤكد التفعيل. أوقف التطبيق إجباريًا وأعد فتحه قبل الاختبار.",
+  "screenshot_fix_policy_live": "تم نشر الاختيار",
+  "screenshot_fix_policy_not_live": "لم يُؤكد نشر الاختيار"
 }

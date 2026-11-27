@@ -91,7 +91,9 @@ case "${1:-}" in
     elif [ -e "$STATE" ] || [ -L "$STATE" ]; then n=unknown; s=invalid
     else n=0; s=empty; fi
     active=0; enabled && active=1
-    printf 'backend=experimental selected=%s policy=%s zygisk_enabled=%s\n' "$n" "$s" "$active" ;;
+    published=0
+    if [ "$active" = 1 ] && valid_policy "$STATE" && valid_policy "$LIVE" && cmp -s "$STATE" "$LIVE"; then published=1; fi
+    printf 'backend=experimental selected=%s policy=%s zygisk_enabled=%s policy_published=%s\n' "$n" "$s" "$active" "$published" ;;
   list)
     [ -e "$STATE" ] || exit 0
     valid_policy "$STATE" || { echo 'error=invalid_saved_policy'; exit 1; }
