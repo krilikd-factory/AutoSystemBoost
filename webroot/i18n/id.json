@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "Aplikasi terpilih",
   "screenshot_fix_empty": "Belum ada aplikasi yang dipilih",
   "screenshot_fix_load_failed": "Aplikasi tidak dapat dimuat",
-  "screenshot_fix_no_matches": "Tidak ada aplikasi yang cocok"
+  "screenshot_fix_no_matches": "Tidak ada aplikasi yang cocok",
+  "inf_advice_observations": "Pengamatan dari log",
+  "inf_advice_observations_chip": "Pengamatan",
+  "lr_zy_zero_explain": "Penghitung ini mencatat permintaan siklus hidup dan mulai dingin opsional, terpisah dari peristiwa proses. Nol dapat berarti fitur mati atau tidak ada permintaan yang memenuhi syarat; periksa status fitur di bawah."
 }

@@ -3118,7 +3118,9 @@ if (!can_leave &&
      * power, which costs more energy than it saves. The metric was already collected
      * and never consulted; 1 Mbit/s is well above keepalive chatter and well below any
      * real download. */
-    m->misc.rmnet_rx_bps < 125000L) {
+    m->misc.rmnet_rx_bps < 125000L &&
+    /* The same background download can use Wi-Fi, with no mobile traffic at all. */
+    m->misc.wlan_rx_bps < 125000L) {
                 /* The prime is the HIGHEST populated slot, not slot 2.
                  *
                  * This hardcoded slot 2. cpu_topology_discover puts a two-cluster phone's prime in

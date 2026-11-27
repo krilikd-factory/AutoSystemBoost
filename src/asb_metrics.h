@@ -2231,6 +2231,9 @@ static void metrics_read_network(asb_misc_t *m, const struct timespec *now) {
             m->wlan_rx_bps = (long)((double)(rx - g_wlan_rx_prev) / dt);
             m->rmnet_tx_bps = (long)((double)(mtx - g_rmnet_tx_prev) / dt);
             m->rmnet_rx_bps = (long)((double)(mrx - g_rmnet_rx_prev) / dt);
+            /* Interface resets and roaming can decrease either set of counters. */
+            if (m->wlan_tx_bps < 0) m->wlan_tx_bps = 0;
+            if (m->wlan_rx_bps < 0) m->wlan_rx_bps = 0;
             /* A link that went away takes its counters with it (fix122): no negative rate. */
             if (m->rmnet_tx_bps < 0) m->rmnet_tx_bps = 0;
             if (m->rmnet_rx_bps < 0) m->rmnet_rx_bps = 0;

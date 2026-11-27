@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "已选择的应用",
   "screenshot_fix_empty": "尚未选择应用",
   "screenshot_fix_load_failed": "无法加载应用",
-  "screenshot_fix_no_matches": "没有匹配的应用"
+  "screenshot_fix_no_matches": "没有匹配的应用",
+  "inf_advice_observations": "日志中的观察",
+  "inf_advice_observations_chip": "观察",
+  "lr_zy_zero_explain": "这些计数器统计可选的生命周期和冷启动请求，与进程事件分开。零可能表示功能已关闭或没有记录到符合条件的请求；请查看下方功能状态。"
 }

@@ -4270,6 +4270,11 @@ chk(r && r.t === '0.37%/h' && r.src === 'meter', 'meter figure first: ' + JSON.s
 _lvMeter.p.battery.off = 128; _lvMeter.p.battery.offN = 2; _lvMeter.p.battery.offLast = 40; _lvMeter.p.battery.offLastS = 18000; _lvMeter.p.battery.offLastAt = 1793343720;
 r = homeOffFigure('battery');
 chk(r && r.t === '0.40%/h' && r.src === 'meter_latest' && /latest complete/.test(r.tip) && /5h/.test(r.tip), 'fresh night replaces the stale aggregate: ' + JSON.stringify(r));
+_lvMeter.p.battery.off = 62; _lvMeter.p.battery.offS = 36000; _lvMeter.p.battery.offN = 5;
+_lvMeter.p.battery.offLastS = 3600; _lvMeter.p.battery.offLast = 100;
+r = homeOffFigure('battery');
+chk(r && r.t === '0.62%/h' && r.src === 'meter', 'one percent in a short interval uses longer same-profile history: ' + JSON.stringify(r));
+_lvMeter.p.battery.offLastS = 18000;
 _lvMeter.p.battery.offLast = 0;
 r = homeOffFigure('battery');
 chk(r && r.t === '<0.20%/h' && r.src === 'bound_latest', 'fresh zero-step night is an upper bound, not the old average: ' + JSON.stringify(r));
@@ -7753,8 +7758,10 @@ let adviceRecs = [], adviceSaved = {}, adviceFinalErrno = 0, adviceWrites = [], 
 let adviceRepaintOnWrite = false, adviceOptimisticOnly = false;
 function Tcfg(k, f, d) { return k; }
 function Topt(v) { return String(v); }
+let adviceTips = [];
 function logReportRecommendations() { return adviceRecs; }
-function logReportTipText() { return ''; }
+function logReportTips() { return adviceTips; }
+function logReportTipText(tip) { return tip && tip.key || ''; }
 async function cfgLoad() { adviceCfgLoads++; return false; }
 function adviceNodes() {
   ['infAdviceRows','infAdviceApply','infAdviceRefresh','infAdviceChip'].forEach(function (id) {
@@ -7882,6 +7889,11 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
 
   /* buildfix9: recommendation application is a transaction preview, not an optimistic badge.
    * The direct governor.conf reads are scripted independently of cfgSet()'s memory update. */
+  adviceTips = [{ic:'warn', key:'lr_tip_awake'}, {ic:'info', key:'lr_tip_net_heavy'}, {ic:'warn', key:'change', op:{key:'x'}}];
+  adviceReset([], {});
+  chk(reg.infAdviceRows.children.some(x => x.textContent === 'lr_tip_awake') && reg.infAdviceRows.children.some(x => x.textContent === 'lr_tip_net_heavy'), 'informational log evidence is hidden');
+  chk(reg.infAdviceApply.disabled, 'informational observations must never enable config writes');
+  adviceTips = [];
   const recNight = { key:'night_modem_idle', from:'0', value:'1', tip:{} };
   const recDoze = { key:'doze_level', from:'stock', value:'night', tip:{} };
   run = async function (cmd) {
@@ -8038,9 +8050,11 @@ from pathlib import Path
 h = (Path(sys.argv[1])/'webroot/index.html').read_text(encoding='utf-8')
 page = h[h.index('id="zygiskPage"'):h.index('id="zygiskBody"')]
 assert 'id="zySave"' in page and "asbSavePage('zygisk')" in page and 'data-i18n="page_save"' in page, 'the Zygisk page has no Save button'
+assert 'id="zySave" type="button" onclick="asbSavePage(\'zygisk\')" aria-label="Save the whole page as a text file" hidden disabled' in page, 'Save must start hidden while loading'
 assert 'id="zyRefresh"' not in page and 'id="zyRefresh"' not in h, 'obsolete Zygisk Refresh remains'
 load = h[h.index('async function zygiskPageLoad(user) {'):h.index('function zygiskRawDigest(b) {')]
 assert 'window._asbZygiskRaw = zygiskRawDigest(b);' in load and "_el('zySave')" in load
+assert 'save.hidden = true' in load and 'save.hidden = !window._asbZygiskLinkData' in load, 'Save visibility must track loaded evidence'
 assert 'window._asbZygiskLinkData = null;' in load and "zygiskPageRender(null, 'error')" in load, 'read error retains stale evidence'
 assert load.count('runBatch(') == 1, 'saving must not add a read to the page load'
 openp = h[h.index('function openZygiskPage() {'):h.index('function closeZygiskPage() {')]
@@ -16472,12 +16486,13 @@ for token in ('#reportPage .lgr-row + .lgr-row, #zygiskPage .lgr-row + .lgr-row'
               'border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent)',
               '.zy-merged-subsection { margin-top:12px; padding-top:11px; border-top:1px solid var(--border); }'):
  assert token not in h,token
-# Infirmary: SOTER precedes System Fixes; Push and DocumentsUI remain its last two cards.
+# Infirmary: system repairs belong to System Fixes; package repairs remain its last cards.
 group_start=h.index('function cfgRenderGroup(list, groupId) {')
 group=h[group_start:h.index('\nfunction ',group_start+1)]
 battery=group.index("if (section.card === 'batteryfix')")
 fixes=group.index("else if (section.card === 'systemfixes')")
-assert battery < group.index('cfgRenderSoterFixCard(list);') < fixes
+assert battery < fixes < group.index('cfgRenderSoterFixCard(list);') < group.index('cfgRenderPackageFixCards(list, sectionItems);',fixes)
+assert fixes < group.index('cfgRenderScreenshotFixCard(list);') < group.index('cfgRenderPackageFixCards(list, sectionItems);',fixes)
 assert group.index('cfgRenderPackageFixCards(list, sectionItems);',fixes) < group.index("else if (section.card === 'junkcleanup')",fixes)
 assert "keys:['heytap_mcs','documentsui_fix'], card:'systemfixes'" in h
 print('static ok')
@@ -17138,11 +17153,11 @@ const chk=(v,m)=>{if(!v)throw Error(m)};
  chk(JSON.stringify(parse('wlan0|256\nrmnet0|9\nwlan1|abc\nwlan2|1024'))==='["wlan0: 256","wlan2: 1024"]','invalid readback accepted');
  refresh();chk(label()==='Reading…','fresh read must not claim an old value');
  refresh();pending[1]({errno:0,stdout:'wlan0|256\n'});await new Promise(r=>setImmediate(r));
- chk(label()==='Now: wlan0: 256','actual queue not shown');
+ chk(label()==='wlan0: 256','actual queue not shown');
  pending[0]({errno:0,stdout:'wlan0|1000\n'});await new Promise(r=>setImmediate(r));
- chk(label()==='Now: wlan0: 256','older read replaced new value');
+ chk(label()==='wlan0: 256','older read replaced new value');
  refresh();pending[2]({errno:1,stdout:''});await new Promise(r=>setImmediate(r));
- chk(label()==='Now: unavailable','failure must not imply a value');
+ chk(label()==='unavailable','failure must not imply a value');
  console.log('ok');
 })().catch(e=>{console.error(e.stack);process.exit(1)});
 JS

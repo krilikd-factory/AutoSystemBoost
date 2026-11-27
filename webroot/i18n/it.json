@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "App selezionate",
   "screenshot_fix_empty": "Nessuna app selezionata",
   "screenshot_fix_load_failed": "Impossibile caricare le app",
-  "screenshot_fix_no_matches": "Nessuna app corrispondente"
+  "screenshot_fix_no_matches": "Nessuna app corrispondente",
+  "inf_advice_observations": "Osservazioni dal registro",
+  "inf_advice_observations_chip": "Osservazioni",
+  "lr_zy_zero_explain": "Questi contatori misurano richieste facoltative del ciclo di vita e di avvio a freddo, distinte dagli eventi dei processi. Zero può indicare che la funzione è disattivata o che non ci sono state richieste valide; controlla gli stati sotto."
 }

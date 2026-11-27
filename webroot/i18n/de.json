@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "Ausgewählte Apps",
   "screenshot_fix_empty": "Keine Apps ausgewählt",
   "screenshot_fix_load_failed": "Apps konnten nicht geladen werden",
-  "screenshot_fix_no_matches": "Keine passenden Apps"
+  "screenshot_fix_no_matches": "Keine passenden Apps",
+  "inf_advice_observations": "Beobachtungen aus dem Protokoll",
+  "inf_advice_observations_chip": "Beobachtungen",
+  "lr_zy_zero_explain": "Diese Zähler erfassen optionale Lebenszyklus- und Kaltstartanfragen getrennt von Prozessereignissen. Null kann bedeuten, dass die Funktion aus ist oder keine passende Anfrage erfasst wurde; siehe Funktionsstatus unten."
 }

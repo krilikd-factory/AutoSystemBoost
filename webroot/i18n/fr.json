@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "Applications sélectionnées",
   "screenshot_fix_empty": "Aucune application sélectionnée",
   "screenshot_fix_load_failed": "Impossible de charger les applications",
-  "screenshot_fix_no_matches": "Aucune application correspondante"
+  "screenshot_fix_no_matches": "Aucune application correspondante",
+  "inf_advice_observations": "Observations du journal",
+  "inf_advice_observations_chip": "Observations",
+  "lr_zy_zero_explain": "Ces compteurs mesurent les demandes facultatives de cycle de vie et de démarrage à froid, distinctes des événements de processus. Zéro peut signifier que la fonction est désactivée ou qu’aucune demande pertinente n’a été enregistrée ; vérifiez les états ci-dessous."
 }
