@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "التطبيقات المحددة",
   "screenshot_fix_empty": "لم يتم اختيار تطبيقات",
   "screenshot_fix_load_failed": "تعذر تحميل التطبيقات",
-  "screenshot_fix_no_matches": "لا توجد تطبيقات مطابقة"
+  "screenshot_fix_no_matches": "لا توجد تطبيقات مطابقة",
+  "inf_advice_observations": "ملاحظات من السجل",
+  "inf_advice_observations_chip": "ملاحظات",
+  "lr_zy_zero_explain": "تقيس هذه العدادات طلبات دورة الحياة والبدء البارد الاختيارية بشكل منفصل عن أحداث العمليات. قد يعني الصفر أن الميزة متوقفة أو لم يُسجل طلب مؤهل؛ تحقق من الحالات أدناه."
 }

@@ -4363,5 +4363,8 @@
   "screenshot_fix_selected": "Selected apps",
   "screenshot_fix_empty": "No apps selected",
   "screenshot_fix_load_failed": "Could not load apps",
-  "screenshot_fix_no_matches": "No matching apps"
+  "screenshot_fix_no_matches": "No matching apps",
+  "inf_advice_observations": "Observations from the capture",
+  "inf_advice_observations_chip": "Observations",
+  "lr_zy_zero_explain": "These counters measure optional lifecycle and cold-start requests, separately from process events. Zero can mean the feature is off or no qualifying request was recorded; check the feature states below."
 }

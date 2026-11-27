@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "Seçilen uygulamalar",
   "screenshot_fix_empty": "Uygulama seçilmedi",
   "screenshot_fix_load_failed": "Uygulamalar yüklenemedi",
-  "screenshot_fix_no_matches": "Eşleşen uygulama yok"
+  "screenshot_fix_no_matches": "Eşleşen uygulama yok",
+  "inf_advice_observations": "Günlükten gözlemler",
+  "inf_advice_observations_chip": "Gözlemler",
+  "lr_zy_zero_explain": "Bu sayaçlar süreç olaylarından ayrı olarak isteğe bağlı yaşam döngüsü ve soğuk başlatma isteklerini ölçer. Sıfır, özelliğin kapalı olduğu veya uygun istek kaydedilmediği anlamına gelebilir; aşağıdaki durumları kontrol edin."
 }

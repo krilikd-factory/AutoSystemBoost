@@ -1333,7 +1333,7 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   box-shadow: 0 0 25px rgba(46,213,115,0.15), 0 8px 32px rgba(0,0,0,0.4); }
 .toast.t-asb { background: rgba(3,33,29,.97); color: #28e6c1; border-color: rgba(0,220,175,.45);
   box-shadow: 0 0 25px rgba(0,220,175,.16), 0 8px 32px rgba(0,0,0,.4); }
-#deviceMeta[hidden] { display: none; }
+#deviceMeta[hidden], #zySave[hidden] { display: none !important; }
 .toast.t-warn { background: rgba(35,25,5,0.95); color: #ffc048; border-color: rgba(255,165,2,0.35);
   box-shadow: 0 0 25px rgba(255,165,2,0.15), 0 8px 32px rgba(0,0,0,0.4); }
 .toast.t-bad, .toast.t-error { background: rgba(40,10,10,0.95); color: #ff6b6b; border-color: rgba(255,26,26,0.35);
@@ -3117,6 +3117,9 @@ html[data-asb-theme="light"] .cfg-row:not(.is-on) > .cfg-row-top > .cfg-icon { -
 
 .cfg-status-row { display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; max-width:100%; }
 .cfg-status-row .cfg-status, .cfg-status-row .cfg-smart-owner { flex:0 1 auto; max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.kernel-status-row .cfg-status-row { flex-wrap:nowrap; }
+.kernel-status-row .cfg-status-row .cfg-status { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.kernel-status-row .cfg-status-row .cfg-smart-owner { flex:0 0 auto; white-space:nowrap; }
 .cfg-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -3967,6 +3970,12 @@ html[dir="rtl"] .bfx-bar > i { transform-origin: right center; }
 .screenshot-fix-empty { padding:11px 12px; border:1px dashed rgba(128,160,150,.24); border-radius:12px; font-size:12px; opacity:.72; }
 .screenshot-fix-card .wl-manual-row { gap:8px; }
 .screenshot-fix-card .wl-manual-name { min-width:0; overflow-wrap:anywhere; }
+.wl-components-app { margin:8px 0; padding:8px; border:1px solid var(--border); border-radius:14px; }
+.wl-components-app-title { padding:4px 4px 8px; font-weight:700; overflow-wrap:anywhere; color:var(--accent); }
+.inf-advice-observations-title { margin:12px 0 6px; font-weight:700; font-size:12px; color:var(--accent); }
+.inf-advice-observation { margin:5px 0; padding:9px 10px; border:1px solid var(--border); border-radius:11px; }
+.lgr-screen-off-starts { margin:12px 0; padding:12px; border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border)); border-radius:15px; background:color-mix(in srgb,var(--accent) 6%,transparent); }
+.lgr-screen-off-starts > .lgr-note { font-weight:700; }
 .bfx-primary { color: #04261a; border: 1px solid rgba(96,242,178,.65); background: linear-gradient(135deg, #6cf2b8, #2fd3a6); box-shadow: 0 4px 14px rgba(26,200,140,.22); }
 .bfx-primary:disabled { color: var(--text-tertiary); background: var(--surface-hover, rgba(255,255,255,.05)); border-color: var(--border); box-shadow: none; cursor: default; }
 .bfx-primary[data-mode="stop"] { color: #fff; background: linear-gradient(135deg, #ff8a6b, #e2574c); border-color: rgba(255,140,120,.6); box-shadow: 0 4px 14px rgba(226,87,76,.22); }
@@ -7648,7 +7657,7 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] .log-menu { background: #f
     <div class="rpt-meta-row">
       <span class="lgr-status" id="zygiskStatus" role="status" aria-live="polite"></span>
       <div class="rpt-actions">
-        <button class="live-chip" id="zySave" type="button" onclick="asbSavePage('zygisk')" aria-label="Save the whole page as a text file" disabled>
+        <button class="live-chip" id="zySave" type="button" onclick="asbSavePage('zygisk')" aria-label="Save the whole page as a text file" hidden disabled>
           <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>
           <span data-i18n="page_save">Save</span>
         </button>
@@ -9967,6 +9976,12 @@ function lvOffFigure(profile) {
     return T('lv_drain_off_latest', 'latest complete screen-off stretch: %s; %s qualifying stretch(es) total')
       .replace('%s', lvDurDHM(e.offLastS)).replace('%s', String(e.offN));
   };
+  /* One whole-percent step in a short interval is too coarse for a stable rate.
+   * Prefer substantially longer history for the same profile when available. */
+  if (e && e.offLastS >= 3600 && e.offLastS < 10800 && e.offLast > 0 &&
+      Math.round(e.offLast * e.offLastS / 360000) <= 1 && e.off > 0 &&
+      e.offS >= e.offLastS * 3 && e.offN > 1)
+    return { x: e.off, t: lvPct(e.off, 100, 2), n: e.offN, src: 'meter', tip: tip(e.offN) };
   if (e && e.offLastS >= 3600 && e.offN > 0) {
     if (e.offLast > 0) return { x: e.offLast, t: lvPct(e.offLast, 100, 2), n: e.offN, src: 'meter_latest', lastS: e.offLastS, tip: latestTip(e) };
     const lub = Math.max(1, Math.ceil(100 * 3600 / e.offLastS));
@@ -12531,6 +12546,19 @@ function infAdvicePaint() {
     });
     if (chip) { chip.className = 'bfx-chip is-ready'; chip.textContent = bfxT('inf_advice_count', '{n} change(s)', { n: recs.length }); }
   }
+  /* The capture can reveal a problem without proving that a config change will help.
+   * Keep those observations visible and informational; only the closed operation
+   * whitelist above can ever enable Apply. */
+  if (_infAdviceData && !_infAdviceLoading) {
+    const notes = logReportTips(_infAdviceData, true).filter(function (tip) {
+      return tip && !tip.op && (tip.ic === 'warn' || tip.ic === 'info') && tip.key !== 'lr_tip_wait' && tip.key !== 'lr_tip_ltpo';
+    }).sort(function (a, b) { return (a.ic === 'warn' ? 0 : 1) - (b.ic === 'warn' ? 0 : 1); }).slice(0, 6);
+    if (notes.length) {
+      host.appendChild(bfxEl('div', 'inf-advice-observations-title', T('inf_advice_observations', 'Observations from the capture')));
+      notes.forEach(function (tip) { host.appendChild(bfxEl('div', 'bfx-note inf-advice-observation', logReportTipText(tip))); });
+      if (chip && !recs.length) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('inf_advice_observations_chip', 'Observations'); }
+    }
+  }
   _infAdviceResults.forEach(function (res) {
     const text = Tcfg(res.key, 'name', res.key) + ' · ' + T('inf_advice_result_' + res.state, res.state);
     host.appendChild(bfxEl('div', 'bfx-note', text));
@@ -13399,12 +13427,11 @@ function cfgRenderGroup(list, groupId) {
     if (section.card === 'batteryfix') {
       cfgRenderInfirmaryAdvice(list);
       cfgRenderBatteryFixCard(list);
-      cfgRenderComponentManagerCard(list);
-      cfgRenderScreenshotFixCard(list);
-      /* Keep the two package repairs as the final cards on the Infirmary page. */
-      cfgRenderSoterFixCard(list);
     }
     else if (section.card === 'systemfixes') {
+      cfgRenderComponentManagerCard(list);
+      cfgRenderScreenshotFixCard(list);
+      cfgRenderSoterFixCard(list);
       cfgRenderPackageFixCards(list, sectionItems);
     }
     else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
@@ -13740,7 +13767,7 @@ function cfgSmartNetworkParse(raw) {
 function cfgSmartNetworkLabel() {
   const v = _cfgSmartNet.values;
   return v === null ? T('cfg_smart_reading', 'Reading…') :
-    T('cfg_smart_current', 'Now: {v}').replace('{v}', v.length ? v.join(' · ') : T('cfg_smart_unknown', 'unavailable'));
+    (v.length ? v.join(' · ') : T('cfg_smart_unknown', 'unavailable'));
 }
 function cfgSmartNetworkRefresh() {
   if (_selectedProfile !== 'smart' || _cfgGroup !== 'net') return;
@@ -14018,14 +14045,11 @@ function kernelDecorateControlRow(row, key) {
     const showLive = a.live && a.live !== 'unknown' && a.state !== 'not_readable';
     /* The adjacent Smart owner already explains automatic control. The status badge itself
      * shows the actual kernel value, not a redundant "On · value" composite. */
-    const item = typeof CFG_ITEMS !== 'undefined' ? CFG_ITEMS.find(function (it) { return it.key === key; }) : null;
-    const chosen = item && (_cfgVals[key] !== undefined ? _cfgVals[key] : item.def);
-    const smart = item && typeof cfgSmartOwner === 'function' && cfgSmartOwner(item, chosen);
-    const binaryKeys = ['kernel_bore', 'kernel_timer_migration', 'kernel_sched_child_runs_first', 'kernel_sched_stats'];
+    const binaryKeys = ['kernel_bore', 'kernel_timer_migration', 'kernel_lpm_prediction', 'kernel_sched_child_runs_first', 'kernel_sched_stats'];
     const rawLive = String(a.live).slice(0, 16);
     const labelLive = binaryKeys.indexOf(key) >= 0 && (rawLive === '0' || rawLive === '1')
       ? (rawLive === '1' ? T('kc_value_on', 'on') : T('kc_value_off', 'off')) : rawLive;
-    badge.textContent = showLive ? (smart ? T('cfg_smart_current', 'Now: {v}').replace('{v}', labelLive) : labelLive) : kernelStateText(a.state);
+    badge.textContent = showLive ? labelLive : kernelStateText(a.state);
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
@@ -17979,7 +18003,18 @@ function wlComponentsPaint(d) {
     list.appendChild(bfxEl('div', 'cfg-profile-empty', d.scan === 'ok'
       ? T('cmp_empty', 'No exact Activity/Service changes are saved. Components disabled from Infinite Log appear here as well.')
       : T('wl_service_unavailable', 'Service records or component state are not exposed right now. Nothing was changed.')));
-  } else _wlComponents.rows.forEach(function (a) { list.appendChild(wlComponentsRow(a)); });
+  } else {
+    const pkgs = Array.from(new Set(_wlComponents.rows.map(function (a) { return a.pkg; })));
+    const labels = dozeKeepLabels(pkgs);
+    pkgs.sort(function (a, b) { return (labels[a] || a).localeCompare(labels[b] || b); });
+    pkgs.forEach(function (pkg) {
+      const group = bfxEl('section', 'wl-components-app');
+      const title = bfxEl('div', 'wl-components-app-title', labels[pkg] && labels[pkg] !== pkg ? labels[pkg] + ' · ' + pkg : pkg);
+      group.appendChild(title);
+      _wlComponents.rows.filter(function (a) { return a.pkg === pkg; }).forEach(function (a) { group.appendChild(wlComponentsRow(a)); });
+      list.appendChild(group);
+    });
+  }
   _el('wlComponentsMeta').textContent = bfxT('cmp_meta', '{n} saved change(s) · Infinite Log and manual entries · one exact restoration ledger', { n:String(d.selected || 0) });
   wlComponentsManualPaint();
 }
@@ -23386,7 +23421,7 @@ async function zygiskPageLoad(user) {
   if (_zygiskOpen) {
     window._asbZygiskLinkData = null;
     window._asbZygiskRaw = '';
-    const save = _el('zySave'); if (save) save.disabled = true;
+    const save = _el('zySave'); if (save) { save.disabled = true; save.hidden = true; }
     zygiskPageRender(null);
   }
   await asbPaintYield();
@@ -23423,7 +23458,7 @@ async function zygiskPageLoad(user) {
     if (_zygiskOpen) zygiskPageRender(null, 'error');
     if (status) status.textContent = T('zy_status_failed_empty', 'Could not read the current Zygisk state. No stale data is shown; reopen the page to try again.');
   }
-  const save = _el('zySave'); if (save) save.disabled = !window._asbZygiskLinkData;
+  const save = _el('zySave'); if (save) { save.disabled = !window._asbZygiskLinkData; save.hidden = !window._asbZygiskLinkData; }
 }
 function zygiskRawDigest(b) {
   const order = [['link', 'asb_zygisk.sh link-status'], ['engine', 'asb_zygisk_link.sh status'], ['guard', 'asb_zygisk_guard.sh status'],
@@ -23457,7 +23492,7 @@ function openZygiskPage() {
   window._asbZygiskLinkData = null;
   window._asbZygiskRaw = '';
   zygiskPageRender(null);
-  const save = _el('zySave'); if (save) save.disabled = true;
+  const save = _el('zySave'); if (save) { save.disabled = true; save.hidden = true; }
   const status = _el('zygiskStatus');
   if (status) status.textContent = T('zy_status_loading', 'Reading current state…');
   /* Every opening is a new read. A splash or earlier visit is never presented as current. */
@@ -24982,6 +25017,9 @@ function logReportZygisk(d) {
     heroScope('ipc_cpu_ms', heroScope('ipc_wakeups', logReportT('lr_zy_wake', '{n} wakeups', { n: heroDelta('ipc_wakeups') }))), false,
     detail(ipcTitle, ipcValue, T('lr_zy_detail_ipc', 'CPU time spent by the observer IPC path between the two snapshots. It covers this observer path, not every ASB component. Milliseconds per wakeup are shown only when both counters are known; neither number proves a net battery cost or saving.'), ipcLines, useLatest('ipc_cpu_ms'))));
   sec.appendChild(grid);
+  if (numericDelta('policy_hints') === 0 || launchDelta === 0) {
+    sec.appendChild(logReportNote(T('lr_zy_zero_explain', 'These counters measure optional lifecycle and cold-start requests, separately from process events. Zero can mean the feature is off or no qualifying request was recorded; check the feature states below.')));
+  }
   const stateText = function (state) { return T('dev_zygisk_link_' + state, state || 'unknown'); };
   sec.appendChild(logReportRow(T('lr_zy_start_state', 'At capture start'), stateText(z.start_state)));
   sec.appendChild(logReportRow(T('lr_zy_policy', 'Policy generation / acknowledged'), String(z.policy_generation || 'unknown') + ' / ' + String(z.policy_seen_generation || 'unknown')));
@@ -24993,8 +25031,10 @@ function logReportZygisk(d) {
   if (!unknown(z.ledger_top_screen_off) && z.ledger_top_screen_off !== 'none') {
     const starts = logReportScreenOffStarts(z.ledger_top_screen_off);
     if (starts.length) {
-      sec.appendChild(logReportNote(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)')));
-      starts.forEach(function (a) { sec.appendChild(logReportPackageRow(a.pkg, a.pkg, a.off + '/' + a.total)); });
+      const box = document.createElement('div'); box.className = 'lgr-screen-off-starts';
+      box.appendChild(logReportNote(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)')));
+      starts.forEach(function (a) { box.appendChild(logReportPackageRow(a.pkg, a.pkg, a.off + '/' + a.total)); });
+      sec.appendChild(box);
     } else sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)'), String(z.ledger_top_screen_off)));
   }
   if (!unknown(z.ledger_restart_loops))

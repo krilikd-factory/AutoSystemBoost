@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "Aplicaciones seleccionadas",
   "screenshot_fix_empty": "Ninguna aplicación seleccionada",
   "screenshot_fix_load_failed": "No se pudieron cargar las aplicaciones",
-  "screenshot_fix_no_matches": "No hay aplicaciones coincidentes"
+  "screenshot_fix_no_matches": "No hay aplicaciones coincidentes",
+  "inf_advice_observations": "Observaciones del registro",
+  "inf_advice_observations_chip": "Observaciones",
+  "lr_zy_zero_explain": "Estos contadores miden solicitudes opcionales de ciclo de vida y arranque en frío, separadas de los eventos de procesos. Un cero puede indicar que la función está desactivada o que no hubo solicitudes; consulta su estado abajo."
 }

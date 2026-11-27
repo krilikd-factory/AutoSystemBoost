@@ -4470,5 +4470,8 @@
   "screenshot_fix_selected": "Aplicativos selecionados",
   "screenshot_fix_empty": "Nenhum aplicativo selecionado",
   "screenshot_fix_load_failed": "Não foi possível carregar os aplicativos",
-  "screenshot_fix_no_matches": "Nenhum aplicativo correspondente"
+  "screenshot_fix_no_matches": "Nenhum aplicativo correspondente",
+  "inf_advice_observations": "Observações do registro",
+  "inf_advice_observations_chip": "Observações",
+  "lr_zy_zero_explain": "Estes contadores medem pedidos opcionais de ciclo de vida e arranque a frio, separadamente dos eventos dos processos. Zero pode indicar função desativada ou ausência de pedidos elegíveis; consulte os estados abaixo."
 }
