@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "Redémarrez l’application après activation ou suppression ; les fenêtres ouvertes peuvent garder leur état.",
   "screenshot_fix_failed": "Impossible d’enregistrer la sélection",
-  "screenshot_fix_saved": "Sélection enregistrée · redémarrez l’application"
+  "screenshot_fix_saved": "Sélection enregistrée · redémarrez l’application",
+  "screenshot_fix_search": "Rechercher des applications",
+  "screenshot_fix_selected": "Applications sélectionnées",
+  "screenshot_fix_empty": "Aucune application sélectionnée",
+  "screenshot_fix_load_failed": "Impossible de charger les applications",
+  "screenshot_fix_no_matches": "Aucune application correspondante"
 }

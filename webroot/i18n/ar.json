@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "أعد تشغيل التطبيق بعد التفعيل أو الإزالة؛ قد تحتفظ النوافذ المفتوحة بحالتها السابقة.",
   "screenshot_fix_failed": "تعذر حفظ الاختيار",
-  "screenshot_fix_saved": "تم حفظ الاختيار · أعد تشغيل التطبيق"
+  "screenshot_fix_saved": "تم حفظ الاختيار · أعد تشغيل التطبيق",
+  "screenshot_fix_search": "البحث عن التطبيقات",
+  "screenshot_fix_selected": "التطبيقات المحددة",
+  "screenshot_fix_empty": "لم يتم اختيار تطبيقات",
+  "screenshot_fix_load_failed": "تعذر تحميل التطبيقات",
+  "screenshot_fix_no_matches": "لا توجد تطبيقات مطابقة"
 }

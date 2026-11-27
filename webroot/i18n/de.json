@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "App nach Aktivierung oder Entfernung neu starten; offene Fenster behalten eventuell ihren Zustand.",
   "screenshot_fix_failed": "Auswahl konnte nicht gespeichert werden",
-  "screenshot_fix_saved": "Auswahl gespeichert · App neu starten"
+  "screenshot_fix_saved": "Auswahl gespeichert · App neu starten",
+  "screenshot_fix_search": "Apps suchen",
+  "screenshot_fix_selected": "Ausgewählte Apps",
+  "screenshot_fix_empty": "Keine Apps ausgewählt",
+  "screenshot_fix_load_failed": "Apps konnten nicht geladen werden",
+  "screenshot_fix_no_matches": "Keine passenden Apps"
 }

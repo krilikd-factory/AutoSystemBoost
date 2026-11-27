@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "Միացնելուց կամ հեռացնելուց հետո վերագործարկեք հավելվածը․ բաց պատուհանները կարող են պահպանել նախկին վիճակը։",
   "screenshot_fix_failed": "Չհաջողվեց պահպանել ընտրությունը",
-  "screenshot_fix_saved": "Ընտրությունը պահպանված է · վերագործարկեք հավելվածը"
+  "screenshot_fix_saved": "Ընտրությունը պահպանված է · վերագործարկեք հավելվածը",
+  "screenshot_fix_search": "Որոնել հավելվածներ",
+  "screenshot_fix_selected": "Ընտրված հավելվածներ",
+  "screenshot_fix_empty": "Հավելվածներ ընտրված չեն",
+  "screenshot_fix_load_failed": "Չհաջողվեց բեռնել հավելվածները",
+  "screenshot_fix_no_matches": "Համապատասխան հավելվածներ չկան"
 }

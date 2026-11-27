@@ -63,12 +63,21 @@ void adjust_window(JNIEnv *env, jobject parcel, jint code) {
         }
         if (marker) {
             asb_screenshot::WindowFields w{};
-            int32_t *values[] = {&w.width, &w.height, &w.x, &w.y, &w.type, &w.flags};
-            bool complete = true;
-            for (auto value : values) {
-                *value = env->CallIntMethod(parcel, read_int);
-                if (!clean(env)) { complete = false; break; }
-            }
+            // Most windows are not secure. Check the flag first so normal
+            // window transactions avoid five JNI reads and all writes.
+            env->CallVoidMethod(parcel, set_position, token_end + 52);
+            bool complete = clean(env);
+            if (complete) { w.flags = env->CallIntMethod(parcel, read_int); complete = clean(env); }
+            if (complete && (w.flags & asb_screenshot::kSecure)) {
+                env->CallVoidMethod(parcel, set_position, token_end + 32);
+                complete = clean(env);
+                int32_t *values[] = {&w.width, &w.height, &w.x, &w.y, &w.type};
+                for (auto value : values) {
+                    if (!complete) break;
+                    *value = env->CallIntMethod(parcel, read_int);
+                    complete = clean(env);
+                }
+            } else complete = false;
             if (complete && asb_screenshot::candidate(w)) {
                 env->CallVoidMethod(parcel, set_position, token_end + 52);
                 if (clean(env)) { env->CallVoidMethod(parcel, write_int, asb_screenshot::filtered(w.flags)); clean(env); }

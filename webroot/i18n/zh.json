@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "启用或移除后请重启应用；已打开的窗口可能保留原状态。",
   "screenshot_fix_failed": "无法保存选择",
-  "screenshot_fix_saved": "选择已保存 · 请重启应用"
+  "screenshot_fix_saved": "选择已保存 · 请重启应用",
+  "screenshot_fix_search": "搜索应用",
+  "screenshot_fix_selected": "已选择的应用",
+  "screenshot_fix_empty": "尚未选择应用",
+  "screenshot_fix_load_failed": "无法加载应用",
+  "screenshot_fix_no_matches": "没有匹配的应用"
 }

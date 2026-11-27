@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "Etkinleştirdikten veya kaldırdıktan sonra uygulamayı yeniden başlatın; açık pencereler eski durumunu koruyabilir.",
   "screenshot_fix_failed": "Seçim kaydedilemedi",
-  "screenshot_fix_saved": "Seçim kaydedildi · uygulamayı yeniden başlatın"
+  "screenshot_fix_saved": "Seçim kaydedildi · uygulamayı yeniden başlatın",
+  "screenshot_fix_search": "Uygulama ara",
+  "screenshot_fix_selected": "Seçilen uygulamalar",
+  "screenshot_fix_empty": "Uygulama seçilmedi",
+  "screenshot_fix_load_failed": "Uygulamalar yüklenemedi",
+  "screenshot_fix_no_matches": "Eşleşen uygulama yok"
 }

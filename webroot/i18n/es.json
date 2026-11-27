@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "Reinicia la aplicación tras activar o quitar el ajuste; las ventanas abiertas pueden conservar su estado.",
   "screenshot_fix_failed": "No se pudo guardar la selección",
-  "screenshot_fix_saved": "Selección guardada · reinicia la aplicación"
+  "screenshot_fix_saved": "Selección guardada · reinicia la aplicación",
+  "screenshot_fix_search": "Buscar aplicaciones",
+  "screenshot_fix_selected": "Aplicaciones seleccionadas",
+  "screenshot_fix_empty": "Ninguna aplicación seleccionada",
+  "screenshot_fix_load_failed": "No se pudieron cargar las aplicaciones",
+  "screenshot_fix_no_matches": "No hay aplicaciones coincidentes"
 }

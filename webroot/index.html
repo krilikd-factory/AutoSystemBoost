@@ -3957,7 +3957,14 @@ html[data-asb-theme="light"] .cfg-inf-emblem svg { filter: drop-shadow(0 1px 1px
 html[dir="rtl"] .bfx-bar > i { transform-origin: right center; }
 .bfx-actions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 .bfx-btn { flex: 1 1 auto; min-height: 40px; padding: 9px 14px; border-radius: 12px; font: 700 13px/1.2 var(--sans); cursor: pointer; }
-.screenshot-fix-card select { width:100%; max-width:100%; margin:8px 0; }
+.screenshot-fix-card select { width:100%; max-width:100%; margin:7px 0 10px; }
+.screenshot-fix-search { width:100%; box-sizing:border-box; margin:12px 0 0; padding:11px 14px; border:1px solid var(--border, rgba(255,255,255,.13)); border-radius:13px; background:rgba(0,0,0,.12); color:inherit; font:inherit; outline:none; }
+.screenshot-fix-search:focus { border-color:var(--accent, #00d5a5); }
+.screenshot-fix-selected-title { margin:16px 2px 7px; font-size:12px; font-weight:700; opacity:.75; }
+.screenshot-fix-card .screenshot-fix-selected { gap:6px; }
+.screenshot-fix-row { padding:9px 10px; border:1px solid rgba(128,160,150,.18); border-radius:12px; background:rgba(128,160,150,.06); }
+.screenshot-fix-no-matches { margin:0 2px 10px; font-size:12px; opacity:.72; }
+.screenshot-fix-empty { padding:11px 12px; border:1px dashed rgba(128,160,150,.24); border-radius:12px; font-size:12px; opacity:.72; }
 .screenshot-fix-card .wl-manual-row { gap:8px; }
 .screenshot-fix-card .wl-manual-name { min-width:0; overflow-wrap:anywhere; }
 .bfx-primary { color: #04261a; border: 1px solid rgba(96,242,178,.65); background: linear-gradient(135deg, #6cf2b8, #2fd3a6); box-shadow: 0 4px 14px rgba(26,200,140,.22); }
@@ -12192,58 +12199,91 @@ function cfgRenderComponentManagerCard(list) {
 
 const SCREENSHOT_FIX_SCRIPT = MD + '/runtime/asb_screenshot_policy.sh';
 let _screenshotUser = '', _screenshotBusy = false, _screenshotSeq = 0;
+let _screenshotApps = [], _screenshotSelected = new Set(), _screenshotAppCache = null;
 function cfgRenderScreenshotFixCard(list) {
   const card = bfxEl('div', 'cfg-row bfx-card screenshot-fix-card'); card.id = 'screenshotFixCard';
   const head = bfxEl('div', 'bfx-head');
   const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon('camera'); head.appendChild(em);
   const titles = bfxEl('div', 'bfx-titles');
   titles.appendChild(bfxEl('div', 'bfx-title', T('screenshot_fix_title', 'Screenshot fix')));
-  const chip = bfxEl('span', 'bfx-chip is-wait', T('screenshot_fix_checking', 'Checking…')); chip.id = 'screenshotFixChip'; titles.appendChild(chip);
+  const chip = bfxEl('span', 'bfx-chip is-wait', T('screenshot_fix_checking', 'Checking…')); chip.id = 'screenshotFixChip'; chip.setAttribute('aria-live', 'polite'); titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
   card.appendChild(bfxEl('div', 'bfx-desc', T('screenshot_fix_desc', 'Experimental: allows screenshots in selected apps on Android 17, 64-bit processes. Requires ASB Zygisk and an app restart; protected media may remain unavailable.')));
+  const search = bfxEl('input', 'screenshot-fix-search'); search.type = 'search'; search.id = 'screenshotFixSearch';
+  search.placeholder = T('screenshot_fix_search', 'Search apps'); search.setAttribute('aria-label', search.placeholder);
+  search.disabled = true; search.oninput = screenshotFixFilterApps; card.appendChild(search);
   const select = bfxEl('select', 'bfx-btn bfx-secondary'); select.id = 'screenshotFixApps'; select.disabled = true;
   select.setAttribute('aria-label', T('screenshot_fix_choose', 'Choose an app')); card.appendChild(select);
+  const noMatches = bfxEl('div', 'screenshot-fix-no-matches', T('screenshot_fix_no_matches', 'No matching apps')); noMatches.id = 'screenshotFixNoMatches'; noMatches.hidden = true; card.appendChild(noMatches);
   const actions = bfxEl('div', 'bfx-actions');
   const add = bfxEl('button', 'bfx-btn bfx-primary', T('screenshot_fix_add', 'Enable for app')); add.type = 'button'; add.id = 'screenshotFixAdd'; add.disabled = true;
   add.onclick = function () { screenshotFixChange('add', select.value); }; actions.appendChild(add);
-  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('dev_refresh', 'Refresh')); refresh.type = 'button'; refresh.onclick = screenshotFixLoad; actions.appendChild(refresh);
+  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('dev_refresh', 'Refresh')); refresh.type = 'button'; refresh.onclick = function () { _screenshotAppCache = null; screenshotFixLoad(); }; actions.appendChild(refresh);
   card.appendChild(actions);
-  const selected = bfxEl('div', 'junk-cats'); selected.id = 'screenshotFixSelected'; card.appendChild(selected);
+  const selectedTitle = bfxEl('div', 'screenshot-fix-selected-title', T('screenshot_fix_selected', 'Selected apps')); card.appendChild(selectedTitle);
+  const selected = bfxEl('div', 'junk-cats screenshot-fix-selected'); selected.id = 'screenshotFixSelected'; card.appendChild(selected);
   const note = bfxEl('div', 'bfx-note', T('screenshot_fix_restart', 'Restart the chosen app after enabling or removing the fix. Existing windows can keep their previous state.')); card.appendChild(note);
   list.appendChild(card); cfgAfterEnter(function () { if (_el('screenshotFixCard')) screenshotFixLoad(); });
 }
 async function screenshotFixLoad() {
   const card = _el('screenshotFixCard'); if (!card || _screenshotBusy) return;
-  const seq = ++_screenshotSeq, chip = _el('screenshotFixChip'), select = _el('screenshotFixApps'), add = _el('screenshotFixAdd'), selected = _el('screenshotFixSelected');
-  select.disabled = true; add.disabled = true; chip.textContent = T('screenshot_fix_checking', 'Checking…');
+  const seq = ++_screenshotSeq, chip = _el('screenshotFixChip'), select = _el('screenshotFixApps'), search = _el('screenshotFixSearch'), add = _el('screenshotFixAdd'), selected = _el('screenshotFixSelected');
+  select.disabled = true; search.disabled = true; add.disabled = true; chip.textContent = T('screenshot_fix_checking', 'Checking…');
   await asbPaintYield();
-  if (seq !== _screenshotSeq || !_el('screenshotFixCard')) return;
+  if (seq !== _screenshotSeq || _el('screenshotFixCard') !== card) return;
   const cmd = 'sh ' + shQuote(SCREENSHOT_FIX_SCRIPT) + ' status; echo __ASB_LIST__; sh ' + shQuote(SCREENSHOT_FIX_SCRIPT) + ' list; echo __ASB_USER__; am get-current-user 2>/dev/null; echo __ASB_SDK__; getprop ro.build.version.sdk; echo __ASB_ABI__; getprop ro.product.cpu.abilist64';
   let r; try { r = await run(cmd); } catch (e) { r = null; }
-  if (seq !== _screenshotSeq || !_el('screenshotFixCard')) return;
+  if (seq !== _screenshotSeq || _el('screenshotFixCard') !== card) return;
   const parts = String(r && r.stdout || '').split(/__ASB_(?:LIST|USER|SDK|ABI)__/);
   const status = bfxParse(parts[0] || ''), user = String(parts[2] || '').trim(), sdk = String(parts[3] || '').trim(), abi = String(parts[4] || '').trim();
   _screenshotUser = /^\d{1,3}$/.test(user) && Number(user) <= 999 ? String(Number(user)) : '';
   const supported = sdk === '37' && !!abi && status.zygisk_enabled === '1' && !!_screenshotUser && status.policy !== 'invalid';
   chip.className = 'bfx-chip ' + (supported ? 'is-ready' : 'is-wait');
   chip.textContent = supported ? T('screenshot_fix_experimental', 'Experimental') : T('screenshot_fix_unavailable', 'Unavailable: check Zygisk, Android 17 and current user');
-  selected.textContent = '';
+  selected.textContent = ''; _screenshotSelected = new Set();
+  const selectedEntries = [];
   String(parts[1] || '').split('\n').forEach(function (line) {
     const m = /^entry\|(\d{1,3})\|([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)$/.exec(line.trim()); if (!m) return;
-    const row = bfxEl('div', 'wl-manual-row'), text = bfxEl('div', 'wl-manual-name', m[2] + ' · u' + m[1]); row.appendChild(text);
+    selectedEntries.push(m); if (m[1] === _screenshotUser) _screenshotSelected.add(m[2]);
+    const row = bfxEl('div', 'wl-manual-row screenshot-fix-row'), text = bfxEl('div', 'wl-manual-name', m[2] + ' · u' + m[1]); row.appendChild(text);
     const remove = bfxEl('button', 'wl-manual-action is-restore', T('screenshot_fix_remove', 'Remove')); remove.type = 'button';
     remove.onclick = function () { screenshotFixChange('remove', m[2], m[1]); }; row.appendChild(remove); selected.appendChild(row);
   });
-  select.textContent = '';
+  if (!selectedEntries.length) selected.appendChild(bfxEl('div', 'screenshot-fix-empty', T('screenshot_fix_empty', 'No apps selected')));
+  select.textContent = ''; _screenshotApps = [];
   if (!supported) return;
   await asbPaintYield();
-  if (seq !== _screenshotSeq || !_el('screenshotFixCard')) return;
-  let apps; try { apps = await run('pm list packages -3 --user ' + _screenshotUser + ' 2>/dev/null'); } catch (e) { apps = null; }
-  if (seq !== _screenshotSeq || !_el('screenshotFixCard')) return;
-  const pkgs = String(apps && apps.stdout || '').split('\n').map(x => x.replace(/^package:/, '').trim()).filter(x => dozePkgOk(x));
+  if (seq !== _screenshotSeq || _el('screenshotFixCard') !== card) return;
+  let pkgs;
+  if (_screenshotAppCache && _screenshotAppCache.user === _screenshotUser && Date.now() - _screenshotAppCache.at < 30000) {
+    pkgs = _screenshotAppCache.pkgs;
+  } else {
+    let apps; try { apps = await run('pm list packages -3 --user ' + _screenshotUser + ' 2>/dev/null'); } catch (e) { apps = null; }
+    if (seq !== _screenshotSeq || _el('screenshotFixCard') !== card) return;
+    if (!apps || apps.errno !== 0) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('screenshot_fix_load_failed', 'Could not load apps'); return; }
+    pkgs = Array.from(new Set(String(apps.stdout || '').split('\n').map(x => x.replace(/^package:/, '').trim()).filter(x => dozePkgOk(x)))).sort();
+    _screenshotAppCache = { user: _screenshotUser, at: Date.now(), pkgs: pkgs };
+  }
   const labels = dozeKeepLabels(pkgs);
-  Array.from(new Set(pkgs)).sort().forEach(function (p) { const opt = bfxEl('option', '', labels[p] ? labels[p] + ' · ' + p : p); opt.value = p; select.appendChild(opt); });
-  select.disabled = add.disabled = !select.options.length;
+  _screenshotApps = pkgs.map(function (p) { return { pkg:p, label:labels[p] || p }; });
+  selectedEntries.forEach(function (m, i) {
+    const name = selected.children[i] && selected.children[i].firstChild;
+    if (name && labels[m[2]]) name.textContent = labels[m[2]] + ' · ' + m[2] + ' · u' + m[1];
+  });
+  search.disabled = false; screenshotFixFilterApps();
+}
+function screenshotFixFilterApps() {
+  const search = _el('screenshotFixSearch'), select = _el('screenshotFixApps'), add = _el('screenshotFixAdd'), noMatches = _el('screenshotFixNoMatches');
+  if (!search || !select || !add || !noMatches) return;
+  const term = String(search.value || '').trim().toLocaleLowerCase(), previous = select.value;
+  select.textContent = '';
+  _screenshotApps.forEach(function (app) {
+    if (_screenshotSelected.has(app.pkg) || (term && (app.label + ' ' + app.pkg).toLocaleLowerCase().indexOf(term) < 0)) return;
+    const opt = bfxEl('option', '', app.label === app.pkg ? app.pkg : app.label + ' · ' + app.pkg); opt.value = app.pkg; select.appendChild(opt);
+  });
+  if (Array.from(select.options).some(function (o) { return o.value === previous; })) select.value = previous;
+  noMatches.hidden = !!select.options.length;
+  select.disabled = add.disabled = !select.options.length || _screenshotBusy;
 }
 async function screenshotFixChange(action, pkg, user) {
   if (_screenshotBusy || !/^(add|remove)$/.test(action) || !dozePkgOk(pkg)) return;

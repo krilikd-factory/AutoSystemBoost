@@ -4466,5 +4466,10 @@
   "screenshot_fix_remove": "Удалить",
   "screenshot_fix_restart": "После включения или удаления перезапустите выбранное приложение: открытые окна могут сохранить прежнее состояние.",
   "screenshot_fix_failed": "Не удалось сохранить выбор",
-  "screenshot_fix_saved": "Выбор сохранён · перезапустите приложение"
+  "screenshot_fix_saved": "Выбор сохранён · перезапустите приложение",
+  "screenshot_fix_search": "Поиск приложений",
+  "screenshot_fix_selected": "Выбранные приложения",
+  "screenshot_fix_empty": "Приложения не выбраны",
+  "screenshot_fix_load_failed": "Не удалось загрузить приложения",
+  "screenshot_fix_no_matches": "Подходящих приложений нет"
 }

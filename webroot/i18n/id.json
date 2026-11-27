@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "Mulai ulang aplikasi setelah mengaktifkan atau menghapus; jendela terbuka dapat mempertahankan keadaan sebelumnya.",
   "screenshot_fix_failed": "Pilihan tidak dapat disimpan",
-  "screenshot_fix_saved": "Pilihan disimpan · mulai ulang aplikasi"
+  "screenshot_fix_saved": "Pilihan disimpan · mulai ulang aplikasi",
+  "screenshot_fix_search": "Cari aplikasi",
+  "screenshot_fix_selected": "Aplikasi terpilih",
+  "screenshot_fix_empty": "Belum ada aplikasi yang dipilih",
+  "screenshot_fix_load_failed": "Aplikasi tidak dapat dimuat",
+  "screenshot_fix_no_matches": "Tidak ada aplikasi yang cocok"
 }

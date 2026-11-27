@@ -17296,12 +17296,17 @@ const ctx={console,document:{createElement:el},MD:'/mod',nodes,_el:id=>nodes[id]
   run:async cmd=>{calls.push(cmd);if(cmd.includes(' status;'))return {errno:0,stdout:'backend=experimental selected=1 policy=ok zygisk_enabled=1\n__ASB_LIST__\nentry|0|org.example.one\n__ASB_USER__\n0\n__ASB_SDK__\n37\n__ASB_ABI__\narm64-v8a\n'};
     if(cmd.startsWith('pm list'))return {errno:0,stdout:'package:org.example.one\npackage:org.example.two\n'};
     return {errno:0,stdout:'status=saved backend=experimental selected=1\n'};}};
-vm.createContext(ctx);vm.runInContext("const SCREENSHOT_FIX_SCRIPT=MD+'/runtime/asb_screenshot_policy.sh'; let _screenshotUser='',_screenshotBusy=false,_screenshotSeq=0;\n"+
-  ['bfxParse','cfgRenderScreenshotFixCard','screenshotFixLoad','screenshotFixChange'].map(extract).join('\n'),ctx);
+vm.createContext(ctx);vm.runInContext("const SCREENSHOT_FIX_SCRIPT=MD+'/runtime/asb_screenshot_policy.sh'; let _screenshotUser='',_screenshotBusy=false,_screenshotSeq=0,_screenshotApps=[],_screenshotSelected=new Set(),_screenshotAppCache=null;\n"+
+  ['bfxParse','cfgRenderScreenshotFixCard','screenshotFixLoad','screenshotFixFilterApps','screenshotFixChange'].map(extract).join('\n'),ctx);
 (async()=>{let list=el('div');ctx.cfgRenderScreenshotFixCard(list);await ctx.screenshotFixLoad();
-  if(!nodes.screenshotFixCard || nodes.screenshotFixApps.options.length!==2 || nodes.screenshotFixAdd.disabled)throw Error('supported app picker');
+  if(!nodes.screenshotFixCard || nodes.screenshotFixApps.options.length!==1 || nodes.screenshotFixAdd.disabled)throw Error('supported app picker');
   if(nodes.screenshotFixSelected.children.length!==1)throw Error('selected entry missing');
+  nodes.screenshotFixSearch.value='missing';ctx.screenshotFixFilterApps();
+  if(nodes.screenshotFixApps.options.length || !nodes.screenshotFixAdd.disabled)throw Error('search should filter and disable');
+  nodes.screenshotFixSearch.value='two';ctx.screenshotFixFilterApps();
+  if(nodes.screenshotFixApps.options.length!==1)throw Error('search should match package');
   await ctx.screenshotFixChange('add','org.example.two');
+  if(calls.filter(x=>x.startsWith('pm list')).length!==1)throw Error('refresh should reuse recent package list');
   if(!calls.some(x=>x.includes(" add '0' 'org.example.two'")) || !toasts.length)throw Error('validated save');
   let before=calls.length;await ctx.screenshotFixChange('add','org.example.two;bad');if(calls.length!==before)throw Error('unsafe input');
 })().catch(e=>{console.error(e);process.exitCode=1});

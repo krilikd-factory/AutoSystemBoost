@@ -4358,5 +4358,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "Restart the chosen app after enabling or removing the fix. Existing windows can keep their previous state.",
   "screenshot_fix_failed": "Could not save selection",
-  "screenshot_fix_saved": "Selection saved · restart the app to apply"
+  "screenshot_fix_saved": "Selection saved · restart the app to apply",
+  "screenshot_fix_search": "Search apps",
+  "screenshot_fix_selected": "Selected apps",
+  "screenshot_fix_empty": "No apps selected",
+  "screenshot_fix_load_failed": "Could not load apps",
+  "screenshot_fix_no_matches": "No matching apps"
 }

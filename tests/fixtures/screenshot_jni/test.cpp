@@ -34,6 +34,10 @@ int main() {
   transaction_count=1; window_transactions[0]=42;
   int at=0; auto good=make_parcel("android.view.IWindowSession",at);
   adjust_window(&env,&good,42); assert(!env.error && good.pos==7 && get(good,at)==0x40000001);
+  auto ordinary=make_parcel("android.view.IWindowSession",at);
+  put(ordinary,at,0x40000001); env.reads=0;
+  adjust_window(&env,&ordinary,42);
+  assert(!env.error && ordinary.pos==7 && get(ordinary,at)==0x40000001 && env.reads==4);
   auto wrong=make_parcel("android.view.IWindowSessioX",at);
   adjust_window(&env,&wrong,42); assert(!env.error && wrong.pos==7 && get(wrong,at)==0x40002001);
   auto other=make_parcel("android.view.IWindowSession",at);

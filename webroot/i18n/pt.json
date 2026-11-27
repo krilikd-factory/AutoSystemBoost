@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "Reinicie o aplicativo após ativar ou remover; janelas abertas podem manter o estado anterior.",
   "screenshot_fix_failed": "Não foi possível salvar a seleção",
-  "screenshot_fix_saved": "Seleção salva · reinicie o aplicativo"
+  "screenshot_fix_saved": "Seleção salva · reinicie o aplicativo",
+  "screenshot_fix_search": "Buscar aplicativos",
+  "screenshot_fix_selected": "Aplicativos selecionados",
+  "screenshot_fix_empty": "Nenhum aplicativo selecionado",
+  "screenshot_fix_load_failed": "Não foi possível carregar os aplicativos",
+  "screenshot_fix_no_matches": "Nenhum aplicativo correspondente"
 }

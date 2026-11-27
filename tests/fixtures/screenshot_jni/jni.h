@@ -11,13 +11,14 @@ using jintArray = void *; using jobjectArray = void *; using jfieldID = void *; 
 struct JNINativeMethod { char *name; char *signature; void *fnPtr; };
 struct FixtureParcel { std::vector<uint8_t> data; int pos = 0; };
 struct JNIEnv {
-  bool error = false; std::string str;
+  bool error = false; int reads = 0; std::string str;
   bool ExceptionCheck() { return error; }
   void ExceptionClear() { error = false; }
   jint CallIntMethod(jobject o, jmethodID id, ...) {
     auto *p = static_cast<FixtureParcel *>(o); auto k = reinterpret_cast<uintptr_t>(id);
     if (k == 1) return p->pos;
     if (k == 3) return static_cast<int>(p->data.size());
+    if (k == 4) ++reads;
     if (k == 4 && p->pos >= 0 && p->pos + 4 <= static_cast<int>(p->data.size())) {
       int32_t n; std::memcpy(&n,p->data.data()+p->pos,4); p->pos += 4; return n;
     }

@@ -4465,5 +4465,10 @@
   "screenshot_fix_remove": "Remove",
   "screenshot_fix_restart": "Перезапустіть програму після ввімкнення або видалення: відкриті вікна можуть зберегти попередній стан.",
   "screenshot_fix_failed": "Не вдалося зберегти вибір",
-  "screenshot_fix_saved": "Вибір збережено · перезапустіть програму"
+  "screenshot_fix_saved": "Вибір збережено · перезапустіть програму",
+  "screenshot_fix_search": "Пошук програм",
+  "screenshot_fix_selected": "Вибрані програми",
+  "screenshot_fix_empty": "Програми не вибрано",
+  "screenshot_fix_load_failed": "Не вдалося завантажити програми",
+  "screenshot_fix_no_matches": "Відповідних програм немає"
 }
