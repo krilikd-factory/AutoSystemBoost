@@ -11,7 +11,7 @@ using jintArray = void *; using jobjectArray = void *; using jfieldID = void *; 
 struct JNINativeMethod { char *name; char *signature; void *fnPtr; };
 struct FixtureParcel { std::vector<uint8_t> data; int pos = 0; };
 struct JNIEnv {
-  bool error = false; int reads = 0; std::string str;
+  bool error = false; bool no_window = false; int reads = 0; std::string str;
   bool ExceptionCheck() { return error; }
   void ExceptionClear() { error = false; }
   jint CallIntMethod(jobject o, jmethodID id, ...) {
@@ -52,7 +52,7 @@ struct JNIEnv {
   }
   jfieldID GetStaticFieldID(jclass cls,const char *name,const char *) {
     if (cls==reinterpret_cast<jclass>(11) && !std::strcmp(name,"SDK_INT")) return reinterpret_cast<jfieldID>(20);
-    if (cls==reinterpret_cast<jclass>(12) && !std::strcmp(name,"TRANSACTION_relayout")) return reinterpret_cast<jfieldID>(21);
+    if (!no_window && cls==reinterpret_cast<jclass>(12) && !std::strcmp(name,"TRANSACTION_relayout")) return reinterpret_cast<jfieldID>(21);
     error=true; return nullptr;
   }
   jint sdk=37;

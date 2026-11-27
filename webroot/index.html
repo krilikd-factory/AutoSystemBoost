@@ -12208,7 +12208,7 @@ function cfgRenderScreenshotFixCard(list) {
   titles.appendChild(bfxEl('div', 'bfx-title', T('screenshot_fix_title', 'Screenshot fix')));
   const chip = bfxEl('span', 'bfx-chip is-wait', T('screenshot_fix_checking', 'Checking…')); chip.id = 'screenshotFixChip'; chip.setAttribute('aria-live', 'polite'); titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', T('screenshot_fix_desc', 'Experimental: allows screenshots in selected apps on Android 17, 64-bit processes. Requires ASB Zygisk and an app restart; protected media may remain unavailable.')));
+  card.appendChild(bfxEl('div', 'bfx-desc', T('screenshot_fix_desc', 'Experimental: allows screenshots in selected apps on Android 15–17, 64-bit processes. Requires ASB Zygisk and an app restart; protected media may remain unavailable.')));
   const search = bfxEl('input', 'screenshot-fix-search'); search.type = 'search'; search.id = 'screenshotFixSearch';
   search.placeholder = T('screenshot_fix_search', 'Search apps'); search.setAttribute('aria-label', search.placeholder);
   search.disabled = true; search.oninput = screenshotFixFilterApps; card.appendChild(search);
@@ -12237,9 +12237,9 @@ async function screenshotFixLoad() {
   const parts = String(r && r.stdout || '').split(/__ASB_(?:LIST|USER|SDK|ABI)__/);
   const status = bfxParse(parts[0] || ''), user = String(parts[2] || '').trim(), sdk = String(parts[3] || '').trim(), abi = String(parts[4] || '').trim();
   _screenshotUser = /^\d{1,3}$/.test(user) && Number(user) <= 999 ? String(Number(user)) : '';
-  const supported = sdk === '37' && !!abi && status.zygisk_enabled === '1' && !!_screenshotUser && status.policy !== 'invalid';
+  const supported = /^(35|36|37)$/.test(sdk) && !!abi && status.zygisk_enabled === '1' && !!_screenshotUser && status.policy !== 'invalid';
   chip.className = 'bfx-chip ' + (supported ? 'is-ready' : 'is-wait');
-  chip.textContent = supported ? T('screenshot_fix_experimental', 'Experimental') : T('screenshot_fix_unavailable', 'Unavailable: check Zygisk, Android 17 and current user');
+  chip.textContent = supported ? T('screenshot_fix_experimental', 'Experimental') : T('screenshot_fix_unavailable', 'Unavailable: check Zygisk, Android 15–17 and current user');
   selected.textContent = ''; _screenshotSelected = new Set();
   const selectedEntries = [];
   String(parts[1] || '').split('\n').forEach(function (line) {

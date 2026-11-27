@@ -2034,7 +2034,7 @@ cat > "$T/test.cpp" <<'CPP'
 #include <cassert>
 using namespace asb_screenshot;
 int main() {
-  assert(supported(37,8)); assert(!supported(36,8)); assert(!supported(37,4));
+  assert(supported(35,8)); assert(supported(36,8)); assert(supported(37,8)); assert(!supported(34,8)); assert(!supported(38,8)); assert(!supported(37,4));
   assert(is_window_session("android.view.IWindowSession"));
   assert(!is_window_session("android.view.IWindowSession.bad"));
   assert(!is_window_session(nullptr));

@@ -6,8 +6,14 @@
 // Android versions, interface names and record shapes are left untouched.
 namespace asb_screenshot {
 constexpr int32_t kSecure = 0x00002000;
+// SurfaceControl flags, distinct from WindowManager.LayoutParams flags.
+constexpr int32_t kSurfaceSecure = 0x00000080;
+constexpr int32_t kSurfaceSkipScreenshot = 0x00000040;
+inline int32_t surface_filtered(int32_t flags) {
+    return flags & ~(kSurfaceSecure | kSurfaceSkipScreenshot);
+}
 struct WindowFields { int32_t width, height, x, y, type, flags; };
-inline bool supported(int sdk, unsigned pointer_bytes) { return sdk == 37 && pointer_bytes == 8; }
+inline bool supported(int sdk, unsigned pointer_bytes) { return sdk >= 35 && sdk <= 37 && pointer_bytes == 8; }
 inline bool is_window_session(const char *descriptor) {
     return descriptor && std::strcmp(descriptor, "android.view.IWindowSession") == 0;
 }

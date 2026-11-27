@@ -17288,12 +17288,12 @@ const fs=require('fs'),vm=require('vm'),h=fs.readFileSync(process.argv[2],'utf8'
 function extract(name){const re=new RegExp('(?:async )?function '+name+'\\('),m=re.exec(h);if(!m)throw Error(name);const e=h.indexOf('\n}',m.index);if(e<0)throw Error('end '+name);return h.slice(m.index,e+2)}
 const nodes={};
 function el(tag){const n={tag,children:[],dataset:{},disabled:false,hidden:false,className:'',value:'',setAttribute(){},appendChild(x){this.children.push(x);if(x.id)nodes[x.id]=x; if(this.tag==='select'&&!this.value)this.value=x.value;},set textContent(v){this.text=String(v);this.children=[]},get textContent(){return this.text||''},get options(){return this.children}}; return n}
-let calls=[], toasts=[];
+let calls=[], toasts=[], sdk='37';
 const ctx={console,document:{createElement:el},MD:'/mod',nodes,_el:id=>nodes[id]||null,
   T:(k,d)=>d,bfxEl:(tag,cls,text)=>{let x=el(tag);x.className=cls||'';if(text!=null)x.textContent=text;return x;},
   techIcon:()=>'',cfgAfterEnter:()=>{},asbPaintYield:async()=>{},shQuote:s=>"'"+s+"'",
   dozePkgOk:p=>/^[A-Za-z0-9_.]+$/.test(p),dozeKeepLabels:()=>({}),toast:(m,t)=>toasts.push([m,t]),
-  run:async cmd=>{calls.push(cmd);if(cmd.includes(' status;'))return {errno:0,stdout:'backend=experimental selected=1 policy=ok zygisk_enabled=1\n__ASB_LIST__\nentry|0|org.example.one\n__ASB_USER__\n0\n__ASB_SDK__\n37\n__ASB_ABI__\narm64-v8a\n'};
+  run:async cmd=>{calls.push(cmd);if(cmd.includes(' status;'))return {errno:0,stdout:'backend=experimental selected=1 policy=ok zygisk_enabled=1\n__ASB_LIST__\nentry|0|org.example.one\n__ASB_USER__\n0\n__ASB_SDK__\n'+sdk+'\n__ASB_ABI__\narm64-v8a\n'};
     if(cmd.startsWith('pm list'))return {errno:0,stdout:'package:org.example.one\npackage:org.example.two\n'};
     return {errno:0,stdout:'status=saved backend=experimental selected=1\n'};}};
 vm.createContext(ctx);vm.runInContext("const SCREENSHOT_FIX_SCRIPT=MD+'/runtime/asb_screenshot_policy.sh'; let _screenshotUser='',_screenshotBusy=false,_screenshotSeq=0,_screenshotApps=[],_screenshotSelected=new Set(),_screenshotAppCache=null;\n"+
@@ -17309,6 +17309,8 @@ vm.createContext(ctx);vm.runInContext("const SCREENSHOT_FIX_SCRIPT=MD+'/runtime/
   if(calls.filter(x=>x.startsWith('pm list')).length!==1)throw Error('refresh should reuse recent package list');
   if(!calls.some(x=>x.includes(" add '0' 'org.example.two'")) || !toasts.length)throw Error('validated save');
   let before=calls.length;await ctx.screenshotFixChange('add','org.example.two;bad');if(calls.length!==before)throw Error('unsafe input');
+  for (const supportedSdk of ['35','36','37']) { sdk=supportedSdk; await ctx.screenshotFixLoad(); if(nodes.screenshotFixSearch.disabled) throw Error('supported SDK '+sdk); }
+  sdk='34';await ctx.screenshotFixLoad();if(!nodes.screenshotFixSearch.disabled || !nodes.screenshotFixAdd.disabled)throw Error('unsupported SDK');
 })().catch(e=>{console.error(e);process.exitCode=1});
 JS
 echo 'PASS screenshot UI: capability gate, per-user selection and validated save'
