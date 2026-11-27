@@ -2000,11 +2000,13 @@ int main(int argc,char **argv) {
   g_package="org.example.one";pre();post();assert(unloads==1 && installs==0);
   {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=1\n";}
   pre();assert(unloads==1);post();assert(installs==1);
-  uid=1010123;pre();post();assert(unloads==2 && installs==1);uid=10123;
-  {std::ofstream f(safe_path);f<<"1";} pre();post();assert(unloads==3 && installs==1);unlink(safe_path.c_str());
-  {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=2\n";} pre();post();assert(unloads==4 && installs==1);
+  g_package="org.example.one:player"; pre();post();assert(unloads==1 && installs==2);
+  g_package="org.example.other:player"; pre();post();assert(unloads==2 && installs==2);
+  g_package="org.example.one"; uid=1010123;pre();post();assert(unloads==3 && installs==2);uid=10123;
+  {std::ofstream f(safe_path);f<<"1";} pre();post();assert(unloads==4 && installs==2);unlink(safe_path.c_str());
+  {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=2\n";} pre();post();assert(unloads==5 && installs==2);
   {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=1\n";}
-  install_ok=false;pre();post();assert(unloads==5 && installs==2);
+  install_ok=false;pre();post();assert(unloads==6 && installs==3);
 }
 CPP
 g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-parameter -pthread -I"$T/inc" -I"$ROOT/src/zygisk" "$T/test.cpp" -o "$T/test"
