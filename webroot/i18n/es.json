@@ -1894,7 +1894,7 @@
   "dev_zygisk_observer_launch_vetoed": "Arranques en frío rechazados",
   "dev_zygisk_observer_ledger_events": "Entradas del registro",
   "dev_zygisk_observer_ledger_restart_loops": "Bucles de reinicio con la pantalla apagada (pico de arranques por 5 min)",
-  "dev_zygisk_observer_ledger_top_screen_off": "Más inicios con la pantalla apagada (app apagada/encendida)",
+  "dev_zygisk_observer_ledger_top_screen_off": "Más inicios con la pantalla apagada",
   "dev_zygisk_observer_lifecycle_coverage": "Cobertura del ciclo de vida",
   "dev_zygisk_observer_lifecycle_hints": "Avisos de ciclo de vida",
   "dev_zygisk_observer_link_state": "Veredicto del enlace ASB (estado interno)",
@@ -4473,5 +4473,8 @@
   "screenshot_fix_no_matches": "No hay aplicaciones coincidentes",
   "inf_advice_observations": "Observaciones del registro",
   "inf_advice_observations_chip": "Observaciones",
-  "lr_zy_zero_explain": "Estos contadores miden solicitudes opcionales de ciclo de vida y arranque en frío, separadas de los eventos de procesos. Un cero puede indicar que la función está desactivada o que no hubo solicitudes; consulta su estado abajo."
+  "lr_zy_zero_explain": "Estos contadores miden solicitudes opcionales de ciclo de vida y arranque en frío, separadas de los eventos de procesos. Un cero puede indicar que la función está desactivada o que no hubo solicitudes; consulta su estado abajo.",
+  "screenshot_fix_runtime_unknown": "Estado de los hooks desconocido; seleccionar la app no confirma su activación. Fuerza su cierre y vuelve a abrirla antes de probar.",
+  "screenshot_fix_policy_live": "Selección publicada",
+  "screenshot_fix_policy_not_live": "Publicación de la selección no confirmada"
 }

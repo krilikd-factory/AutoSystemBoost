@@ -1894,7 +1894,7 @@
   "dev_zygisk_observer_launch_vetoed": "Démarrages à froid refusés",
   "dev_zygisk_observer_ledger_events": "Entrées du registre",
   "dev_zygisk_observer_ledger_restart_loops": "Boucles de redémarrage écran éteint (pic de démarrages par 5 min)",
-  "dev_zygisk_observer_ledger_top_screen_off": "Le plus de démarrages écran éteint (app éteint/allumé)",
+  "dev_zygisk_observer_ledger_top_screen_off": "Plus de démarrages écran éteint",
   "dev_zygisk_observer_lifecycle_coverage": "Couverture du cycle de vie",
   "dev_zygisk_observer_lifecycle_hints": "Indications du cycle de vie",
   "dev_zygisk_observer_link_state": "Verdict de liaison ASB (état machine)",
@@ -4473,5 +4473,8 @@
   "screenshot_fix_no_matches": "Aucune application correspondante",
   "inf_advice_observations": "Observations du journal",
   "inf_advice_observations_chip": "Observations",
-  "lr_zy_zero_explain": "Ces compteurs mesurent les demandes facultatives de cycle de vie et de démarrage à froid, distinctes des événements de processus. Zéro peut signifier que la fonction est désactivée ou qu’aucune demande pertinente n’a été enregistrée ; vérifiez les états ci-dessous."
+  "lr_zy_zero_explain": "Ces compteurs mesurent les demandes facultatives de cycle de vie et de démarrage à froid, distinctes des événements de processus. Zéro peut signifier que la fonction est désactivée ou qu’aucune demande pertinente n’a été enregistrée ; vérifiez les états ci-dessous.",
+  "screenshot_fix_runtime_unknown": "État des hooks inconnu ; la sélection ne confirme pas leur activation. Forcez l’arrêt de l’application puis rouvrez-la avant le test.",
+  "screenshot_fix_policy_live": "Sélection publiée",
+  "screenshot_fix_policy_not_live": "Publication de la sélection non confirmée"
 }

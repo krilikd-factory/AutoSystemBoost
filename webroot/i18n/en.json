@@ -1788,7 +1788,7 @@
   "dev_zygisk_observer_launch_vetoed": "Cold starts vetoed",
   "dev_zygisk_observer_ledger_events": "Ledger records",
   "dev_zygisk_observer_ledger_restart_loops": "Restart loops with the screen off (peak starts per 5 min)",
-  "dev_zygisk_observer_ledger_top_screen_off": "Most starts with the screen off (app off/on)",
+  "dev_zygisk_observer_ledger_top_screen_off": "Most starts with the screen off",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_lifecycle_hints": "Lifecycle hints",
   "dev_zygisk_observer_link_state": "ASB link verdict (machine state)",
@@ -4366,5 +4366,8 @@
   "screenshot_fix_no_matches": "No matching apps",
   "inf_advice_observations": "Observations from the capture",
   "inf_advice_observations_chip": "Observations",
-  "lr_zy_zero_explain": "These counters measure optional lifecycle and cold-start requests, separately from process events. Zero can mean the feature is off or no qualifying request was recorded; check the feature states below."
+  "lr_zy_zero_explain": "These counters measure optional lifecycle and cold-start requests, separately from process events. Zero can mean the feature is off or no qualifying request was recorded; check the feature states below.",
+  "screenshot_fix_runtime_unknown": "Hook status is unknown; selection alone does not confirm activation. Force-stop and reopen the app before testing.",
+  "screenshot_fix_policy_live": "Selection published",
+  "screenshot_fix_policy_not_live": "Selection is not confirmed as published"
 }

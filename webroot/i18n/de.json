@@ -1894,7 +1894,7 @@
   "dev_zygisk_observer_launch_vetoed": "Abgelehnte Kaltstarts",
   "dev_zygisk_observer_ledger_events": "Protokolleinträge",
   "dev_zygisk_observer_ledger_restart_loops": "Neustartschleifen bei ausgeschaltetem Bildschirm (Spitze an Starts pro 5 Min.)",
-  "dev_zygisk_observer_ledger_top_screen_off": "Meiste Starts bei ausgeschaltetem Bildschirm (App aus/an)",
+  "dev_zygisk_observer_ledger_top_screen_off": "Meiste Starts bei ausgeschaltetem Bildschirm",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle-Abdeckung",
   "dev_zygisk_observer_lifecycle_hints": "Lifecycle-Hinweise",
   "dev_zygisk_observer_link_state": "ASB-Verbindungsurteil (Maschinenzustand)",
@@ -4473,5 +4473,8 @@
   "screenshot_fix_no_matches": "Keine passenden Apps",
   "inf_advice_observations": "Beobachtungen aus dem Protokoll",
   "inf_advice_observations_chip": "Beobachtungen",
-  "lr_zy_zero_explain": "Diese Zähler erfassen optionale Lebenszyklus- und Kaltstartanfragen getrennt von Prozessereignissen. Null kann bedeuten, dass die Funktion aus ist oder keine passende Anfrage erfasst wurde; siehe Funktionsstatus unten."
+  "lr_zy_zero_explain": "Diese Zähler erfassen optionale Lebenszyklus- und Kaltstartanfragen getrennt von Prozessereignissen. Null kann bedeuten, dass die Funktion aus ist oder keine passende Anfrage erfasst wurde; siehe Funktionsstatus unten.",
+  "screenshot_fix_runtime_unknown": "Hook-Status unbekannt; die Auswahl bestätigt keine Aktivierung. App vor dem Test vollständig beenden und neu öffnen.",
+  "screenshot_fix_policy_live": "Auswahl veröffentlicht",
+  "screenshot_fix_policy_not_live": "Veröffentlichung der Auswahl nicht bestätigt"
 }
