@@ -4476,5 +4476,6 @@
   "lr_zy_zero_explain": "Penghitung ini mencatat permintaan siklus hidup dan mulai dingin opsional, terpisah dari peristiwa proses. Nol dapat berarti fitur mati atau tidak ada permintaan yang memenuhi syarat; periksa status fitur di bawah.",
   "screenshot_fix_runtime_unknown": "Status hook tidak diketahui; pilihan saja tidak memastikan aktivasi. Paksa berhenti dan buka kembali aplikasi sebelum menguji.",
   "screenshot_fix_policy_live": "Pilihan diterbitkan",
-  "screenshot_fix_policy_not_live": "Penerbitan pilihan belum dikonfirmasi"
+  "screenshot_fix_policy_not_live": "Penerbitan pilihan belum dikonfirmasi",
+  "lr_tip_sradio_speed": "Saat layar mati, trafik seluler mencapai {mib}; “{set}” aktif dan diterapkan {n} kali. Jika kecepatan unduhan latar lebih penting, coba matikan. Ini tidak membuktikan perlambatan dan 5G dapat memakai lebih banyak daya."
 }

@@ -4476,5 +4476,6 @@
   "lr_zy_zero_explain": "Estos contadores miden solicitudes opcionales de ciclo de vida y arranque en frío, separadas de los eventos de procesos. Un cero puede indicar que la función está desactivada o que no hubo solicitudes; consulta su estado abajo.",
   "screenshot_fix_runtime_unknown": "Estado de los hooks desconocido; seleccionar la app no confirma su activación. Fuerza su cierre y vuelve a abrirla antes de probar.",
   "screenshot_fix_policy_live": "Selección publicada",
-  "screenshot_fix_policy_not_live": "Publicación de la selección no confirmada"
+  "screenshot_fix_policy_not_live": "Publicación de la selección no confirmada",
+  "lr_tip_sradio_speed": "Con la pantalla apagada hubo {mib} de tráfico móvil; «{set}» estaba activado y se aplicó {n} veces. Si priorizas la velocidad de descarga en segundo plano, prueba a desactivarlo. Esto no demuestra lentitud y 5G puede consumir más energía."
 }

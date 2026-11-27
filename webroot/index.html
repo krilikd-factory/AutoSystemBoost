@@ -12503,11 +12503,20 @@ function cfgInfLater(key, fn) {
  * governor.conf read-back. No report text is parsed as a shell argument. */
 let _infAdviceData = null, _infAdviceLoading = false, _infAdviceBusy = false;
 let _infAdviceArmed = 0, _infAdviceResults = [], _infAdviceError = '';
+let _infAdviceAt = 0;
+const INF_ADVICE_MAX_AGE_MS = 300000;
 function infAdviceValue(vals, key) {
   const item = CFG_ITEMS.filter(function (x) { return x.key === key; })[0];
   return vals && vals[key] !== undefined ? String(vals[key]) : String(item ? item.def : '');
 }
 function infAdviceCurrent(key) { return infAdviceValue(_cfgVals, key); }
+function infAdviceRecommendations() {
+  // The digest includes a config snapshot from its read. Keep it stable while this
+  // advice is displayed, and hide an already-confirmed action until refreshed.
+  return logReportRecommendations(_infAdviceData).filter(function (rec) {
+    return !_infAdviceResults.some(function (r) { return r.key === rec.key && r.target === rec.value && r.state === 'applied'; });
+  });
+}
 /* A writer's optimistic in-memory update is not read-back evidence. This bounded read is
  * used at the preview boundary and after the last write; errno must say that governor.conf
  * itself was read before any result can be called applied. */
@@ -12528,7 +12537,7 @@ function infAdvicePaint() {
   const host = _el('infAdviceRows'), apply = _el('infAdviceApply'), refresh = _el('infAdviceRefresh'), chip = _el('infAdviceChip');
   if (!host || !apply || !refresh) return;
   host.textContent = '';
-  const recs = logReportRecommendations(_infAdviceData);
+  const recs = infAdviceRecommendations();
   if (_infAdviceLoading) {
     host.appendChild(bfxEl('div', 'bfx-note', T('inf_advice_loading', 'Reading the existing evidence snapshot…')));
     if (chip) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('inf_advice_loading_chip', 'Reading'); }
@@ -12559,24 +12568,28 @@ function infAdvicePaint() {
 }
 async function infAdviceLoad(manual) {
   if (_infAdviceBusy || _infAdviceLoading) return;
-  if (!manual && _infAdviceData) { infAdvicePaint(); return; }
+  const now = Date.now();
+  if (!manual && _infAdviceData && _infAdviceAt > 0 && now >= _infAdviceAt && now - _infAdviceAt <= INF_ADVICE_MAX_AGE_MS) { infAdvicePaint(); return; }
   const cache = !manual && typeof logReportCacheGet === 'function' ? logReportCacheGet() : null;
-  if (cache) {
+  if (cache && cache.t > 0 && now >= cache.t && now - cache.t <= INF_ADVICE_MAX_AGE_MS) {
     const cached = parseLogReport(cache.raw);
-    if (cached.ok) { _infAdviceData = cached; _infAdviceError = ''; infAdvicePaint(); return; }
+    if (cached.ok) { _infAdviceData = cached; _infAdviceAt = cache.t; _infAdviceError = ''; infAdvicePaint(); return; }
   }
   _infAdviceLoading = true; _infAdviceError = ''; infAdvicePaint();
   let out = '';
   try { out = runText(await run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null')); } catch (e) {}
   const d = parseLogReport(out);
   _infAdviceLoading = false;
-  if (d.ok) { _infAdviceData = d; logReportCacheSet(out); }
-  else { _infAdviceData = null; _infAdviceError = T('inf_advice_read_failed', 'The log digest is unavailable or has no capture; no setting was changed.'); }
+  if (d.ok) { _infAdviceData = d; _infAdviceAt = Date.now(); _infAdviceResults = []; logReportCacheSet(out); }
+  else { _infAdviceData = null; _infAdviceAt = 0; _infAdviceError = T('inf_advice_read_failed', 'The log digest is unavailable or has no capture; no setting was changed.'); }
   _infAdviceArmed = 0; infAdvicePaint();
 }
 async function infAdviceApply() {
   if (_infAdviceBusy || _infAdviceLoading) return;
-  const recs = logReportRecommendations(_infAdviceData);
+  if (_infAdviceAt > 0 && (Date.now() < _infAdviceAt || Date.now() - _infAdviceAt > INF_ADVICE_MAX_AGE_MS)) {
+    await infAdviceLoad(true); return;
+  }
+  const recs = infAdviceRecommendations();
   if (!recs.length) return;
   const now = Date.now();
   if (!_infAdviceArmed || now - _infAdviceArmed > 6000) {
@@ -12611,7 +12624,6 @@ async function infAdviceApply() {
     if (res.state === 'changed') return;
     res.state = after && infAdviceValue(after, res.key) === res.target ? 'applied' : 'failed';
   });
-  if (_infAdviceData && after) _infAdviceData.cfg = Object.assign({}, _infAdviceData.cfg || {}, after);
   try { await cfgLoad(true); } catch (e) {}
   _infAdviceBusy = false;
   const applied = _infAdviceResults.filter(function (x) { return x.state === 'applied'; }).length;
@@ -12632,13 +12644,15 @@ function cfgRenderInfirmaryAdvice(list) {
   const rows = bfxEl('div', 'inf-advice-rows'); rows.id = 'infAdviceRows'; card.appendChild(rows);
   const actions = bfxEl('div', 'bfx-actions');
   const apply = bfxEl('button', 'bfx-btn bfx-primary', T('inf_advice_apply', 'Apply recommended values'));
-  apply.type = 'button'; apply.id = 'infAdviceApply'; apply.onclick = function (e) { e.stopPropagation(); infAdviceApply(); }; actions.appendChild(apply);
+  apply.type = 'button'; apply.id = 'infAdviceApply'; apply.disabled = true; apply.onclick = function (e) { e.stopPropagation(); infAdviceApply(); }; actions.appendChild(apply);
   const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('inf_advice_refresh', 'Refresh recommendations'));
   refresh.type = 'button'; refresh.id = 'infAdviceRefresh'; refresh.onclick = function (e) { e.stopPropagation(); infAdviceLoad(true); }; actions.appendChild(refresh);
   card.appendChild(actions);
   card.appendChild(bfxEl('div', 'bfx-note', T('inf_advice_note', 'Read-back verifies the saved value, not battery or smoothness gains.')));
   list.appendChild(card);
-  if (_infAdviceData) infAdvicePaint(); else cfgInfLater('advice', function () { infAdviceLoad(false); });
+  if (_infAdviceData && _infAdviceAt > 0 && Date.now() >= _infAdviceAt && Date.now() - _infAdviceAt <= INF_ADVICE_MAX_AGE_MS) infAdvicePaint();
+  else { chip.className = 'bfx-chip is-wait'; chip.textContent = T('inf_advice_loading_chip', 'Reading'); rows.appendChild(bfxEl('div', 'bfx-note', T('inf_advice_loading', 'Reading the existing evidence snapshot…'))); }
+  cfgInfLater('advice', function () { infAdviceLoad(false); });
 }
 
 /* Infirmary → System Repairs → SOTER Repair (dev47). Tencent SOTER is the TEE-backed key
@@ -19930,9 +19944,20 @@ function logReportTips(d, all) {
     const radioTip = { ic: 'info', key: 'lr_tip_sradio', vars: { mib: String(sradio.mib), set: Tcfg('net_screen_off_lte', 'name', 'LTE While Screen Off') } };
     /* Traffic alone is not an energy verdict. Make this machine-applicable only beside
      * a separately measured, long overnight drain; the confirmation still names the cost. */
-    if (night && (+night.pctph || 0) > 0.8 && (+night.dur_min || 0) >= 120)
+    if (night && (+night.pctph || 0) > 0.8 && (+night.dur_min || 0) >= 120 &&
+        !(s.lte && s.lte.en === '1'))
       radioTip.op = { key: 'net_screen_off_lte', value: '1' };
     tips.push(radioTip);
+  }
+  const offLte = s.lte || null;
+  if (sradio && (+sradio.mib || 0) >= 256 && s.scr && (+s.scr.off_min || 0) >= 60 &&
+      offLte && offLte.unsup === '0' && offLte.en === '1' && (+offLte.snaps || 0) >= 3 &&
+      (+offLte.applies || 0) > 0 && cfg.net_screen_off_lte === '1' && !logReportRecorderGap(d)) {
+    // Volume and applied mode are separate capture facts, not a speed measurement or
+    // proof that they overlapped. Offer a user-controlled speed/battery trade-off only.
+    tips.push({ ic:'info', key:'lr_tip_sradio_speed', vars:{ mib:logReportMiB(sradio.mib),
+      n:String(offLte.applies), set:Tcfg('net_screen_off_lte','name','LTE While Screen Off') },
+      op:{ key:'net_screen_off_lte', value:'0' } });
   }
   /* fix213 (audit 8.3/К9): heat finally speaks. A peak number alone says nothing about
      cost - the DURATION above 45 °C does. Half an hour hot is advice-worthy (and when
@@ -20027,7 +20052,7 @@ function logReportTips(d, all) {
  * tip cannot become an arbitrary config writer. Values are ordinary CFG_ITEMS values and
  * are committed through cfgSet(), never through sed/echo. */
 const LOG_REPORT_APPLY_WHITELIST = {
-  night_modem_idle: ['1'], net_screen_off_lte: ['1'], doze_level: ['night'],
+  night_modem_idle: ['1'], net_screen_off_lte: ['0', '1'], doze_level: ['night'],
   sustained_temp_mode: ['smart'], sustained_temp_enter: ['65'], perf_ceiling_pct: ['100']
 };
 function logReportRecommendations(d) {
@@ -20324,7 +20349,7 @@ function logReportAnalyze(d) {
     lr_tip_crash: 100, lr_tip_cost_hi: 96, lr_tip_heat_warm_set: 92, lr_tip_heat_warm: 92, lr_tip_heat_manual_set: 92,
     lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
     lr_tip_awake_sync: 87, lr_tip_awake_worker: 84, lr_tip_sync_loop: 80, lr_tip_worker: 60,
-    lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78, lr_tip_night_doze: 77,
+    lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_sradio_speed: 78, lr_tip_night_modem: 78, lr_tip_night_doze: 77,
     lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_game: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_bad_pace: 72, lr_tip_jank_bad_evidence: 72, lr_tip_jank_cap_set: 73, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
     lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_hooks: 50, lr_tip_sysui_other: 30,
     lr_tip_sysui_inj: 90,
@@ -24159,6 +24184,7 @@ function logReportTipText(tip) {
     lr_tip_wl_enable: '{app} held the phone awake for {min} min - turn on "{set}" in Settings and ASB will rein such apps in for you.',
     lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
     lr_tip_night_doze: 'Overnight the phone lost ~{pct}%/h while "{set}" was Stock. Night-only Doze can defer background work during this window; timely notifications are not guaranteed to be unchanged.',
+    lr_tip_sradio_speed: 'With the screen off, mobile traffic totalled {mib}; "{set}" was enabled and applied {n} times during the capture. If background download speed matters more, try turning it off. This does not prove a slowdown, and 5G may use more power.',
     lr_tip_jank_cap_set: 'About {pct}% of frames missed their deadline. Measured jank at the cap was {yes}% against {no}% below it; "{set}" is {from}%, so restoring the ASB ceiling to 100% is a bounded test, not proof of causation.',
     lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; the Smoothness section lists where frames are lost.',
     lr_tip_jank_bad_game: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',

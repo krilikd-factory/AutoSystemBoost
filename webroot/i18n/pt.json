@@ -4476,5 +4476,6 @@
   "lr_zy_zero_explain": "Estes contadores medem pedidos opcionais de ciclo de vida e arranque a frio, separadamente dos eventos dos processos. Zero pode indicar função desativada ou ausência de pedidos elegíveis; consulte os estados abaixo.",
   "screenshot_fix_runtime_unknown": "Estado dos hooks desconhecido; a seleção não confirma a ativação. Force a paragem e reabra a aplicação antes do teste.",
   "screenshot_fix_policy_live": "Seleção publicada",
-  "screenshot_fix_policy_not_live": "Publicação da seleção não confirmada"
+  "screenshot_fix_policy_not_live": "Publicação da seleção não confirmada",
+  "lr_tip_sradio_speed": "Com o ecrã desligado houve {mib} de tráfego móvel; «{set}» estava ativo e foi aplicado {n} vezes. Para privilegiar a velocidade de transferência em segundo plano, experimente desativá-lo. Isto não prova lentidão e o 5G pode gastar mais energia."
 }
