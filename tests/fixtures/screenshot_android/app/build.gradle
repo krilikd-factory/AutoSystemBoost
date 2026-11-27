@@ -1,0 +1,6 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'org.asb.capturefixture'
+    compileSdk 35
+    defaultConfig { applicationId 'org.asb.capturefixture'; minSdk 35; targetSdk 35 }
+}

@@ -52,11 +52,14 @@ struct JNIEnv {
   }
   jfieldID GetStaticFieldID(jclass cls,const char *name,const char *) {
     if (cls==reinterpret_cast<jclass>(11) && !std::strcmp(name,"SDK_INT")) return reinterpret_cast<jfieldID>(20);
+    if (!no_window && cls==reinterpret_cast<jclass>(12) && !std::strcmp(name,"TRANSACTION_addToDisplay")) return reinterpret_cast<jfieldID>(24);
     if (!no_window && cls==reinterpret_cast<jclass>(12) && !std::strcmp(name,"TRANSACTION_relayout")) return reinterpret_cast<jfieldID>(21);
+    if (!no_window && sdk==37 && cls==reinterpret_cast<jclass>(12) && !std::strcmp(name,"TRANSACTION_relayout2")) return reinterpret_cast<jfieldID>(22);
+    if (!no_window && sdk==37 && cls==reinterpret_cast<jclass>(12) && !std::strcmp(name,"TRANSACTION_relayoutAsync2")) return reinterpret_cast<jfieldID>(23);
     error=true; return nullptr;
   }
   jint sdk=37;
-  jint GetStaticIntField(jclass,jfieldID id) { return id==reinterpret_cast<jfieldID>(20) ? sdk : 42; }
+  jint GetStaticIntField(jclass,jfieldID id) { return id==reinterpret_cast<jfieldID>(20) ? sdk : id==reinterpret_cast<jfieldID>(22) ? 43 : id==reinterpret_cast<jfieldID>(23) ? 44 : id==reinterpret_cast<jfieldID>(24) ? 41 : 42; }
   jmethodID GetMethodID(jclass,const char *name,const char *) {
     const char *names[]={"dataPosition","setDataPosition","dataSize","readInt","writeInt","readString"};
     for (int i=0;i<6;++i) if (!std::strcmp(name,names[i])) return reinterpret_cast<jmethodID>(uintptr_t(i+1));
