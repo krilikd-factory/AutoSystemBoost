@@ -24,7 +24,8 @@ void wrapped_surface_set_flags(JNIEnv *env, jclass cls, jlong transaction, jlong
     // Preserve the caller's mask and every unrelated bit; masked capture flags
     // are explicitly cleared instead of being applied to the layer.
     original_surface_set_flags(env, cls, transaction, surface,
-                               asb_screenshot::surface_filtered(flags), mask);
+                               flags & ~(mask & (asb_screenshot::kSurfaceSecure |
+                                                 asb_screenshot::kSurfaceSkipScreenshot)), mask);
 }
 jmethodID get_position = nullptr, set_position = nullptr, get_size = nullptr;
 jmethodID read_int = nullptr, write_int = nullptr, read_string = nullptr;
@@ -117,13 +118,17 @@ jboolean wrapped_transact(JNIEnv *env, jobject self, jint code, jobject data, jo
 }
 }
 
-static bool install_window_hook(zygisk::Api *api, JNIEnv *env) {
+static bool install_window_hook(zygisk::Api *api, JNIEnv *env, jint sdk) {
     jclass session = env->FindClass("android/view/IWindowSession$Stub");
     if (!clean(env) || !session) return false;
     const char *fields[] = {"TRANSACTION_addToDisplay", "TRANSACTION_addToDisplayAsUser",
-        "TRANSACTION_addToDisplayWithoutInputChannel", "TRANSACTION_relayoutLegacy", "TRANSACTION_relayout", "TRANSACTION_relayoutAsync"};
+        "TRANSACTION_addToDisplayWithoutInputChannel", "TRANSACTION_relayoutLegacy", "TRANSACTION_relayout", "TRANSACTION_relayoutAsync",
+        "TRANSACTION_relayout2", "TRANSACTION_relayoutAsync2"};
     transaction_count = 0;
     for (const char *field : fields) {
+        // Android 17 adds these variants with the same leading window and attrs.
+        if (sdk != 37 && (!std::strcmp(field, "TRANSACTION_relayout2") ||
+                          !std::strcmp(field, "TRANSACTION_relayoutAsync2"))) continue;
         jfieldID id = env->GetStaticFieldID(session, field, "I");
         if (!clean(env) || !id) continue;
         const jint value = env->GetStaticIntField(session, id);
@@ -168,7 +173,7 @@ bool asb_screenshot_install(zygisk::Api *api, JNIEnv *env) {
     env->DeleteLocalRef(build);
     if (!clean(env) || !asb_screenshot::supported(sdk, sizeof(void *))) return false;
 
-    const bool window_hooked = install_window_hook(api, env);
+    const bool window_hooked = install_window_hook(api, env, sdk);
     const bool surface_hooked = install_surface_hooks(api, env);
     return window_hooked || surface_hooked;
 }

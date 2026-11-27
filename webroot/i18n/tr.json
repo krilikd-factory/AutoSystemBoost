@@ -4476,5 +4476,6 @@
   "lr_zy_zero_explain": "Bu sayaçlar süreç olaylarından ayrı olarak isteğe bağlı yaşam döngüsü ve soğuk başlatma isteklerini ölçer. Sıfır, özelliğin kapalı olduğu veya uygun istek kaydedilmediği anlamına gelebilir; aşağıdaki durumları kontrol edin.",
   "screenshot_fix_runtime_unknown": "Hook durumu bilinmiyor; seçim etkinleşmeyi doğrulamaz. Testten önce uygulamayı zorla durdurup yeniden açın.",
   "screenshot_fix_policy_live": "Seçim yayımlandı",
-  "screenshot_fix_policy_not_live": "Seçimin yayımlandığı doğrulanmadı"
+  "screenshot_fix_policy_not_live": "Seçimin yayımlandığı doğrulanmadı",
+  "lr_tip_sradio_speed": "Ekran kapalıyken mobil trafik {mib} oldu; “{set}” açıktı ve kayıt sırasında {n} kez uygulandı. Arka plan indirme hızı daha önemliyse kapatmayı deneyin. Bu yavaşlama olduğunu kanıtlamaz ve 5G daha fazla güç tüketebilir."
 }

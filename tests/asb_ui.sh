@@ -5276,6 +5276,14 @@ chk(d.wlive[1].pkg === '' && d.wlive[1].tag === 'com.android.server.MountService
 chk(d.profs.length === 2 && d.profs[0].name === 'performance' && d.profs[0].onP === 6.1 && d.profs[1].offP === 3, 'per-profile rows: ' + JSON.stringify(d.profs));
 chk(d.sections.chg.min === '402' && d.sections.chg.gain === '63' && d.sections.chg.sess === '10', 'charging line parses');
 chk(d.sections.ltpo.n === '79' && d.sections.ltpo.min === '11' && d.sections.ltpo.basis === 'lifetime', 'ltpo line parses');
+const mobileBulk = parseLogReport('meta\telapsed_min=787\nscr\toff_min=629\nsradio\tmib=497.7\nlte\ten=1\tunsup=0\tsnaps=10\tapplies=11\ncfg\tkey=net_screen_off_lte\tvalue=1\n');
+chk(logReportRecommendations(mobileBulk).some(r => r.key === 'net_screen_off_lte' && r.value === '0'), 'active screen-off LTE with substantial traffic should offer the speed trade-off');
+const noAppliedLte = parseLogReport('meta\telapsed_min=787\nscr\toff_min=629\nsradio\tmib=497.7\nlte\ten=1\tunsup=0\tsnaps=10\tapplies=0\ncfg\tkey=net_screen_off_lte\tvalue=1\n');
+chk(!logReportRecommendations(noAppliedLte).some(r => r.key === 'net_screen_off_lte'), 'traffic alone must not become a radio-setting change');
+const unsupportedLte = parseLogReport('meta\telapsed_min=787\nscr\toff_min=629\nsradio\tmib=497.7\nlte\ten=1\tunsup=1\tsnaps=10\tapplies=11\ncfg\tkey=net_screen_off_lte\tvalue=1\n');
+chk(!logReportRecommendations(unsupportedLte).some(r => r.key === 'net_screen_off_lte'), 'unsupported radio must not become a radio-setting change');
+const oldLteCapture = parseLogReport('meta\telapsed_min=787\nnight\tdur_min=360\tpctph=1.2\nscr\toff_min=629\nsradio\tmib=497.7\nlte\ten=1\tunsup=0\tsnaps=10\tapplies=11\ncfg\tkey=net_screen_off_lte\tvalue=0\n');
+chk(!logReportRecommendations(oldLteCapture).some(r => r.key === 'net_screen_off_lte'), 'capture with LTE enabled must not immediately recommend restoring it');
 chk(d.sections.aod.lit === '11' && d.sections.aod.of === '520', 'aod line parses');
 /* fix207: the screen split, the phase table and the kernel charger holders parse. */
 chk(d.sections.scr.on_pctph === '5.7' && d.sections.scr.off_pctph === '1.8' && d.sections.scr.off_min === '478', 'screen split parses');
@@ -7743,7 +7751,7 @@ async function run(cmd) {
 }
 EOF
   sed -n '/^const BATTERY_FIX_SCRIPT = MD/,/^function cfgOpenInfirmary() {/p' "$H" | sed '/^function cfgOpenInfirmary() {/d'
-  for fn in infAdviceValue infAdviceReadConfig infAdvicePaint infAdviceApply; do
+  for fn in infAdviceValue infAdviceRecommendations infAdviceReadConfig infAdvicePaint infAdviceApply; do
     sed -n "/^async function $fn(/,/^}/p; /^function $fn(/,/^}/p" "$H"
   done
   cat <<'EOF'
@@ -7754,6 +7762,7 @@ const CFG_ITEMS = [
 ];
 let _cfgVals = {}, _infAdviceData = null, _infAdviceLoading = false, _infAdviceBusy = false;
 let _infAdviceArmed = 0, _infAdviceResults = [], _infAdviceError = '';
+let _infAdviceAt = 0; const INF_ADVICE_MAX_AGE_MS = 300000;
 let adviceRecs = [], adviceSaved = {}, adviceFinalErrno = 0, adviceWrites = [], adviceCfgLoads = 0;
 let adviceRepaintOnWrite = false, adviceOptimisticOnly = false;
 function Tcfg(k, f, d) { return k; }
@@ -7762,6 +7771,8 @@ let adviceTips = [];
 function logReportRecommendations() { return adviceRecs; }
 function logReportTips() { return adviceTips; }
 function logReportTipText(tip) { return tip && tip.key || ''; }
+let staleAdviceRefreshes = 0;
+async function infAdviceLoad() { staleAdviceRefreshes++; }
 async function cfgLoad() { adviceCfgLoads++; return false; }
 function adviceNodes() {
   ['infAdviceRows','infAdviceApply','infAdviceRefresh','infAdviceChip'].forEach(function (id) {
@@ -7904,10 +7915,16 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
     return { errno:0, stdout:'' };
   };
   adviceReset([recNight], { night_modem_idle:'0' });
+  _infAdviceAt = Date.now() - INF_ADVICE_MAX_AGE_MS - 1;
+  await infAdviceApply();
+  chk(staleAdviceRefreshes === 1 && !adviceWrites.length, 'stale advice must refresh before any action');
+  _infAdviceAt = 0;
+  _infAdviceData.cfg = { night_modem_idle:'0' };
   await infAdviceApply();
   chk(!adviceWrites.length && _infAdviceArmed > 0 && /Confirm the listed changes/.test(reg.infAdviceApply.textContent), 'the first recommendation tap wrote without confirmation');
   await infAdviceApply();
   chk(adviceWrites.join(',') === 'night_modem_idle=1' && adviceResult('night_modem_idle').state === 'applied', 'confirmed recommendation was not saved and read back: ' + JSON.stringify(_infAdviceResults));
+  chk(_infAdviceData.cfg.night_modem_idle === '0' && reg.infAdviceApply.disabled, 'applied config must not rewrite the digest or repeat the same recommendation');
   chk(adviceCfgLoads === 2, 'related config state was not refreshed around the write');
 
   adviceReset([recNight, recDoze], { night_modem_idle:'1', doze_level:'night' });
@@ -17337,6 +17354,37 @@ vm.createContext(ctx);vm.runInContext("const SCREENSHOT_FIX_SCRIPT=MD+'/runtime/
 })().catch(e=>{console.error(e);process.exitCode=1});
 JS
 echo 'PASS screenshot UI: capability gate, per-user selection and validated save'
+)
+
+t_webui_infinite_advice_freshness() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+command -v node >/dev/null 2>&1 || { echo 'SKIP advice freshness: node missing'; return 0; }
+node - "$ROOT/webroot/index.html" <<'JS'
+const fs=require('fs'), h=fs.readFileSync(process.argv[2],'utf8');
+const start=h.indexOf('async function infAdviceLoad(manual) {'), end=h.indexOf('\n}',start);
+if(start<0||end<0)throw Error('missing loader');
+let _infAdviceData=null,_infAdviceAt=0,_infAdviceLoading=false,_infAdviceBusy=false,_infAdviceError='',_infAdviceArmed=0,_infAdviceResults=[];
+const INF_ADVICE_MAX_AGE_MS=300000, MD='/m'; let now=1000000, cache=null, reads=0, raw='fresh';
+Date.now=()=>now;
+function logReportCacheGet(){return cache} function logReportCacheSet(x){cache={raw:x,t:now}}
+function parseLogReport(x){return {ok:x!=='bad',raw:x}} function infAdvicePaint(){}
+function runText(x){return x.stdout} async function run(){reads++;return {stdout:raw}}
+function T(k,d){return d}
+eval(h.slice(start,end+2));
+const chk=(v,m)=>{if(!v)throw Error(m)};
+(async()=>{
+ cache={raw:'old',t:now-301000}; await infAdviceLoad(false);
+ chk(reads===1&&_infAdviceData.raw==='fresh','stale report cache masked current capture');
+ await infAdviceLoad(false); chk(reads===1,'fresh in-memory result should not reread');
+ now+=300001; raw='newer'; await infAdviceLoad(false);
+ chk(reads===2&&_infAdviceData.raw==='newer','reopening did not refresh stale in-memory data');
+ raw='manual'; await infAdviceLoad(true); chk(reads===3&&_infAdviceData.raw==='manual','manual refresh did not bypass cache');
+ now+=300001; raw='bad'; await infAdviceLoad(false);
+ chk(_infAdviceData===null&&_infAdviceAt===0,'failed refresh presented stale data as current');
+ console.log('PASS Infinite Log recommendations: bounded cache, fresh reopen and explicit refresh');
+})().catch(e=>{console.error(e);process.exitCode=1});
+JS
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

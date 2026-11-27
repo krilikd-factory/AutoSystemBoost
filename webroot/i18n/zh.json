@@ -4476,5 +4476,6 @@
   "lr_zy_zero_explain": "这些计数器统计可选的生命周期和冷启动请求，与进程事件分开。零可能表示功能已关闭或没有记录到符合条件的请求；请查看下方功能状态。",
   "screenshot_fix_runtime_unknown": "Hook 状态未知；选择应用并不代表已启用。测试前请强行停止并重新打开应用。",
   "screenshot_fix_policy_live": "选择已发布",
-  "screenshot_fix_policy_not_live": "尚未确认选择已发布"
+  "screenshot_fix_policy_not_live": "尚未确认选择已发布",
+  "lr_tip_sradio_speed": "熄屏期间移动流量为 {mib}；“{set}”已启用，采集期间应用了 {n} 次。如果更重视后台下载速度，可以尝试关闭它。这不能证明发生过降速，5G 也可能消耗更多电量。"
 }

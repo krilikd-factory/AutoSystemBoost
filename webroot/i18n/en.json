@@ -1916,7 +1916,7 @@
   "inf_advice_finished": "Applied: {applied} · failed: {failed} · left unchanged: {skipped}",
   "inf_advice_loading": "Reading the existing evidence snapshot…",
   "inf_advice_loading_chip": "Reading",
-  "inf_advice_no_changes": "This capture supports no whitelisted setting change. Existing settings stay untouched.",
+  "inf_advice_no_changes": "No evidence-backed setting changes are recommended yet. Refresh after a longer capture.",
   "inf_advice_no_changes_chip": "No change",
   "inf_advice_no_data": "No data",
   "inf_advice_none": "No readable Infinite Log report yet. Start the log and collect a representative capture first.",
@@ -4369,5 +4369,6 @@
   "lr_zy_zero_explain": "These counters measure optional lifecycle and cold-start requests, separately from process events. Zero can mean the feature is off or no qualifying request was recorded; check the feature states below.",
   "screenshot_fix_runtime_unknown": "Hook status is unknown; selection alone does not confirm activation. Force-stop and reopen the app before testing.",
   "screenshot_fix_policy_live": "Selection published",
-  "screenshot_fix_policy_not_live": "Selection is not confirmed as published"
+  "screenshot_fix_policy_not_live": "Selection is not confirmed as published",
+  "lr_tip_sradio_speed": "With the screen off, mobile traffic totalled {mib}; \"{set}\" was enabled and applied {n} times during the capture. If background download speed matters more, try turning it off. This does not prove a slowdown, and 5G may use more power."
 }

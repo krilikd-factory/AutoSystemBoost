@@ -4476,5 +4476,6 @@
   "lr_zy_zero_explain": "Ces compteurs mesurent les demandes facultatives de cycle de vie et de démarrage à froid, distinctes des événements de processus. Zéro peut signifier que la fonction est désactivée ou qu’aucune demande pertinente n’a été enregistrée ; vérifiez les états ci-dessous.",
   "screenshot_fix_runtime_unknown": "État des hooks inconnu ; la sélection ne confirme pas leur activation. Forcez l’arrêt de l’application puis rouvrez-la avant le test.",
   "screenshot_fix_policy_live": "Sélection publiée",
-  "screenshot_fix_policy_not_live": "Publication de la sélection non confirmée"
+  "screenshot_fix_policy_not_live": "Publication de la sélection non confirmée",
+  "lr_tip_sradio_speed": "Écran éteint, le trafic mobile a atteint {mib} ; « {set} » était activé et appliqué {n} fois. Pour privilégier les téléchargements en arrière-plan, essayez de le désactiver. Cela ne prouve pas un ralentissement et la 5G peut consommer davantage."
 }

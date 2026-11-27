@@ -4476,5 +4476,6 @@
   "lr_zy_zero_explain": "Diese Zähler erfassen optionale Lebenszyklus- und Kaltstartanfragen getrennt von Prozessereignissen. Null kann bedeuten, dass die Funktion aus ist oder keine passende Anfrage erfasst wurde; siehe Funktionsstatus unten.",
   "screenshot_fix_runtime_unknown": "Hook-Status unbekannt; die Auswahl bestätigt keine Aktivierung. App vor dem Test vollständig beenden und neu öffnen.",
   "screenshot_fix_policy_live": "Auswahl veröffentlicht",
-  "screenshot_fix_policy_not_live": "Veröffentlichung der Auswahl nicht bestätigt"
+  "screenshot_fix_policy_not_live": "Veröffentlichung der Auswahl nicht bestätigt",
+  "lr_tip_sradio_speed": "Bei ausgeschaltetem Bildschirm wurden {mib} Mobilfunkdaten übertragen; „{set}“ war aktiv und wurde {n}-mal angewendet. Für schnellere Hintergrunddownloads können Sie es testweise ausschalten. Eine Verlangsamung ist nicht bewiesen; 5G kann mehr Energie verbrauchen."
 }
