@@ -5,6 +5,35 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test30 - one build, one identity; the post-test29 fixes hardened
+
+Input: the owner's plan after PR 20/21 (build and log identity, a second native pass, HELD end
+to end, measurement before redesign). No field report of the current `main` existed yet.
+
+- **Three different trees were built as V66-test29**: `e4810920` (payload `d26a3660…`, the one
+  the owner's 27-28 November logs came from), `4d5e6af5` (`79799f4f…`, private) and `e0d69772`
+  (`c03aea88…`, group and private). The two "no build yet" entries below describe the tree at
+  their commit; the builds made later from it differ by source and payload, not by name.
+  - Test posts and the private message now end with the build's source commit and payload
+    hash, read from the packaged manifest (nothing when it cannot be read).
+  - ASB-logs: the index keeps `diag_held` apart from `diag_fail`, and a per-build summary keys
+    reports by source and payload, with unpaired and conflicting identities in buckets of
+    their own and device labels counted apart from reports. On the existing index it already
+    splits V66-test27 into two builds.
+- **Zygisk:** app-zygote rows an older build left in the guard history are dropped. A process
+  named like `pkg:svc_zygote` of a screenshot-selected app gets no hook (tested now). A package
+  whose own name ends in `_zygote` is not observed either: a known limitation, kept visible in
+  the tests; no such package was seen, and telling it apart would cost a JNI read per start.
+  The BinderProxy install matrix covers no original, our own wrapper returned, both hook
+  families unavailable and an exception pending before the install.
+- **asbdiag:** an empty or unprintable effects-guard record is named as such; HELD is tested
+  beside an independent FAIL, without an audio HAL process and with the library mapped but not
+  registered.
+- **Measured, not changed:** the stylesheet is 414 KB with 3,841 selectors; style recalculation
+  is the main cost of the WebUI open in a browser model. A redesign needs its own measured
+  plan. ASB's own runtime cost in the last capture (1.7 s CPU per hour, 96 % of JSON publishes
+  skipped, 80 % of probes cached) shows no hotspot to cut.
+
 ## V66 after test29, second round - app zygotes are not apps, honest readbacks
 
 Input: the owner's OnePlus 15 logs of 27-28 November on the first test29 payload (`d26a3660…`):
