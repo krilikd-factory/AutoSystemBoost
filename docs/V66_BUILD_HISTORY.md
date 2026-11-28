@@ -5,6 +5,49 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66-test30, third build - Evolution Engine, stage 3.5: correctness and evidence integrity
+
+Built again as V66-test30 at the owner's request; told apart from the two earlier test30 builds
+by its source and payload. Input: the owner's Evolution revision plan (defects F1-F10, work
+C1-C10). The engine stays read-only and gains no writer; stage 4 is not started. Every public
+command (`status`, `evaluate`, `advise`, `export`) now runs one guarded pipeline: constitution,
+complete build identity, the engine's own self-check, full journal integrity, pairs of the
+current build generation, evidence quality, early harm, pair count, gates, benefit.
+
+- **C1 identity.** A missing or partial manifest holds every verdict (`incomplete_identity`).
+- **C2 journal.** A checkpoint keeps the digest of the verified prefix, so an edit anywhere -
+  first, last or middle entry, a removed or swapped one - is found on every read even with a
+  live checkpoint; a monotonic head mark finds a cut-off tail or a deleted journal. A damaged
+  journal is never written to (`record` reports `journal_damaged`, exit 7).
+- **C3 one pipeline.** `evaluate`, `advise` and `export` give the verdicts `status` gives; no
+  hold is applied after the fact.
+- **C4 trust.** The self-check is keyed to the engine file's own hash (code and fixtures), the
+  schema and the policy: any change re-runs it.
+- **C5 generations.** The lab's aggregates survive a module update, so the journal marks where
+  each build generation's run of a trial starts (`sv=2` observations; one bounded record after
+  boot from the existing boot waiter, at most 20 checks 30 s apart, skipped in Safe mode). The
+  pairs since then are recovered from the two aggregate snapshots (the inverse of Welford's
+  merge); pairs from another payload, a rollback, a ROM/kernel change or a pre-3.5 journal never
+  count (`unproven_pair_identity`). A trim that drops a run start makes fewer pairs count, never
+  more. kstat rounds to six places, so recovered values are close, not bit-exact.
+- **C6 record outcomes.** `recorded`, `unchanged`, `busy` (3), `no_lab` (4), `invalid_lab` (5),
+  `error` (6), `journal_damaged` (7); status shows the outcome and when it last read.
+- **C7 early harm.** Dearer, jank, ceiling and warming stops are judged before the pair count,
+  in the lab's order; a host matrix runs the lab's real `asb_lab_verdict` against the engine.
+- **C8 audit lineage.** A lab promotion counts as agreed or disputed only against the
+  evaluator's verdict on the same trial and the build it was seen on; otherwise unconfirmed or
+  stale (another trial or build).
+- **C9 evidence quality.** The governor's energy-scale confidence (`high` = valid,
+  `medium`/`low` = limited, missing = unknown) and frames counted in a screen-on knob's pairs
+  limit a positive verdict; harm verdicts are not softened.
+- **C10 WebUI and asbdiag.** The positive verdict is `eligible_for_holdout` ("eligible for a
+  holdout check"): no field A/A or holdout exists, so nothing is called a proven saving. The card
+  shows freshness, the record outcome, pairs of this build against the rule and evidence quality
+  before any percentage; a malformed number is shown as unknown, never 0. 13 locales.
+
+Not done and not claimed: field A/A, holdout, manual A/B/A, any executor or canary (stage 4+);
+no physical ColorOS WebView validation of the card; no energy-saving figure.
+
 ## V66-test30, second build - Evolution Engine, stages 0-3: a read-only check of Smart's experiments
 
 Built again as V66-test30 at the owner's request: the first test30 (`e8e2f15b`, payload
