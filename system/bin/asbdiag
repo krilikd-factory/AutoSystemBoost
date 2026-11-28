@@ -3893,7 +3893,7 @@ for _cbf in /data/adb/modules/AutoSystemBoost/odm/etc/camera/config/video_beauty
   [ -f "$_cbf" ] || { NOTE "module copy absent: $_cbf"; continue; }
   case "$_cbf" in
     *video_beauty*) NOTE "module copy: video_beauty apps=$(grep -c '"packageName"' "$_cbf" 2>/dev/null)" ;;
-    *) NOTE "module copy: conf_tuning BlendWeight=$(grep -m1 -o '"BlendWeight"[^]]*]' "$_cbf" 2>/dev/null | sed 's/.*\[//')" ;;
+    *) NOTE "module copy: conf_tuning BlendWeight=$(grep -m1 -o '"BlendWeight"[^]]*]' "$_cbf" 2>/dev/null | sed 's/.*\[//;s/\]//')" ;;
   esac
 done
 _cbmm="$(ls /data/adb/metamodule/module.prop 2>/dev/null && grep -m1 '^id=' /data/adb/metamodule/module.prop 2>/dev/null)"
