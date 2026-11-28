@@ -5,6 +5,34 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 after test29 (no build yet) - a held DSP guard is not an install FAIL, a binder hook keeps its original
+
+Input: the private field logs (64 reports, test16-test28) and a review of the screenshot hook.
+No version change; no test build was made.
+
+- **asbdiag: HELD instead of FAIL under a tripped effects guard.** One OnePlus 13R sent FAIL=2
+  four times (test24, test26 twice, test27): "library mapped into the audio HAL" and "effect
+  registered with audioflinger" both absent, under an effects safety guard that had unbound the
+  effect itself after three audio-service PID changes. While the guard holds, an unattached
+  effect is what ASB intends, so "FAIL = not what ASB intended" was wrong. The two lines now read
+  `[HELD]` with the guard record, the verdict says `FAIL=0 · HELD=n` and names the feature, and
+  HELD is outside pass_ratio. Without the guard the same absence is still FAIL; with an attached
+  effect it is still PASS. The totals line gains `HELD=n` only when a guard holds, so every other
+  report keeps the line the log intake parses. The guard itself, its record and its "do not
+  retry" guidance are unchanged; why the 13R's audio service restarted is still not established.
+- **Screenshot hook: a registered BinderProxy wrapper keeps its original.** If the hook call
+  returned the original but left a JNI exception pending, the window path dropped the original
+  and reported failure: the live wrapper then failed every binder call, and with no surface hook
+  the caller unloaded the library beneath it. It now keeps the original and clears the exception,
+  as the surface path already did. No field crash is attributed to this; it is a host-proven
+  failure path.
+- **Tests:** `t_asbdiag_dsp_guard_held_runtime` (real helpers, DSP block and verdict over stubbed
+  tools; fails on test29), the pending-exception case in the screenshot JNI fixture (aborts on
+  test29), and `t_lte_screenoff_contract` now stops the arm timer it starts (it outlived the test
+  for up to 300 s as an orphan of PID 1).
+- **Checked, no change:** the full host regression also passes with `sh` = mksh R59; the three
+  runtime tests that used to hang there finish in 0-2 s.
+
 ## V66-test23 - failures handled honestly: Bluetooth rate, vendor ceiling hand-back, log archive freshness and integrity
 
 Input: an external audit of test22 (correctness of failure paths, not new tuning). Taken: the
