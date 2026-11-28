@@ -8,11 +8,17 @@ static int create_calls=0, set_flags_calls=0;
 static jlong create_surface(JNIEnv *, jclass, jobject, jstring, jint, jint, jint, jint flags, jlong, jobject) { ++create_calls; create_flags=flags; return 123; }
 static void set_surface_flags(JNIEnv *, jclass, jlong, jlong, jint flags, jint mask) { ++set_flags_calls; transaction_flags=flags; transaction_mask=mask; }
 static zygisk::Api *captured_api=nullptr; static int hook_count=0; static bool no_surface=false;
+static bool pending_after_window_hook=false;
 struct FixtureModule : zygisk::ModuleBase { void onLoad(zygisk::Api *api, JNIEnv *) override { captured_api=api; } };
 static bool register_module(zygisk::internal::api_table *, zygisk::internal::module_abi *) { return true; }
-static void hook(JNIEnv *, const char *name, JNINativeMethod *m, int n) {
+static void hook(JNIEnv *env, const char *name, JNINativeMethod *m, int n) {
   ++hook_count;
-  if (!std::strcmp(name,"android/os/BinderProxy")) { assert(n==1); m[0].fnPtr=reinterpret_cast<void *>(&original); return; }
+  assert(!env->ExceptionCheck()); // never called with an exception pending
+  if (!std::strcmp(name,"android/os/BinderProxy")) {
+    assert(n==1); m[0].fnPtr=reinterpret_cast<void *>(&original);
+    if (pending_after_window_hook) env->error=true; // registered, then an exception left behind
+    return;
+  }
   assert(!std::strcmp(name,"android/view/SurfaceControl") && n==2);
   if (no_surface) { m[0].fnPtr=nullptr; m[1].fnPtr=nullptr; return; }
   assert(!std::strcmp(m[0].signature,"(Landroid/view/SurfaceSession;Ljava/lang/String;IIIIJLandroid/os/Parcel;)J"));
@@ -100,4 +106,12 @@ int main() {
   assert(asb_screenshot_install(captured_api,&env) && original_surface_create && original_surface_set_flags);
   env.no_window=false; no_surface=true; original_surface_create=nullptr; original_surface_set_flags=nullptr;
   assert(asb_screenshot_install(captured_api,&env) && !original_surface_create && !original_surface_set_flags);
+  // A registered BinderProxy wrapper keeps its original even when the hook call leaves an
+  // exception pending: binder calls still forward and the install is reported, so the
+  // module is not unloaded beneath a live wrapper. The exception does not leak onward.
+  original_transact=nullptr; pending_after_window_hook=true;
+  assert(asb_screenshot_install(captured_api,&env) && original_transact==original && !env.error);
+  { int off=0; auto p=make_parcel("android.view.IWindowSession",off); const int before=original_calls;
+    assert(wrapped_transact(&env,nullptr,42,&p,nullptr,0)==1 && original_calls==before+1); }
+  pending_after_window_hook=false;
 }

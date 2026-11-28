@@ -3555,7 +3555,10 @@ fail() { echo "FAIL lte_screenoff contract: $*"; exit 1; }
 
 grep -q '^net_screen_off_lte=0$' "$ROOT/config/governor.conf.shipped" || fail "shipped default is not 0"
 
-T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+# The script's screen-off arm timer runs detached (its window is 300 s). Stop any timer this
+# test started before its directory goes: it outlived the test as an orphan of PID 1.
+T="$(mktemp -d)"
+trap 'for _pf in "$T"/state/*.pid; do [ -s "$_pf" ] && kill "$(cat "$_pf")" 2>/dev/null; done; rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/mod/config" "$T/state" "$T/dev"
 cat > "$T/bin/settings" <<'EOF'
 #!/bin/sh

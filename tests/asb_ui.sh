@@ -238,6 +238,67 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag hi-res owner: the 384000 policy check is a verdict only where ASB delivers the policy (odm bind or overlay); a stock file is a note"
 )
 
+t_asbdiag_dsp_guard_held_runtime() (
+# Runtime: a tripped effects safety guard is reported as HELD, not as two install FAILs.
+# A OnePlus 13R (test24/26/27) sent FAIL=2 four times: "library mapped into the audio HAL"
+# and "effect registered with audioflinger" both absent, under a guard that had unbound the
+# effect itself after three audio-service PID changes. While the guard holds, an unattached
+# effect is what ASB intends. The REAL helpers, DSP attach block and verdict block of
+# tools/asb_diag.sh run over stubbed Android tools: guard held -> HELD (FAIL=0, named in the
+# verdict, excluded from pass_ratio); no guard -> the same absence is still FAIL; guard file
+# but effect attached -> PASS. Reports without a held guard keep their exact totals line.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag DSP guard held: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+awk '/^P\(\)  \{/ { f = 1 } /^firstf\(\) \{/ { exit } f { print }' "$D" > "$T/h.sh"
+awk '/^_dsp_pid=""$/ { f = 1 } f && /^SEC "2\. BLUETOOTH"$/ { exit } f { print }' "$D" \
+  | sed -e "s#/data/adb/#$T/data/adb/#g" -e "s#/vendor/lib#$T/vendor/lib#g" > "$T/b.sh"
+awk '/^P "  C\. VERDICT"$/ { f = 1 } f { print } f && /HELD = checks kept off on purpose/ { exit }' "$D" > "$T/v.sh"
+grep -q '^HELD()' "$T/h.sh" && grep -q '^V() {' "$T/h.sh" || fail "helper block not found"
+grep -q '_dsp_held' "$T/b.sh" && grep -q 'dsp_effects_blocked' "$T/b.sh" || fail "DSP block not found"
+grep -q 'HELD=' "$T/v.sh" || fail "verdict block not found"
+mkdir -p "$T/data/adb/asb" "$T/data/adb/modules/AutoSystemBoost" "$T/vendor/lib64/soundfx"
+printf 'legacy\n' > "$T/data/adb/modules/AutoSystemBoost/dsp_abi_installed"
+: > "$T/vendor/lib64/soundfx/libasbdsp.so"
+run() {  # $1 = effect line audioflinger prints ('' = not registered)
+  { echo 'OUT1=""; OUT2=""'
+    echo 'getprop() { case "$1" in persist.asb.dsp.enable) echo 1 ;; persist.asb.dsp.outputs) echo all ;; *) : ;; esac; }'
+    echo 'cfg() { [ "$1" = dsp_loudness ] && echo 1; }'
+    echo 'pidof() { [ "$1" = android.hardware.audio.service_64 ] && echo 4799; }'
+    printf 'dumpsys() { [ "$1" = media.audio_flinger ] && printf "%%s\\n" "%s"; }\n' "$1"
+    echo 'logcat() { :; }'
+    echo "MODDIR='$T/mod'"
+    cat "$T/h.sh" "$T/b.sh"
+    echo '_ux_refused=0'
+    cat "$T/v.sh"; echo 'exit 0'; } > "$T/r.sh"
+  sh "$T/r.sh"
+}
+printf 'ts=1795456411 restarts=3\n' > "$T/data/adb/asb/dsp_effects_blocked"
+out="$(run '')"
+printf '%s\n' "$out" | grep -F '[FAIL]' >/dev/null && fail "the guard's own unbind is still an install FAIL: $out"
+[ "$(printf '%s\n' "$out" | grep -c '^  \[HELD\]   ')" = 2 ] || fail "map and registration must both be HELD: $out"
+printf '%s\n' "$out" | grep -F 'held by: effects safety guard (ts=1795456411 restarts=3)' >/dev/null || fail "guard record not named: $out"
+printf '%s\n' "$out" | grep -F 'FAIL=0 · HELD=2 - no install failure, but DSP effect is kept off on purpose' >/dev/null || fail "verdict: $out"
+printf '%s\n' "$out" | grep -F 'everything this report can check for your settings is in effect' >/dev/null && fail "held DSP called fully in effect: $out"
+printf '%s\n' "$out" | grep -E '^  PASS=0   FAIL=0   N/A=0   OFF=0   info=[0-9]+   HELD=2$' >/dev/null || fail "totals: $out"
+printf '%s\n' "$out" | grep -F 'HELD = checks kept off on purpose by an ASB safety guard: DSP effect (excluded from pass_ratio)' >/dev/null || fail "held list: $out"
+printf '%s\n' "$out" | python3 -c 'import re,sys; m=re.search(r"PASS=(\d+)\s+FAIL=(\d+)", sys.stdin.read()); sys.exit(0 if m and m.group(2)=="0" else 1)' || fail "log intake regex no longer reads FAIL=0"
+printf '%s\n' "$out" | grep -F 'guard is active; do not retry registration' >/dev/null || fail "guard guidance lost: $out"
+rm -f "$T/data/adb/asb/dsp_effects_blocked"
+out="$(run '')"
+[ "$(printf '%s\n' "$out" | grep -c '^  \[FAIL\] ')" = 2 ] || fail "without a guard an absent attach must stay FAIL: $out"
+printf '%s\n' "$out" | grep -F 'HELD' >/dev/null && fail "HELD shown without a guard: $out"
+printf '%s\n' "$out" | grep -E '^  PASS=0   FAIL=2   N/A=0   OFF=0   info=[0-9]+$' >/dev/null || fail "totals line changed without a guard: $out"
+printf 'ts=1 restarts=3\n' > "$T/data/adb/asb/dsp_effects_blocked"
+mkdir -p "$T/proc"; out="$(run 'ASB Loudness')"
+printf '%s\n' "$out" | grep -E '\[PASS\] +effect registered with audioflinger' >/dev/null || fail "attached effect under a stale guard file: $out"
+printf '%s\n' "$out" | grep -F '[HELD]' >/dev/null && fail "an attached effect was reported HELD: $out"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag DSP guard held: a tripped effects guard reads HELD (FAIL=0, named, out of pass_ratio); without the guard the absence stays FAIL; totals unchanged otherwise"
+)
+
 t_asbdiag_write_ratio_runtime() (
 # Runtime (fix179): "writes per transition" is judged against the phone's own cpufreq slots,
 # and chatter by how often the state changes. A CPH2691 read "13 (8+ ... suggests the ladder
