@@ -15,6 +15,16 @@ else
   printf 'MODE=RELEASE_STRICT\nreference prebuilts: absent\n'
 fi
 
+# Several fixtures model a read-only kernel node with chmod 0444 and expect the write to be
+# refused. root ignores file modes, so as root those cases fail although the source is fine
+# (a root-run cloud container reported 8 such failures on a tree that passes unprivileged).
+# Say so before any output instead of leaving the reader to diagnose them; CI is unprivileged.
+_ASB_RUN_AS_ROOT=0
+[ "$(id -u 2>/dev/null || echo 1)" = 0 ] && _ASB_RUN_AS_ROOT=1
+if [ "$_ASB_RUN_AS_ROOT" = 1 ]; then
+  printf 'WARNING: running as root - read-only node fixtures (chmod 0444) cannot refuse a write;\n' >&2
+  printf '         their FAILs here are not source regressions. Run as an unprivileged user.\n' >&2
+fi
 run() { printf '\n== %s ==\n' "$1"; shift; "$@"; }
 if [ -n "${CC:-}" ] && command -v "$CC" >/dev/null 2>&1; then
   HOST_CC="$CC"            # an explicit choice (CI passes clang) wins
@@ -98,7 +108,11 @@ run_queue() {
     fi
   done
   rm -rf "$out"
-  [ "$failed" -eq 0 ] || { printf '\n%d regression test(s) failed\n' "$failed" >&2; exit 1; }
+  if [ "$failed" -ne 0 ]; then
+    printf '\n%d regression test(s) failed\n' "$failed" >&2
+    [ "$_ASB_RUN_AS_ROOT" = 1 ] && printf 'NOTE: this run was as root; re-run unprivileged before reading read-only node FAILs as regressions\n' >&2
+    exit 1
+  fi
 }
 
 run 'schema sync' bash tools/asb_schema_sync.sh check
