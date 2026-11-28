@@ -69,6 +69,22 @@ NOTE(){ P "  (i) $1"; INFO=$((INFO+1)); }
 # loudness switched off on the first phone - settings, not defects. A reader comparing two
 # reports needs to see that at a glance instead of diffing them line by line.
 OFF(){ P "  [OFF ] $1"; OFFN=$((OFFN+1)); OFF_LIST="${OFF_LIST:+$OFF_LIST, }$2"; }
+# A check whose subject one of ASB's own safety guards keeps off on purpose. Not FAIL
+# ("not what ASB intended": while the guard holds, staying off IS what ASB intends) and not
+# OFF (the user's setting is on). A OnePlus 13R sent the same report four times with FAIL=2,
+# "library mapped" and "effect registered" both absent, under a tripped effects guard that
+# had unbound the effect itself. Counted apart, listed in B and named in the verdict, so the
+# held feature stays visible without being called an install failure.
+# $1 label  $2 guard and its record  $3 short name for the summary list
+HELDN=0; HELD_LIST=""
+HELD(){
+  P "  [HELD] $1"
+  P "         held by: $2"
+  HELDN=$((HELDN+1))
+  case ", $HELD_LIST, " in *", $3, "*) : ;; *) HELD_LIST="${HELD_LIST:+$HELD_LIST, }$3" ;; esac
+  CHK_LIST="${CHK_LIST}HELD	${1}	held	${2}
+"
+}
 
 gp() { getprop "$1" 2>/dev/null; }
 firstf() { for _g in $@; do for _f in $_g; do [ -f "$_f" ] && { printf '%s' "$_f"; return 0; }; done; done; return 1; }
@@ -2238,6 +2254,12 @@ case "$(cfg dsp_loudness)" in ''|0|off) : ;; *) [ "$(gp persist.asb.dsp.enable)"
 _dsp_map=""
 [ -n "$_dsp_pid" ] && _dsp_map="$(grep -c asbdsp /proc/$_dsp_pid/maps 2>/dev/null | grep -v '^0$')"
 _dsp_reg="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -oiE 'ASB Loudness|AsbLoudness|asbdsp')"
+# The effects guard unbinds ASB's effect configs when the audio service keeps restarting.
+# Absent attach under a tripped guard is the guard's own result, not a failed install.
+_dsp_held=""
+if [ -z "$_dsp_reg" ] && [ -f /data/adb/asb/dsp_effects_blocked ]; then
+  _dsp_held="effects safety guard ($(cat /data/adb/asb/dsp_effects_blocked 2>/dev/null | tr -d '\r\n' | cut -c1-60)) - investigate the audio-service restarts before retrying"
+fi
 if [ "$_dsp_on" = "1" ] && [ "$(gp persist.asb.dsp.route_allowed)" = "0" ] && [ -z "$_dsp_reg" ]; then
   # fix77: off the selected outputs the attach daemon releases the effect, so the stream can
   # use the offload path. Not attached is the intended state here, not a failure.
@@ -2249,6 +2271,8 @@ elif [ "$_dsp_on" = "1" ]; then
   if [ -n "$_dsp_pid" ]; then
     if [ -n "$_dsp_map" ]; then
       V "  library mapped into the audio HAL" "present" "$_dsp_map" present
+    elif [ -n "$_dsp_held" ]; then
+      HELD "  library mapped into the audio HAL" "$_dsp_held" "DSP effect"
     else
       V "  library mapped into the audio HAL" "present" "absent" eq
     fi
@@ -2277,6 +2301,8 @@ elif [ "$_dsp_on" = "1" ]; then
           fi ;;
       esac
     fi
+  elif [ -n "$_dsp_held" ]; then
+    HELD "  effect registered with audioflinger" "$_dsp_held" "DSP effect"
   else
     V "  effect registered with audioflinger" "present" "absent" eq
   fi
@@ -5272,7 +5298,10 @@ else
 fi
 P ""
 P "  C. VERDICT"
-if [ "$FAIL" -eq 0 ]; then
+if [ "$FAIL" -eq 0 ] && [ "$HELDN" -gt 0 ]; then
+  P "     FAIL=0 · HELD=$HELDN - no install failure, but $HELD_LIST is kept off on purpose by an ASB safety guard (details above); it stays off until the guard's cause is investigated."
+  [ "$_ux_refused" -gt 0 ] && P "     REFUSED=$_ux_refused - Android also kept $_ux_refused requested system setting(s) unchanged (listed above)."
+elif [ "$FAIL" -eq 0 ]; then
   if [ "$_ux_refused" -gt 0 ]; then
     P "     FAIL=0 · REFUSED=$_ux_refused - every live check passed, but $_ux_refused Android system setting(s) are not in effect (listed above)."
   else
@@ -5285,12 +5314,16 @@ else
     P "       $_cl: want $_ce, live ${_ca:-<none>}"
   done
   [ "$_ux_refused" -gt 0 ] && P "     REFUSED=$_ux_refused - Android also kept $_ux_refused requested system setting(s) unchanged (listed above)."
+  [ "$HELDN" -gt 0 ] && P "     HELD=$HELDN - $HELD_LIST is also kept off on purpose by an ASB safety guard (details above)."
 fi
 P "     Why another phone shows a different PASS count: every PASS is one check of a tweak that"
 P "     is ON on that phone. More tweaks on means more checks, fewer tweaks on means fewer -"
 P "     11 PASS and 30 PASS with FAIL=0 are both healthy installs. Read FAIL, not PASS."
 P ""
-P "  PASS=$PASS   FAIL=$FAIL   N/A=$NA   OFF=$OFFN   info=$INFO"
+# HELD is appended only when present, so every report without a held guard keeps the line
+# it always had (log intake and older readers parse "PASS=n FAIL=n").
+P "  PASS=$PASS   FAIL=$FAIL   N/A=$NA   OFF=$OFFN   info=$INFO$([ "$HELDN" -gt 0 ] && printf '   HELD=%s' "$HELDN")"
+[ "$HELDN" -gt 0 ] && P "  HELD = checks kept off on purpose by an ASB safety guard: $HELD_LIST (excluded from pass_ratio)"
 [ "$OFFN" -gt 0 ] && P "  OFF = checks not run because the setting is off/auto here: $OFF_LIST"
 # Normalized score so devices are comparable. Raw PASS counts mislead (a device
 # with more applicable checks, e.g. bt_absvol=on + aggressive toggles, racks up
@@ -5313,7 +5346,9 @@ P "             expected: conf_tuning/qape are absent on OP12/Gen3)."
 P "   - (i)   = informational (toggle states, live props, link info).
    - OFF   = not checked because your setting turns that feature off (or
              leaves it on auto). Two phones with different settings will
-             show different PASS counts - compare pass_ratio, not PASS."
+             show different PASS counts - compare pass_ratio, not PASS.
+   - HELD  = your setting is on, but an ASB safety guard keeps it off on
+             purpose (shown only when a guard holds; see its section)."
 P ""
 P "  Report saved to:"
 [ -n "$OUT1" ] && P "    $OUT1"
