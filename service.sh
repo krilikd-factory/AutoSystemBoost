@@ -4499,5 +4499,13 @@ asb_timeline_mark boot_wait_begin
   if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_wakeup_blocker.sh" ]; then
     MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakeup_blocker.sh" apply auto >/dev/null 2>&1 || true
   fi
+  # Evolution Engine: one record soon after boot marks where this build generation's pairs
+  # start, so pairs measured before anyone opens the WebUI are not lost to "unproven". Bounded
+  # (at most 20 checks, 30 s apart, for the lab's first summary), then this waiter ends.
+  if [ ! -f /dev/.asb/safe_mode ] && [ -f "$MODDIR/runtime/asb_evolution.sh" ]; then
+    _ew=0
+    while [ ! -s /dev/.asb/smart_lab.txt ] && [ "$_ew" -lt 20 ]; do sleep 30; _ew=$((_ew + 1)); done
+    [ -s /dev/.asb/smart_lab.txt ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_evolution.sh" record >/dev/null 2>&1
+  fi
 ) &
 exit 0
