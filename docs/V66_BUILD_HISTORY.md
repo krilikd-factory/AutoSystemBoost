@@ -5,7 +5,11 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
-## V66 after test30 (no build yet) - Evolution Engine, stages 0-3: a read-only check of Smart's experiments
+## V66-test30, second build - Evolution Engine, stages 0-3: a read-only check of Smart's experiments
+
+Built again as V66-test30 at the owner's request: the first test30 (`e8e2f15b`, payload
+`c96f023a…`) does not have this; the second is told apart by its source and payload, which the
+private message now prints.
 
 Input: the owner's "ASB Evolution Engine" plan (champion, challenger, check, keep or roll back;
 an unchangeable constitution; planner, safety gate, executor and evaluator kept apart; stages
