@@ -5,6 +5,33 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 after test29, second round - app zygotes are not apps, honest readbacks
+
+Input: the owner's OnePlus 15 logs of 27-28 November on the first test29 payload (`d26a3660…`):
+two asbdiag runs (FAIL=0), the Zygisk and Device pages, and a 630-minute Infinite Log (night
+0.47 %/h over 385 min, deep sleep 86 %, janky frames 1.3 %, no tombstone or SystemUI restart,
+ASB's own cost 1.7 s CPU per hour). Nothing in the capture points at ASB for drain or heat.
+
+- **Zygisk: an app zygote is no longer counted as an app.** `com.netflix.mediaclient_zygote` and
+  `com.opera.browser_zygote` sat in the start ledger as top-app starts (57 and 33, growing between
+  the two reports) and showed on the ZYGISK and ART pages with "ART unknown". They are Android
+  app zygotes, child zygotes this provider (NyaZygisk) did not flag. The observer now treats a
+  `<process>_zygote` name as a child zygote (no companion frame, no screenshot hook), and the ART,
+  guard and engine scripts drop such names, also from counts stored by older builds.
+- **ZYGISK page: no "next update" class while classes are off.** The page read "Launch classes:
+  off" above rows promising "next update: fast start".
+- **Device page: a cleared managed property reads back as a match.** The KERNEL block clears
+  three Gboard properties (`key=`); they were reported `live=unavailable_or_empty`.
+- **asbdiag: a tracked DSP route outside `dsp_outputs` is called released, not followed**, and
+  the camera BlendWeight note lost its stray bracket.
+- **Measured and left as is:** the WebUI open in a browser model (Chromium, 4x CPU): skipping
+  the end-of-script viewport relayout changed nothing beyond noise, so it was not kept. The
+  stylesheet's recalculation is the larger cost and is left for a measured redesign.
+- **Tests:** an unflagged `_zygote` start in the observer harness (fails on test29), app-zygote
+  rows in `t_zygisk_aot_runtime` and `t_zygisk_guard_runtime`, classes-off rows in
+  `t_zygisk_link_ui_runtime`, a cleared property in `t_device_info_runtime`, and
+  `t_asbdiag_dsp_route_released_runtime`.
+
 ## V66 after test29 (no build yet) - a held DSP guard is not an install FAIL, a binder hook keeps its original
 
 Input: the private field logs (64 reports, test16-test28) and a review of the screenshot hook.
