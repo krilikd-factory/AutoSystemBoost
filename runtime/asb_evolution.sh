@@ -73,13 +73,15 @@ _identity() {
 }
 
 # ---- journal --------------------------------------------------------------------------------
+# One writer at a time, without waiting: a page or a report that finds the journal busy skips
+# its recording (the next read records the same state). A lock older than a minute belongs to
+# a run that was killed and is cleared, so an interruption cannot stop recording for good.
 _lock() {
   mkdir -p "$D" 2>/dev/null || return 1
-  _i=0
-  while ! mkdir "$D/.lock" 2>/dev/null; do
-    _i=$((_i + 1)); [ "$_i" -ge 3 ] && return 1; sleep 1
-  done
-  return 0
+  mkdir "$D/.lock" 2>/dev/null && return 0
+  [ -n "$(find "$D/.lock" -maxdepth 0 -mmin +1 2>/dev/null)" ] || return 1
+  rmdir "$D/.lock" 2>/dev/null
+  mkdir "$D/.lock" 2>/dev/null
 }
 _unlock() { rmdir "$D/.lock" 2>/dev/null; }
 _tail_ref() {  # prints "seq hash" of the newest entry, the anchor, or "0 genesis"

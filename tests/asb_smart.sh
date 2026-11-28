@@ -8175,6 +8175,12 @@ printf '%s\n' "$out" | grep -x 'journal=ok' >/dev/null || fail "journal: $out"
 printf '%s\n' "$out" | grep -x 'advice|app2|continue|lean as situation|lean +0.1|2|0.0200' >/dev/null || fail "advisor: $(printf '%s\n' "$out" | grep advice)"
 grep -q 'secret' "$T/d/journal" && fail "a package name reached the journal"
 run export | grep -q 'secret' && fail "a package name reached the export"
+# A busy journal is skipped without waiting; a lock a killed run left behind is cleared.
+mkdir "$T/d/.lock"; n0="$(wc -l < "$T/d/journal")"
+sed -i 's/^kstat|app2|4|/kstat|app2|5|/' "$T/lab"; s0="$(date +%s)"; run status >/dev/null
+[ "$(( $(date +%s) - s0 ))" -le 1 ] && [ "$(wc -l < "$T/d/journal")" = "$n0" ] || fail "a busy journal waited or was written"
+touch -d '2 minutes ago' "$T/d/.lock"; run status >/dev/null
+[ ! -d "$T/d/.lock" ] && [ "$(wc -l < "$T/d/journal")" -gt "$n0" ] || fail "a stale lock stopped recording"
 # Recording is change-only: the same lab state adds nothing.
 n1="$(wc -l < "$T/d/journal")"; run status >/dev/null; [ "$(wc -l < "$T/d/journal")" = "$n1" ] || fail "an unchanged lab added journal entries"
 # A new payload in the middle of a trial: its pairs mix two builds, so it cannot promote.
