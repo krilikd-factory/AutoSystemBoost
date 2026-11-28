@@ -2215,6 +2215,10 @@ case "$(gp persist.asb.dsp.outputs)" in
   *)
     if [ -n "$_lr" ] && [ "$_lr" != "$(gp persist.asb.dsp.route)" ]; then
       NOTE "  route lag: music is on $_lr now, the DSP still follows $(gp persist.asb.dsp.route) - the route watcher republishes within seconds; run asbdiag again if this persists"
+    elif [ -n "$_lr" ] && [ "$(gp persist.asb.dsp.route_allowed)" = "0" ]; then
+      # Tracking the route is not processing it: a OnePlus 15 report read "the DSP follows
+      # speaker" one line above "DSP released on purpose: route speaker is not in dsp_outputs=bt".
+      NOTE "  route check: music is on $_lr; the DSP tracks it but stays released there (not in dsp_outputs=$(gp persist.asb.dsp.outputs))"
     else
       [ -n "$_lr" ] && NOTE "  route check: music is on $_lr and the DSP follows $_lr"
     fi ;;

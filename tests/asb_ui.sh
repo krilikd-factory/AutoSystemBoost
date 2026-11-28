@@ -299,6 +299,36 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag DSP guard held: a tripped effects guard reads HELD (FAIL=0, named, out of pass_ratio); without the guard the absence stays FAIL; totals unchanged otherwise"
 )
 
+t_asbdiag_dsp_route_released_runtime() (
+# Runtime: a route the DSP tracks but is released on is not reported as followed. A OnePlus 15
+# asbdiag read "route check: music is on speaker and the DSP follows speaker" right above "DSP
+# released on purpose: route speaker is not in dsp_outputs=bt". The REAL route-check block runs.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag DSP route released: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+# The second top-level "case outputs" block is the route check (the first sets a gain note).
+awk '/^case "\$\(gp persist\.asb\.dsp\.outputs\)" in$/ { n++; if (n == 2) f = 1 } f { print } f && /^esac$/ { exit }' "$D" > "$T/b.sh"
+grep -q 'route check' "$T/b.sh" || fail "route-check block not found"
+run() {  # $1 outputs  $2 published route  $3 route_allowed  $4 live route
+  { echo 'NOTE() { echo "(i) $1"; }'
+    printf 'gp() { case "$1" in persist.asb.dsp.outputs) echo %s ;; persist.asb.dsp.route) echo %s ;; persist.asb.dsp.route_allowed) echo %s ;; esac; }\n' "$1" "$2" "$3"
+    echo "_lr='$4'"; cat "$T/b.sh"; } > "$T/r.sh"
+  sh "$T/r.sh"
+}
+out="$(run bt speaker 0 speaker)"
+printf '%s\n' "$out" | grep -F 'follows speaker' >/dev/null && fail "a released route is still called followed: $out"
+printf '%s\n' "$out" | grep -F 'route check: music is on speaker; the DSP tracks it but stays released there (not in dsp_outputs=bt)' >/dev/null || fail "released note: $out"
+out="$(run bt bt 1 bt)"
+printf '%s\n' "$out" | grep -F 'route check: music is on bt and the DSP follows bt' >/dev/null || fail "an allowed route lost its note: $out"
+out="$(run bt bt 1 speaker)"
+printf '%s\n' "$out" | grep -F 'route lag: music is on speaker now, the DSP still follows bt' >/dev/null || fail "route lag lost: $out"
+[ -z "$(run all speaker 0 speaker)" ] || fail "outputs=all printed a route note"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag DSP route released: a tracked route outside dsp_outputs reads released, not followed; allowed routes and lag notes unchanged"
+)
+
 t_asbdiag_write_ratio_runtime() (
 # Runtime (fix179): "writes per transition" is judged against the phone's own cpufreq slots,
 # and chatter by how often the state changes. A CPH2691 read "13 (8+ ... suggests the ladder
