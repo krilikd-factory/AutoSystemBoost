@@ -7770,8 +7770,15 @@ int main(int argc, char **argv) {
         asb_lab_in_t in = base(); in.wall = g_wall;
         asb_lab_summary_write(&in);
         FILE *sf = fopen(ASB_LAB_SUMMARY, "r"); char ln[512]; int won_line = 0;
-        while (sf && fgets(ln, sizeof(ln), sf)) if (!strncmp(ln, "knob|radio|", 11) && strstr(ln, "|won_energy|16\n")) won_line = 1;
+        int kstat_ok = 0, kstat_n = 0;
+        while (sf && fgets(ln, sizeof(ln), sf)) {
+            if (!strncmp(ln, "knob|radio|", 11) && strstr(ln, "|won_energy|16\n")) won_line = 1;
+            /* test31: raw pair statistics for an outside evaluator, one line per knob. */
+            if (!strncmp(ln, "kstat|", 6)) kstat_n++;
+            if (!strcmp(ln, "kstat|membus_on|3|-0.050000|0.000000|0|0.000000|0.000000|0.000|111\n")) kstat_ok = 1;
+        }
         if (sf) fclose(sf);
+        if (!kstat_ok || kstat_n != LAB_N) { printf("kstat missing: ok=%d n=%d\n", kstat_ok, kstat_n); return 1; }
         g_lab_build_id = 222;
         int other = asb_lab_load();
         printf("build same_ok=%d won_line=%d other_rc=%d radio_conv=%d radio_best=%d radio_last=%s reopen=%u ref=%.0f mem_pairs=%u mem_best=%d mem_last=%s retests=%d stored=%u\n",
@@ -8130,6 +8137,7 @@ ${CC:-cc} -O1 -Wall -Wno-unused-function -I"$T" -o "$T/t" "$T/t.c"
 "$T/t"
 echo 'PASS uclamp live precheck and exact readback'
 )
+
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
