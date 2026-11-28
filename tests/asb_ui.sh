@@ -329,6 +329,38 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag DSP route released: a tracked route outside dsp_outputs reads released, not followed; allowed routes and lag notes unchanged"
 )
 
+t_telegram_caption_identity_runtime() (
+# Runtime: a Telegram post names the build it carries. Three different trees were posted as
+# V66-test29, so a report could not be matched to its build by the version. The REAL caption
+# code reads source and payload from the packaged manifest; nothing is shown when it cannot.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL telegram caption identity: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -F 'post.identity_line()' "$ROOT/.github/workflows/build-test.yml" >/dev/null || fail "the private message does not carry the identity"
+python3 -I -B - "$ROOT" "$T" <<'PY' || fail "caption assertions"
+import importlib.util, json, os, sys
+root, tmp = sys.argv[1], sys.argv[2]
+spec = importlib.util.spec_from_file_location('post', os.path.join(root, '.github/scripts/telegram_post.py'))
+post = importlib.util.module_from_spec(spec); spec.loader.exec_module(post)
+os.chdir(root)
+man = os.path.join(tmp, 'm.json')
+json.dump({'source_commit': 'e0d6977281c89f7065af95810bbe2247ae2230a2',
+           'payload_sha256': 'c03aea88d15820ca976f436f62944bc035ad0457b0cb2093bd0784d283d6cbeb'}, open(man, 'w'))
+os.environ['ASB_MANIFEST'] = man
+cap = post.caption('test', 'V66-test30', 'https://example.invalid/run/1')
+assert 'source <code>e0d6977281c8</code> · payload <code>c03aea88d158</code>' in cap, cap
+assert post.visible(cap) <= post.CAPTION_LIMIT, post.visible(cap)
+assert cap.index('🧬') < cap.index('🔗'), cap
+os.environ['ASB_MANIFEST'] = os.path.join(tmp, 'missing.json')
+assert '🧬' not in post.caption('test', 'V66-test30', ''), 'identity invented without a manifest'
+json.dump({'source_commit': 'abc', 'payload_sha256': '<b>x</b>'}, open(man, 'w'))
+os.environ['ASB_MANIFEST'] = man
+assert post.identity_line() == '', 'a malformed manifest was shown'
+PY
+echo "PASS telegram caption identity: test posts and the private message name source and payload from the manifest; nothing when it is missing or malformed"
+)
+
 t_asbdiag_write_ratio_runtime() (
 # Runtime (fix179): "writes per transition" is judged against the phone's own cpufreq slots,
 # and chatter by how often the state changes. A CPH2691 read "13 (8+ ... suggests the ladder

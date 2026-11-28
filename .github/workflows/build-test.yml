@@ -892,6 +892,7 @@ jobs:
           text = ("🛸 <b>AutoSystemBoost " + os.environ["ASB_VER"] + "</b>\n"
               "Личная тестовая сборка\n\n"
               "🧪 Проверьте изменения на устройстве.\n"
+              + (post.identity_line() + "\n" if post.identity_line() else "") +
               "🔗 <a href=\"" + os.environ["RUN_URL"] + "\">Сборка на GitHub</a>")
           result = subprocess.run(["curl", "--silent", "--show-error",
               "--form-string", "chat_id=" + chat, "--form-string", "parse_mode=HTML",
