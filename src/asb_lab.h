@@ -1081,6 +1081,16 @@ static void asb_lab_summary_write(const asb_lab_in_t *in) {
                 (int)(kn->gain * 1000.0f), kn->wins, kn->trials, kn->reopen, kn->blocks,
                 (double)kn->ewma_mw, (double)kn->ref_mw, kn->pkg[0] ? kn->pkg : "-",
                 g_lab_verdict_names[kn->last_verdict < LAB_V_N ? kn->last_verdict : 0], rd);
+        /* The raw pair statistics behind the verdict (V66 test31), on a line of its own so the
+         * 18/20-field knob readers are untouched: an evaluator outside the lab can recompute the
+         * t test from the mean and variance instead of trusting the lab's own decision. The
+         * per-pair means of ceiling, jank and warming, and the ROM/kernel hash the store is on. */
+        fprintf(f, "kstat|%s|%u|%.6f|%.6f|%u|%.6f|%.6f|%.3f|%u\n",
+                g_lab_names[k], n, n ? kn->pr_mean : 0.0,
+                n > 1 ? kn->pr_m2 / (double)(n - 1) : 0.0, kn->jank_pairs,
+                n ? kn->pr_press / (double)n : 0.0,
+                kn->jank_pairs ? kn->pr_jank / (double)kn->jank_pairs : 0.0,
+                n ? kn->pr_heat / (double)n : 0.0, g_lab.build);
     }
     fprintf(f, "mem|%s|voters=%d|active=%d|doms=%d|cap_now=%d|writes=%lu|restores=%lu|yields=%lu|fails=%lu\n",
             g_mem_probe == 1 ? g_mem_kind : (g_mem_probe == 0 ? "unprobed" : "none"), g_mem_nv,
