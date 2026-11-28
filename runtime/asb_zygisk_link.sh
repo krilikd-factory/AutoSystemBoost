@@ -68,7 +68,7 @@ _evidence() {
       }
       while ((getline ln < cf) > 0) {
         n = split(ln, f, " ")
-        if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/ && f[2] + 0 > use[f[1]]) use[f[1]] = f[2] + 0
+        if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/ && f[1] !~ /_zygote$/ && f[2] + 0 > use[f[1]]) use[f[1]] = f[2] + 0
       }
       for (p in hk) all[p] = 1
       for (p in use) all[p] = 1
