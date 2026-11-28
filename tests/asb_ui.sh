@@ -8296,6 +8296,7 @@ cp "$ROOT/runtime/asb_managed.props" "$ROOT/features.conf" "$T/mod/runtime/"
 printf 'DISPLAY=1
 BT=1
 AUDIO=1
+KERNEL=1
 ' > "$T/mod/features.conf"
 cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_zygisk.sh" "$ROOT/runtime/asb_zygisk_info.sh" "$ROOT/runtime/asb_lsposed_info.sh" "$T/mod/runtime/"
 printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\n' > "$T/mod/config/governor.conf"
@@ -8532,6 +8533,8 @@ want asb_properties managed_status applied; want asb_properties managed_reason f
 want asb_properties vendor.display.enable_dpps_dynamic_fps 'source=managed:DISPLAY; configured=1; live=1; readback=match'
 want asb_properties vendor.display.backlight_smooth 'source=managed:DISPLAY; configured=1; live=0; readback=mismatch'
 want asb_properties persist.displayfeature.dc_backlight.enable 'source=managed:DISPLAY; configured=true; live=unavailable_or_empty; readback=unavailable_or_empty'
+# A managed entry that clears a stock value (key=) reads back empty: that is a match.
+want asb_properties ro.com.google.ime.kb_pad_port_r 'source=managed:KERNEL; configured=; live=empty; readback=match'
 printf '%s\n' "$out" | grep '^D\tasb_properties\tlog.tag.bluetooth\t' >/dev/null && fail 'BT property was selected without its separate opt-in marker'
 _bt_n="$(awk -F '\t' 'BEGIN { inbt=0 } /^# ASB:BT:BEGIN/ { inbt=1; next } /^# ASB:BT:END/ { inbt=0 } inbt && /^[A-Za-z0-9_.-]+=/ { n++ } END { print n+0 }' "$T/mod/runtime/asb_managed.props")"
 [ "$_bt_n" -gt 0 ] || fail 'empty BT fixture'
