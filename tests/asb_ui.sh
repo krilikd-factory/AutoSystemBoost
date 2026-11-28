@@ -380,6 +380,97 @@ PY
 echo "PASS telegram caption identity: test posts and the private message name source and payload from the manifest; nothing when it is missing or malformed"
 )
 
+t_webui_evolution_card_runtime() (
+# Runtime (V66 test31): the Evolution card on the ZYGISK page. The REAL parser and card run in
+# node over a minimal DOM: hostile lines are dropped, every value lands as text, a held or
+# blocked state is never shown as a success, the card has no control that applies anything,
+# and every key it uses exists in all 13 locales.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui evolution card: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui evolution card: no node'; exit 0; }
+grep -F "['evo', 'sh ' + shQuote(MD + '/runtime/asb_evolution.sh') + ' status']" "$H" >/dev/null || fail "the page does not read the evaluator in its batch"
+grep -F "['zy-evo', T('zy_nav_evo', 'Evolution')]" "$H" >/dev/null || fail "no jump entry"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  cat <<'JS'
+const T = (k, d) => d;
+class El { constructor(t) { this.tag = t; this.children = []; this.className = ''; this._t = ''; this.attrs = {}; this.classList = { add: () => {} }; }
+  appendChild(c) { this.children.push(c); return c; } setAttribute(k, v) { this.attrs[k] = v; }
+  set textContent(v) { this._t = String(v); } get textContent() { return this._t + this.children.map(c => c.textContent).join(' '); }
+  set innerHTML(v) { if (this.className !== 'zy-sec-icon') throw Error('innerHTML outside the icon: ' + v); this._h = v; }
+  set onclick(f) { throw Error('a control in the evolution card'); } }
+const document = { createElement: t => { if (t === 'button' || t === 'input') throw Error('a control in the evolution card'); return new El(t); } };
+const techIcon = () => '<svg/>';
+JS
+  for fn in logReportSec logReportRow logReportNote zyHowFold zyItemPanel evolutionParse evolutionKnobName evolutionCard; do
+    sed -n "/^function $fn(/,/^}/p" "$H"
+  done
+  sed -n '/^const EVO_KNOBS = /p; /^const EVO_VERDICTS = /p; /^const EVO_VERDICT_TEXT = /p; /^const EVO_REASON_TEXT = /p' "$H"
+  cat <<'JS'
+let _zyEvo = null; let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const out = ['version=1', 'policy=ok', 'policy_hash=bc3572c33860', 'identity=aaaaaaaaaaaa:111111111111:abcdef0123',
+  'identity_complete=1', 'trust=trusted', 'trust_reason=fixtures_passed', 'safe_mode=0', 'lab=present', 'journal=ok', 'journal_entries=12',
+  'ev|membus_on|testing|bus free|bus 75%|8|-0.0600|0.0200|8.49|0.0100|0.0020|2.0|promoted|cheaper_significant|-',
+  'ev|app1|testing|lean as situation|lean +0.1|8|-0.0600|0.0200|8.49|0.0100|0.0300|0.0|rejected|gate_jank|-',
+  'ev|radio|off|LTE on light traffic|-|0|0|0|0|0|0|0|blocked|lab_off|-',
+  'ev|<img src=x>|testing|a|b|1|0|0|0|0|0|0|promoted|x|-', 'ev|app2|testing|a|b|1|0|0|0|0|0|0|winning|x|-',
+  'identity=$(id)', 'advice|app2|continue|lean as situation|lean +0.1|2|0.0200', 'audit|1|1|0|0|0'].join('\n');
+_zyEvo = evolutionParse(out);
+chk(_zyEvo.ok && _zyEvo.ev.length === 3, 'hostile ev lines kept: ' + _zyEvo.ev.length);
+chk(_zyEvo.kv.identity === 'aaaaaaaaaaaa:111111111111:abcdef0123', 'a shell string replaced the identity');
+chk(_zyEvo.advice && _zyEvo.advice.knob === 'app2' && _zyEvo.advice.more === 2 && _zyEvo.audit.join() === '1,1,0,0,0', 'advice/audit');
+const txt = evolutionCard().textContent;
+for (const s of ['meets the rules', 'more janky frames', 'cannot judge', 'source aaaaaaaaaaaa · payload 111111111111',
+                 'App 2 needs about 2 more pair(s)', 'not applied', '1 promotion(s): 1 agreed', 'not a guaranteed saving', 'manual A/B/A not started'])
+  chk(txt.indexOf(s) >= 0, 'missing: ' + s);
+chk(!/winning|<img/.test(txt), 'hostile text rendered');
+_zyEvo = evolutionParse(out.replace('trust=trusted', 'trust=untrusted').replace('trust_reason=fixtures_passed', 'trust_reason=fixture:radio'));
+chk(evolutionCard().textContent.indexOf('failed (fixture:radio): every verdict is held') >= 0, 'untrusted self-check not shown');
+_zyEvo = null; chk(evolutionCard().textContent.indexOf('could not be read') >= 0, 'unreadable state not shown');
+process.exit(bad ? 1 : 0);
+JS
+} > "$T/e.js"
+node "$T/e.js" || fail 'card assertions'
+python3 - "$ROOT" <<'PY' || fail 'locale keys'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+a = h.index('/* V66 test31: the Evolution Engine card'); b = h.index('async function zygiskPageLoad(user) {')
+keys = {k for k in re.findall(r"T\('((?:evo|zy_nav)_[a-z0-9_]+)'", h[a:b]) if not k.endswith('_')} | {'zy_nav_evo'}
+keys |= {'evo_r_' + r for r in re.findall(r'why = "([a-z_]+)"', (root / 'runtime/asb_evolution.sh').read_text())}
+keys |= {'evo_r_journal_damaged'} | {'evo_v_' + v for v in ('promoted', 'rejected', 'inconclusive', 'held', 'blocked')}
+keys |= {'evo_k_' + k for k in ('radio', 'wake_lift', 'membus_on', 'membus_off', 'app1', 'app2', 'app3')}
+for f in sorted((root / 'webroot/i18n').glob('*.json')):
+    d = json.loads(f.read_text(encoding='utf-8')); miss = sorted(k for k in keys if k not in d)
+    assert not miss, (f.name, miss[:5])
+PY
+echo "PASS webui evolution card: defensive parse, text-only card without controls, held/blocked/untrusted never shown as success, every key in 13 locales"
+)
+
+t_asbdiag_evolution_runtime() (
+# Runtime (V66 test31): asbdiag prints the Evolution check as information only - no PASS or
+# FAIL of its own - from the REAL block and the REAL engine over a fake lab summary.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag evolution: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/mod/runtime" "$T/d"; cp "$ROOT/runtime/asb_evolution.sh" "$ROOT/runtime/asb_evolution.policy" "$T/mod/runtime/"
+awk '/^# Evolution Engine \(V66 test31\)/ { f = 1 } f { print } f && /^fi$/ { exit }' "$D" > "$T/b.sh"
+grep -q 'asb_evolution.sh" export' "$T/b.sh" || fail "block not found"
+grep -E '^[[:space:]]*V ' "$T/b.sh" && fail "the evolution block adds a verdict to the report"
+printf 'knob|membus_on|testing|bus free|bus 75%%|8|0|0|0|0|0|0|0|0|0|0|0|com.secret.app|-|-1\nkstat|membus_on|8|-0.06|0.0004|4|0.01|0.002|2|7\n' > "$T/lab"
+run() { { echo 'P() { echo "$1"; }; NOTE() { echo "(i) $1"; }'; echo "MODDIR='$T/mod'"; cat "$T/b.sh"; } > "$T/r.sh"; ASB_EVO_DIR="$T/d" ASB_EVO_LAB="$T/lab" ASB_EVO_SAFE="$T/safe" sh "$T/r.sh"; }
+out="$(run)"
+printf '%s\n' "$out" | grep -E '^    membus_on +promoted +cheaper_significant · 8 pair\(s\), -6\.0 %, t 8\.5$' >/dev/null || fail "verdict line: $out"
+printf '%s\n' "$out" | grep -F 'trust=trusted' >/dev/null && printf '%s\n' "$out" | grep -F "not a guaranteed saving" >/dev/null || fail "trust/note: $out"
+printf '%s\n' "$out" | grep -q secret && fail "a package name reached the report"
+rm -f "$T/mod/runtime/asb_evolution.sh"; [ -z "$(run)" ] || fail "a missing engine printed a section"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag evolution: information-only section from the real engine, no package names, absent engine prints nothing"
+)
+
 t_asbdiag_write_ratio_runtime() (
 # Runtime (fix179): "writes per transition" is judged against the phone's own cpufreq slots,
 # and chatter by how often the state changes. A CPH2691 read "13 (8+ ... suggests the ladder

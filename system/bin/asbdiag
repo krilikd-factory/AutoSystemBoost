@@ -3208,6 +3208,24 @@ if [ -r "$_slf" ]; then
 else
   P "  Smart lab            : no summary yet (smart_lab=$(cfg smart_lab))"
 fi
+# Evolution Engine (V66 test31): an independent, read-only re-check of the lab's experiments
+# under the shipped constitution. Information only: it adds no PASS or FAIL to this report.
+if [ -r "$MODDIR/runtime/asb_evolution.sh" ]; then
+  _evo="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_evolution.sh" export 2>/dev/null)"
+  if [ -n "$_evo" ]; then
+    P "  Evolution check      : $(printf '%s\n' "$_evo" | awk -F= '$1 ~ /^(policy|trust|trust_reason|journal|journal_entries|identity)$/ { printf "%s=%s ", $1, $2 }')"
+    printf '%s\n' "$_evo" | awk -F'|' '$1 == "ev" {
+        line = sprintf("    %-11s %-12s %s", $2, $13, $14)
+        if ($6 > 0) line = line sprintf(" · %d pair(s), %+.1f %%, t %.1f", $6, $7 * 100, $9)
+        print line }' | while IFS= read -r _evl; do P "$_evl"; done
+    printf '%s\n' "$_evo" | awk -F'|' '$1 == "advice" && $3 == "continue" { printf "    suggested (not applied): %s needs about %d more pair(s)\n", $2, $6 }
+      $1 == "audit" { printf "    lab decisions checked: %d promotion(s), %d agreed, %d disputed, %d not checked before, %d rejection(s)\n", $2, $3, $4, $5, $6 }' \
+      | while IFS= read -r _evl; do P "$_evl"; done
+    NOTE "evolution verdicts re-check the lab's measured pairs against rules shipped with ASB; they apply nothing, and 'promoted' is not a guaranteed saving"
+  else
+    P "  Evolution check      : unavailable"
+  fi
+fi
 P "  optional forks       : $(_rget fork_budget_hour /dev/.asb/state 2>/dev/null) this hour (budget 240), $(_rget fork_budget_skips /dev/.asb/state 2>/dev/null) skipped (budget or camera), $(_rget fork_budget_total /dev/.asb/state 2>/dev/null) since start · top-app answers with only a keyboard: $(_rget probe_topapp_keyboard_only /dev/.asb/state 2>/dev/null)"
 _scg="$(_rget smart_cold_guard /dev/.asb/state 2>/dev/null)"
 [ "$_scg" = 1 ] && NOTE "cold battery under 40 %: Smart holds the CPU peaks down until it warms up or charges (smart_cold_guard=$(cfg smart_cold_guard))"

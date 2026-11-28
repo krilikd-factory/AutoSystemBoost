@@ -22152,13 +22152,14 @@ function zygiskPageRender(d, state) {
     body.appendChild(zygiskOffCard());
     const lspOff = lspLiteCard(); lspOff.id = 'zy-lsp'; body.appendChild(lspOff);
     const s7Off = smart7Card(); s7Off.id = 'zy-s7'; body.appendChild(s7Off);
+    const evoOff = evolutionCard(); evoOff.id = 'zy-evo'; body.appendChild(evoOff);
     zyCompact(body);
     if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
     return;
   }
   body.appendChild(asbPageJump([
     ['zy-status', T('zy_nav_controls', 'Controls')],
-    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-engine', T('zy_link_nav', 'Unified engine')], ['zy-s7', T('zy_nav_s7', 'Budgets')], ['zy-aot', T('zy_nav_art', 'ART')],
+    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-engine', T('zy_link_nav', 'Unified engine')], ['zy-s7', T('zy_nav_s7', 'Budgets')], ['zy-evo', T('zy_nav_evo', 'Evolution')], ['zy-aot', T('zy_nav_art', 'ART')],
     ['zy-apps', T('zy_nav_apps', 'Apps')]
   ], T('dev_nav_title', 'Jump to'), 'zy-page-nav'));
   const automatic = zygiskAutoCard(d);
@@ -22180,6 +22181,7 @@ function zygiskPageRender(d, state) {
   while (lspCard.firstChild) lsp.appendChild(lspCard.firstChild);
   engine.appendChild(lsp); body.appendChild(engine);
   const s7 = smart7Card(); s7.id = 'zy-s7'; body.appendChild(s7);
+  const evo = evolutionCard(); evo.id = 'zy-evo'; body.appendChild(evo);
   const aot = zygiskAotCard(); aot.id = 'zy-aot'; body.appendChild(aot);
   const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'), 'zygisk_apps');
   apps.id = 'zy-apps';
@@ -23446,6 +23448,92 @@ function zygiskLinkCard() {
   note.classList.add('dev-evidence'); card.appendChild(note);
   return card;
 }
+/* V66 test31: the Evolution Engine card, stages 0-3. runtime/asb_evolution.sh re-checks the
+ * Smart lab's experiments under a shipped constitution and says, per knob, what the measured
+ * pairs support. The card answers which champion is active, which challenger runs and why,
+ * on which build, what was measured, whether the gates passed, and the verdict. It has no
+ * button: nothing here applies a setting, and a verdict is not a guaranteed saving. Every
+ * value is parsed defensively and inserted as text. */
+let _zyEvo = null;
+const EVO_KNOBS = ['radio', 'wake_lift', 'membus_on', 'membus_off', 'app1', 'app2', 'app3'];
+const EVO_VERDICTS = ['promoted', 'rejected', 'inconclusive', 'held', 'blocked'];
+/* English fallbacks, so a missing locale file never shows a bare code. */
+const EVO_VERDICT_TEXT = {"promoted": "meets the rules", "rejected": "rejected", "inconclusive": "undecided", "held": "held", "blocked": "cannot judge"};
+const EVO_REASON_TEXT = {"cheaper_significant": "cheaper, beyond the noise", "dearer": "clearly dearer", "dearer_significant": "dearer, beyond the noise", "gate_ceiling": "cores at their ceiling more often", "gate_jank": "more janky frames", "gate_heat": "warms faster", "too_few_pairs": "too few pairs yet", "within_noise": "difference within the noise", "mixed_build_identity": "measured across two builds", "no_challenger": "no challenger running", "no_pairs_yet": "no pairs measured yet", "no_pair_statistics": "this build publishes no pair statistics", "lab_off": "lab setting is off", "no_app_assigned": "no app assigned", "safe_mode": "Safe mode", "evaluator_untrusted": "self-check failed", "policy_invalid": "rules failed their check", "journal_damaged": "journal damaged"};
+function evolutionParse(out) {
+  const g = { ok: false, kv: {}, ev: [], advice: null, audit: null };
+  const num = function (v) { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+  String(out || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    if (ln === 'version=1') { g.ok = true; return; }
+    const m = /^([a-z_]+)=([A-Za-z0-9_.:,-]{0,96})$/.exec(ln);
+    if (m) { g.kv[m[1]] = m[2]; return; }
+    const f = ln.split('|');
+    const arm = function (v) { return String(v || '').replace(/[^A-Za-z0-9 %+.-]/g, '').slice(0, 32); };
+    if (f[0] === 'ev' && f.length === 15 && EVO_KNOBS.indexOf(f[1]) >= 0 && EVO_VERDICTS.indexOf(f[12]) >= 0 && /^[a-z_]+$/.test(f[13])) {
+      g.ev.push({ knob: f[1], lab: /^[a-z]+$/.test(f[2]) ? f[2] : '-', best: arm(f[3]), trying: f[4] === '-' ? '' : arm(f[4]),
+        n: Math.max(0, Math.round(num(f[5]))), mean: num(f[6]), sd: num(f[7]), t: num(f[8]),
+        press: num(f[9]), jank: num(f[10]), heat: num(f[11]), verdict: f[12], why: f[13] });
+    } else if (f[0] === 'advice' && f.length === 7 && /^[a-z_]+$/.test(f[2])) {
+      g.advice = { knob: EVO_KNOBS.indexOf(f[1]) >= 0 ? f[1] : '', kind: f[2], more: Math.max(0, Math.round(num(f[5]))) };
+    } else if (f[0] === 'audit' && f.length === 6 && f.slice(1).every(function (x) { return /^\d+$/.test(x); })) {
+      g.audit = f.slice(1).map(Number);
+    }
+  });
+  return g;
+}
+function evolutionKnobName(k) {
+  return T('evo_k_' + k, ({ radio: '5G only when needed', wake_lift: 'Wake lift', membus_on: 'Memory bus, screen on',
+    membus_off: 'Memory bus, screen off', app1: 'App 1', app2: 'App 2', app3: 'App 3' })[k] || k);
+}
+function evolutionCard() {
+  const card = logReportSec(T('evo_title', 'Evolution: an independent check of Smart experiments'), 'zygisk_engine');
+  card.appendChild(zyHowFold(T('evo_how_title', 'How the check works'), [T('evo_how', 'The Smart lab tries one setting at a time against the best so far, side by side. This check recomputes each result from the lab\'s own measured pairs under fixed rules shipped with ASB: side effects first (cores at their ceiling, janky frames, warming), then energy. Results measured across two builds never count. The check first passes examples with known answers, one of them a change that does nothing; if it misjudges one, every verdict is held. It applies nothing.')]));
+  const g = _zyEvo;
+  if (!g || !g.ok) { card.appendChild(logReportNote(T('evo_unavailable', 'The check could not be read.'), true)); return card; }
+  const kv = g.kv;
+  card.appendChild(logReportRow(T('evo_row_policy', 'Rules'), kv.policy === 'ok'
+    ? T('evo_policy_ok', 'shipped with ASB · fingerprint %s').replace('%s', kv.policy_hash || '?')
+    : T('evo_policy_bad', 'failed their check: every verdict is blocked'), kv.policy !== 'ok'));
+  card.appendChild(logReportRow(T('evo_row_trust', 'Self-check'), kv.trust === 'trusted'
+    ? T('evo_trust_ok', 'passed on known examples, including one that changes nothing')
+    : T('evo_trust_bad', 'failed (%s): every verdict is held').replace('%s', kv.trust_reason || '?'), kv.trust !== 'trusted'));
+  const jn = kv.journal_entries || '0';
+  card.appendChild(logReportRow(T('evo_row_journal', 'Journal'), kv.journal === 'damaged'
+    ? T('evo_journal_bad', 'broken at entry %s: no promotion stands on it').replace('%s', kv.journal_bad || '?')
+    : (kv.journal === 'ok' ? T('evo_journal_ok', '%s entries, chain verified').replace('%s', jn) : T('evo_journal_empty', 'no entries yet')), kv.journal === 'damaged'));
+  const id = String(kv.identity || '').split(':');
+  card.appendChild(logReportRow(T('evo_row_build', 'Build'), T('evo_build_val', 'source %1 · payload %2')
+    .replace('%1', id[0] || '?').replace('%2', id[1] || '?'), kv.identity_complete !== '1'));
+  card.appendChild(logReportRow(T('evo_row_stage', 'Stage'), T('evo_stage_val', 'checks and suggests only; manual A/B/A not started')));
+  if (kv.safe_mode === '1') card.appendChild(logReportNote(T('evo_safe', 'Safe mode is on: every verdict is held.'), true));
+  if (kv.lab !== 'present') card.appendChild(logReportNote(T('evo_no_lab', 'The Smart lab has written no summary yet (it runs on the Smart profile).')));
+  const tone = { promoted: 'light', rejected: 'heavy', inconclusive: 'off', held: 'watch', blocked: 'watch' };
+  g.ev.forEach(function (e) {
+    const chips = [T('evo_champion', 'champion: %s').replace('%s', e.best)];
+    if (e.trying) chips.push(T('evo_challenger', 'challenger: %s').replace('%s', e.trying));
+    if (e.n > 0) {
+      chips.push(T('evo_measure', '%1 pair(s) · %2 % · t %3').replace('%1', String(e.n))
+        .replace('%2', (e.mean <= 0 ? '' : '+') + (e.mean * 100).toFixed(1)).replace('%3', e.t.toFixed(1)));
+      chips.push(T('evo_gates', 'ceiling %1 pt · jank %2 pt · warming %3 dC/h').replace('%1', (e.press * 100).toFixed(1))
+        .replace('%2', (e.jank * 100).toFixed(2)).replace('%3', e.heat.toFixed(0)));
+    }
+    chips.push([T('evo_r_' + e.why, EVO_REASON_TEXT[e.why] || e.why.replace(/_/g, ' ')), e.verdict === 'rejected' ? 'zy-lsp-chip-warn' : '']);
+    card.appendChild(zyItemPanel({ name: evolutionKnobName(e.knob), tone: tone[e.verdict] || 'off',
+      badge: T('evo_v_' + e.verdict, EVO_VERDICT_TEXT[e.verdict] || e.verdict), chips: chips }));
+  });
+  const a = g.advice;
+  if (a && a.kind === 'continue' && a.knob) card.appendChild(logReportNote(T('evo_advice', 'Suggested next step (not applied): %1 needs about %2 more pair(s) to be decided.')
+    .replace('%1', evolutionKnobName(a.knob)).replace('%2', String(a.more))));
+  else if (a && a.kind === 'restart_after_update' && a.knob) card.appendChild(logReportNote(T('evo_advice_restart', 'Suggested next step (not applied): %s was measured across two builds and needs a new start.')
+    .replace('%s', evolutionKnobName(a.knob))));
+  else card.appendChild(logReportNote(T('evo_advice_none', 'No open question is close to an answer.')));
+  if (g.audit) card.appendChild(logReportRow(T('evo_row_audit', 'Lab decisions checked'),
+    T('evo_audit', '%1 promotion(s): %2 agreed, %3 disputed, %4 not checked before · %5 rejection(s)')
+      .replace('%1', g.audit[0]).replace('%2', g.audit[1]).replace('%3', g.audit[2]).replace('%4', g.audit[3]).replace('%5', g.audit[4]), g.audit[2] > 0));
+  card.appendChild(logReportNote(T('evo_note', 'A verdict re-checks the measured pairs against the shipped rules. It applies nothing and is not a guaranteed saving.')));
+  return card;
+}
 async function zygiskPageLoad(user) {
   const seq = ++_zygiskLoadSeq;
   const status = _el('zygiskStatus');
@@ -23467,11 +23555,13 @@ async function zygiskPageLoad(user) {
       ['lsp', 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh') + ' status'],
       ['s7', 'sh ' + shQuote(MD + '/runtime/asb_smart7.sh') + ' status'],
       ['nc', 'sh ' + shQuote(MD + '/runtime/asb_night_charge.sh') + ' status'],
-      ['s7l', ASB_S7L_READ]]);
+      ['s7l', ASB_S7L_READ],
+      ['evo', 'sh ' + shQuote(MD + '/runtime/asb_evolution.sh') + ' status']]);
   } catch (e) { b = null; }
   if (seq !== _zygiskLoadSeq) return;
   if (b && b.s7 && b.s7.errno === 0) _zyS7 = smart7Parse(b.s7.stdout, b.nc && b.nc.errno === 0 ? b.nc.stdout : '');
   if (b && b.s7l) _zyS7L = smart7LearnParse(b.s7l.stdout || '');
+  _zyEvo = b && b.evo && b.evo.errno === 0 ? evolutionParse(b.evo.stdout) : null;
   if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
   if (b && b.lsp && b.lsp.errno === 0) { _zyLsp = lspLiteParse(b.lsp.stdout); lspLiteAutoRefresh(); }
   const r = b ? b.link : null;
