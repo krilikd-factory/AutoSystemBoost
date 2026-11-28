@@ -254,7 +254,7 @@ fail() { echo "FAIL asbdiag DSP guard held: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 awk '/^P\(\)  \{/ { f = 1 } /^firstf\(\) \{/ { exit } f { print }' "$D" > "$T/h.sh"
 awk '/^_dsp_pid=""$/ { f = 1 } f && /^SEC "2\. BLUETOOTH"$/ { exit } f { print }' "$D" \
-  | sed -e "s#/data/adb/#$T/data/adb/#g" -e "s#/vendor/lib#$T/vendor/lib#g" > "$T/b.sh"
+  | sed -e "s#/data/adb/#$T/data/adb/#g" -e "s#/vendor/lib#$T/vendor/lib#g" -e "s#/proc/#$T/proc/#g" > "$T/b.sh"
 awk '/^P "  C\. VERDICT"$/ { f = 1 } f { print } f && /HELD = checks kept off on purpose/ { exit }' "$D" > "$T/v.sh"
 grep -q '^HELD()' "$T/h.sh" && grep -q '^V() {' "$T/h.sh" || fail "helper block not found"
 grep -q '_dsp_held' "$T/b.sh" && grep -q 'dsp_effects_blocked' "$T/b.sh" || fail "DSP block not found"
@@ -262,15 +262,17 @@ grep -q 'HELD=' "$T/v.sh" || fail "verdict block not found"
 mkdir -p "$T/data/adb/asb" "$T/data/adb/modules/AutoSystemBoost" "$T/vendor/lib64/soundfx"
 printf 'legacy\n' > "$T/data/adb/modules/AutoSystemBoost/dsp_abi_installed"
 : > "$T/vendor/lib64/soundfx/libasbdsp.so"
-run() {  # $1 = effect line audioflinger prints ('' = not registered)
+run() {  # $1 = effect line audioflinger prints ('' = not registered); NOPID=1: no HAL; XFAIL=1: an unrelated FAIL
   { echo 'OUT1=""; OUT2=""'
     echo 'getprop() { case "$1" in persist.asb.dsp.enable) echo 1 ;; persist.asb.dsp.outputs) echo all ;; *) : ;; esac; }'
     echo 'cfg() { [ "$1" = dsp_loudness ] && echo 1; }'
-    echo 'pidof() { [ "$1" = android.hardware.audio.service_64 ] && echo 4799; }'
+    if [ "${NOPID:-0}" = 1 ]; then echo 'pidof() { return 1; }'
+    else echo 'pidof() { [ "$1" = android.hardware.audio.service_64 ] && echo 4799; }'; fi
     printf 'dumpsys() { [ "$1" = media.audio_flinger ] && printf "%%s\\n" "%s"; }\n' "$1"
     echo 'logcat() { :; }'
     echo "MODDIR='$T/mod'"
     cat "$T/h.sh" "$T/b.sh"
+    [ "${XFAIL:-0}" = 1 ] && echo 'V "Hi-res 384000 present in audio policy" "1" "0" ge'
     echo '_ux_refused=0'
     cat "$T/v.sh"; echo 'exit 0'; } > "$T/r.sh"
   sh "$T/r.sh"
@@ -286,6 +288,23 @@ printf '%s\n' "$out" | grep -E '^  PASS=0   FAIL=0   N/A=0   OFF=0   info=[0-9]+
 printf '%s\n' "$out" | grep -F 'HELD = checks kept off on purpose by an ASB safety guard: DSP effect (excluded from pass_ratio)' >/dev/null || fail "held list: $out"
 printf '%s\n' "$out" | python3 -c 'import re,sys; m=re.search(r"PASS=(\d+)\s+FAIL=(\d+)", sys.stdin.read()); sys.exit(0 if m and m.group(2)=="0" else 1)' || fail "log intake regex no longer reads FAIL=0"
 printf '%s\n' "$out" | grep -F 'guard is active; do not retry registration' >/dev/null || fail "guard guidance lost: $out"
+# Edge cases: HELD must not hide anything else, nor read a bad record as a reason.
+printf '' > "$T/data/adb/asb/dsp_effects_blocked"
+out="$(run '')"
+printf '%s\n' "$out" | grep -F 'held by: effects safety guard (record empty)' >/dev/null || fail "empty record: $out"
+printf 'ts=1\033[31m\tbad\001\n' > "$T/data/adb/asb/dsp_effects_blocked"
+out="$(run '')"
+printf '%s\n' "$out" | grep -F 'held by: effects safety guard (ts=1[31mbad)' >/dev/null || fail "control characters kept: $out"
+printf 'ts=1795456411 restarts=3\n' > "$T/data/adb/asb/dsp_effects_blocked"
+out="$(NOPID=1 run '')"
+[ "$(printf '%s\n' "$out" | grep -c '\[HELD\]')" = 1 ] && ! printf '%s\n' "$out" | grep -F 'library mapped' >/dev/null || fail "no audio HAL: only the registration is held: $out"
+mkdir -p "$T/proc/4799"; printf '7f00 r-xp /vendor/lib64/soundfx/libasbdsp.so\n' > "$T/proc/4799/maps"
+out="$(run '')"
+printf '%s\n' "$out" | grep -E '\[PASS\] +library mapped into the audio HAL' >/dev/null && printf '%s\n' "$out" | grep -E '\[HELD\] +effect registered' >/dev/null || fail "mapped but not registered under the guard: $out"
+rm -rf "$T/proc/4799"
+out="$(XFAIL=1 run '')"
+printf '%s\n' "$out" | grep -F 'FAIL=1 - these did not take effect' >/dev/null && printf '%s\n' "$out" | grep -F 'HELD=2 - DSP effect is also kept off on purpose' >/dev/null \
+  && printf '%s\n' "$out" | grep -E '^  PASS=0   FAIL=1   N/A=0   OFF=0   info=[0-9]+   HELD=2$' >/dev/null || fail "HELD hid an independent FAIL: $out"
 rm -f "$T/data/adb/asb/dsp_effects_blocked"
 out="$(run '')"
 [ "$(printf '%s\n' "$out" | grep -c '^  \[FAIL\] ')" = 2 ] || fail "without a guard an absent attach must stay FAIL: $out"
@@ -327,6 +346,38 @@ printf '%s\n' "$out" | grep -F 'route lag: music is on speaker now, the DSP stil
 [ -z "$(run all speaker 0 speaker)" ] || fail "outputs=all printed a route note"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag DSP route released: a tracked route outside dsp_outputs reads released, not followed; allowed routes and lag notes unchanged"
+)
+
+t_telegram_caption_identity_runtime() (
+# Runtime: a Telegram post names the build it carries. Three different trees were posted as
+# V66-test29, so a report could not be matched to its build by the version. The REAL caption
+# code reads source and payload from the packaged manifest; nothing is shown when it cannot.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL telegram caption identity: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -F 'post.identity_line()' "$ROOT/.github/workflows/build-test.yml" >/dev/null || fail "the private message does not carry the identity"
+python3 -I -B - "$ROOT" "$T" <<'PY' || fail "caption assertions"
+import importlib.util, json, os, sys
+root, tmp = sys.argv[1], sys.argv[2]
+spec = importlib.util.spec_from_file_location('post', os.path.join(root, '.github/scripts/telegram_post.py'))
+post = importlib.util.module_from_spec(spec); spec.loader.exec_module(post)
+os.chdir(root)
+man = os.path.join(tmp, 'm.json')
+json.dump({'source_commit': 'e0d6977281c89f7065af95810bbe2247ae2230a2',
+           'payload_sha256': 'c03aea88d15820ca976f436f62944bc035ad0457b0cb2093bd0784d283d6cbeb'}, open(man, 'w'))
+os.environ['ASB_MANIFEST'] = man
+cap = post.caption('test', 'V66-test30', 'https://example.invalid/run/1')
+assert 'source <code>e0d6977281c8</code> · payload <code>c03aea88d158</code>' in cap, cap
+assert post.visible(cap) <= post.CAPTION_LIMIT, post.visible(cap)
+assert cap.index('🧬') < cap.index('🔗'), cap
+os.environ['ASB_MANIFEST'] = os.path.join(tmp, 'missing.json')
+assert '🧬' not in post.caption('test', 'V66-test30', ''), 'identity invented without a manifest'
+json.dump({'source_commit': 'abc', 'payload_sha256': '<b>x</b>'}, open(man, 'w'))
+os.environ['ASB_MANIFEST'] = man
+assert post.identity_line() == '', 'a malformed manifest was shown'
+PY
+echo "PASS telegram caption identity: test posts and the private message name source and payload from the manifest; nothing when it is missing or malformed"
 )
 
 t_asbdiag_write_ratio_runtime() (

@@ -11317,7 +11317,10 @@ age_prev() { sed -i "1s/^t .*/t $(( $(date +%s) - $1 ))/" "$T/tmp/zygisk_guard.p
 echo screen=0 > "$T/state"; ledger 10
 run tick; [ -e "$T/tmp/zygisk_guard.prev" ] && fail "a disabled guard sampled the ledger"
 out="$(run enable)"; [ "$out" = result=enabled ] || fail "enable: $out"
+# A history row an older build kept for an app zygote is dropped at the next update.
+printf 'b none 1\ncom.old.app_zygote 40 40 0 0 0 0\n' > "$T/d/zygisk_guard_hist"
 run tick; [ -s "$T/d/zygisk_guard_active" ] && fail "the first sample acted"
+grep -q '_zygote' "$T/d/zygisk_guard_hist" && fail "a stored app-zygote history row survived: $(cat "$T/d/zygisk_guard_hist")"
 ledger 13; age_prev 300; run tick
 [ -s "$T/d/zygisk_guard_active" ] && fail "3 starts in 5 minutes were treated as a loop"
 ledger 23; age_prev 300; run tick

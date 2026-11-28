@@ -36,6 +36,22 @@ def items(path):
     return out
 
 
+def identity_line(path=None):
+    """The build a post carries: source commit and payload hash from the packaged manifest.
+    Three different trees were posted as V66-test29; the version alone cannot tell which one a
+    later report came from. Empty when the manifest is unreadable (nothing is invented)."""
+    path = path or os.environ.get('ASB_MANIFEST', 'pkg-test/release-manifest.json')
+    try:
+        with open(path, encoding='utf-8') as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        return ''
+    src, pay = str(m.get('source_commit', '')), str(m.get('payload_sha256', ''))
+    if not re.fullmatch(r'[0-9a-f]{40}', src) or not re.fullmatch(r'[0-9a-f]{64}', pay):
+        return ''
+    return '🧬 source <code>' + src[:12] + '</code> · payload <code>' + pay[:12] + '</code>'
+
+
 def visible(cap):
     """Length Telegram checks: the text without HTML tags, entities decoded."""
     return len(html.unescape(re.sub(r'<[^>]+>', '', cap)))
@@ -98,6 +114,9 @@ def caption(kind, ver, run_url=''):
         cap += 'Новая тестовая сборка!\n\n'
         cap += '\n'.join('✅ ' + x for x in lines)
         cap += '\n\n🧪 Это тестовая сборка. При проблемах пришлите asbdiag и Вечный лог в раздел <a href="' + BUGS_URL + '">Bugs</a>.'
+        ident = identity_line()
+        if ident:
+            cap += '\n' + ident
         cap += link
         if visible(cap) <= CAPTION_LIMIT or len(lines) <= 1:
             return cap

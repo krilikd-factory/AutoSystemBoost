@@ -2262,7 +2262,9 @@ _dsp_reg="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -oiE 'ASB Loudnes
 # Absent attach under a tripped guard is the guard's own result, not a failed install.
 _dsp_held=""
 if [ -z "$_dsp_reg" ] && [ -f /data/adb/asb/dsp_effects_blocked ]; then
-  _dsp_held="effects safety guard ($(cat /data/adb/asb/dsp_effects_blocked 2>/dev/null | tr -d '\r\n' | cut -c1-60)) - investigate the audio-service restarts before retrying"
+  # Printable characters only, bounded; an empty or unreadable record is named as such.
+  _dsp_hrec="$(head -c 200 /data/adb/asb/dsp_effects_blocked 2>/dev/null | tr -cd '[:print:]' | cut -c1-60)"
+  _dsp_held="effects safety guard (${_dsp_hrec:-record empty}) - investigate the audio-service restarts before retrying"
 fi
 if [ "$_dsp_on" = "1" ] && [ "$(gp persist.asb.dsp.route_allowed)" = "0" ] && [ -z "$_dsp_reg" ]; then
   # fix77: off the selected outputs the attach daemon releases the effect, so the stream can

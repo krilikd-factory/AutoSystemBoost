@@ -686,6 +686,10 @@ int main(){
   // com.netflix.mediaclient_zygote as a top-app start) is not an app start: no frame, unloaded.
   { int zc=g_connects, zd=g_dlclose; top=1; child=0; g_nice="com.netflix.mediaclient_zygote"; pre();
     assert(g_connects==zc && g_dlclose==zd+1); top=0; }
+  // Known limitation, kept visible: an installed package whose own name ends in "_zygote" is
+  // indistinguishable by name from an app zygote and is not observed either (no field case seen;
+  // a probe of se_info would add a JNI read to every start and is not proven on ColorOS).
+  { int zc=g_connects; top=1; g_nice="com.example.my_zygote"; pre(); assert(g_connects==zc); top=0; }
   // dev46: the owner's compatibility exclusion covers even a package also present in the
   // allowlist, and its process suffix. No companion connection, ledger or launch frame is made.
   put_policy("v=2\ngen=81\nobserver=1\nhints=1\nlaunch=1\nledger=1\npkg=com.example.compat\nxpkg=com.example.compat\n");
@@ -2009,6 +2013,10 @@ int main(int argc,char **argv) {
   pre();assert(unloads==1);post();assert(installs==1);
   g_package="org.example.one:player"; pre();post();assert(unloads==1 && installs==2);
   g_package="org.example.other:player"; pre();post();assert(unloads==2 && installs==2);
+  // An app zygote named after a selected app's process maps to the selected base package, but
+  // hooks installed in a child zygote would reach every process it forks: never installed.
+  { const int u=unloads, i=installs; g_package="org.example.one:svc_zygote"; pre();post();
+    assert(installs==i && unloads==u+1); unloads=u; /* keep the counts below unchanged */ }
   g_package="org.example.one"; uid=1010123;pre();post();assert(unloads==3 && installs==2);uid=10123;
   {std::ofstream f(safe_path);f<<"1";} pre();post();assert(unloads==4 && installs==2);unlink(safe_path.c_str());
   {std::ofstream f(screen_path);f<<"ASB_SCREENSHOT_V1\n0|org.example.one\nEND=2\n";} pre();post();assert(unloads==5 && installs==2);

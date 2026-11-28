@@ -228,7 +228,8 @@ _hist_update() {
     BEGIN {
       while ((getline ln < hf) > 0) {
         n = split(ln, f, " ")
-        if (n == 7 && f[1] ~ /^[A-Za-z0-9_.]+$/) {
+        # An app-zygote row kept from an older build is dropped, not carried forward.
+        if (n == 7 && f[1] ~ /^[A-Za-z0-9_.]+$/ && f[1] !~ /_zygote$/) {
           o[f[1]] = f[2] + 0; w[f[1]] = f[3] + 0; t[f[1]] = f[4] + 0
           lo[f[1]] = same ? f[5] + 0 : 0; lw[f[1]] = same ? f[6] + 0 : 0; lt[f[1]] = same ? f[7] + 0 : 0
         }
@@ -260,7 +261,7 @@ _ghost_scan() {
   { echo "at $(_now)"
     if [ "$_gd" -ge $(( GDAYS * 10 )) ]; then
       _gu="$(_users)"
-      awk -v gmin="$GMIN" 'NF == 7 && $1 ~ /^[A-Za-z0-9_.]+$/ { b = $2 + $3 - $4; if ($4 == 0 && b >= gmin) print $1, b }' "$HIST" 2>/dev/null \
+      awk -v gmin="$GMIN" 'NF == 7 && $1 ~ /^[A-Za-z0-9_.]+$/ && $1 !~ /_zygote$/ { b = $2 + $3 - $4; if ($4 == 0 && b >= gmin) print $1, b }' "$HIST" 2>/dev/null \
         | sort -k2,2nr | head -n 8 | while read -r _gp _gb; do
           _pkgok "$_gp" || continue
           printf '%s\n' "$_gu" | grep -qxF "$_gp" || continue
