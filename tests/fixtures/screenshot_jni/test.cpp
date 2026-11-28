@@ -9,13 +9,17 @@ static jlong create_surface(JNIEnv *, jclass, jobject, jstring, jint, jint, jint
 static void set_surface_flags(JNIEnv *, jclass, jlong, jlong, jint flags, jint mask) { ++set_flags_calls; transaction_flags=flags; transaction_mask=mask; }
 static zygisk::Api *captured_api=nullptr; static int hook_count=0; static bool no_surface=false;
 static bool pending_after_window_hook=false;
+static int window_fnptr_mode=0; // 0 = the original, 1 = none returned, 2 = our own wrapper returned
 struct FixtureModule : zygisk::ModuleBase { void onLoad(zygisk::Api *api, JNIEnv *) override { captured_api=api; } };
 static bool register_module(zygisk::internal::api_table *, zygisk::internal::module_abi *) { return true; }
 static void hook(JNIEnv *env, const char *name, JNINativeMethod *m, int n) {
   ++hook_count;
   assert(!env->ExceptionCheck()); // never called with an exception pending
   if (!std::strcmp(name,"android/os/BinderProxy")) {
-    assert(n==1); m[0].fnPtr=reinterpret_cast<void *>(&original);
+    assert(n==1);
+    m[0].fnPtr = window_fnptr_mode==1 ? nullptr
+               : window_fnptr_mode==2 ? reinterpret_cast<void *>(&wrapped_transact)
+               : reinterpret_cast<void *>(&original);
     if (pending_after_window_hook) env->error=true; // registered, then an exception left behind
     return;
   }
@@ -114,4 +118,23 @@ int main() {
   { int off=0; auto p=make_parcel("android.view.IWindowSession",off); const int before=original_calls;
     assert(wrapped_transact(&env,nullptr,42,&p,nullptr,0)==1 && original_calls==before+1); }
   pending_after_window_hook=false;
+  // The rest of the matrix: no original returned, or our own wrapper returned (a provider that
+  // hooked twice), with no surface hook: nothing is installed and nothing is claimed.
+  for (int mode : {1, 2}) {
+    original_transact=nullptr; window_fnptr_mode=mode; no_surface=true;
+    original_surface_create=nullptr; original_surface_set_flags=nullptr;
+    assert(!asb_screenshot_install(captured_api,&env) && original_transact==nullptr && !env.error);
+    int off=0; auto p=make_parcel("android.view.IWindowSession",off); const int before=original_calls;
+    assert(wrapped_transact(&env,nullptr,42,&p,nullptr,0)==JNI_FALSE && original_calls==before);
+  }
+  window_fnptr_mode=0;
+  // Both hook families unavailable: not installed, no original kept.
+  env.no_window=true; no_surface=true; original_transact=nullptr;
+  original_surface_create=nullptr; original_surface_set_flags=nullptr;
+  assert(!asb_screenshot_install(captured_api,&env) && !original_transact && !original_surface_create && !original_surface_set_flags && !env.error);
+  env.no_window=false; no_surface=false;
+  // An exception already pending before the install: no hook call at all, the caller's
+  // exception is left as it was (not cleared, not added to).
+  { const int hooks=hook_count; env.error=true;
+    assert(!asb_screenshot_install(captured_api,&env) && hook_count==hooks && env.error); env.error=false; }
 }
