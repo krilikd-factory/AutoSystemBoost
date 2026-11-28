@@ -155,10 +155,14 @@ static bool install_window_hook(zygisk::Api *api, JNIEnv *env, jint sdk) {
     JNINativeMethod methods[] = {{const_cast<char *>("transactNative"),
         const_cast<char *>("(ILandroid/os/Parcel;Landroid/os/Parcel;I)Z"), reinterpret_cast<void *>(&wrapped_transact)}};
     api->hookJniNativeMethods(env, "android/os/BinderProxy", methods, 1);
-    if (!clean(env) || !methods[0].fnPtr || methods[0].fnPtr == reinterpret_cast<void *>(&wrapped_transact)) return false;
-    original_transact = reinterpret_cast<Transact>(methods[0].fnPtr);
-
-    return true;
+    // A returned original means the wrapper is registered, even if the hook call also left
+    // an exception pending. Keep that original (as the surface path does): dropping it left
+    // a live wrapper that failed every binder call, and reported "not installed" so the
+    // caller could unload the library under it.
+    if (methods[0].fnPtr && methods[0].fnPtr != reinterpret_cast<void *>(&wrapped_transact))
+        original_transact = reinterpret_cast<Transact>(methods[0].fnPtr);
+    clean(env);
+    return original_transact != nullptr;
 }
 static bool install_surface_hooks(zygisk::Api *api, JNIEnv *env);
 
