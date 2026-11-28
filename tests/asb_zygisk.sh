@@ -1916,6 +1916,9 @@ chk(/^slow start · 1 of 3 cold starts measured · next update: fast start · LS
 chk(/LSPosed module, never restricted/.test(zygiskLinkAppValue(g.apps[2], nm)) && /Doze keep list/.test(zygiskLinkAppValue(g.apps[2], nm)), 'module app');
 const v3 = zygiskLinkAppValue(g.apps[3], nm);
 chk(v3 === 'usual start · protected system app, never classed', 'excluded app: ' + v3);
+// Launch classes off: no "next update" promise, the measured facts stay.
+const v1off = zygiskLinkAppValue(g.apps[1], nm, false);
+chk(!/next update/.test(v1off) && /1 of 3 cold starts measured/.test(v1off), 'classes off still promises a class: ' + v1off);
 chk(!/%[0-9s]/.test(v0 + v1 + v3), 'placeholder left');
 process.exit(bad ? 1 : 0);
 JS
