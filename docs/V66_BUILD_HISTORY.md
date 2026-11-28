@@ -5,6 +5,44 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
 
+## V66 after test30 (no build yet) - Evolution Engine, stages 0-3: a read-only check of Smart's experiments
+
+Input: the owner's "ASB Evolution Engine" plan (champion, challenger, check, keep or roll back;
+an unchangeable constitution; planner, safety gate, executor and evaluator kept apart; stages
+0-6, none skipped). The champion/challenger loop already exists: the Smart lab (V66 dev8) tries
+one existing knob at a time side by side, with the governor as the only writer, read-back and
+restore. This round adds the independent half and nothing that writes:
+
+- **Lab statistics published.** A `kstat|` line per knob carries the pairs, the mean and
+  variance of the paired differences and the per-pair ceiling, jank and warming means, plus
+  the ROM/kernel hash of the store. The 18/20-field `knob|` lines and their readers are as they
+  were.
+- **Stage 0 - constitution and identity.** `runtime/asb_evolution.policy` ships the allowlist
+  (the seven lab knobs, nothing else), the gates and the journal bounds. It may tighten the
+  lab's own rules, never loosen them: a looser or malformed file blocks every verdict. Each
+  journal entry carries source commit, payload hash and an opaque ROM/kernel hash.
+- **Stage 1 - journal and evaluator.** `runtime/asb_evolution.sh` keeps an append-only,
+  hash-chained journal, written only when the lab or a verdict changes, bounded to 400 entries
+  and 30 days behind a hash anchor. The evaluator recomputes each verdict from the pair
+  statistics: gates (ceiling, jank, warming) before energy, then promoted / rejected /
+  inconclusive / held / blocked with a reason. Pairs measured across two builds never promote,
+  Safe mode holds everything, and a damaged chain holds any promotion. It cannot apply anything.
+- **Stage 2 - the evaluator checks itself.** Shipped fixtures with known answers, a no-op among
+  them, run before any verdict; one misjudged fixture marks the evaluator untrusted and holds
+  every verdict. A field no-op (an A/A arm in the lab) is not built: it would change the lab.
+- **Stage 3 - shadow advisor.** At most one suggestion (the open trial closest to a verdict,
+  with the pairs it still needs at its measured spread), never applied. The lab's own
+  promotions are audited against the evaluator's last verdict before them.
+- **Where it shows:** an Evolution card on the ZYGISK page (in its existing read batch, text
+  only, no control) and an information-only section in asbdiag. It runs only when one of them
+  reads it: no timer, no worker. Uninstall removes its state.
+- **Not started:** stage 4 (a manual A/B/A with an executor), stage 5 (canary) and stage 6
+  (strategies, optimizer versions). Each needs the earlier stages proven on a phone first.
+- **Found on the way:** an unquoted `|` in a `${var%%|*}` pattern is alternation under mksh
+  (Android's sh) and literal in dash; the engine uses `\|` as the rest of ASB already does.
+- **Tests:** `t_evolution_engine_runtime`, `t_webui_evolution_card_runtime`,
+  `t_asbdiag_evolution_runtime`, and the `kstat` line in `t_smart_lab_native_runtime`.
+
 ## V66-test30 - one build, one identity; the post-test29 fixes hardened
 
 Input: the owner's plan after PR 20/21 (build and log identity, a second native pass, HELD end
