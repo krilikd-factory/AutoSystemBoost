@@ -1,23 +1,28 @@
-# ASB Evolution Engine - the constitution (schema 1).
+# ASB Evolution Engine - the constitution (schema 2).
 #
 # The rules the read-only evaluator judges every experiment by. No ASB component writes this
 # file: it ships with the module and changes only through the developer / pull-request loop.
 # The evaluator checks its shape and records its hash with every verdict; a file that fails the
-# check makes every verdict "blocked", never a looser rule.
+# check makes every verdict "blocked", never a looser rule. Each value may tighten the Smart
+# lab's own rule (src/asb_lab.h), never loosen it.
 #
-# The allowlist names only the existing Smart lab knobs (src/asb_lab.h). Each already has one
-# owner (the governor), read-back and restore; the evaluator adds no writer of its own.
-schema=1
+# The allowlist names only the existing Smart lab knobs. Each already has one owner (the
+# governor), read-back and restore; the evaluator adds no writer of its own.
+schema=2
 allow=radio,wake_lift,membus_on,membus_off,app1,app2,app3
-# A verdict needs this many side-by-side pairs; fewer is inconclusive.
+# A verdict needs this many side-by-side pairs measured on the current build generation.
 min_pairs=6
-# Promotion: at least this much cheaper (fraction of the champion's cost) with t at least t_min.
+# Benefit: at least this much cheaper (fraction of the champion's cost) with t at least t_min.
 min_gain=0.03
 t_min=2.5
-# Rejection without a full run: this much dearer after three pairs.
+# Early harm, judged before the pair count is reached (the lab's early stops): this much dearer
+# after three pairs; this janky-frame share over two jank pairs; this ceiling share or warming
+# (dC per hour) over three pairs.
 dearer=0.15
-# Non-regression gates, judged before energy (per-pair means of the challenger minus the champion):
-# share of ticks with a cluster at its ceiling, janky-frame share, battery warming in dC per hour.
+early_jank=0.02
+early_press=0.15
+early_heat=30
+# Non-regression gates once the pairs are in (per-pair means, challenger minus champion).
 max_press=0.08
 max_jank=0.01
 max_heat=15
