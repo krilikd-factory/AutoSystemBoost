@@ -1,0 +1,26 @@
+# ASB Evolution Engine - the constitution (schema 1).
+#
+# The rules the read-only evaluator judges every experiment by. No ASB component writes this
+# file: it ships with the module and changes only through the developer / pull-request loop.
+# The evaluator checks its shape and records its hash with every verdict; a file that fails the
+# check makes every verdict "blocked", never a looser rule.
+#
+# The allowlist names only the existing Smart lab knobs (src/asb_lab.h). Each already has one
+# owner (the governor), read-back and restore; the evaluator adds no writer of its own.
+schema=1
+allow=radio,wake_lift,membus_on,membus_off,app1,app2,app3
+# A verdict needs this many side-by-side pairs; fewer is inconclusive.
+min_pairs=6
+# Promotion: at least this much cheaper (fraction of the champion's cost) with t at least t_min.
+min_gain=0.03
+t_min=2.5
+# Rejection without a full run: this much dearer after three pairs.
+dearer=0.15
+# Non-regression gates, judged before energy (per-pair means of the challenger minus the champion):
+# share of ticks with a cluster at its ceiling, janky-frame share, battery warming in dC per hour.
+max_press=0.08
+max_jank=0.01
+max_heat=15
+# Experiment journal: bounded entries and age; older entries are dropped behind a hash anchor.
+journal_max=400
+retention_days=30

@@ -8138,6 +8138,103 @@ ${CC:-cc} -O1 -Wall -Wno-unused-function -I"$T" -o "$T/t" "$T/t.c"
 echo 'PASS uclamp live precheck and exact readback'
 )
 
+t_evolution_engine_runtime() (
+# Runtime (V66 test31): the Evolution Engine's stages 0-3 - constitution, build identity, a
+# hash-chained bounded journal, a read-only evaluator that checks itself on fixtures, and a
+# shadow advisor. The REAL script runs over a fake lab summary, manifest and state dir.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_evolution.sh"
+fail() { echo "FAIL evolution engine: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/mod/runtime" "$T/d"; cp "$ROOT/runtime/asb_evolution.policy" "$T/mod/runtime/"
+man() { printf '{\n  "source_commit": "%s",\n  "payload_sha256": "%s"\n}\n' "$1" "$2" > "$T/mod/release-manifest.json"; }
+man aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1111111111111111111111111111111111111111111111111111111111111111
+lab() {  # knob state best try n mean var jank_pairs press jank heat lastverdict
+  printf 'knob|%s|%s|%s|%s|%s|0|0|0|0|0|0|0|0|0|0|0|com.secret.app|%s|-1\nkstat|%s|%s|%s|%s|%s|%s|%s|%s|7\n' \
+    "$1" "$2" "$3" "$4" "$5" "${12}" "$1" "$5" "$6" "$7" "$8" "$9" "${10}" "${11}"
+}
+run() { ASB_EVO_DIR="$T/d" MODDIR="$T/mod" ASB_EVO_LAB="$T/lab" ASB_EVO_SAFE="$T/safe" ASB_EVO_NOW="${NOW:-1800000000}" sh "$S" "$@"; }
+ev() { printf '%s\n' "$1" | awk -F'|' -v k="$2" '$1 == "ev" && $2 == k { print $13 ":" $14 }'; }
+# Self-check on the shipped fixtures, the no-op among them.
+out="$(run selftest)"; [ "$out" = "$(printf 'trust=trusted\ntrust_reason=fixtures_passed')" ] || fail "self-check: $out"
+# Verdicts from the lab's raw pair statistics, hard gates before energy.
+{ lab membus_on testing 'bus free' 'bus 75%' 8 -0.06 0.0004 4 0.01 0.002 2 -
+  lab app1 testing 'lean as situation' 'lean +0.1' 8 -0.06 0.0004 4 0.01 0.03 0 -
+  lab app2 testing 'lean as situation' 'lean +0.1' 4 -0.06 0.0004 0 0.01 0 0 -
+  lab radio testing 'LTE on light traffic' '5G allowed' 16 0.001 0.0009 0 0.01 0 0 -
+  printf 'knob|membus_off|watching|bus free|-|0|0|0|0|0|0|0|0|0|0|0|0|-|-|-1\n'; } > "$T/lab"
+out="$(run status)"
+[ "$(ev "$out" membus_on)" = promoted:cheaper_significant ] || fail "clean significant saving: $out"
+[ "$(ev "$out" app1)" = rejected:gate_jank ] || fail "a saving with more janky frames passed: $out"
+[ "$(ev "$out" app2)" = inconclusive:too_few_pairs ] || fail "four pairs decided: $out"
+[ "$(ev "$out" radio)" = inconclusive:within_noise ] || fail "noise promoted: $out"
+[ "$(ev "$out" membus_off)" = blocked:no_pair_statistics ] || fail "a knob without statistics was judged: $out"
+printf '%s\n' "$out" | grep -x 'identity=aaaaaaaaaaaa:111111111111:[0-9a-f]*' >/dev/null || fail "identity: $out"
+printf '%s\n' "$out" | grep -x 'journal=ok' >/dev/null || fail "journal: $out"
+printf '%s\n' "$out" | grep -x 'advice|app2|continue|lean as situation|lean +0.1|2|0.0200' >/dev/null || fail "advisor: $(printf '%s\n' "$out" | grep advice)"
+grep -q 'secret' "$T/d/journal" && fail "a package name reached the journal"
+run export | grep -q 'secret' && fail "a package name reached the export"
+# Recording is change-only: the same lab state adds nothing.
+n1="$(wc -l < "$T/d/journal")"; run status >/dev/null; [ "$(wc -l < "$T/d/journal")" = "$n1" ] || fail "an unchanged lab added journal entries"
+# A new payload in the middle of a trial: its pairs mix two builds, so it cannot promote.
+man aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 2222222222222222222222222222222222222222222222222222222222222222
+sed -i 's/^kstat|membus_on|8|/kstat|membus_on|9|/; s/^knob|membus_on|testing|bus free|bus 75%|8|/knob|membus_on|testing|bus free|bus 75%|9|/' "$T/lab"
+out="$(run status)"; [ "$(ev "$out" membus_on)" = inconclusive:mixed_build_identity ] || fail "mixed identity promoted: $out"
+printf '%s\n' "$out" | grep -x 'advice|.*' | grep -q mixed && fail "advice text leaked a reason code"
+# The lab's own promotion is audited against the evaluator's last verdict before it.
+man aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1111111111111111111111111111111111111111111111111111111111111111
+rm -rf "$T/d"; mkdir -p "$T/d"
+lab membus_on testing 'bus free' 'bus 75%' 8 -0.06 0.0004 4 0.01 0.002 2 - > "$T/lab"; run status >/dev/null
+lab membus_on best 'bus 75%' - 0 0 0 0 0 0 0 won_energy > "$T/lab"; out="$(run status)"
+printf '%s\n' "$out" | grep -x 'audit|1|1|0|0|0' >/dev/null || fail "audit of an agreed promotion: $(printf '%s\n' "$out" | grep audit)"
+[ "$(ev "$out" membus_on)" = inconclusive:no_challenger ] || fail "a settled knob: $out"
+# The chain: a changed entry is found, and a promotion does not stand on a damaged journal.
+run verify | grep -x 'journal=ok' >/dev/null || fail "fresh chain does not verify"
+lab membus_on testing 'bus free' 'bus 55%' 8 -0.06 0.0004 4 0.01 0.002 2 won_energy > "$T/lab"; run status >/dev/null
+cp "$T/d/journal" "$T/j.before"; sed -i '2s/^\([0-9]*\)|[0-9]*|/\1|1|/' "$T/d/journal"
+cmp -s "$T/j.before" "$T/d/journal" && fail "the tamper step changed nothing"
+run verify | grep -x 'journal=damaged' >/dev/null || fail "a rewritten entry passed verification"
+rm -f "$T/d/verified"; out="$(run status)"
+printf '%s\n' "$out" | grep -x 'journal=damaged' >/dev/null && [ "$(ev "$out" membus_on)" = held:journal_damaged ] || fail "promotion on a damaged journal: $out"
+# Bounded: past journal_max the oldest entries go behind an anchor and the rest still verifies.
+rm -rf "$T/d"; mkdir -p "$T/d"; sed -i 's/^journal_max=.*/journal_max=4/' "$T/mod/runtime/asb_evolution.policy"
+for i in 1 2 3 4 5 6; do lab app2 testing 'lean as situation' 'lean +0.1' "$i" -0.01 0.0004 0 0.01 0 0 - > "$T/lab"; run status >/dev/null; done
+[ "$(wc -l < "$T/d/journal")" -le 4 ] && [ -s "$T/d/anchor" ] || fail "journal not bounded: $(wc -l < "$T/d/journal") lines"
+run verify | grep -x 'journal=ok' >/dev/null || fail "trimmed chain does not verify from its anchor"
+# Retention by age.
+NOW=$((1800000000 + 40 * 86400)) run status >/dev/null; lab app2 testing 'lean as situation' 'lean +0.1' 9 -0.01 0.0004 0 0.01 0 0 - > "$T/lab"
+NOW=$((1800000000 + 40 * 86400)) run status >/dev/null
+awk -F'|' '$2 < 1800000000 + 30 * 86400 { bad = 1 } END { exit bad }' "$T/d/journal" || fail "entries older than retention kept"
+cp "$ROOT/runtime/asb_evolution.policy" "$T/mod/runtime/"
+# Safe mode holds every verdict; an invalid constitution blocks them and fails the self-check.
+lab membus_on testing 'bus free' 'bus 75%' 8 -0.06 0.0004 4 0.01 0.002 2 - > "$T/lab"
+: > "$T/safe"; [ "$(ev "$(run status)" membus_on)" = held:safe_mode ] || fail "safe mode"; rm -f "$T/safe"
+sed -i 's/^t_min=.*/t_min=0/' "$T/mod/runtime/asb_evolution.policy"
+out="$(run status)"; [ "$(ev "$out" membus_on)" = blocked:policy_invalid ] && printf '%s\n' "$out" | grep -x 'trust=untrusted' >/dev/null || fail "a loosened constitution was used: $out"
+# Positive but looser than the lab's own rule is still a loosening.
+for loose in t_min=2.0 min_gain=0.01 min_pairs=3 max_jank=0.05 dearer=0.5; do
+  cp "$ROOT/runtime/asb_evolution.policy" "$T/mod/runtime/"
+  sed -i "s/^${loose%%=*}=.*/$loose/" "$T/mod/runtime/asb_evolution.policy"
+  [ "$(ev "$(run status)" membus_on)" = blocked:policy_invalid ] || fail "a looser rule was accepted: $loose"
+done
+cp "$ROOT/runtime/asb_evolution.policy" "$T/mod/runtime/"
+sed -i 's/^allow=.*/allow=radio,cpu_overclock/' "$T/mod/runtime/asb_evolution.policy"
+[ "$(run selftest | head -1)" = trust=untrusted ] || fail "an allowlist with an unknown knob was accepted"
+cp "$ROOT/runtime/asb_evolution.policy" "$T/mod/runtime/"
+# Read-only: only its own state dir is written; no system writer, no timer, no policy writer.
+find "$T" -newer "$T/lab" -type f | grep -v "^$T/d/" | grep -v "^$T/mod/runtime/asb_evolution.policy$" && fail "wrote outside its state dir"
+grep -nE 'resetprop|setprop|settings (put|delete)|cmd |appops|> */(sys|proc|dev/cpuctl)|/system/bin/(echo|write)|sleep [0-9]+[^;]*done|while true' "$S" && fail "a writer or a loop in the read-only engine"
+grep -rln 'asb_evolution.policy' "$ROOT/runtime" "$ROOT/service.sh" "$ROOT/tools" 2>/dev/null | grep -v 'asb_evolution\.\(sh\|policy\)$' && fail "another component references the constitution"
+grep -q 'asb/evolution' "$ROOT/uninstall.sh" || fail "uninstall leaves the evolution state"
+# Android's shell: the same run under mksh when it is installed.
+if command -v mksh >/dev/null 2>&1; then
+  rm -rf "$T/d"; lab membus_on testing 'bus free' 'bus 75%' 8 -0.06 0.0004 4 0.01 0.002 2 - > "$T/lab"
+  out="$(ASB_EVO_DIR="$T/d" MODDIR="$T/mod" ASB_EVO_LAB="$T/lab" ASB_EVO_SAFE="$T/safe" mksh "$S" status)"
+  printf '%s\n' "$out" | grep -x 'journal=ok' >/dev/null && [ "$(ev "$out" membus_on)" = promoted:cheaper_significant ] || fail "mksh: $out"
+fi
+echo "PASS evolution engine: shipped fixtures trust the evaluator, gates before energy, change-only hash-chained journal (tamper found, bounded, aged out), mixed builds never promote, lab promotions audited, safe mode holds, a loosened constitution blocks, read-only"
+)
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in

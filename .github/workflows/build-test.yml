@@ -158,6 +158,8 @@ jobs:
             runtime/asb_zygisk_aot.sh \
             runtime/asb_lsposed_lite.sh \
             runtime/asb_smart7.sh \
+            runtime/asb_evolution.sh \
+            runtime/asb_evolution.policy \
             runtime/asb_zygisk_link.sh \
             runtime/asb_zygisk_park.sh \
             runtime/asb_device_db.sh \
@@ -742,6 +744,8 @@ jobs:
             "runtime/asb_zygisk_aot.sh" \
             "runtime/asb_lsposed_lite.sh" \
             "runtime/asb_smart7.sh" \
+            "runtime/asb_evolution.sh" \
+            "runtime/asb_evolution.policy" \
             "runtime/asb_zygisk_link.sh" \
             "runtime/asb_zygisk_park.sh" \
             "runtime/asb_device_db.sh" \
