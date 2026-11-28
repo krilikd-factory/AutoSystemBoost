@@ -742,10 +742,14 @@ public:
         std::string base;
         if (((policy.observer && policy.packages) || policy.ledger || launch) && args->nice_name) {
             const char *raw = env_->GetStringUTFChars(args->nice_name, nullptr);
+            bool app_zygote = false;
             if (raw) {
+                app_zygote = asb_observer_app_zygote_name(raw);
                 base = asb_observer_base_package(raw);
                 env_->ReleaseStringUTFChars(args->nice_name, raw);
             }
+            // A child zygote the provider did not flag: not an app start, no companion call.
+            if (app_zygote) return skip();
             if (!asb_observer_package_valid(base) || asb_observer_package_denied(base)) base.clear();
         }
         /* dev46: an owner exclusion is a process-compatibility boundary, not only an ART flag.
@@ -809,8 +813,11 @@ private:
         if (n <= 0 || static_cast<size_t>(n) > asb_screenshot::kMaxBytes) return false;
         const char *raw = env_->GetStringUTFChars(args->nice_name, nullptr);
         if (!raw) { if (env_->ExceptionCheck()) env_->ExceptionClear(); return false; }
+        const bool app_zygote = asb_observer_app_zygote_name(raw);
         std::string base = asb_observer_base_package(raw);
         env_->ReleaseStringUTFChars(args->nice_name, raw);
+        // Hooks in a child zygote would be inherited by every process it forks.
+        if (app_zygote) return false;
         if (!asb_observer_package_valid(base) || asb_observer_package_denied(base)) return false;
         return asb_screenshot::selected(buf, static_cast<size_t>(n), args->uid, base.c_str());
     }

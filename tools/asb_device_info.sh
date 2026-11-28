@@ -1082,11 +1082,15 @@ if [ -r "$_mp_file" ] && [ "$_mp_status" = applied ]; then
     [ "$_mk" != "$_ml" ] || continue
     case "$_mk" in ''|*[!A-Za-z0-9_.-]*) continue ;; esac
     if [ "$_mapply" != 1 ]; then _mp_not_selected=$((_mp_not_selected + 1)); continue; fi
-    _mp_selected=$((_mp_selected + 1)); _mlive="$(_prop "$_mk")"
+    _mp_selected=$((_mp_selected + 1)); _mlive="$(_prop "$_mk")"; _mshow="$_mlive"
     if [ -n "$_mlive" ]; then
       [ "$_mlive" = "$_mv" ] && _mstate=match || _mstate=mismatch
-    else _mstate=unavailable_or_empty; fi
-    _emit asb_properties "$_mk" "source=managed:${_mblock:-unknown}; configured=$_mv; live=${_mlive:-unavailable_or_empty}; readback=$_mstate"
+    elif [ -z "$_mv" ]; then
+      # An entry that clears a stock value (key=) is set to "", which Android reads as unset:
+      # an empty read IS the intended result, not a missing one.
+      _mstate=match; _mshow=empty
+    else _mstate=unavailable_or_empty; _mshow=unavailable_or_empty; fi
+    _emit asb_properties "$_mk" "source=managed:${_mblock:-unknown}; configured=$_mv; live=$_mshow; readback=$_mstate"
   done < "$_mp_file"
 fi
 _emit asb_properties managed_selected "$_mp_selected"

@@ -103,6 +103,18 @@ inline std::string asb_observer_base_package(const std::string &process_name) {
     return process_name.substr(0, colon);
 }
 
+/* An app zygote is named "<process>_zygote" by Android (AppZygote). It is a child zygote that
+ * preloads code for an app's isolated services, not an app the user opened. A OnePlus 15
+ * (NyaZygisk) reported is_child_zygote false for it: com.netflix.mediaclient_zygote and
+ * com.opera.browser_zygote reached the start ledger as top-app starts (57 and 33), ranked for
+ * ART as "apps" whose state could never be read. The name is the fallback signal. */
+inline bool asb_observer_app_zygote_name(const std::string &process_name) {
+    static constexpr char suffix[] = "_zygote";
+    constexpr size_t n = sizeof(suffix) - 1;
+    return process_name.size() > n &&
+           process_name.compare(process_name.size() - n, n, suffix) == 0;
+}
+
 inline bool asb_observer_package_valid(const std::string &package) {
     if (package.size() < 3 || package.size() > 127 || package.find('.') == std::string::npos)
         return false;

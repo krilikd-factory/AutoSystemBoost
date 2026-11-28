@@ -11308,7 +11308,7 @@ grep -q "^$1|$2|" "$f" || echo "$1|$2|default|default" >> "$f"
 awk -F'|' -v OFS='|' -v p="$1" -v o="$2" -v m="$3" -v u="$u" '$1 == p && $2 == o { if (u) $4 = m; else $3 = m } { print }' "$f" > "$f.t" && mv "$f.t" "$f"
 X
 chmod +x "$T/bin/"*
-ledger() { printf 'L\tcom.loop.app\t%s\t0\t0\t1\nL\tcom.whatsapp\t%s\t0\t0\t1\nL\tcom.keep.app\t%s\t0\t0\t1\nL\tcom.nf.app\t%s\t0\t0\t1\nL\tcom.sys.app\t%s\t0\t0\t1\nL\tcom.already.app\t%s\t0\t0\t1\nL\tcom.exact.app\t%s\t0\t0\t1\nL\tcom.fgs.app\t%s\t0\t0\t1\nL\tcom.nl.app\t%s\t0\t0\t1\n' "$1" "$1" "$1" "$1" "$1" "$1" "$1" "$1" "$1" > "$T/run/state.arm64-v8a.tsv"; }
+ledger() { printf 'L\tcom.loop.app\t%s\t0\t0\t1\nL\tcom.whatsapp\t%s\t0\t0\t1\nL\tcom.keep.app\t%s\t0\t0\t1\nL\tcom.nf.app\t%s\t0\t0\t1\nL\tcom.sys.app\t%s\t0\t0\t1\nL\tcom.already.app\t%s\t0\t0\t1\nL\tcom.exact.app\t%s\t0\t0\t1\nL\tcom.fgs.app\t%s\t0\t0\t1\nL\tcom.nl.app\t%s\t0\t0\t1\nL\tcom.loop.app_zygote\t%s\t0\t0\t1\n' "$1" "$1" "$1" "$1" "$1" "$1" "$1" "$1" "$1" "$1" > "$T/run/state.arm64-v8a.tsv"; }
 sleep 3600 & _gov=$!; echo "$_gov" > "$T/govpid"
 trap 'kill $_gov 2>/dev/null; rm -rf "$T"' EXIT
 run() { PATH="$T/bin:$PATH" ZG_T="$T" MODDIR="$T/mod" ASB_ZG_DIR="$T/d" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZG_TMP="$T/tmp" ASB_ZG_STATE="$T/state" ASB_ZG_GOVPID="$T/govpid" sh "$S" "$@"; }
@@ -11323,6 +11323,7 @@ ledger 13; age_prev 300; run tick
 ledger 23; age_prev 300; run tick
 [ "$(mode com.loop.app)" = ignore ] && fail "one session restricted an app without confirmation"
 run status | grep -x 'pending|com.loop.app|1|10|loop|0' >/dev/null || fail "dry-run proposal missing: $(run status | grep '^pending')"
+run status | grep -F '|com.loop.app_zygote|' >/dev/null && fail "an app zygote was proposed for restriction: $(run status | grep _zygote)"
 [ "$(run approve com.loop.app)" = result=approved ] || fail 'per-package confirmation failed'
 for p in com.exact.app com.fgs.app com.nl.app; do
   run approve "$p" >/dev/null || fail "safety fixture approval failed: $p"
@@ -11681,7 +11682,7 @@ echo Discharging > "$T/pw/status"; echo 310 > "$T/pw/temp"; echo boot-1 > "$T/bo
 sleep 3600 & _gov=$!; echo "$_gov" > "$T/govpid"
 trap 'kill $_gov 2>/dev/null; rm -rf "$T"' EXIT
 echo screen=1 > "$T/state"
-led() { printf 'L\tcom.ig.app\t3\t9\t%s\t1\nL\tcom.yt.app\t0\t4\t%s\t0\nL\tcom.np.app\t0\t2\t%s\t0\nL\tcom.mail.app\t1\t1\t%s\t0\nL\tcom.once.app\t0\t1\t1\t0\n' "$1" "$2" "$3" "$4" > "$T/run/state.arm64-v8a.tsv"; }
+led() { printf 'L\tcom.ig.app\t3\t9\t%s\t1\nL\tcom.yt.app\t0\t4\t%s\t0\nL\tcom.np.app\t0\t2\t%s\t0\nL\tcom.mail.app\t1\t1\t%s\t0\nL\tcom.once.app\t0\t1\t1\t0\nL\tcom.ig.app_zygote\t0\t0\t9\t0\n' "$1" "$2" "$3" "$4" > "$T/run/state.arm64-v8a.tsv"; }
 run() { PATH="$T/bin:$PATH" ZA_T="$T" MODDIR="$T/mod" ASB_ZA_DIR="$T/d" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZA_POWER="$T/pw" ASB_ZA_BOOTID="$T/bootid" ASB_ZA_STATE="$T/state" ASB_ZA_GOVPID="$T/govpid" ASB_ZA_SYNC=1 sh "$S" "$@"; }
 row() { grep "^$1|" "$T/d/zygisk_aot_apps"; }
 pmn() { if [ -f "$T/pm.log" ]; then grep -c compile "$T/pm.log"; else echo 0; fi; }
@@ -11699,12 +11700,18 @@ $((now-499)).100  1000  1500 I wm_activity_launch_time: [0,115,com.svc.app/.Main
 E
 led 2 3 2 2
 run tick; [ -e "$T/d/zygisk_aot_apps" ] || [ -e "$T/d/zygisk_aot_launch" ] && fail "a disabled tick collected data"
+printf 'b boot-1\ncom.old.app_zygote 50 50\n' > "$T/d/zygisk_aot_count"
 out="$(run enable)"; [ "$out" = result=enabled ] || fail "enable: $out"
 grep -qx "$((now-899))|com.ig.app|820|1" "$T/d/zygisk_aot_launch" && grep -qx "$((now-800))|com.ig.app|240|0" "$T/d/zygisk_aot_launch" \
   && grep -qx "$((now-699))|com.ig.app|780|1" "$T/d/zygisk_aot_launch" || fail "cold/warm launches: $(cat "$T/d/zygisk_aot_launch")"
 grep -q 'com.svc.app' "$T/d/zygisk_aot_launch" && fail "a service start or an absurd time was taken as a launch"
 [ "$(sed -n 1p "$T/d/zygisk_aot_apps" | cut -d'|' -f1)" = com.yt.app ] || [ "$(sed -n 1p "$T/d/zygisk_aot_apps" | cut -d'|' -f1)" = com.ig.app ] || fail "ranking: $(cat "$T/d/zygisk_aot_apps")"
 row com.once.app >/dev/null && fail "an app opened once was listed"
+# An app zygote ("<pkg>_zygote", unflagged by the provider) is not an app: neither the live
+# ledger row nor a count kept from an older build ranks it.
+row com.ig.app_zygote >/dev/null && fail "an app zygote was ranked as an app: $(cat "$T/d/zygisk_aot_apps")"
+row com.old.app_zygote >/dev/null && fail "a stored app-zygote count was ranked"
+grep -q '_zygote' "$T/d/zygisk_aot_count" && fail "app-zygote count kept: $(cat "$T/d/zygisk_aot_count")"
 row com.ig.app | grep '^com.ig.app|3|verify|install|' >/dev/null || fail "ART state of a listed app (2 cold starts, 3 launches in Android's log): $(row com.ig.app)"
 row com.yt.app | grep '^com.yt.app|3|speed-profile|bg-dexopt|' >/dev/null || fail "primary-ABI state not preferred: $(row com.yt.app)"
 out="$(run status)"

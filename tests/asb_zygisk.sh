@@ -682,6 +682,10 @@ int main(){
   top=0; g_nice="com.example.sync:worker"; pre(); f=take();
   assert(f.flags==ASB_OBSERVER_FLAG_LEDGER && std::string(f.package)=="com.example.sync"); close(g_peer); g_peer=-1;
   g_nice="com.android.settings"; uid=10200; pre(); assert(g_connects==2); uid=10123; // protected name: nothing sent
+  // An app zygote the provider did not flag as a child zygote (NyaZygisk on a OnePlus 15:
+  // com.netflix.mediaclient_zygote as a top-app start) is not an app start: no frame, unloaded.
+  { int zc=g_connects, zd=g_dlclose; top=1; child=0; g_nice="com.netflix.mediaclient_zygote"; pre();
+    assert(g_connects==zc && g_dlclose==zd+1); top=0; }
   // dev46: the owner's compatibility exclusion covers even a package also present in the
   // allowlist, and its process suffix. No companion connection, ledger or launch frame is made.
   put_policy("v=2\ngen=81\nobserver=1\nhints=1\nlaunch=1\nledger=1\npkg=com.example.compat\nxpkg=com.example.compat\n");
@@ -1912,6 +1916,9 @@ chk(/^slow start · 1 of 3 cold starts measured · next update: fast start · LS
 chk(/LSPosed module, never restricted/.test(zygiskLinkAppValue(g.apps[2], nm)) && /Doze keep list/.test(zygiskLinkAppValue(g.apps[2], nm)), 'module app');
 const v3 = zygiskLinkAppValue(g.apps[3], nm);
 chk(v3 === 'usual start · protected system app, never classed', 'excluded app: ' + v3);
+// Launch classes off: no "next update" promise, the measured facts stay.
+const v1off = zygiskLinkAppValue(g.apps[1], nm, false);
+chk(!/next update/.test(v1off) && /1 of 3 cold starts measured/.test(v1off), 'classes off still promises a class: ' + v1off);
 chk(!/%[0-9s]/.test(v0 + v1 + v3), 'placeholder left');
 process.exit(bad ? 1 : 0);
 JS

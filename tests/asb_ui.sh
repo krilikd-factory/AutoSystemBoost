@@ -299,6 +299,36 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag DSP guard held: a tripped effects guard reads HELD (FAIL=0, named, out of pass_ratio); without the guard the absence stays FAIL; totals unchanged otherwise"
 )
 
+t_asbdiag_dsp_route_released_runtime() (
+# Runtime: a route the DSP tracks but is released on is not reported as followed. A OnePlus 15
+# asbdiag read "route check: music is on speaker and the DSP follows speaker" right above "DSP
+# released on purpose: route speaker is not in dsp_outputs=bt". The REAL route-check block runs.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag DSP route released: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+# The second top-level "case outputs" block is the route check (the first sets a gain note).
+awk '/^case "\$\(gp persist\.asb\.dsp\.outputs\)" in$/ { n++; if (n == 2) f = 1 } f { print } f && /^esac$/ { exit }' "$D" > "$T/b.sh"
+grep -q 'route check' "$T/b.sh" || fail "route-check block not found"
+run() {  # $1 outputs  $2 published route  $3 route_allowed  $4 live route
+  { echo 'NOTE() { echo "(i) $1"; }'
+    printf 'gp() { case "$1" in persist.asb.dsp.outputs) echo %s ;; persist.asb.dsp.route) echo %s ;; persist.asb.dsp.route_allowed) echo %s ;; esac; }\n' "$1" "$2" "$3"
+    echo "_lr='$4'"; cat "$T/b.sh"; } > "$T/r.sh"
+  sh "$T/r.sh"
+}
+out="$(run bt speaker 0 speaker)"
+printf '%s\n' "$out" | grep -F 'follows speaker' >/dev/null && fail "a released route is still called followed: $out"
+printf '%s\n' "$out" | grep -F 'route check: music is on speaker; the DSP tracks it but stays released there (not in dsp_outputs=bt)' >/dev/null || fail "released note: $out"
+out="$(run bt bt 1 bt)"
+printf '%s\n' "$out" | grep -F 'route check: music is on bt and the DSP follows bt' >/dev/null || fail "an allowed route lost its note: $out"
+out="$(run bt bt 1 speaker)"
+printf '%s\n' "$out" | grep -F 'route lag: music is on speaker now, the DSP still follows bt' >/dev/null || fail "route lag lost: $out"
+[ -z "$(run all speaker 0 speaker)" ] || fail "outputs=all printed a route note"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag DSP route released: a tracked route outside dsp_outputs reads released, not followed; allowed routes and lag notes unchanged"
+)
+
 t_asbdiag_write_ratio_runtime() (
 # Runtime (fix179): "writes per transition" is judged against the phone's own cpufreq slots,
 # and chatter by how often the state changes. A CPH2691 read "13 (8+ ... suggests the ladder
@@ -8296,6 +8326,7 @@ cp "$ROOT/runtime/asb_managed.props" "$ROOT/features.conf" "$T/mod/runtime/"
 printf 'DISPLAY=1
 BT=1
 AUDIO=1
+KERNEL=1
 ' > "$T/mod/features.conf"
 cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_zygisk.sh" "$ROOT/runtime/asb_zygisk_info.sh" "$ROOT/runtime/asb_lsposed_info.sh" "$T/mod/runtime/"
 printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\n' > "$T/mod/config/governor.conf"
@@ -8532,6 +8563,8 @@ want asb_properties managed_status applied; want asb_properties managed_reason f
 want asb_properties vendor.display.enable_dpps_dynamic_fps 'source=managed:DISPLAY; configured=1; live=1; readback=match'
 want asb_properties vendor.display.backlight_smooth 'source=managed:DISPLAY; configured=1; live=0; readback=mismatch'
 want asb_properties persist.displayfeature.dc_backlight.enable 'source=managed:DISPLAY; configured=true; live=unavailable_or_empty; readback=unavailable_or_empty'
+# A managed entry that clears a stock value (key=) reads back empty: that is a match.
+want asb_properties ro.com.google.ime.kb_pad_port_r 'source=managed:KERNEL; configured=; live=empty; readback=match'
 printf '%s\n' "$out" | grep '^D\tasb_properties\tlog.tag.bluetooth\t' >/dev/null && fail 'BT property was selected without its separate opt-in marker'
 _bt_n="$(awk -F '\t' 'BEGIN { inbt=0 } /^# ASB:BT:BEGIN/ { inbt=1; next } /^# ASB:BT:END/ { inbt=0 } inbt && /^[A-Za-z0-9_.-]+=/ { n++ } END { print n+0 }' "$T/mod/runtime/asb_managed.props")"
 [ "$_bt_n" -gt 0 ] || fail 'empty BT fixture'

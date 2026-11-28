@@ -55,7 +55,8 @@ _screen_on() {
   [ "$_so" != 0 ]
 }
 _ledger_cols() {
-  cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L" && $2 ~ /^[A-Za-z0-9_.]+$/ { o[$2] += $3; n[$2] += $4; t[$2] += $5 }
+  # An app zygote ("<pkg>_zygote") is not an app the guard could restrict.
+  cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L" && $2 ~ /^[A-Za-z0-9_.]+$/ && $2 !~ /_zygote$/ { o[$2] += $3; n[$2] += $4; t[$2] += $5 }
     END { for (p in o) print p, o[p], n[p], t[p] }'
 }
 _ledger() { _ledger_cols | awk '{ print $1, $2 }'; }

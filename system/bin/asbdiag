@@ -2215,6 +2215,10 @@ case "$(gp persist.asb.dsp.outputs)" in
   *)
     if [ -n "$_lr" ] && [ "$_lr" != "$(gp persist.asb.dsp.route)" ]; then
       NOTE "  route lag: music is on $_lr now, the DSP still follows $(gp persist.asb.dsp.route) - the route watcher republishes within seconds; run asbdiag again if this persists"
+    elif [ -n "$_lr" ] && [ "$(gp persist.asb.dsp.route_allowed)" = "0" ]; then
+      # Tracking the route is not processing it: a OnePlus 15 report read "the DSP follows
+      # speaker" one line above "DSP released on purpose: route speaker is not in dsp_outputs=bt".
+      NOTE "  route check: music is on $_lr; the DSP tracks it but stays released there (not in dsp_outputs=$(gp persist.asb.dsp.outputs))"
     else
       [ -n "$_lr" ] && NOTE "  route check: music is on $_lr and the DSP follows $_lr"
     fi ;;
@@ -3889,7 +3893,7 @@ for _cbf in /data/adb/modules/AutoSystemBoost/odm/etc/camera/config/video_beauty
   [ -f "$_cbf" ] || { NOTE "module copy absent: $_cbf"; continue; }
   case "$_cbf" in
     *video_beauty*) NOTE "module copy: video_beauty apps=$(grep -c '"packageName"' "$_cbf" 2>/dev/null)" ;;
-    *) NOTE "module copy: conf_tuning BlendWeight=$(grep -m1 -o '"BlendWeight"[^]]*]' "$_cbf" 2>/dev/null | sed 's/.*\[//')" ;;
+    *) NOTE "module copy: conf_tuning BlendWeight=$(grep -m1 -o '"BlendWeight"[^]]*]' "$_cbf" 2>/dev/null | sed 's/.*\[//;s/\]//')" ;;
   esac
 done
 _cbmm="$(ls /data/adb/metamodule/module.prop 2>/dev/null && grep -m1 '^id=' /data/adb/metamodule/module.prop 2>/dev/null)"

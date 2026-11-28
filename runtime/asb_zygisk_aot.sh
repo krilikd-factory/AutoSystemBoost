@@ -98,8 +98,10 @@ _observer_policy_sync() {
   echo 'observer_policy=failed'
   return 1
 }
+# "<pkg>_zygote" is an app zygote, not an app: a provider that does not flag child zygotes let
+# it into the ledger as a top-app start. Older counts carrying such names are dropped here too.
 _ledger_top() {
-  cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L" && $2 ~ /^[A-Za-z0-9_.]+$/ { t[$2] += $5 } END { for (p in t) if (t[p] > 0) print p, t[p] }'
+  cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L" && $2 ~ /^[A-Za-z0-9_.]+$/ && $2 !~ /_zygote$/ { t[$2] += $5 } END { for (p in t) if (t[p] > 0) print p, t[p] }'
 }
 _count_update() {
   _bid="$(tr -d ' \r\n' < "$BOOTID" 2>/dev/null)"
@@ -110,7 +112,7 @@ _count_update() {
     BEGIN {
       while ((getline ln < cf) > 0) {
         n = split(ln, f, " ")
-        if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/) { tot[f[1]] = f[2] + 0; last[f[1]] = same ? f[3] + 0 : 0 }
+        if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/ && f[1] !~ /_zygote$/) { tot[f[1]] = f[2] + 0; last[f[1]] = same ? f[3] + 0 : 0 }
       }
     }
     NF == 2 && $1 ~ /^[A-Za-z0-9_.]+$/ { c = $2 + 0; l = last[$1] + 0; d = (c >= l) ? c - l : c; tot[$1] += d; last[$1] = c }
@@ -198,7 +200,7 @@ _ranked() {
   awk -v cf="$CUM" -v lf="$LAUNCH" -v kf="$CLASSES" -v xf="$EXCL" '
     BEGIN {
       while ((getline ln < xf) > 0) x[ln] = 1
-      while ((getline ln < cf) > 0) { n = split(ln, f, " "); if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/) z[f[1]] = f[2] + 0 }
+      while ((getline ln < cf) > 0) { n = split(ln, f, " "); if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/ && f[1] !~ /_zygote$/) z[f[1]] = f[2] + 0 }
       while ((getline ln < lf) > 0) { n = split(ln, f, "|"); if (n == 4 && f[2] ~ /^[A-Za-z0-9_.]+$/) e[f[2]]++ }
       while ((getline ln < kf) > 0) if (ln ~ /^slow=[A-Za-z0-9_.]+$/) sl[substr(ln, 6)] = 1
       for (p in z) sc[p] = z[p]

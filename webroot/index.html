@@ -23378,12 +23378,15 @@ function zygiskLinkParse(out) {
   });
   return g;
 }
-function zygiskLinkAppValue(a, nm) {
+/* live=false: launch classes are off (no cold-start lift), so a "next update" class would never
+ * apply. A OnePlus 15 page read "Launch classes: off" above rows promising "next update: fast
+ * start". The measured median stays; only the promise is dropped. */
+function zygiskLinkAppValue(a, nm, live) {
   const parts = [T('zy_link_cls_' + a.cls, a.cls === 'slow' ? 'slow start' : a.cls === 'fast' ? 'fast start' : 'usual start')];
   if (a.why === 'measured' && a.med > 0) parts.push(T('zy_link_app_med', 'median %1 ms over %2').replace('%1', String(a.med)).replace('%2', String(a.n)));
   else if (a.why === 'hooks') parts.push(T('zy_link_app_unmeasured', '%s of 3 cold starts measured').replace('%s', String(a.n)));
   else if (a.why === 'excluded') parts.push(T('zy_link_app_excluded', 'protected system app, never classed'));
-  if (a.next !== a.cls && a.why !== 'excluded') parts.push(T('zy_link_app_next', 'next update: %s').replace('%s', T('zy_link_cls_' + a.next, a.next === 'slow' ? 'slow start' : a.next === 'fast' ? 'fast start' : 'usual start')));
+  if (live !== false && a.next !== a.cls && a.why !== 'excluded') parts.push(T('zy_link_app_next', 'next update: %s').replace('%s', T('zy_link_cls_' + a.next, a.next === 'slow' ? 'slow start' : a.next === 'fast' ? 'fast start' : 'usual start')));
   if (a.hooks > 0) parts.push(T('zy_link_app_mods', 'LSPosed: %s').replace('%s', a.mods.map(nm).join(', ') + (a.hooks > a.mods.length ? ' +' + (a.hooks - a.mods.length) : '')));
   if (a.guard !== '-') parts.push(T('zy_link_app_guard', 'background restricted'));
   if (a.art !== '-') parts.push(T('zy_link_app_art', 'ART %s').replace('%s', a.art.replace(/-/g, '\u2011')));
@@ -23433,7 +23436,7 @@ function zygiskLinkCard() {
     sm.textContent = T('zy_link_apps', 'Each app: what ASB knows and does (%s)').replace('%s', String(g.apps.length));
     box.appendChild(sm);
     g.apps.forEach(function (a) {
-      const parts = zyChipsOf(zygiskLinkAppValue(a, nm));
+      const parts = zyChipsOf(zygiskLinkAppValue(a, nm, kv.launch === '1' && kv.enabled === '1'));
       box.appendChild(zyItemPanel({ name: nm(a.pkg), tone: a.cls === 'slow' ? 'heavy' : a.cls === 'fast' ? 'light' : 'off',
         badge: parts[0], chips: parts.slice(1) }));
     });
