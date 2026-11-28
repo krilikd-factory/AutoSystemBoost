@@ -4478,7 +4478,6 @@
   "screenshot_fix_policy_live": "Seleção publicada",
   "screenshot_fix_policy_not_live": "Publicação da seleção não confirmada",
   "lr_tip_sradio_speed": "Com o ecrã desligado houve {mib} de tráfego móvel; «{set}» estava ativo e foi aplicado {n} vezes. Para privilegiar a velocidade de transferência em segundo plano, experimente desativá-lo. Isto não prova lentidão e o 5G pode gastar mais energia.",
-  "zy_nav_evo": "Evolução",
   "evo_title": "Evolução: verificação independente das experiências do Smart",
   "evo_how_title": "Como funciona a verificação",
   "evo_how": "O laboratório do Smart testa uma definição de cada vez contra a melhor até agora, lado a lado. Esta verificação recalcula cada resultado a partir dos pares medidos pelo próprio laboratório, com regras fixas incluídas no ASB: primeiro os efeitos secundários (núcleos no limite, quadros com engasgos, aquecimento), depois a energia. Resultados medidos em duas compilações nunca contam. Antes passa por exemplos com resposta conhecida, um deles uma alteração que não faz nada; se errar algum, todos os veredictos ficam retidos. Não aplica nada.",

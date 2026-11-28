@@ -4478,7 +4478,6 @@
   "screenshot_fix_policy_live": "Auswahl veröffentlicht",
   "screenshot_fix_policy_not_live": "Veröffentlichung der Auswahl nicht bestätigt",
   "lr_tip_sradio_speed": "Bei ausgeschaltetem Bildschirm wurden {mib} Mobilfunkdaten übertragen; „{set}“ war aktiv und wurde {n}-mal angewendet. Für schnellere Hintergrunddownloads können Sie es testweise ausschalten. Eine Verlangsamung ist nicht bewiesen; 5G kann mehr Energie verbrauchen.",
-  "zy_nav_evo": "Evolution",
   "evo_title": "Evolution: unabhängige Prüfung der Smart-Experimente",
   "evo_how_title": "So funktioniert die Prüfung",
   "evo_how": "Das Smart-Labor testet jeweils eine Einstellung direkt gegen die bisher beste. Diese Prüfung berechnet jedes Ergebnis aus den vom Labor gemessenen Paaren neu, nach festen Regeln aus dem ASB-Paket: zuerst Nebenwirkungen (Kerne am Limit, ruckelnde Frames, Erwärmung), dann Energie. Über zwei Builds gemessene Ergebnisse zählen nie. Vorher besteht die Prüfung Beispiele mit bekannter Antwort, darunter eine Änderung, die nichts bewirkt; beurteilt sie eines falsch, werden alle Urteile zurückgehalten. Sie wendet nichts an.",

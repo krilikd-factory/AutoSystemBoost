@@ -4478,7 +4478,6 @@
   "screenshot_fix_policy_live": "Sélection publiée",
   "screenshot_fix_policy_not_live": "Publication de la sélection non confirmée",
   "lr_tip_sradio_speed": "Écran éteint, le trafic mobile a atteint {mib} ; « {set} » était activé et appliqué {n} fois. Pour privilégier les téléchargements en arrière-plan, essayez de le désactiver. Cela ne prouve pas un ralentissement et la 5G peut consommer davantage.",
-  "zy_nav_evo": "Évolution",
   "evo_title": "Évolution : contrôle indépendant des expériences Smart",
   "evo_how_title": "Fonctionnement du contrôle",
   "evo_how": "Le laboratoire Smart essaie un réglage à la fois face au meilleur jusqu'ici, côte à côte. Ce contrôle recalcule chaque résultat à partir des paires mesurées par le laboratoire lui-même, selon des règles fixes livrées avec ASB : d'abord les effets secondaires (cœurs au plafond, images saccadées, échauffement), puis l'énergie. Les résultats mesurés sur deux builds ne comptent jamais. Il réussit d'abord des exemples à réponse connue, dont un changement qui ne fait rien ; s'il en juge un mal, tous les verdicts sont suspendus. Il n'applique rien.",

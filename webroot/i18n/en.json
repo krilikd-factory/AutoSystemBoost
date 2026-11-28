@@ -4371,7 +4371,6 @@
   "screenshot_fix_policy_live": "Selection published",
   "screenshot_fix_policy_not_live": "Selection is not confirmed as published",
   "lr_tip_sradio_speed": "With the screen off, mobile traffic totalled {mib}; \"{set}\" was enabled and applied {n} times during the capture. If background download speed matters more, try turning it off. This does not prove a slowdown, and 5G may use more power.",
-  "zy_nav_evo": "Evolution",
   "evo_title": "Evolution: an independent check of Smart experiments",
   "evo_how_title": "How the check works",
   "evo_how": "The Smart lab tries one setting at a time against the best so far, side by side. This check recomputes each result from the lab's own measured pairs under fixed rules shipped with ASB: side effects first (cores at their ceiling, janky frames, warming), then energy. Results measured across two builds never count. The check first passes examples with known answers, one of them a change that does nothing; if it misjudges one, every verdict is held. It applies nothing.",

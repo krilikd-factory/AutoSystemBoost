@@ -391,7 +391,8 @@ H="$ROOT/webroot/index.html"
 fail() { echo "FAIL webui evolution card: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo 'SKIP webui evolution card: no node'; exit 0; }
 grep -F "['evo', 'sh ' + shQuote(MD + '/runtime/asb_evolution.sh') + ' status']" "$H" >/dev/null || fail "the page does not read the evaluator in its batch"
-grep -F "['zy-evo', T('zy_nav_evo', 'Evolution')]" "$H" >/dev/null || fail "no jump entry"
+# The six-link section map is a layout contract: the card sits under the Smart card instead.
+grep -F "'zy-evo'," "$H" | grep -F 'asbPageJump' >/dev/null && fail "a seventh link in the section map"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 {
   cat <<'JS'
@@ -437,7 +438,7 @@ python3 - "$ROOT" <<'PY' || fail 'locale keys'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
 a = h.index('/* V66 test31: the Evolution Engine card'); b = h.index('async function zygiskPageLoad(user) {')
-keys = {k for k in re.findall(r"T\('((?:evo|zy_nav)_[a-z0-9_]+)'", h[a:b]) if not k.endswith('_')} | {'zy_nav_evo'}
+keys = {k for k in re.findall(r"T\('((?:evo|zy_nav)_[a-z0-9_]+)'", h[a:b]) if not k.endswith('_')}
 keys |= {'evo_r_' + r for r in re.findall(r'why = "([a-z_]+)"', (root / 'runtime/asb_evolution.sh').read_text())}
 keys |= {'evo_r_journal_damaged'} | {'evo_v_' + v for v in ('promoted', 'rejected', 'inconclusive', 'held', 'blocked')}
 keys |= {'evo_k_' + k for k in ('radio', 'wake_lift', 'membus_on', 'membus_off', 'app1', 'app2', 'app3')}
@@ -7274,11 +7275,12 @@ function parseDeviceInfo(s){return {count:s?1:0,raw:s};}function zygiskRawDigest
 function zygiskHeaderPublish(){}function smart7Parse(){return {};}function smart7LearnParse(){return {};}
 function zygiskLinkParse(){return {};}function lspLiteParse(){return {};}function lspLiteAutoRefresh(){}
 function zygiskGuardParse(){return {};}function zygiskAotParse(){return {};}
+let _zyEvo=null;function evolutionParse(){return {};}
 eval(grab('zygiskPageLoad'));
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 (async()=>{
  let p=zygiskPageLoad(false);await Promise.resolve();await Promise.resolve();
- chk(events.join('|')==='render:loading|yield|collect:8','initial loader did not paint before the sole collector: '+events);
+ chk(events.join('|')==='render:loading|yield|collect:9','initial loader did not paint before the sole collector: '+events);
  chk(renders.length===1&&renders[0].d===null,'initial loader missing');
  resolveBatch({link:{errno:0,stdout:'D\tzygisk_observer\tenabled\t1'}});await p;
  chk(renders.length===2&&renders[1].d&&renders[1].d.count===1&&!els.zyRefresh.disabled&&!els.zySave.disabled,'success did not replace loader');
@@ -11222,7 +11224,7 @@ function logReportNote(t) { const n=el('div','lgr-note'); n.textContent=t; retur
 function deviceZygiskLink() { return el('div','dev-zygisk-link'); }
 function zygiskOffCard() { return el('div','zy-off'); }
 function techIcon() { return ''; }
-for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygiskLinkCard','zygiskGuardCard','zygiskAotCard','lspLiteCard','smart7Card'])
+for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygiskLinkCard','zygiskGuardCard','zygiskAotCard','lspLiteCard','smart7Card','evolutionCard'])
   global[name]=function () { return el('div','lgr-sec '+name); };
 global.zyCompact=function () {};
 for (const name of ['deviceZygiskOverview','zygiskPageRows','deviceZygiskEditor','zygiskEvidenceCard'])
@@ -11242,12 +11244,12 @@ zygiskPageRender(null);
 chk(body.children.length===1 && navs().length===0,'loading state grew populated-page navigation');
 const off={sections:{zygisk_observer:{enabled:'0'}}};
 zygiskPageRender(off);
-chk(body.children.length===4 && body.children[0].id==='zy-status' && body.children[2].id==='zy-lsp' && body.children[3].id==='zy-s7' && navs().length===0,'Off state grew irrelevant navigation or lost the LSPosed/Smart cards');
+chk(body.children.length===5 && body.children[0].id==='zy-status' && body.children[2].id==='zy-lsp' && body.children[3].id==='zy-s7' && body.children[4].id==='zy-evo' && navs().length===0,'Off state grew irrelevant navigation or lost the LSPosed/Smart/Evolution cards');
 page.scrollTop=417;
 zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
 chk(navs().length===1,'populated state must have exactly one section map');
 const ids=body.children.filter(c=>c.id).map(c=>c.id);
-const expected=['zy-status','zy-guard','zy-engine','zy-s7','zy-aot','zy-apps','zy-evidence'];
+const expected=['zy-status','zy-guard','zy-engine','zy-s7','zy-evo','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
 /* dev47: Controls live inside the Connection card, so "Connection and controls" is one card. */
 const zyStatus=body.children.find(c=>c.id==='zy-status');

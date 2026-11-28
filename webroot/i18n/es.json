@@ -4478,7 +4478,6 @@
   "screenshot_fix_policy_live": "Selección publicada",
   "screenshot_fix_policy_not_live": "Publicación de la selección no confirmada",
   "lr_tip_sradio_speed": "Con la pantalla apagada hubo {mib} de tráfico móvil; «{set}» estaba activado y se aplicó {n} veces. Si priorizas la velocidad de descarga en segundo plano, prueba a desactivarlo. Esto no demuestra lentitud y 5G puede consumir más energía.",
-  "zy_nav_evo": "Evolución",
   "evo_title": "Evolución: comprobación independiente de los experimentos de Smart",
   "evo_how_title": "Cómo funciona la comprobación",
   "evo_how": "El laboratorio de Smart prueba un ajuste cada vez frente al mejor hasta ahora, en paralelo. Esta comprobación recalcula cada resultado a partir de los pares medidos por el propio laboratorio con reglas fijas incluidas en ASB: primero los efectos secundarios (núcleos en su techo, fotogramas con tirones, calentamiento) y después la energía. Los resultados medidos entre dos compilaciones nunca cuentan. Antes supera ejemplos con respuesta conocida, uno de ellos un cambio que no hace nada; si se equivoca en uno, todos los veredictos quedan retenidos. No aplica nada.",

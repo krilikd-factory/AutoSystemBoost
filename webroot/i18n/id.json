@@ -4478,7 +4478,6 @@
   "screenshot_fix_policy_live": "Pilihan diterbitkan",
   "screenshot_fix_policy_not_live": "Penerbitan pilihan belum dikonfirmasi",
   "lr_tip_sradio_speed": "Saat layar mati, trafik seluler mencapai {mib}; “{set}” aktif dan diterapkan {n} kali. Jika kecepatan unduhan latar lebih penting, coba matikan. Ini tidak membuktikan perlambatan dan 5G dapat memakai lebih banyak daya.",
-  "zy_nav_evo": "Evolusi",
   "evo_title": "Evolusi: pemeriksaan independen atas eksperimen Smart",
   "evo_how_title": "Cara kerja pemeriksaan",
   "evo_how": "Lab Smart mencoba satu pengaturan setiap kali melawan yang terbaik sejauh ini, berdampingan. Pemeriksaan ini menghitung ulang setiap hasil dari pasangan yang diukur lab sendiri dengan aturan tetap bawaan ASB: efek samping dulu (inti di batas atas, frame tersendat, pemanasan), lalu energi. Hasil yang diukur di dua build tidak pernah dihitung. Sebelumnya ia lulus contoh dengan jawaban yang diketahui, salah satunya perubahan yang tidak melakukan apa pun; jika salah menilai satu saja, semua putusan ditahan. Ia tidak menerapkan apa pun.",

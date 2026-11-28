@@ -4478,7 +4478,6 @@
   "screenshot_fix_policy_live": "Seçim yayımlandı",
   "screenshot_fix_policy_not_live": "Seçimin yayımlandığı doğrulanmadı",
   "lr_tip_sradio_speed": "Ekran kapalıyken mobil trafik {mib} oldu; “{set}” açıktı ve kayıt sırasında {n} kez uygulandı. Arka plan indirme hızı daha önemliyse kapatmayı deneyin. Bu yavaşlama olduğunu kanıtlamaz ve 5G daha fazla güç tüketebilir.",
-  "zy_nav_evo": "Evrim",
   "evo_title": "Evrim: Smart deneylerinin bağımsız kontrolü",
   "evo_how_title": "Kontrol nasıl çalışır",
   "evo_how": "Smart laboratuvarı her seferinde bir ayarı şimdiye kadarki en iyiye karşı yan yana dener. Bu kontrol, her sonucu laboratuvarın kendi ölçtüğü çiftlerden ASB ile gelen sabit kurallarla yeniden hesaplar: önce yan etkiler (tavandaki çekirdekler, takılan kareler, ısınma), sonra enerji. İki farklı derlemede ölçülen sonuçlar asla sayılmaz. Önce cevabı bilinen örnekleri geçer, biri hiçbir şey yapmayan bir değişikliktir; birini yanlış değerlendirirse tüm kararlar bekletilir. Hiçbir şey uygulamaz.",
